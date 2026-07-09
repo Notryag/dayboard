@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
 
 from dayboard.context import TenantContext, get_dev_tenant_context
-from dayboard.db.models import CalendarEntryRow, TaskItemRow
+from dayboard.db.models import AgentRunEventRow, AgentRunRow, CalendarEntryRow, TaskItemRow
 from dayboard.db.session import SessionLocal, get_session
 from dayboard.main import app
 
@@ -29,10 +29,14 @@ def tenant_context() -> TenantContext:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
+        await session.execute(delete(AgentRunEventRow))
+        await session.execute(delete(AgentRunRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
         await session.commit()
         yield session
+        await session.execute(delete(AgentRunEventRow))
+        await session.execute(delete(AgentRunRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
         await session.commit()

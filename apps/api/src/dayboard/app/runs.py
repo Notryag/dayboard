@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from dayboard.context import TenantContext
+from dayboard.db.models import AgentRunEventRow, AgentRunRow
+from dayboard.db.run_repositories import AgentRunEventRepository, AgentRunRepository
+from dayboard.domain.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+
+
+def agent_run_from_row(row: AgentRunRow) -> AgentRun:
+    return AgentRun(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        owner_user_id=row.owner_user_id,
+        thread_id=row.thread_id,
+        status=AgentRunStatus(row.status),
+        input_message=row.input_message,
+        result_message=row.result_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def agent_run_event_from_row(row: AgentRunEventRow) -> AgentRunEvent:
+    return AgentRunEvent(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        run_id=row.run_id,
+        seq=row.seq,
+        event_type=row.event_type,
+        category=AgentRunEventCategory(row.category),
+        content=row.content,
+        event_metadata=row.event_metadata,
+        created_at=row.created_at,
+    )
+
+
+class AgentRunService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.runs = AgentRunRepository(session)
+        self.events = AgentRunEventRepository(session)
+
+    async def create_run(
+        self,
+        context: TenantContext,
+        *,
+        input_message: str,
+        thread_id: UUID | None = None,
+    ) -> AgentRunRow:
+        run = await self.runs.create(
+            context,
+            input_message=input_message,
+            thread_id=thread_id,
+            status=AgentRunStatus.queued,
+        )
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="run_created",
+            category=AgentRunEventCategory.lifecycle,
+            content=input_message,
+        )
+        return run
+
+    async def mark_running(self, context: TenantContext, run: AgentRunRow) -> AgentRunRow:
+        await self.runs.update_status(run, AgentRunStatus.running)
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="run_started",
+            category=AgentRunEventCategory.lifecycle,
+        )
+        return run
+
+    async def mark_completed(
+        self,
+        context: TenantContext,
+        run: AgentRunRow,
+        *,
+        result_message: str,
+        event_metadata: dict[str, Any] | None = None,
+    ) -> AgentRunRow:
+        await self.runs.update_status(
+            run,
+            AgentRunStatus.completed,
+            result_message=result_message,
+        )
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="run_completed",
+            category=AgentRunEventCategory.lifecycle,
+            content=result_message,
+            event_metadata=event_metadata,
+        )
+        return run
+
+    async def mark_needs_clarification(
+        self,
+        context: TenantContext,
+        run: AgentRunRow,
+        *,
+        question: str,
+    ) -> AgentRunRow:
+        await self.runs.update_status(
+            run,
+            AgentRunStatus.needs_clarification,
+            result_message=question,
+        )
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="clarification_requested",
+            category=AgentRunEventCategory.clarification,
+            content=question,
+        )
+        return run
+
+    async def get_run(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
+        row = await self.runs.get(context, run_id)
+        return agent_run_from_row(row) if row else None
+
+    async def list_events(self, context: TenantContext, run_id: UUID) -> list[AgentRunEvent]:
+        rows = await self.events.list_for_run(context, run_id)
+        return [agent_run_event_from_row(row) for row in rows]

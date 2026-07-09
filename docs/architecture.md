@@ -178,6 +178,8 @@ GET  /api/calendar-entries
 GET  /api/task-items
 ```
 
+`agent_runs` and `agent_run_events` are the source of truth for command execution state. Even before background workers are introduced, synchronous command handling should create a run and append lifecycle events so the API shape stays compatible with future async execution.
+
 Later API:
 
 ```text

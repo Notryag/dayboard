@@ -80,6 +80,10 @@ Completed M2 work:
 - added Redis-backed FastAPI rate limiting configuration
 - connected the Next.js composer to the temporary `/api/commands` endpoint
 - added local CORS configuration for Next.js dev origins
+- added `agent_runs` and `agent_run_events` persistence
+- added `AgentRunService` and run event repositories
+- added `GET /api/runs/{run_id}` and `GET /api/runs/{run_id}/events`
+- changed the temporary command path to create real run records and lifecycle events
 
 Temporary implementation notes:
 
@@ -89,9 +93,9 @@ Temporary implementation notes:
 Next implementation slice:
 
 1. decide the first natural-language parsing boundary before adding LLM calls
-2. introduce persisted `agent_runs` before long-running or streamed command execution
-3. replace the placeholder command fallback with `north` clarification handling
-4. add provider-level request/token budgets before enabling real LLM execution
+2. replace the placeholder command fallback with `north` clarification handling
+3. add provider-level request/token budgets before enabling real LLM execution
+4. add SSE or polling UI for run event updates
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
@@ -105,6 +109,7 @@ cd apps/web && npm run build
 cd apps/api && uv sync
 cd apps/api && uv run ruff check .
 cd apps/api && uv run pytest
+cd apps/api && uv run alembic upgrade head
 cd apps/api && uv run python -c "from dayboard.main import app; from dayboard.context import get_dev_tenant_context; print(app.title, get_dev_tenant_context().timezone)"
 cd apps/api && uv run alembic upgrade head --sql
 docker compose up -d postgres redis
