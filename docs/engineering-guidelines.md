@@ -1,0 +1,343 @@
+# Engineering Guidelines
+
+## Core Principles
+
+- Keep Dayboard product concepts out of `north`.
+- Keep `north` runtime concepts out of Dayboard business models unless they are references, such as `run_id`.
+- Treat PostgreSQL as the source of truth.
+- Treat Redis or Valkey as infrastructure for queues, fanout, locks, rate limits, and cache.
+- Make tenant and user context explicit from the first implementation.
+- Prefer mature existing libraries over custom implementations for infrastructure, protocol, parsing, UI primitives, and generated clients.
+
+## Scaffolding First
+
+Use official or mature scaffolding when it exists.
+
+Examples:
+
+- create Next.js using the Next.js CLI
+- create Alembic migrations using Alembic commands
+- add shadcn/ui components using the shadcn CLI when selected
+- generate TypeScript API clients from OpenAPI when the API stabilizes
+
+Do not manually recreate large boilerplate that a maintained tool can generate.
+
+Generated code may be adjusted to fit the project, but large generated artifacts should stay isolated from hand-written application code.
+
+## Reuse Before Building
+
+Before implementing a non-trivial feature, check in this order:
+
+1. Python or TypeScript standard library
+2. existing Dayboard code
+3. existing `north` capability
+4. mature open-source library
+5. custom implementation
+
+Do not duplicate existing implementations for:
+
+- date and timezone handling
+- schema validation
+- database migrations
+- queues and workers
+- SSE clients
+- OpenAPI clients
+- form handling
+- UI primitives
+- calendar display widgets
+- ASR provider clients
+
+Adding a third-party dependency is encouraged when it reduces real implementation risk and has a clear boundary. Prefer libraries with active maintenance, clear APIs, reasonable size, and low lock-in.
+
+Good candidates for reuse include:
+
+- UI primitives and component systems, such as Radix UI and shadcn/ui
+- icons, such as lucide-react
+- server state and caching, such as TanStack Query
+- local/client state, such as Zustand or Jotai
+- forms and validation adapters, such as React Hook Form and Zod
+- dates, timezones, and calendar UI libraries
+- tables, virtual lists, upload widgets, recorder widgets, and SSE clients
+- API client generation from OpenAPI
+
+Avoid building custom versions of these unless the product has a clear requirement that existing libraries cannot meet.
+
+Record major dependency choices in ADRs.
+
+Dependency rules:
+
+- Use mature libraries freely for product delivery, but isolate them behind feature or infrastructure boundaries when practical.
+- Do not let a UI library define backend contracts or domain models.
+- Do not wrap every library immediately. Wrap only when it protects business code, provider choice, or generated contracts.
+- Prefer CLI installation and generated setup for libraries that provide it, such as shadcn/ui.
+- Check current documentation before adding a library with fast-moving setup commands or breaking changes.
+
+## Backend Layers
+
+Target backend layout:
+
+```text
+dayboard/
+  api/
+  app/
+  agent/
+  domain/
+  tools/
+  db/
+  workers/
+  integrations/
+```
+
+Responsibilities:
+
+- `api`: HTTP routes, SSE routes, request and response schemas
+- `app`: use cases and orchestration
+- `agent`: `north` integration, prompts, agent construction
+- `domain`: business models, policies, validation
+- `tools`: thin agent-facing adapters
+- `db`: SQLAlchemy models, repositories, sessions, migrations
+- `workers`: background jobs
+- `integrations`: ASR, object storage, external APIs
+
+Allowed dependency direction:
+
+```text
+api -> app -> agent/tools/domain -> db/integrations
+```
+
+Avoid:
+
+- business rules in API routes
+- raw SQL scattered outside repositories
+- tool functions containing full business workflows
+- `north` importing Dayboard code
+- request context stored in global mutable state
+
+## Tool Design
+
+Agent tools should be narrow and explicit.
+
+Prefer:
+
+```text
+create_calendar_entry
+list_calendar_entries
+create_task_item
+list_task_items
+```
+
+Avoid:
+
+```text
+manage_calendar(action, payload)
+```
+
+Tool functions should be thin:
+
+```text
+tool input
+  -> Pydantic validation
+  -> application/domain service
+  -> repository
+  -> structured tool result
+```
+
+The LLM response is not a source of truth. A database row created through a tool is the source of truth.
+
+## Tenant Context
+
+Even when Phase 1 uses a single development tenant, service and tool boundaries should accept a `TenantContext`.
+
+```text
+TenantContext:
+  tenant_id
+  user_id
+  timezone
+  locale
+  isolation_mode
+```
+
+Rules:
+
+- `tenant_id` and `user_id` must come from trusted server context.
+- The model must not generate tenant, user, permission, or run identity fields.
+- Repository queries must include `tenant_id`.
+- Tool input schemas must not expose trusted context fields.
+- Future dedicated schema or dedicated database support should be added through a database/session resolver, not by rewriting services.
+
+## Database Rules
+
+- Use PostgreSQL and Alembic from Phase 1.
+- Use SQLAlchemy models for persistence and Pydantic models for API/tool schemas.
+- Keep SQLAlchemy models separate from API response schemas.
+- Use transactions for writes.
+- Use soft deletion for business objects with `deleted_at`.
+- Store external files in object storage; store only URIs and metadata in PostgreSQL.
+- Keep migrations replayable and code-reviewed.
+
+Common business table fields:
+
+```text
+tenant_id
+created_at
+updated_at
+deleted_at
+owner_user_id
+created_by_run_id
+updated_by_run_id
+```
+
+Time rules:
+
+- Use timezone-aware datetimes in code.
+- Store canonical timestamps in PostgreSQL as timezone-aware values.
+- Store the user's intended IANA timezone separately, such as `Asia/Shanghai`.
+- Natural-language time parsing must use an explicit reference time and timezone.
+
+## API Rules
+
+- Use Pydantic request and response schemas.
+- Do not return raw SQLAlchemy models.
+- Use stable error envelopes.
+- Long-running agent work should use `agent_runs` and background workers.
+- Use `Idempotency-Key` for command creation and other retryable write endpoints.
+- Expose run status through `GET /api/runs/{run_id}`.
+- Expose live run updates through SSE when streaming is implemented.
+
+Suggested error shape:
+
+```json
+{
+  "error": {
+    "code": "missing_required_field",
+    "message": "A start time is required.",
+    "request_id": "req_..."
+  }
+}
+```
+
+## Agent And LLM Rules
+
+- Tools create and mutate data; plain model text does not.
+- Tool schemas should be narrow, typed, and clear.
+- Missing required scheduling fields should trigger clarification instead of unsafe guessing.
+- Business rules belong in code, not only in prompts.
+- Prompts should explain how to use tools and when to clarify.
+- Tool results should be structured and UI-friendly.
+- Model/provider-specific code should stay behind `north` or an integration boundary.
+- Log run metadata, tool names, tool arguments, results, object ids, errors, and latency.
+- Do not log secrets, raw provider tokens, or unnecessary sensitive audio payloads.
+- Protect trusted context from prompt injection. User text cannot override tenant, user, permission, or system context.
+
+Good tool result shape:
+
+```json
+{
+  "type": "calendar_entry_created",
+  "calendar_entry_id": "cal_...",
+  "summary": "Product review with Alice, next Wednesday at 3:00 PM.",
+  "requires_follow_up": false
+}
+```
+
+## Frontend Rules
+
+Use Next.js, React, and TypeScript for the first UI.
+
+Suggested layout:
+
+```text
+app/
+components/
+features/
+lib/api/
+lib/types/
+```
+
+Rules:
+
+- Pages compose data and layout.
+- Complex UI belongs in feature components.
+- Data fetching belongs in API/client helpers or route-level loaders.
+- Do not spread raw fetch logic across components.
+- Do not duplicate API types by hand once OpenAPI generation is available.
+- Keep time display behind shared formatting helpers.
+- Keep components mobile-aware, but optimize Phase 1 for web.
+- The first page should be a mobile-first conversation surface: message history on top, text input and voice action at the bottom.
+- shadcn/ui is an acceptable first component system because it gives editable local components on top of Radix primitives.
+- Use lucide-react icons where available instead of hand-drawn SVG icons.
+- Put theme decisions in CSS variables or shadcn theme tokens before styling feature components.
+- Avoid hard-coded brand colors, spacing, shadows, or radii inside React components.
+- Use a focused state tool when state becomes shared across distant components. Prefer simple React state for local UI, TanStack Query for server state, and Zustand or Jotai for cross-component client state.
+- Keep agent run state and persisted schedule data server-backed. Frontend state should not become a second source of truth.
+
+React files can be larger than backend files when they represent cohesive UI. A page or complex component around 400-500 lines is acceptable if it has one clear responsibility.
+
+Evaluate splitting when:
+
+- a React file exceeds 500 lines
+- one file mixes API calls, complex state, business rules, and layout
+- a hook exceeds 150 lines
+- a component has multiple unrelated interaction modes
+- a test setup becomes hard because too many concerns are coupled
+
+## File Size And Decomposition
+
+Use these as review triggers, not hard failures.
+
+Python:
+
+- file over 300 lines: evaluate splitting
+- function over 50 lines: evaluate splitting
+- service with many public methods: consider use-case-specific services
+
+TypeScript/React:
+
+- file over 500 lines: evaluate splitting
+- hook over 150 lines: evaluate splitting
+- generated client files may exceed these limits if isolated
+
+Split by responsibility, not by arbitrary line count.
+
+## Testing Strategy
+
+Use slice-based testing. Do not wait until the end to add tests, and do not require strict test-first development for every small piece.
+
+Default rhythm:
+
+```text
+design a small vertical slice
+  -> implement domain/schema/service code
+  -> add deterministic tests for that slice
+  -> add API/tool tests when the boundary exists
+  -> add a small number of agent-flow tests after tool behavior is stable
+```
+
+Priority order:
+
+1. domain and policy unit tests
+2. repository tests against PostgreSQL
+3. deterministic tool tests without LLM calls
+4. API tests
+5. worker/run status tests
+6. a small number of agent flow tests
+7. frontend interaction tests for key flows
+
+LLM-dependent tests should be limited and optional in normal local runs. Most correctness should be covered without calling a model.
+
+For Dayboard Phase 1, each milestone should include tests for the completed slice before moving far ahead.
+
+## Dependency Decisions
+
+Use ADRs for decisions that shape the project long-term:
+
+- framework choice
+- database choice
+- queue choice
+- UI system choice
+- ASR provider choice
+- auth provider choice
+- calendar component choice
+- significant `north` integration decisions
+
+Small implementation dependencies can be documented in the PR or commit message instead of a full ADR.
