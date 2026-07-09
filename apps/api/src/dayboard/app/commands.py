@@ -36,6 +36,13 @@ class CommandResponse(BaseModel):
 
 
 class CommandService:
+    """Temporary command path used only before the north agent loop exists.
+
+    M3 must replace this placeholder with north-driven command execution,
+    persisted run state, and agent-owned clarification behavior. Do not add
+    more natural-language interpretation here.
+    """
+
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -64,6 +71,8 @@ class CommandService:
                 result=result,
             )
 
+        # Temporary M2 fallback. The final behavior should be produced by the
+        # north agent clarification flow, not by hard-coded application text.
         return CommandResponse(
             run_id=run_id,
             status="needs_clarification",

@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from uuid import UUID
 
+from pydantic import AliasChoices
 from pydantic import Field
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,10 +34,18 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
     rate_limit_storage_url: str | None = Field(default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL")
+    cors_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        validation_alias=AliasChoices("DAYBOARD_CORS_ORIGINS", "CORS_ORIGINS"),
+    )
 
     @property
     def effective_rate_limit_storage_url(self) -> str:
         return self.rate_limit_storage_url or self.redis_url
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 @lru_cache

@@ -51,6 +51,8 @@ Engineering work should follow [engineering-guidelines.md](./engineering-guideli
 - call tools from structured input before connecting the LLM
 - add repository tests against PostgreSQL
 
+Any command API added in M2 is temporary. It may return a hard-coded clarification only to keep the frontend/API contract moving before the agent loop exists. That fallback must be removed or replaced in M3 when `north` owns command interpretation and clarification.
+
 ### M3
 
 - connect agent loop to scheduling tools

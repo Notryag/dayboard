@@ -78,14 +78,20 @@ Completed M2 work:
 - added command API tests for structured creation and clarification fallback
 - added OpenAI-compatible model gateway configuration placeholders
 - added Redis-backed FastAPI rate limiting configuration
+- connected the Next.js composer to the temporary `/api/commands` endpoint
+- added local CORS configuration for Next.js dev origins
+
+Temporary implementation notes:
+
+- `CommandService` is an M2 placeholder. Its hard-coded clarification fallback must be removed when the `north` agent command loop is introduced.
+- Do not add natural-language interpretation to the placeholder command service. M3 should route text through `north`, product tools, persisted run state, and agent-owned clarification.
 
 Next implementation slice:
 
-1. connect the Next.js composer to the placeholder endpoint
-2. display completed and clarification responses in the chat UI
-3. decide the first natural-language parsing boundary before adding LLM calls
-4. introduce persisted `agent_runs` before long-running or streamed command execution
-5. add provider-level request/token budgets before enabling real LLM execution
+1. decide the first natural-language parsing boundary before adding LLM calls
+2. introduce persisted `agent_runs` before long-running or streamed command execution
+3. replace the placeholder command fallback with `north` clarification handling
+4. add provider-level request/token budgets before enabling real LLM execution
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

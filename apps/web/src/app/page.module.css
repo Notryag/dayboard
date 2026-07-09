@@ -139,6 +139,12 @@
   background: var(--color-primary);
 }
 
+.sendButton:disabled,
+.iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 .inputWrap {
   min-width: 0;
 }
@@ -154,6 +160,10 @@
 
 .inputWrap input::placeholder {
   color: var(--color-text-muted);
+}
+
+.inputWrap input:disabled {
+  cursor: not-allowed;
 }
 
 .srOnly {
