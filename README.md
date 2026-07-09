@@ -62,4 +62,5 @@ The first usable Dayboard loop should be:
 - [docs/phase-1-plan.md](./docs/phase-1-plan.md)
 - [docs/engineering-guidelines.md](./docs/engineering-guidelines.md)
 - [docs/ui-design.md](./docs/ui-design.md)
+- [docs/deploy.md](./docs/deploy.md)
 - [docs/adr/README.md](./docs/adr/README.md)

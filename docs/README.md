@@ -47,11 +47,16 @@ Architecture decisions:
 
 - [adr/README.md](./adr/README.md)
 
+Deployment:
+
+- [deploy.md](./deploy.md)
+
 ## Loading Guidance
 
 - Start with [PROJECT_STATE.md](./PROJECT_STATE.md) to understand the current direction.
 - Read [architecture.md](./architecture.md) when changing backend, agent, storage, API, or infrastructure boundaries.
 - Read [engineering-guidelines.md](./engineering-guidelines.md) before adding code.
 - Read [ui-design.md](./ui-design.md) before changing the main chat UI, theme variables, or component system.
+- Read [deploy.md](./deploy.md) before changing GitHub, Vercel, API hosting, or secret handling.
 - Read ADRs only when making or revisiting a major technical decision.
 - Avoid pulling all docs into context for small edits.
