@@ -4,6 +4,15 @@
 
 Dayboard has started implementation. M1 scaffolding is in place for the API, web app, local infrastructure, and initial database schema.
 
+The repository is initialized at `/root/dayboard`.
+
+Latest committed baseline:
+
+```text
+84e046c Initial Dayboard scaffold
+Author: Notryag <1135814285@qq.com>
+```
+
 The current direction is:
 
 - product name: Dayboard
@@ -38,7 +47,7 @@ The current direction is:
 
 ## Next Milestone
 
-Continue M1/M2 from [phase-1-plan.md](./phase-1-plan.md).
+Continue M2 from [phase-1-plan.md](./phase-1-plan.md).
 
 Completed M1 work:
 
@@ -52,12 +61,22 @@ Completed M1 work:
 - added Docker Compose for PostgreSQL and Redis
 - added the first mobile-first conversation UI
 
+Completed M2 work:
+
+- added `SchedulingService` for calendar entries and task items
+- added deterministic scheduling tool adapters:
+  - `create_calendar_entry`
+  - `list_calendar_entries`
+  - `create_task_item`
+  - `list_task_items`
+- added PostgreSQL-backed tests for the create/list tool paths
+
 Next implementation slice:
 
-1. add application services for calendar entries and task items
-2. add deterministic `create_calendar_entry` and `create_task_item` tools
-3. add repository tests against PostgreSQL
-4. add the first `POST /api/commands` placeholder flow without LLM calls
+1. add the first `POST /api/commands` placeholder flow without LLM calls
+2. add request/response schemas for command creation
+3. add command API tests
+4. connect the Next.js composer to the placeholder endpoint
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
@@ -70,6 +89,7 @@ cd apps/web && npm run lint
 cd apps/web && npm run build
 cd apps/api && uv sync
 cd apps/api && uv run ruff check .
+cd apps/api && uv run pytest
 cd apps/api && uv run python -c "from dayboard.main import app; from dayboard.context import get_dev_tenant_context; print(app.title, get_dev_tenant_context().timezone)"
 cd apps/api && uv run alembic upgrade head --sql
 docker compose up -d postgres redis
