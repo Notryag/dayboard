@@ -218,6 +218,23 @@ Initial keying:
 
 Later, `/api/commands`, voice upload, and provider calls should each have separate limits because their cost profiles are different.
 
+Provider budgets are application/business controls and belong in code, not only
+at the gateway. The gateway cannot reliably know which command will call a
+model, which model will be used, how many agent turns will run, or which tenant
+plan should be charged. Dayboard should check provider budgets immediately
+before real model calls.
+
+Initial provider budget controls:
+
+- request budget by tenant, user, and model
+- estimated token budget by tenant, user, and model
+- shared Redis or Valkey storage in server environments
+- memory storage only for tests or local isolated development
+
+The first token budget uses a cheap prompt-size estimate. Once real provider
+calls are enabled, Dayboard should add a usage ledger that records provider
+reported input/output tokens, cost, `tenant_id`, `user_id`, `run_id`, and model.
+
 ## Agent Assembly Boundary
 
 Dayboard owns the product assembly function. `north` should expose generic runtime primitives, while Dayboard decides which tools, prompts, context, and clarification rules are installed.

@@ -4,7 +4,9 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.app.command_schemas import CommandRequest, CommandResponse
+from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 
 
@@ -27,11 +29,26 @@ class NorthCommandExecutor:
     event mapping before replacing the placeholder flow.
     """
 
+    def __init__(
+        self,
+        *,
+        settings: Settings | None = None,
+        budget_guard: ProviderBudgetGuard | None = None,
+    ) -> None:
+        self.settings = settings or get_settings()
+        self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
+
     async def execute(
         self,
         session: AsyncSession,
         context: TenantContext,
         request: CommandRequest,
     ) -> CommandResponse:
-        del session, context, request
+        del session
+        estimate = self.budget_guard.estimate(input_text=request.message)
+        self.budget_guard.check(
+            context=context,
+            model_name=self.settings.agent_model_name,
+            estimate=estimate,
+        )
         raise NotImplementedError("north command execution is not wired yet")

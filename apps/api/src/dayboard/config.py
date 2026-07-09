@@ -34,6 +34,19 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
     rate_limit_storage_url: str | None = Field(default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL")
+    provider_budget_enabled: bool = Field(default=True, alias="DAYBOARD_PROVIDER_BUDGET_ENABLED")
+    provider_budget_request_limit: str = Field(
+        default="30/minute",
+        alias="DAYBOARD_PROVIDER_BUDGET_REQUEST_LIMIT",
+    )
+    provider_budget_token_limit: str = Field(
+        default="60000/day",
+        alias="DAYBOARD_PROVIDER_BUDGET_TOKEN_LIMIT",
+    )
+    provider_budget_storage_url: str | None = Field(
+        default=None,
+        alias="DAYBOARD_PROVIDER_BUDGET_STORAGE_URL",
+    )
     cors_origins: str = Field(
         default="http://localhost:3000,http://127.0.0.1:3000",
         validation_alias=AliasChoices("DAYBOARD_CORS_ORIGINS", "CORS_ORIGINS"),
@@ -42,6 +55,10 @@ class Settings(BaseSettings):
     @property
     def effective_rate_limit_storage_url(self) -> str:
         return self.rate_limit_storage_url or self.redis_url
+
+    @property
+    def effective_provider_budget_storage_url(self) -> str:
+        return self.provider_budget_storage_url or self.redis_url
 
     @property
     def allowed_cors_origins(self) -> list[str]:
