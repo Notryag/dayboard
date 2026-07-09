@@ -240,6 +240,17 @@ build_dayboard_agent(
 
 This keeps product behavior in Dayboard and avoids adding Dayboard-specific assumptions to `north`.
 
+Dayboard should keep a replaceable command executor boundary:
+
+```text
+CommandService
+  -> CommandExecutor
+    -> temporary placeholder executor
+    -> later NorthCommandExecutor
+```
+
+The placeholder executor exists only to keep the API and UI moving before model execution is enabled. The `NorthCommandExecutor` should become the owner of command interpretation, tool calling, and clarification once DB/session context injection and provider budgets are in place.
+
 The model must not generate trusted context fields. The server injects them:
 
 - `tenant_id`

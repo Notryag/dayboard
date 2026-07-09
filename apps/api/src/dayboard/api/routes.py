@@ -6,7 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from dayboard.app.commands import CommandRequest, CommandResponse, CommandService
+from dayboard.app.command_schemas import CommandRequest, CommandResponse
+from dayboard.app.commands import CommandService
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session

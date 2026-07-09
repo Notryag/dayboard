@@ -84,15 +84,18 @@ Completed M2 work:
 - added `AgentRunService` and run event repositories
 - added `GET /api/runs/{run_id}` and `GET /api/runs/{run_id}/events`
 - changed the temporary command path to create real run records and lifecycle events
+- added Dayboard agent assembly boundary around `north.build_agent`
+- added replaceable command executor boundary so the placeholder can be swapped for a north-backed executor
 
 Temporary implementation notes:
 
 - `CommandService` is an M2 placeholder. Its hard-coded clarification fallback must be removed when the `north` agent command loop is introduced.
 - Do not add natural-language interpretation to the placeholder command service. M3 should route text through `north`, product tools, persisted run state, and agent-owned clarification.
+- `NorthCommandExecutor` is an integration placeholder. It intentionally does not call the model yet; Dayboard still needs LangChain tool wrappers with injected DB/session context and provider request/token budgets before enabling real LLM execution.
 
 Next implementation slice:
 
-1. decide the first natural-language parsing boundary before adding LLM calls
+1. wrap Dayboard scheduling tools as `north`/LangChain-compatible tools with injected DB/session context
 2. replace the placeholder command fallback with `north` clarification handling
 3. add provider-level request/token budgets before enabling real LLM execution
 4. add SSE or polling UI for run event updates
