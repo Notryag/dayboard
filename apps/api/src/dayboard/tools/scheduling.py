@@ -19,7 +19,6 @@ class CreateCalendarEntryInput(BaseModel):
     timezone: str = Field(min_length=1, max_length=64)
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = None
-    created_by_run_id: UUID | None = None
 
 
 class CalendarEntryToolResult(BaseModel):
@@ -36,7 +35,6 @@ class CreateTaskItemInput(BaseModel):
     timezone: str = Field(min_length=1, max_length=64)
     reminder: Reminder | None = None
     status: TaskStatus = TaskStatus.open
-    created_by_run_id: UUID | None = None
 
 
 class TaskItemToolResult(BaseModel):
@@ -51,11 +49,13 @@ async def create_calendar_entry(
     session: AsyncSession,
     context: TenantContext,
     data: CreateCalendarEntryInput,
+    *,
+    created_by_run_id: UUID | None = None,
 ) -> CalendarEntryToolResult:
     service = SchedulingService(session)
     entry = await service.create_calendar_entry(
         context,
-        CalendarEntryCreate(**data.model_dump()),
+        CalendarEntryCreate(**data.model_dump(), created_by_run_id=created_by_run_id),
     )
     return CalendarEntryToolResult(
         calendar_entry_id=entry.id,
@@ -76,11 +76,13 @@ async def create_task_item(
     session: AsyncSession,
     context: TenantContext,
     data: CreateTaskItemInput,
+    *,
+    created_by_run_id: UUID | None = None,
 ) -> TaskItemToolResult:
     service = SchedulingService(session)
     task = await service.create_task_item(
         context,
-        TaskItemCreate(**data.model_dump()),
+        TaskItemCreate(**data.model_dump(), created_by_run_id=created_by_run_id),
     )
     return TaskItemToolResult(
         task_item_id=task.id,

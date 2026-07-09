@@ -222,23 +222,39 @@ Later, `/api/commands`, voice upload, and provider calls should each have separa
 
 Dayboard owns the product assembly function. `north` should expose generic runtime primitives, while Dayboard decides which tools, prompts, context, and clarification rules are installed.
 
-The first implementation should look conceptually like:
+The first implementation uses local LangChain/north tool injection, not MCP.
+MCP can be considered later if Dayboard tools need to be exposed to other
+products or deployed as an external tool service. For now the tools are
+application-internal because they need Dayboard database sessions, tenant
+context, run identity, and domain services.
+
+The implementation should look conceptually like:
 
 ```python
-build_dayboard_agent(
-    tenant_context=tenant_context,
-    tools=[
-        create_calendar_entry,
-        create_task_item,
-        list_calendar_entries,
-        list_task_items,
-    ],
-    prompts=dayboard_prompts,
-    checkpointer=checkpointer,
+tools = build_scheduling_tools(
+    session=session,
+    context=tenant_context,
+    run_id=run_id,
+)
+
+agent = build_dayboard_agent(
+    settings=settings,
+    tools=tools,
 )
 ```
 
 This keeps product behavior in Dayboard and avoids adding Dayboard-specific assumptions to `north`.
+
+The model-visible tool schemas must only contain business fields. Trusted
+fields are injected by server closures and must not be exposed to the model:
+
+```text
+model-visible fields:
+  title, start_time, end_time, timezone, participants, reminder, due_at, status
+
+server-injected fields:
+  session, tenant_id, user_id, run_id, request_id, permissions
+```
 
 Dayboard should keep a replaceable command executor boundary:
 
