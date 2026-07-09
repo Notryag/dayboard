@@ -92,20 +92,19 @@ Completed M2 work:
 - added generic `north.invoke_agent_once` helper in the reusable `north` package
 - implemented `NorthCommandExecutor` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
 
-Temporary implementation notes:
+Implementation notes:
 
-- `CommandService` is an M2 placeholder. Its hard-coded clarification fallback must be removed when the `north` agent command loop is introduced.
-- Do not add natural-language interpretation to the placeholder command service. M3 should route text through `north`, product tools, persisted run state, and agent-owned clarification.
-- `CommandService` still defaults to the placeholder executor. Switch the default to `NorthCommandExecutor` only after live model configuration and manual end-to-end verification.
+- `CommandService` defaults to `NorthCommandExecutor`; the old runtime placeholder path has been removed.
+- Tests can still inject fake executors to avoid live model calls.
+- Do not add natural-language interpretation outside the north-backed executor path.
 - Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
 
 Next implementation slice:
 
-1. add a feature flag or setting to choose placeholder vs `NorthCommandExecutor`
-2. run a live model smoke test with OpenAI-compatible `.env` config
-3. replace the placeholder command fallback with `north` clarification handling after live verification
-4. add provider usage ledger for real token accounting
-5. add SSE or polling UI for run event updates
+1. run a live model smoke test with OpenAI-compatible `.env` config
+2. tune prompt/tool schemas based on live behavior
+3. add provider usage ledger for real token accounting
+4. add SSE or polling UI for run event updates
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

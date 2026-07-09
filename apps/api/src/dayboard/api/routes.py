@@ -7,8 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from dayboard.app.command_schemas import CommandRequest, CommandResponse
-from dayboard.app.commands import CommandService
+from dayboard.app.commands import CommandService, get_command_executor
 from dayboard.app.runs import AgentRunService
+from dayboard.agent.executor import CommandExecutor
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
@@ -34,8 +35,9 @@ async def create_command(
     request: CommandRequest,
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    executor: CommandExecutor = Depends(get_command_executor),
 ) -> CommandResponse:
-    service = CommandService(session)
+    service = CommandService(session, executor=executor)
     return await service.handle_command(tenant_context, request)
 
 

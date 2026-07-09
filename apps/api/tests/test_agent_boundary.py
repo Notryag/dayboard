@@ -42,6 +42,12 @@ async def test_command_service_accepts_replaceable_executor(
     assert response.clarification_question == "fake question"
 
 
+def test_command_service_defaults_to_north_executor(db_session: AsyncSession) -> None:
+    service = CommandService(db_session)
+
+    assert isinstance(service.executor, NorthCommandExecutor)
+
+
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}
 
