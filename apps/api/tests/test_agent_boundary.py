@@ -6,7 +6,9 @@ from dayboard.app.command_schemas import CommandRequest, CommandResponse
 from dayboard.app.commands import CommandService
 from dayboard.config import Settings
 from dayboard.context import TenantContext
+from dayboard.agent.executor import NorthCommandExecutor
 from dayboard.agent.factory import build_dayboard_agent
+from dayboard.app.runs import AgentRunService
 
 
 class FakeExecutor:
@@ -57,3 +59,42 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert captured["model_name"] == "openai:gpt-test"
     assert "scheduling assistant" in captured["system_prompt"]
     assert captured["tools"] == ["tool"]
+
+
+async def test_north_executor_maps_clarification_result_to_run(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+    monkeypatch,
+) -> None:
+    built = {}
+
+    def fake_build_dayboard_agent(*args, **kwargs):
+        built["run_id"] = kwargs["run_id"]
+        built["context"] = kwargs["context"]
+        built["session"] = kwargs["session"]
+        return {"agent": "fake"}
+
+    async def fake_invoker(**kwargs):
+        assert kwargs["agent_factory"]() == {"agent": "fake"}
+        return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
+
+    monkeypatch.setattr("dayboard.agent.executor.build_dayboard_agent", fake_build_dayboard_agent)
+    executor = NorthCommandExecutor(
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        invoker=fake_invoker,
+    )
+
+    response = await executor.execute(db_session, tenant_context, CommandRequest(message="安排会议"))
+
+    assert response.status == "needs_clarification"
+    assert response.clarification_question == "几点开始？"
+    assert built["context"] == tenant_context
+    assert built["session"] is db_session
+    assert str(built["run_id"]) == response.run_id
+
+    runs = AgentRunService(db_session)
+    events = await runs.list_events(tenant_context, response.run_id)
+    assert events[-1].event_type == "clarification_requested"

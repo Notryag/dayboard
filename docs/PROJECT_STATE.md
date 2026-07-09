@@ -89,20 +89,23 @@ Completed M2 work:
 - added LangChain/north-compatible scheduling tool wrappers with server-injected session, tenant context, and run id
 - removed `created_by_run_id` from model-visible scheduling tool input
 - added provider-level request and estimated token budget guard before real model calls
+- added generic `north.invoke_agent_once` helper in the reusable `north` package
+- implemented `NorthCommandExecutor` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
 
 Temporary implementation notes:
 
 - `CommandService` is an M2 placeholder. Its hard-coded clarification fallback must be removed when the `north` agent command loop is introduced.
 - Do not add natural-language interpretation to the placeholder command service. M3 should route text through `north`, product tools, persisted run state, and agent-owned clarification.
-- `NorthCommandExecutor` is an integration placeholder. It intentionally does not call the model yet; Dayboard still needs clarification event mapping before enabling real LLM execution.
+- `CommandService` still defaults to the placeholder executor. Switch the default to `NorthCommandExecutor` only after live model configuration and manual end-to-end verification.
 - Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
 
 Next implementation slice:
 
-1. implement `NorthCommandExecutor` with Dayboard scheduling tools injected into `north`
-2. replace the placeholder command fallback with `north` clarification handling
-3. add provider usage ledger for real token accounting
-4. add SSE or polling UI for run event updates
+1. add a feature flag or setting to choose placeholder vs `NorthCommandExecutor`
+2. run a live model smoke test with OpenAI-compatible `.env` config
+3. replace the placeholder command fallback with `north` clarification handling after live verification
+4. add provider usage ledger for real token accounting
+5. add SSE or polling UI for run event updates
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
@@ -116,6 +119,7 @@ cd apps/web && npm run build
 cd apps/api && uv sync
 cd apps/api && uv run ruff check .
 cd apps/api && uv run pytest
+cd apps/api && uv run python -c "from north import invoke_agent_once; print(invoke_agent_once)"
 cd apps/api && uv run alembic upgrade head
 cd apps/api && uv run python -c "from dayboard.main import app; from dayboard.context import get_dev_tenant_context; print(app.title, get_dev_tenant_context().timezone)"
 cd apps/api && uv run alembic upgrade head --sql

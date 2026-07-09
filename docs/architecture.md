@@ -279,10 +279,10 @@ Dayboard should keep a replaceable command executor boundary:
 CommandService
   -> CommandExecutor
     -> temporary placeholder executor
-    -> later NorthCommandExecutor
+    -> NorthCommandExecutor
 ```
 
-The placeholder executor exists only to keep the API and UI moving before model execution is enabled. The `NorthCommandExecutor` should become the owner of command interpretation, tool calling, and clarification once DB/session context injection and provider budgets are in place.
+The placeholder executor exists only to keep the API and UI moving before model execution is enabled. `NorthCommandExecutor` owns command interpretation, tool calling, and clarification for the north-backed path. It creates Dayboard run records, checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events.
 
 The model must not generate trusted context fields. The server injects them:
 

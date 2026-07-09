@@ -45,10 +45,15 @@ async def test_north_command_executor_checks_budget_before_model_execution(
             DAYBOARD_PROVIDER_BUDGET_TOKEN_LIMIT="1000/minute",
         )
     )
-    executor = NorthCommandExecutor(settings=guard.settings, budget_guard=guard)
+    async def fake_invoker(**kwargs):
+        del kwargs
+        return {"messages": [{"content": "ok"}]}
 
-    with pytest.raises(NotImplementedError):
-        await executor.execute(db_session, tenant_context, CommandRequest(message="安排明天开会"))
+    executor = NorthCommandExecutor(settings=guard.settings, budget_guard=guard, invoker=fake_invoker)
+
+    response = await executor.execute(db_session, tenant_context, CommandRequest(message="安排明天开会"))
+
+    assert response.status == "completed"
 
     with pytest.raises(ProviderBudgetExceeded):
         await executor.execute(db_session, tenant_context, CommandRequest(message="安排后天开会"))
