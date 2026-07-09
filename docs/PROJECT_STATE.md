@@ -21,6 +21,7 @@ The current direction is:
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`
+- model gateway config: OpenAI-compatible environment variables in `.env`
 - database: PostgreSQL
 - queue/cache/stream fanout: Redis or Valkey
 - worker candidate: `arq`
@@ -44,6 +45,8 @@ The current direction is:
 - Zustand or Jotai are acceptable candidates for shared client state when plain React state is no longer enough.
 - The first UI should focus on the conversation surface only: message history, text input, voice action, and send action.
 - Visual choices should use CSS variables or shadcn theme tokens rather than hard-coded component colors.
+- Real provider credentials must stay in `.env` or a secret store and must not be committed.
+- Application rate limiting belongs at the FastAPI boundary first, with provider-level budgets added before real LLM calls.
 
 ## Next Milestone
 
@@ -73,6 +76,8 @@ Completed M2 work:
 - added `POST /api/commands` placeholder flow without LLM calls
 - added command request/response schemas
 - added command API tests for structured creation and clarification fallback
+- added OpenAI-compatible model gateway configuration placeholders
+- added Redis-backed FastAPI rate limiting configuration
 
 Next implementation slice:
 
@@ -80,6 +85,7 @@ Next implementation slice:
 2. display completed and clarification responses in the chat UI
 3. decide the first natural-language parsing boundary before adding LLM calls
 4. introduce persisted `agent_runs` before long-running or streamed command execution
+5. add provider-level request/token budgets before enabling real LLM execution
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

@@ -57,6 +57,16 @@ S3-compatible object storage
 - LLM APIs used by `north`
 - later ASR APIs used by Dayboard input services
 
+Model provider credentials must come from environment variables or a secret store, not code or committed files. Dayboard should support OpenAI-compatible gateways through:
+
+```text
+APP_MODEL_NAME
+OPENAI_BASE_URL
+OPENAI_API_KEY
+```
+
+Real values belong in `.env`, which is ignored by git. `.env.example` should contain only empty placeholders or safe defaults.
+
 ## Technology Choices
 
 - Frontend: Next.js, React, TypeScript
@@ -72,6 +82,7 @@ S3-compatible object storage
 - API contract: OpenAPI generated from FastAPI, then consumed by the web app
 - Object storage: S3-compatible storage for audio and future attachments
 - Observability: structured logs first, OpenTelemetry later
+- Rate limiting: edge/gateway first when deployed, FastAPI middleware as the application boundary, provider-level budgets before LLM calls
 
 ## Project Shape
 
@@ -181,6 +192,29 @@ DELETE /api/task-items/{task_id}
 ```
 
 `POST /api/commands` should support idempotent retries with an `Idempotency-Key` header.
+
+## Rate Limiting
+
+Rate limiting belongs at multiple layers:
+
+```text
+edge/CDN/API gateway
+  -> coarse public traffic protection
+FastAPI middleware
+  -> tenant/user/IP request protection
+agent/model provider boundary
+  -> LLM request and token budgets
+```
+
+The first application implementation uses FastAPI middleware backed by Redis or Valkey. This keeps limits shared across API processes. In-process memory limits are acceptable only for local development or tests.
+
+Initial keying:
+
+- prefer trusted `tenant_id` or authenticated user id when auth exists
+- temporarily use `X-Tenant-Id` when provided
+- otherwise fall back to client address
+
+Later, `/api/commands`, voice upload, and provider calls should each have separate limits because their cost profiles are different.
 
 ## Agent Assembly Boundary
 

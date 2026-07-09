@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+import os
 from uuid import UUID
 
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
+
+os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
 
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.models import CalendarEntryRow, TaskItemRow

@@ -203,6 +203,9 @@ Time rules:
 - Use `Idempotency-Key` for command creation and other retryable write endpoints.
 - Expose run status through `GET /api/runs/{run_id}`.
 - Expose live run updates through SSE when streaming is implemented.
+- Apply rate limiting at the API boundary for user-facing write and command endpoints.
+- Use Redis or Valkey for shared rate limit state in server environments.
+- Do not rely only on frontend throttling for cost or abuse control.
 
 Suggested error shape:
 
@@ -228,6 +231,10 @@ Suggested error shape:
 - Log run metadata, tool names, tool arguments, results, object ids, errors, and latency.
 - Do not log secrets, raw provider tokens, or unnecessary sensitive audio payloads.
 - Protect trusted context from prompt injection. User text cannot override tenant, user, permission, or system context.
+- Load model credentials and gateway URLs only from environment variables or secret stores.
+- Do not commit real `OPENAI_API_KEY`, `OPENAI_BASE_URL`, provider keys, or copied local Codex credentials.
+- Support OpenAI-compatible forwarding through `.env` variables such as `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
+- Add provider-level request/token budgets before enabling real LLM command execution.
 
 Good tool result shape:
 

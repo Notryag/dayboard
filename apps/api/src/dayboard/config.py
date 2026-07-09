@@ -4,6 +4,7 @@ from functools import lru_cache
 from uuid import UUID
 
 from pydantic import Field
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,16 @@ class Settings(BaseSettings):
     )
     default_timezone: str = Field(default="Asia/Shanghai", alias="DAYBOARD_DEFAULT_TIMEZONE")
     default_locale: str = Field(default="zh-CN", alias="DAYBOARD_DEFAULT_LOCALE")
+    agent_model_name: str = Field(default="openai:gpt-4o-mini", alias="APP_MODEL_NAME")
+    openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
+    openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
+    rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
+    rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
+    rate_limit_storage_url: str | None = Field(default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL")
+
+    @property
+    def effective_rate_limit_storage_url(self) -> str:
+        return self.rate_limit_storage_url or self.redis_url
 
 
 @lru_cache
