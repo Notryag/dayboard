@@ -47,7 +47,7 @@ Do not duplicate existing implementations for:
 - calendar display widgets
 - ASR provider clients
 
-Adding a third-party dependency is encouraged when it reduces real implementation risk and has a clear boundary. Prefer libraries with active maintenance, clear APIs, reasonable size, and low lock-in.
+Adding a third-party dependency is encouraged when it reduces real implementation risk and has a clear boundary. Prefer libraries with active maintenance, clear APIs, reasonable size, and low lock-in. Stability, operability, and maintainability are more important than minimizing dependency count.
 
 Good candidates for reuse include:
 
@@ -331,6 +331,8 @@ Priority order:
 7. frontend interaction tests for key flows
 
 LLM-dependent tests should be limited and optional in normal local runs. Most correctness should be covered without calling a model.
+
+Unit tests for application orchestration may use fakes for database sessions, model invokers, and provider gateways when the behavior under test is routing, budgeting, logging, or status mapping. Repository tests, API persistence tests, and tool tests must still run against PostgreSQL because PostgreSQL is the source of truth and its constraints, JSONB behavior, timestamps, and transaction behavior are part of the product contract.
 
 For Dayboard Phase 1, each milestone should include tests for the completed slice before moving far ahead.
 

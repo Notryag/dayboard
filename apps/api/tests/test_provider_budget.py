@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, estimate_prompt_tokens
-from dayboard.agent.executor import NorthCommandExecutor
 from dayboard.app.command_schemas import CommandRequest
+from dayboard.app.commands import CommandService
 from dayboard.config import Settings
 from dayboard.context import TenantContext
 
@@ -33,9 +34,9 @@ def test_provider_budget_guard_rejects_request_over_limit(tenant_context: Tenant
     assert exc_info.value.budget_type == "request"
 
 
-async def test_north_command_executor_checks_budget_before_model_execution(
-    db_session: AsyncSession,
+async def test_command_service_checks_budget_before_model_execution(
     tenant_context: TenantContext,
+    monkeypatch,
 ) -> None:
     guard = ProviderBudgetGuard(
         Settings(
@@ -49,11 +50,49 @@ async def test_north_command_executor_checks_budget_before_model_execution(
         del kwargs
         return {"messages": [{"content": "ok"}]}
 
-    executor = NorthCommandExecutor(settings=guard.settings, budget_guard=guard, invoker=fake_invoker)
+    class FakeRunService:
+        def __init__(self, session) -> None:
+            self.session = session
 
-    response = await executor.execute(db_session, tenant_context, CommandRequest(message="安排明天开会"))
+        async def create_run(self, context, *, input_message, thread_id=None):
+            del context, input_message, thread_id
+            return SimpleNamespace(id="fake-run")
+
+        async def mark_running(self, context, run):
+            del context
+            return run
+
+        async def mark_needs_clarification(self, context, run, *, question):
+            result = run
+            del context, question, run
+            return result
+
+        async def mark_completed(self, context, run, *, result_message, event_metadata=None):
+            result = run
+            del context, result_message, event_metadata, run
+            return result
+
+        async def mark_failed(self, context, run, *, error_type, error_message):
+            result = run
+            del context, error_type, error_message, run
+            return result
+
+    class FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
+
+    service = CommandService(
+        FakeSession(),
+        settings=guard.settings,
+        budget_guard=guard,
+        invoker=fake_invoker,
+    )
+
+    response = await service.handle_command(tenant_context, CommandRequest(message="安排明天开会"))
 
     assert response.status == "completed"
 
     with pytest.raises(ProviderBudgetExceeded):
-        await executor.execute(db_session, tenant_context, CommandRequest(message="安排后天开会"))
+        await service.handle_command(tenant_context, CommandRequest(message="安排后天开会"))

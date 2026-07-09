@@ -9,6 +9,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "secret-value")
     monkeypatch.setenv("DAYBOARD_RATE_LIMIT_DEFAULT", "10/minute")
     monkeypatch.setenv("DAYBOARD_RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/9")
+    monkeypatch.setenv("DAYBOARD_LOG_LEVEL", "DEBUG")
 
     settings = Settings()
 
@@ -19,3 +20,4 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert "secret-value" not in repr(settings)
     assert settings.rate_limit_default == "10/minute"
     assert settings.effective_rate_limit_storage_url == "redis://localhost:6379/9"
+    assert settings.log_level == "DEBUG"

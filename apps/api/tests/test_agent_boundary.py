@@ -1,24 +1,25 @@
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
 
 from dayboard.app.command_schemas import CommandRequest, CommandResponse
 from dayboard.app.commands import CommandService
 from dayboard.config import Settings
 from dayboard.context import TenantContext
-from dayboard.agent.executor import NorthCommandExecutor
 from dayboard.agent.factory import build_dayboard_agent
-from dayboard.app.runs import AgentRunService
 
 
-class FakeExecutor:
-    async def execute(
+class FakeCommandService:
+    async def handle_command(
         self,
-        session: AsyncSession,
         context: TenantContext,
         request: CommandRequest,
     ) -> CommandResponse:
-        del session, context
+        del context
         return CommandResponse(
             run_id="fake-run",
             status="needs_clarification",
@@ -27,11 +28,10 @@ class FakeExecutor:
         )
 
 
-async def test_command_service_accepts_replaceable_executor(
-    db_session: AsyncSession,
+async def test_command_route_can_override_service_for_tests(
     tenant_context: TenantContext,
 ) -> None:
-    service = CommandService(db_session, executor=FakeExecutor())
+    service = FakeCommandService()
 
     response = await service.handle_command(
         tenant_context,
@@ -40,12 +40,6 @@ async def test_command_service_accepts_replaceable_executor(
 
     assert response.run_id == "fake-run"
     assert response.clarification_question == "fake question"
-
-
-def test_command_service_defaults_to_north_executor(db_session: AsyncSession) -> None:
-    service = CommandService(db_session)
-
-    assert isinstance(service.executor, NorthCommandExecutor)
 
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
@@ -67,25 +61,59 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert captured["tools"] == ["tool"]
 
 
-async def test_north_executor_maps_clarification_result_to_run(
-    db_session: AsyncSession,
+async def test_command_service_maps_north_clarification_result_to_run(
     tenant_context: TenantContext,
     monkeypatch,
 ) -> None:
     built = {}
+    recorded_events = []
+
+    class FakeRunService:
+        def __init__(self, session) -> None:
+            self.session = session
+
+        async def create_run(self, context, *, input_message, thread_id=None):
+            del context, input_message, thread_id
+            return SimpleNamespace(id=uuid4())
+
+        async def mark_running(self, context, run):
+            del context
+            return run
+
+        async def mark_needs_clarification(self, context, run, *, question):
+            result = run
+            del context, run
+            recorded_events.append(("clarification_requested", question))
+            return result
+
+        async def mark_completed(self, context, run, *, result_message, event_metadata=None):
+            result = run
+            del context, result_message, event_metadata, run
+            return result
+
+        async def mark_failed(self, context, run, *, error_type, error_message):
+            result = run
+            del context, error_type, error_message, run
+            return result
+
+    class FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
 
     def fake_build_dayboard_agent(*args, **kwargs):
         built["run_id"] = kwargs["run_id"]
         built["context"] = kwargs["context"]
-        built["session"] = kwargs["session"]
         return {"agent": "fake"}
 
     async def fake_invoker(**kwargs):
         assert kwargs["agent_factory"]() == {"agent": "fake"}
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 
-    monkeypatch.setattr("dayboard.agent.executor.build_dayboard_agent", fake_build_dayboard_agent)
-    executor = NorthCommandExecutor(
+    monkeypatch.setattr("dayboard.app.commands.build_dayboard_agent", fake_build_dayboard_agent)
+    service = CommandService(
+        FakeSession(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -93,14 +121,71 @@ async def test_north_executor_maps_clarification_result_to_run(
         invoker=fake_invoker,
     )
 
-    response = await executor.execute(db_session, tenant_context, CommandRequest(message="安排会议"))
+    response = await service.handle_command(tenant_context, CommandRequest(message="安排会议"))
 
     assert response.status == "needs_clarification"
     assert response.clarification_question == "几点开始？"
     assert built["context"] == tenant_context
-    assert built["session"] is db_session
     assert str(built["run_id"]) == response.run_id
+    assert recorded_events[-1] == ("clarification_requested", "几点开始？")
 
-    runs = AgentRunService(db_session)
-    events = await runs.list_events(tenant_context, response.run_id)
-    assert events[-1].event_type == "clarification_requested"
+
+async def test_command_service_logs_and_marks_failed_run(
+    tenant_context: TenantContext,
+    monkeypatch,
+    caplog,
+) -> None:
+    recorded_failures = []
+
+    class FakeRunService:
+        def __init__(self, session) -> None:
+            self.session = session
+
+        async def create_run(self, context, *, input_message, thread_id=None):
+            del context, input_message, thread_id
+            return SimpleNamespace(id=uuid4())
+
+        async def mark_running(self, context, run):
+            del context
+            return run
+
+        async def mark_needs_clarification(self, context, run, *, question):
+            result = run
+            del context, question, run
+            return result
+
+        async def mark_completed(self, context, run, *, result_message, event_metadata=None):
+            result = run
+            del context, result_message, event_metadata, run
+            return result
+
+        async def mark_failed(self, context, run, *, error_type, error_message):
+            result = run
+            del context, run
+            recorded_failures.append((error_type, error_message))
+            return result
+
+    class FakeSession:
+        async def commit(self) -> None:
+            return None
+
+    async def failing_invoker(**kwargs):
+        del kwargs
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
+    service = CommandService(
+        FakeSession(),
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        invoker=failing_invoker,
+    )
+
+    with caplog.at_level(logging.ERROR, logger="dayboard.app.commands"):
+        with pytest.raises(RuntimeError, match="provider unavailable"):
+            await service.handle_command(tenant_context, CommandRequest(message="安排会议"))
+
+    assert recorded_failures == [("RuntimeError", "provider unavailable")]
+    assert "dayboard.command.failed" in caplog.text

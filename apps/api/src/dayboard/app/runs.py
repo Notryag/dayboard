@@ -121,6 +121,29 @@ class AgentRunService:
         )
         return run
 
+    async def mark_failed(
+        self,
+        context: TenantContext,
+        run: AgentRunRow,
+        *,
+        error_type: str,
+        error_message: str,
+    ) -> AgentRunRow:
+        await self.runs.update_status(
+            run,
+            AgentRunStatus.failed,
+            result_message=error_message,
+        )
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="run_failed",
+            category=AgentRunEventCategory.error,
+            content=error_message,
+            event_metadata={"error_type": error_type},
+        )
+        return run
+
     async def get_run(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
         row = await self.runs.get(context, run_id)
         return agent_run_from_row(row) if row else None

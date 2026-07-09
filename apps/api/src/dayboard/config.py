@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     environment: str = Field(default="local", alias="DAYBOARD_ENV")
+    log_level: str = Field(default="INFO", alias="DAYBOARD_LOG_LEVEL")
     database_url: str = Field(
         default="postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard",
         alias="DATABASE_URL",

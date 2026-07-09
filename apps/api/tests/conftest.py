@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
 
 from dayboard.app.command_schemas import CommandRequest, CommandResponse
-from dayboard.app.commands import get_command_executor
+from dayboard.app.commands import get_command_service
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, CalendarEntryRow, TaskItemRow
@@ -20,13 +20,16 @@ from dayboard.main import app
 from dayboard.tools import create_calendar_entry, create_task_item
 
 
-class TestCommandExecutor:
-    async def execute(
+class TestCommandService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def handle_command(
         self,
-        session: AsyncSession,
         context: TenantContext,
         request: CommandRequest,
     ) -> CommandResponse:
+        session = self.session
         runs = AgentRunService(session)
         run = await runs.create_run(context, input_message=request.message)
         await runs.mark_running(context, run)
@@ -90,7 +93,7 @@ async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_dev_tenant_context] = override_tenant_context
-    app.dependency_overrides[get_command_executor] = lambda: TestCommandExecutor()
+    app.dependency_overrides[get_command_service] = lambda: TestCommandService(db_session)
     try:
         yield app
     finally:

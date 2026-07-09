@@ -81,7 +81,7 @@ Real values belong in `.env`, which is ignored by git. `.env.example` should con
 - Worker: async Python worker, with `arq` as the first implementation candidate
 - API contract: OpenAPI generated from FastAPI, then consumed by the web app
 - Object storage: S3-compatible storage for audio and future attachments
-- Observability: structured logs first, OpenTelemetry later
+- Observability: structured JSON logs with `structlog` first, OpenTelemetry later
 - Rate limiting: edge/gateway first when deployed, FastAPI middleware as the application boundary, provider-level budgets before LLM calls
 
 ## Project Shape
@@ -273,15 +273,14 @@ server-injected fields:
   session, tenant_id, user_id, run_id, request_id, permissions
 ```
 
-Dayboard should keep a replaceable command executor boundary:
+Dayboard should keep the command application service as the product boundary:
 
 ```text
 CommandService
-  -> CommandExecutor
-    -> NorthCommandExecutor
+  -> north.invoke_agent_once
 ```
 
-`NorthCommandExecutor` owns command interpretation, tool calling, and clarification for the north-backed path. It creates Dayboard run records, checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. Tests may inject fake executors, but product runtime should not keep a parallel placeholder interpretation path.
+`CommandService` owns command interpretation, tool calling, and clarification for the north-backed path. It creates Dayboard run records, checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. Tests may inject a fake service or fake invoker, but product runtime should not keep a parallel placeholder interpretation path.
 
 The model must not generate trusted context fields. The server injects them:
 

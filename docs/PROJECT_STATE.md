@@ -90,12 +90,12 @@ Completed M2 work:
 - removed `created_by_run_id` from model-visible scheduling tool input
 - added provider-level request and estimated token budget guard before real model calls
 - added generic `north.invoke_agent_once` helper in the reusable `north` package
-- implemented `NorthCommandExecutor` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
+- implemented `CommandService` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
 
 Implementation notes:
 
-- `CommandService` defaults to `NorthCommandExecutor`; the old runtime placeholder path has been removed.
-- Tests can still inject fake executors to avoid live model calls.
+- `CommandService` now calls `north.invoke_agent_once` directly; the old runtime placeholder path has been removed.
+- Tests can still inject a fake service or fake invoker to avoid live model calls.
 - Do not add natural-language interpretation outside the north-backed executor path.
 - Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
 
@@ -140,7 +140,7 @@ The `/health` response was:
 
 PostgreSQL and Redis are running through Docker Compose after verification.
 
-PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In sandboxed command contexts, run tests from an environment that can reach `localhost:5432`.
+PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In Codex sandboxed command contexts, normal commands may not reach Docker or `localhost:5432`; if these tests hang or time out, rerun them from an execution context that can access Docker-exposed local ports after confirming `docker compose ps` reports healthy PostgreSQL and Redis containers.
 
 ## Testing Direction
 
