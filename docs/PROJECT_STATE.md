@@ -70,13 +70,16 @@ Completed M2 work:
   - `create_task_item`
   - `list_task_items`
 - added PostgreSQL-backed tests for the create/list tool paths
+- added `POST /api/commands` placeholder flow without LLM calls
+- added command request/response schemas
+- added command API tests for structured creation and clarification fallback
 
 Next implementation slice:
 
-1. add the first `POST /api/commands` placeholder flow without LLM calls
-2. add request/response schemas for command creation
-3. add command API tests
-4. connect the Next.js composer to the placeholder endpoint
+1. connect the Next.js composer to the placeholder endpoint
+2. display completed and clarification responses in the chat UI
+3. decide the first natural-language parsing boundary before adding LLM calls
+4. introduce persisted `agent_runs` before long-running or streamed command execution
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
@@ -109,6 +112,8 @@ The `/health` response was:
 ```
 
 PostgreSQL and Redis are running through Docker Compose after verification.
+
+PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In sandboxed command contexts, run tests from an environment that can reach `localhost:5432`.
 
 ## Testing Direction
 
