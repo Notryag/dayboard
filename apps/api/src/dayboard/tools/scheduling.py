@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.scheduling import SchedulingService
@@ -47,8 +48,15 @@ class SearchCalendarEntriesInput(BaseModel):
 
 class RescheduleCalendarEntryInput(BaseModel):
     calendar_entry_id: UUID
-    new_start_time: AwareDatetime
+    new_date: date | None = None
+    new_start_time: AwareDatetime | None = None
     expected_updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_target(self) -> RescheduleCalendarEntryInput:
+        if (self.new_date is None) == (self.new_start_time is None):
+            raise ValueError("provide exactly one of new_date or new_start_time")
+        return self
 
 
 class CalendarEntryRescheduleResult(BaseModel):
@@ -175,10 +183,19 @@ async def reschedule_calendar_entry(
         if existing.end_time is not None
         else timedelta(hours=1)
     )
-    new_end_time = data.new_start_time + duration
+    if data.new_start_time is not None:
+        resolved_start_time = data.new_start_time
+    else:
+        local_start = existing.start_time.astimezone(ZoneInfo(existing.timezone))
+        resolved_start_time = datetime.combine(
+            data.new_date,
+            local_start.time(),
+            tzinfo=ZoneInfo(existing.timezone),
+        )
+    new_end_time = resolved_start_time + duration
     conflicts = await service.list_calendar_conflicts(
         context,
-        start_time=data.new_start_time,
+        start_time=resolved_start_time,
         end_time=new_end_time,
         default_duration=timedelta(hours=1),
         exclude_entry_id=existing.id,
@@ -186,7 +203,7 @@ async def reschedule_calendar_entry(
     updated = await service.reschedule_calendar_entry(
         context,
         entry_id=existing.id,
-        start_time=data.new_start_time,
+        start_time=resolved_start_time,
         end_time=new_end_time,
         expected_updated_at=data.expected_updated_at,
         updated_by_run_id=updated_by_run_id,

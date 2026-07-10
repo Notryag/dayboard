@@ -40,6 +40,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     }
     assert set(reschedule_entry.args_schema.model_json_schema()["properties"]) == {
         "calendar_entry_id",
+        "new_date",
         "new_start_time",
         "expected_updated_at",
     }

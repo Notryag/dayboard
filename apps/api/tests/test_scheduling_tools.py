@@ -224,7 +224,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
         tenant_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=matches[0].id,
-            new_start_time="2026-07-12T08:00:00+08:00",
+            new_date="2026-07-12",
             expected_updated_at=matches[0].updated_at,
         ),
         updated_by_run_id=update_run_id,

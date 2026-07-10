@@ -105,6 +105,7 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
         "search_calendar_entries": ("start_time", "end_time", "title_query"),
         "reschedule_calendar_entry": (
             "calendar_entry_id",
+            "new_date",
             "new_start_time",
             "expected_updated_at",
         ),
@@ -137,7 +138,8 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             inputs.get("start_time"), inputs.get("end_time")
         )
     if tool_name == "reschedule_calendar_entry":
-        return f"正在修改日程时间为 {inputs.get('new_start_time')}"
+        target = inputs.get("new_start_time") or inputs.get("new_date")
+        return f"正在修改日程时间为 {target}"
     return {
         "list_calendar_entries": "正在查询日程",
         "list_task_items": "正在查询任务",
