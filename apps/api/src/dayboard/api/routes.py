@@ -211,8 +211,8 @@ async def cancel_run(
     run = await service.get_run_row(tenant_context, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
-    await service.mark_cancelled(tenant_context, run)
-    if run.status == "cancelled":
+    transitioned = await service.mark_cancelled(tenant_context, run)
+    if transitioned:
         await ConversationService(session).append_message(
             tenant_context,
             thread_id=run.thread_id,

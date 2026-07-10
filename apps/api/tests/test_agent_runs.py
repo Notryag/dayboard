@@ -110,6 +110,81 @@ async def test_run_reads_refresh_status_changed_by_another_session(
     assert refreshed.status == "cancelled"
 
 
+async def test_cancelled_run_cannot_be_completed_by_worker_with_stale_state(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="安排会议")
+    await service.mark_running(tenant_context, run)
+    await db_session.commit()
+
+    async with SessionLocal() as worker_session, SessionLocal() as cancelling_session:
+        worker = AgentRunService(worker_session)
+        cancelling = AgentRunService(cancelling_session)
+        worker_run = await worker.get_run_row(tenant_context, run.id)
+        cancelling_run = await cancelling.get_run_row(tenant_context, run.id)
+        assert worker_run is not None
+        assert cancelling_run is not None
+
+        assert await cancelling.mark_cancelled(tenant_context, cancelling_run)
+        await cancelling_session.commit()
+        assert not await worker.mark_completed(
+            tenant_context,
+            worker_run,
+            result_message="不应覆盖取消状态",
+        )
+        await worker_session.commit()
+
+    refreshed = await service.get_run_row(tenant_context, run.id)
+    events = await service.list_events(tenant_context, run.id)
+    assert refreshed is not None
+    assert refreshed.status == AgentRunStatus.cancelled.value
+    assert [event.event_type for event in events] == [
+        "run_created",
+        "run_started",
+        "run_cancelled",
+    ]
+
+
+async def test_completed_run_cannot_be_cancelled_by_request_with_stale_state(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="安排会议")
+    await service.mark_running(tenant_context, run)
+    await db_session.commit()
+
+    async with SessionLocal() as worker_session, SessionLocal() as cancelling_session:
+        worker = AgentRunService(worker_session)
+        cancelling = AgentRunService(cancelling_session)
+        worker_run = await worker.get_run_row(tenant_context, run.id)
+        cancelling_run = await cancelling.get_run_row(tenant_context, run.id)
+        assert worker_run is not None
+        assert cancelling_run is not None
+
+        assert await worker.mark_completed(
+            tenant_context,
+            worker_run,
+            result_message="已完成",
+        )
+        await worker_session.commit()
+        assert not await cancelling.mark_cancelled(tenant_context, cancelling_run)
+        await cancelling_session.commit()
+
+    refreshed = await service.get_run_row(tenant_context, run.id)
+    events = await service.list_events(tenant_context, run.id)
+    assert refreshed is not None
+    assert refreshed.status == AgentRunStatus.completed.value
+    assert refreshed.result_message == "已完成"
+    assert [event.event_type for event in events] == [
+        "run_created",
+        "run_started",
+        "run_completed",
+    ]
+
+
 async def test_expired_idempotency_keys_are_deleted(
     db_session: AsyncSession,
     tenant_context: TenantContext,

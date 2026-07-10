@@ -98,15 +98,22 @@ class AgentRunService:
             ) from exc
         return run
 
-    async def mark_running(self, context: TenantContext, run: AgentRunRow) -> AgentRunRow:
-        await self.runs.update_status(run, AgentRunStatus.running)
+    async def mark_running(self, context: TenantContext, run: AgentRunRow) -> bool:
+        transitioned = await self.runs.transition_status(
+            context,
+            run,
+            from_statuses={AgentRunStatus.queued},
+            status=AgentRunStatus.running,
+        )
+        if not transitioned:
+            return False
         await self.events.append(
             context,
             run_id=run.id,
             event_type="run_started",
             category=AgentRunEventCategory.lifecycle,
         )
-        return run
+        return True
 
     async def append_progress(
         self,
@@ -134,12 +141,16 @@ class AgentRunService:
         *,
         result_message: str,
         event_metadata: dict[str, Any] | None = None,
-    ) -> AgentRunRow:
-        await self.runs.update_status(
+    ) -> bool:
+        transitioned = await self.runs.transition_status(
+            context,
             run,
-            AgentRunStatus.completed,
+            from_statuses={AgentRunStatus.running},
+            status=AgentRunStatus.completed,
             result_message=result_message,
         )
+        if not transitioned:
+            return False
         await self.events.append(
             context,
             run_id=run.id,
@@ -148,7 +159,7 @@ class AgentRunService:
             content=result_message,
             event_metadata=event_metadata,
         )
-        return run
+        return True
 
     async def mark_needs_clarification(
         self,
@@ -156,12 +167,16 @@ class AgentRunService:
         run: AgentRunRow,
         *,
         question: str,
-    ) -> AgentRunRow:
-        await self.runs.update_status(
+    ) -> bool:
+        transitioned = await self.runs.transition_status(
+            context,
             run,
-            AgentRunStatus.needs_clarification,
+            from_statuses={AgentRunStatus.running},
+            status=AgentRunStatus.needs_clarification,
             result_message=question,
         )
+        if not transitioned:
+            return False
         await self.events.append(
             context,
             run_id=run.id,
@@ -169,7 +184,7 @@ class AgentRunService:
             category=AgentRunEventCategory.clarification,
             content=question,
         )
-        return run
+        return True
 
     async def mark_failed(
         self,
@@ -178,12 +193,16 @@ class AgentRunService:
         *,
         error_type: str,
         error_message: str,
-    ) -> AgentRunRow:
-        await self.runs.update_status(
+    ) -> bool:
+        transitioned = await self.runs.transition_status(
+            context,
             run,
-            AgentRunStatus.failed,
+            from_statuses={AgentRunStatus.queued, AgentRunStatus.running},
+            status=AgentRunStatus.failed,
             result_message=error_message,
         )
+        if not transitioned:
+            return False
         await self.events.append(
             context,
             run_id=run.id,
@@ -192,22 +211,21 @@ class AgentRunService:
             content=error_message,
             event_metadata={"error_type": error_type},
         )
-        return run
+        return True
 
     async def mark_cancelled(
         self,
         context: TenantContext,
         run: AgentRunRow,
-    ) -> AgentRunRow:
-        status = AgentRunStatus(run.status)
-        if status in {
-            AgentRunStatus.completed,
-            AgentRunStatus.failed,
-            AgentRunStatus.cancelled,
-            AgentRunStatus.needs_clarification,
-        }:
-            return run
-        await self.runs.update_status(run, AgentRunStatus.cancelled)
+    ) -> bool:
+        transitioned = await self.runs.transition_status(
+            context,
+            run,
+            from_statuses={AgentRunStatus.queued, AgentRunStatus.running},
+            status=AgentRunStatus.cancelled,
+        )
+        if not transitioned:
+            return False
         await self.events.append(
             context,
             run_id=run.id,
@@ -215,7 +233,7 @@ class AgentRunService:
             category=AgentRunEventCategory.lifecycle,
             content="请求已取消",
         )
-        return run
+        return True
 
     async def get_run(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
         row = await self.runs.get(context, run_id)
@@ -250,11 +268,12 @@ class AgentRunService:
                 timezone=timezone,
                 locale=locale,
             )
-            await self.mark_failed(
+            transitioned = await self.mark_failed(
                 context,
                 run,
                 error_type="StaleRunRecovered",
                 error_message="执行超时，请重试",
             )
-            recovered.append(run.id)
+            if transitioned:
+                recovered.append(run.id)
         return recovered

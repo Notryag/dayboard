@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
@@ -39,18 +39,33 @@ class AgentRunRepository:
         await self.session.flush()
         return row
 
-    async def update_status(
+    async def transition_status(
         self,
+        context: TenantContext,
         run: AgentRunRow,
-        status: AgentRunStatus,
         *,
+        from_statuses: set[AgentRunStatus],
+        status: AgentRunStatus,
         result_message: str | None = None,
-    ) -> AgentRunRow:
-        run.status = status.value
+    ) -> bool:
+        values: dict[str, Any] = {"status": status.value}
         if result_message is not None:
-            run.result_message = result_message
-        await self.session.flush()
-        return run
+            values["result_message"] = result_message
+        result = await self.session.execute(
+            update(AgentRunRow)
+            .where(
+                AgentRunRow.id == run.id,
+                AgentRunRow.tenant_id == context.tenant_id,
+                AgentRunRow.owner_user_id == context.user_id,
+                AgentRunRow.status.in_(status.value for status in from_statuses),
+                AgentRunRow.deleted_at.is_(None),
+            )
+            .values(**values)
+            .execution_options(synchronize_session="fetch")
+        )
+        transitioned = result.rowcount == 1
+        await self.session.refresh(run)
+        return transitioned
 
     async def get(self, context: TenantContext, run_id: UUID) -> AgentRunRow | None:
         return await self.session.scalar(

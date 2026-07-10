@@ -159,7 +159,8 @@ class CommandService:
             return
         try:
             if status == AgentRunStatus.queued:
-                await runs.mark_running(context, run)
+                if not await runs.mark_running(context, run):
+                    return
                 await self.session.commit()
             logger.info(
                 "dayboard.command.run_started",
@@ -298,7 +299,11 @@ class CommandService:
 
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
-                await runs.mark_needs_clarification(context, run, question=clarification_question)
+                if not await runs.mark_needs_clarification(
+                    context, run, question=clarification_question
+                ):
+                    await self.session.rollback()
+                    return
                 await self.conversations.set_pending_clarification(
                     context,
                     thread_id=run.thread_id,
@@ -324,12 +329,14 @@ class CommandService:
                 return
 
             message = _extract_final_message(result)
-            await runs.mark_completed(
+            if not await runs.mark_completed(
                 context,
                 run,
                 result_message=message,
                 event_metadata={"runtime": "north"},
-            )
+            ):
+                await self.session.rollback()
+                return
             await self.conversations.append_message(
                 context,
                 thread_id=run.thread_id,
@@ -372,12 +379,15 @@ class CommandService:
         run = await runs.get_run_row(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
-        await runs.mark_failed(
+        transitioned = await runs.mark_failed(
             context,
             run,
             error_type=type(exc).__name__,
             error_message=_safe_error_message(exc),
         )
+        if not transitioned:
+            await self.session.rollback()
+            return
         await self.conversations.append_message(
             context,
             thread_id=run.thread_id,
@@ -402,12 +412,15 @@ async def _mark_run_failed(
         run = await runs.get_run_row(context, run_id)
         if run is None:
             return
-        await runs.mark_failed(
+        transitioned = await runs.mark_failed(
             context,
             run,
             error_type=type(exc).__name__,
             error_message=_safe_error_message(exc),
         )
+        if not transitioned:
+            await session.rollback()
+            return
         await conversations.append_message(
             context,
             thread_id=run.thread_id,

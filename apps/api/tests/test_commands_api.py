@@ -95,6 +95,7 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
         runs = AgentRunService(db_session)
         first_row = await runs.get_run_row(tenant_context, UUID(first.json()["run_id"]))
         assert first_row is not None
+        await runs.mark_running(tenant_context, first_row)
         await runs.mark_completed(tenant_context, first_row, result_message="会议已创建")
         await db_session.commit()
 
