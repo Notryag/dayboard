@@ -14,11 +14,15 @@ from dayboard.domain.tasks import TaskStatus
 from dayboard.tools import (
     CreateCalendarEntryInput,
     CreateTaskItemInput,
+    RescheduleCalendarEntryInput,
+    SearchCalendarEntriesInput,
     check_calendar_conflicts,
     create_calendar_entry,
     create_task_item,
     list_calendar_entries,
     list_task_items,
+    reschedule_calendar_entry,
+    search_calendar_entries,
 )
 
 
@@ -125,6 +129,31 @@ def build_scheduling_tools(
         entries = await list_calendar_entries(session, context)
         return [entry.model_dump(mode="json") for entry in entries]
 
+    async def agent_search_calendar_entries(**kwargs):
+        input_data = SearchCalendarEntriesInput.model_validate(kwargs)
+        entries = await search_calendar_entries(session, context, input_data)
+        return [entry.model_dump(mode="json") for entry in entries]
+
+    async def agent_reschedule_calendar_entry(**kwargs):
+        if run_id is None:
+            raise RuntimeError("Rescheduling requires a run id")
+        input_data = RescheduleCalendarEntryInput.model_validate(kwargs)
+        result = await reschedule_calendar_entry(
+            session,
+            context,
+            input_data,
+            updated_by_run_id=run_id,
+        )
+        if progress:
+            await progress(
+                "conflict_check_completed",
+                "发现日程冲突，已按新时间修改"
+                if result.conflicts
+                else "新时间没有日程冲突",
+                {"conflict_count": len(result.conflicts)},
+            )
+        return result.model_dump(mode="json")
+
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
         data = CreateTaskItemInput.model_validate(
@@ -163,6 +192,24 @@ def build_scheduling_tools(
             name="list_calendar_entries",
             description="List active Dayboard calendar entries for the current user.",
             args_schema=ListCalendarEntriesInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=agent_search_calendar_entries,
+            name="search_calendar_entries",
+            description=(
+                "Search the current user's calendar entries in a start-time range, "
+                "optionally filtering by title. Use this to identify an entry before moving it."
+            ),
+            args_schema=SearchCalendarEntriesInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=agent_reschedule_calendar_entry,
+            name="reschedule_calendar_entry",
+            description=(
+                "Move one identified calendar entry to a new start time while preserving "
+                "its duration, title, participants, reminder, and original timezone."
+            ),
+            args_schema=RescheduleCalendarEntryInput,
         ),
         StructuredTool.from_function(
             coroutine=agent_create_task_item,

@@ -102,6 +102,12 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
     allowed_fields = {
         "create_calendar_entry": ("title", "start_time", "end_time"),
         "check_calendar_conflicts": ("start_time", "end_time"),
+        "search_calendar_entries": ("start_time", "end_time", "title_query"),
+        "reschedule_calendar_entry": (
+            "calendar_entry_id",
+            "new_start_time",
+            "expected_updated_at",
+        ),
         "create_task_item": ("title", "due_at", "status"),
     }.get(tool_name, ())
     return {key: content[key] for key in allowed_fields if key in content}
@@ -126,6 +132,12 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
         return "正在查询日程冲突" + _time_suffix(
             inputs.get("start_time"), inputs.get("end_time")
         )
+    if tool_name == "search_calendar_entries":
+        return "正在查找要修改的日程" + _time_suffix(
+            inputs.get("start_time"), inputs.get("end_time")
+        )
+    if tool_name == "reschedule_calendar_entry":
+        return f"正在修改日程时间为 {inputs.get('new_start_time')}"
     return {
         "list_calendar_entries": "正在查询日程",
         "list_task_items": "正在查询任务",
@@ -138,6 +150,8 @@ def _tool_label(tool_name: str) -> str:
         "create_calendar_entry": "创建日程",
         "check_calendar_conflicts": "查询日程冲突",
         "list_calendar_entries": "查询日程",
+        "search_calendar_entries": "查找日程",
+        "reschedule_calendar_entry": "修改日程",
         "create_task_item": "创建任务",
         "list_task_items": "查询任务",
         "ask_clarification": "信息确认",

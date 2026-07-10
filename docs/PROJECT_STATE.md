@@ -108,6 +108,7 @@ Completed M2 work:
 - expanded `/health` to verify PostgreSQL, Redis, and the arq worker heartbeat
 - added seven-day idempotency-key retention with a scheduled cleanup job and structured operational logs
 - added a DeerFlow-inspired `north.RuntimeJournal` integration that captures model/tool callbacks and projects allowlisted, user-safe execution events into Dayboard Run history
+- added tenant-scoped calendar search and safe rescheduling that preserves duration, event timezone, participants, and reminders, with optimistic concurrency, Run idempotency, and update audit attribution
 
 Implementation notes:
 
@@ -122,9 +123,10 @@ Implementation notes:
 
 Next implementation slice:
 
-1. add an optional avoid-conflicts flow with suggested alternative times
-2. tune prompt/tool schemas across additional live creation scenarios
-3. reconcile provider budget counters against persisted actual usage
+1. add calendar cancellation with the same search, optimistic concurrency, idempotency, and audit guarantees
+2. add persistent conversations and resumable clarification without replaying unbounded chat history
+3. tune prompt/tool schemas across additional live create/change/cancel scenarios
+4. reconcile provider budget counters against persisted actual usage
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

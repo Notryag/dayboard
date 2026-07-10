@@ -310,6 +310,8 @@ Initial tools:
 
 - `create_calendar_entry`
 - `list_calendar_entries`
+- `search_calendar_entries`
+- `reschedule_calendar_entry`
 - `create_task_item`
 - `list_task_items`
 

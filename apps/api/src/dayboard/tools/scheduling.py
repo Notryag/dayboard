@@ -39,6 +39,33 @@ class CalendarConflictResult(BaseModel):
     requires_follow_up: bool = True
 
 
+class SearchCalendarEntriesInput(BaseModel):
+    start_time: AwareDatetime
+    end_time: AwareDatetime
+    title_query: str | None = Field(default=None, min_length=1, max_length=240)
+
+
+class RescheduleCalendarEntryInput(BaseModel):
+    calendar_entry_id: UUID
+    new_start_time: AwareDatetime
+    expected_updated_at: AwareDatetime
+
+
+class CalendarEntryRescheduleResult(BaseModel):
+    type: str = "calendar_entry_rescheduled"
+    calendar_entry_id: UUID
+    previous_start_time: AwareDatetime
+    previous_end_time: AwareDatetime | None
+    calendar_entry: CalendarEntry
+    conflicts: list[CalendarEntry] = Field(default_factory=list)
+    summary: str
+    requires_follow_up: bool = False
+
+
+class CalendarEntryChangedError(RuntimeError):
+    pass
+
+
 class CreateTaskItemInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     due_at: AwareDatetime | None = None
@@ -105,6 +132,80 @@ async def list_calendar_entries(
 ) -> list[CalendarEntry]:
     service = SchedulingService(session)
     return list(await service.list_calendar_entries(context))
+
+
+async def search_calendar_entries(
+    session: AsyncSession,
+    context: TenantContext,
+    data: SearchCalendarEntriesInput,
+) -> list[CalendarEntry]:
+    return list(
+        await SchedulingService(session).search_calendar_entries(
+            context,
+            start_time=data.start_time,
+            end_time=data.end_time,
+            title_query=data.title_query,
+        )
+    )
+
+
+async def reschedule_calendar_entry(
+    session: AsyncSession,
+    context: TenantContext,
+    data: RescheduleCalendarEntryInput,
+    *,
+    updated_by_run_id: UUID,
+) -> CalendarEntryRescheduleResult:
+    service = SchedulingService(session)
+    repeated = await service.get_calendar_entry_updated_by_run(context, updated_by_run_id)
+    if repeated is not None:
+        return CalendarEntryRescheduleResult(
+            calendar_entry_id=repeated.id,
+            previous_start_time=repeated.start_time,
+            previous_end_time=repeated.end_time,
+            calendar_entry=repeated,
+            summary=f"{repeated.title} is already at {repeated.start_time.isoformat()}",
+        )
+
+    existing = await service.get_calendar_entry(context, data.calendar_entry_id)
+    if existing is None:
+        raise LookupError("Calendar entry not found")
+    duration = (
+        existing.end_time - existing.start_time
+        if existing.end_time is not None
+        else timedelta(hours=1)
+    )
+    new_end_time = data.new_start_time + duration
+    conflicts = await service.list_calendar_conflicts(
+        context,
+        start_time=data.new_start_time,
+        end_time=new_end_time,
+        default_duration=timedelta(hours=1),
+        exclude_entry_id=existing.id,
+    )
+    updated = await service.reschedule_calendar_entry(
+        context,
+        entry_id=existing.id,
+        start_time=data.new_start_time,
+        end_time=new_end_time,
+        expected_updated_at=data.expected_updated_at,
+        updated_by_run_id=updated_by_run_id,
+    )
+    if updated is None:
+        raise CalendarEntryChangedError(
+            "Calendar entry changed after it was selected; search again before updating"
+        )
+    return CalendarEntryRescheduleResult(
+        calendar_entry_id=updated.id,
+        previous_start_time=existing.start_time,
+        previous_end_time=existing.end_time,
+        calendar_entry=updated,
+        conflicts=list(conflicts),
+        summary=(
+            f"Moved {updated.title} from {existing.start_time.isoformat()} "
+            f"to {updated.start_time.isoformat()} with {len(conflicts)} conflict(s)"
+        ),
+    )
 
 
 async def check_calendar_conflicts(

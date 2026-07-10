@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -9,13 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
 from dayboard.tools import (
+    CalendarEntryChangedError,
     CreateCalendarEntryInput,
     CreateTaskItemInput,
+    RescheduleCalendarEntryInput,
+    SearchCalendarEntriesInput,
     create_calendar_entry,
     create_task_item,
     check_calendar_conflicts,
     list_calendar_entries,
     list_task_items,
+    reschedule_calendar_entry,
+    search_calendar_entries,
 )
 
 
@@ -186,3 +192,101 @@ async def test_create_and_list_task_item(
     assert result.task_item.tenant_id == tenant_context.tenant_id
     assert result.task_item.owner_user_id == tenant_context.user_id
     assert tasks == [result.task_item]
+
+
+async def test_search_and_reschedule_calendar_entry_preserves_event_details(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="产品会议",
+            start_time="2026-07-11T08:00:00+08:00",
+            end_time="2026-07-11T09:30:00+08:00",
+            timezone="Asia/Shanghai",
+            participants=["Alice"],
+        ),
+    )
+    matches = await search_calendar_entries(
+        db_session,
+        tenant_context,
+        SearchCalendarEntriesInput(
+            start_time="2026-07-11T00:00:00+08:00",
+            end_time="2026-07-12T00:00:00+08:00",
+            title_query="会议",
+        ),
+    )
+    update_run_id = uuid4()
+    moved = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=matches[0].id,
+            new_start_time="2026-07-12T08:00:00+08:00",
+            expected_updated_at=matches[0].updated_at,
+        ),
+        updated_by_run_id=update_run_id,
+    )
+    repeated = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=matches[0].id,
+            new_start_time="2026-07-13T08:00:00+08:00",
+            expected_updated_at=matches[0].updated_at,
+        ),
+        updated_by_run_id=update_run_id,
+    )
+
+    assert [entry.id for entry in matches] == [created.calendar_entry_id]
+    assert moved.previous_start_time.isoformat() == "2026-07-11T00:00:00+00:00"
+    assert moved.calendar_entry.start_time.isoformat() == "2026-07-12T00:00:00+00:00"
+    assert moved.calendar_entry.end_time is not None
+    assert moved.calendar_entry.end_time - moved.calendar_entry.start_time == timedelta(
+        hours=1, minutes=30
+    )
+    assert moved.calendar_entry.title == "产品会议"
+    assert moved.calendar_entry.participants == ["Alice"]
+    assert moved.calendar_entry.timezone == "Asia/Shanghai"
+    assert moved.calendar_entry.updated_by_run_id == update_run_id
+    assert repeated.calendar_entry.start_time == moved.calendar_entry.start_time
+
+
+async def test_reschedule_rejects_stale_selected_version(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="评审会",
+            start_time="2026-07-11T10:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    selected = created.calendar_entry
+    await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=selected.id,
+            new_start_time="2026-07-12T10:00:00+08:00",
+            expected_updated_at=selected.updated_at,
+        ),
+        updated_by_run_id=uuid4(),
+    )
+
+    with pytest.raises(CalendarEntryChangedError, match="changed after it was selected"):
+        await reschedule_calendar_entry(
+            db_session,
+            tenant_context,
+            RescheduleCalendarEntryInput(
+                calendar_entry_id=selected.id,
+                new_start_time="2026-07-13T10:00:00+08:00",
+                expected_updated_at=selected.updated_at,
+            ),
+            updated_by_run_id=uuid4(),
+        )

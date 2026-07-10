@@ -25,6 +25,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         participants=row.participants,
         reminder=Reminder.model_validate(row.reminder) if row.reminder else None,
         created_by_run_id=row.created_by_run_id,
+        updated_by_run_id=row.updated_by_run_id,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -66,6 +67,62 @@ class SchedulingService:
         rows = await self.calendar_entries.list_active(context)
         return [calendar_entry_from_row(row) for row in rows]
 
+    async def search_calendar_entries(
+        self,
+        context: TenantContext,
+        *,
+        start_time: datetime,
+        end_time: datetime,
+        title_query: str | None = None,
+    ) -> Sequence[CalendarEntry]:
+        rows = await self.calendar_entries.search_active(
+            context,
+            start_time=start_time,
+            end_time=end_time,
+            title_query=title_query,
+        )
+        return [calendar_entry_from_row(row) for row in rows]
+
+    async def get_calendar_entry(
+        self,
+        context: TenantContext,
+        entry_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get(context, entry_id)
+        return calendar_entry_from_row(row) if row else None
+
+    async def get_calendar_entry_updated_by_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get_by_updated_run(context, run_id)
+        return calendar_entry_from_row(row) if row else None
+
+    async def reschedule_calendar_entry(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        start_time: datetime,
+        end_time: datetime,
+        expected_updated_at: datetime,
+        updated_by_run_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.reschedule(
+            context,
+            entry_id=entry_id,
+            start_time=start_time,
+            end_time=end_time,
+            expected_updated_at=expected_updated_at,
+            updated_by_run_id=updated_by_run_id,
+        )
+        if row is None:
+            return None
+        await self.session.commit()
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
+
     async def get_calendar_entry_created_by_run(
         self,
         context: TenantContext,
@@ -81,12 +138,14 @@ class SchedulingService:
         start_time: datetime,
         end_time: datetime,
         default_duration: timedelta,
+        exclude_entry_id: UUID | None = None,
     ) -> Sequence[CalendarEntry]:
         rows = await self.calendar_entries.list_overlapping(
             context,
             start_time=start_time,
             end_time=end_time,
             default_duration=default_duration,
+            exclude_entry_id=exclude_entry_id,
         )
         return [calendar_entry_from_row(row) for row in rows]
 

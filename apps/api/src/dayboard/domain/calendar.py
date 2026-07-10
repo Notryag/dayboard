@@ -38,5 +38,6 @@ class CalendarEntry(BaseModel):
     participants: list[str]
     reminder: Reminder | None
     created_by_run_id: UUID | None
+    updated_by_run_id: UUID | None
     created_at: datetime
     updated_at: datetime
