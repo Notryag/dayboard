@@ -164,6 +164,8 @@ PostgreSQL and Redis are running through Docker Compose after verification.
 
 PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In Codex sandboxed command contexts, normal commands may not reach Docker or `localhost:5432`; if these tests hang or time out, rerun them from an execution context that can access Docker-exposed local ports after confirming `docker compose ps` reports healthy PostgreSQL and Redis containers.
 
+Tests use `TEST_DATABASE_URL` and refuse database names that do not end in `_test`. Run Alembic migrations against the test database before the suite; test fixtures intentionally truncate test tables between cases.
+
 ## Testing Direction
 
 Use slice-based testing:

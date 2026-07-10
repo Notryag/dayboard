@@ -16,6 +16,7 @@ These notes are for coding agents working on Dayboard.
 
 - Unit tests may use fakes for database sessions, model invokers, provider gateways, and run services when testing orchestration, logging, budgeting, or status mapping.
 - Repository tests, API persistence tests, and scheduling tool tests must still run against PostgreSQL.
+- Tests must use `TEST_DATABASE_URL` with a database name ending in `_test`. The test suite refuses to run against the product database because fixtures truncate tables.
 - Docker Compose provides PostgreSQL and Redis from `docker-compose.yml`.
 - In the Codex sandbox, normal commands may not reach Docker or `localhost:5432`. If PostgreSQL-backed tests hang or time out in the sandbox, rerun them with an execution context that can access Docker-exposed local ports.
 - Use `docker compose ps` to confirm `dayboard-postgres-1` and `dayboard-redis-1` are healthy before treating database test failures as code failures.

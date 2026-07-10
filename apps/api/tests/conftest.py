@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+# ruff: noqa: E402 -- test database safety must be configured before importing dayboard.db
+
 from collections.abc import AsyncIterator
 import os
 from uuid import UUID
 
 import pytest
 from sqlalchemy import delete
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
+test_database_url = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard_test",
+)
+if not (make_url(test_database_url).database or "").endswith("_test"):
+    raise RuntimeError("TEST_DATABASE_URL must use a database name ending in _test")
+os.environ["DATABASE_URL"] = test_database_url
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.api.routes import get_command_dispatcher
