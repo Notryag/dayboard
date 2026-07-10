@@ -31,3 +31,7 @@ Initial ADRs to add when implementation starts:
 - keep `CalendarEntry` out of `north`
 - use `tenant_id` with future isolation resolver
 - choose the first worker/queue implementation
+
+## Accepted Decisions
+
+- [ADR-001: Adopt DeerFlow Run and Runtime Patterns](./001-adopt-deerflow-run-runtime-patterns.md)

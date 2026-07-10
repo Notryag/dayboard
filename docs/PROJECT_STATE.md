@@ -73,12 +73,11 @@ Completed M2 work:
   - `create_task_item`
   - `list_task_items`
 - added PostgreSQL-backed tests for the create/list tool paths
-- added `POST /api/commands` placeholder flow without LLM calls
-- added command request/response schemas
-- added command API tests for structured creation and clarification fallback
+- added and later removed the temporary synchronous command placeholder
+- reduced command input to natural-language text interpreted only by north
 - added OpenAI-compatible model gateway configuration placeholders
 - added Redis-backed FastAPI rate limiting configuration
-- connected the Next.js composer to the temporary `/api/commands` endpoint
+- connected the Next.js composer to queued command creation and SSE terminal events
 - added local CORS configuration for Next.js dev origins
 - added `agent_runs` and `agent_run_events` persistence
 - added `AgentRunService` and run event repositories
@@ -91,6 +90,12 @@ Completed M2 work:
 - added provider-level request and estimated token budget guard before real model calls
 - added generic `north.invoke_agent_once` helper in the reusable `north` package
 - implemented `CommandService` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
+- added a PostgreSQL provider usage ledger that records actual input, output, and total tokens reported by LangChain model messages
+- added an SSE run-event endpoint with incremental replay, keep-alives, and terminal-event closure
+- verified `gpt-5.4-mini` live tool selection for calendar creation and clarification through the configured gateway
+- added `POST /api/command-runs`, which commits a queued run and returns 202 before execution
+- added an application-lifecycle background dispatcher that executes runs with independent database sessions
+- removed the old synchronous `/api/commands` path and temporary structured intent input
 
 Implementation notes:
 
@@ -98,13 +103,16 @@ Implementation notes:
 - Tests can still inject a fake service or fake invoker to avoid live model calls.
 - Do not add natural-language interpretation outside the north-backed executor path.
 - Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
+- Provider budget admission still uses a conservative pre-call estimate; actual provider usage is persisted after successful model calls and can be used for reconciliation in a later budget iteration.
+- A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
+- A live background smoke test returned a queued run in about 63 ms and then emitted created, started, and clarification events over SSE.
 
 Next implementation slice:
 
-1. run a live model smoke test with OpenAI-compatible `.env` config
-2. tune prompt/tool schemas based on live behavior
-3. add provider usage ledger for real token accounting
-4. add SSE or polling UI for run event updates
+1. replace the in-process dispatcher with a durable Redis-backed worker while preserving the run API
+2. add idempotency and explicit cancellation to the run resource
+3. tune prompt/tool schemas across additional live creation scenarios
+4. reconcile provider budget counters against persisted actual usage
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

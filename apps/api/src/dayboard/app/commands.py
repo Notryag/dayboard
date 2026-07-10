@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage
@@ -10,10 +11,11 @@ import structlog
 
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
-from dayboard.app.command_schemas import CommandRequest, CommandResponse
+from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
+from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.session import get_session
 
 logger = structlog.get_logger(__name__)
@@ -39,15 +41,35 @@ class CommandService:
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
         self.invoker = invoker
 
-    async def handle_command(
+    async def create_command_run(
         self,
         context: TenantContext,
         request: CommandRequest,
-    ) -> CommandResponse:
+    ) -> UUID:
+        run = await AgentRunService(self.session).create_run(
+            context,
+            input_message=request.message,
+        )
+        await self.session.commit()
+        logger.info(
+            "dayboard.command.run_queued",
+            run_id=str(run.id),
+            tenant_id=str(context.tenant_id),
+            user_id=str(context.user_id),
+        )
+        return run.id
+
+    async def execute_command_run(
+        self,
+        context: TenantContext,
+        request: CommandRequest,
+        run_id: UUID,
+    ) -> None:
         runs = AgentRunService(self.session)
-        run = None
+        run = await runs.get_run_row(context, run_id)
+        if run is None:
+            raise LookupError(f"Run {run_id} not found")
         try:
-            run = await runs.create_run(context, input_message=request.message)
             await runs.mark_running(context, run)
             logger.info(
                 "dayboard.command.run_started",
@@ -97,6 +119,30 @@ class CommandService:
                 },
             )
 
+            usage = _extract_provider_usage(result)
+            if usage is not None:
+                provider, _, _ = self.settings.agent_model_name.partition(":")
+                await ProviderUsageRepository(self.session).create(
+                    context,
+                    run_id=run.id,
+                    provider=provider or "unknown",
+                    model=self.settings.agent_model_name,
+                    input_tokens=usage["input_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    total_tokens=usage["total_tokens"],
+                    usage_metadata={"calls": usage["calls"]},
+                )
+                logger.info(
+                    "dayboard.command.provider_usage_recorded",
+                    run_id=str(run.id),
+                    tenant_id=str(context.tenant_id),
+                    user_id=str(context.user_id),
+                    model=self.settings.agent_model_name,
+                    input_tokens=usage["input_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    total_tokens=usage["total_tokens"],
+                )
+
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
                 await runs.mark_needs_clarification(context, run, question=clarification_question)
@@ -107,12 +153,7 @@ class CommandService:
                     tenant_id=str(context.tenant_id),
                     user_id=str(context.user_id),
                 )
-                return CommandResponse(
-                    run_id=str(run.id),
-                    status="needs_clarification",
-                    message="More scheduling details are needed.",
-                    clarification_question=clarification_question,
-                )
+                return
 
             message = _extract_final_message(result)
             await runs.mark_completed(
@@ -129,7 +170,6 @@ class CommandService:
                 user_id=str(context.user_id),
                 result_length=len(message),
             )
-            return CommandResponse(run_id=str(run.id), status="completed", message=message)
         except Exception as exc:
             if run is not None:
                 await _mark_run_failed(runs, self.session, context, run, exc)
@@ -203,3 +243,46 @@ def _extract_final_message(result: Any) -> str:
             if isinstance(dict_content, str) and dict_content.strip():
                 return dict_content.strip()
     return "Done."
+
+
+def _extract_provider_usage(result: Any) -> dict[str, Any] | None:
+    if not isinstance(result, dict) or not isinstance(result.get("messages"), list):
+        return None
+
+    calls: list[dict[str, int]] = []
+    for message in result["messages"]:
+        metadata = getattr(message, "usage_metadata", None)
+        if metadata is None and isinstance(message, dict):
+            metadata = message.get("usage_metadata")
+        if not isinstance(metadata, dict):
+            continue
+
+        input_tokens = _non_negative_int(metadata.get("input_tokens"))
+        output_tokens = _non_negative_int(metadata.get("output_tokens"))
+        total_tokens = _non_negative_int(metadata.get("total_tokens"))
+        if input_tokens is None and output_tokens is None and total_tokens is None:
+            continue
+        input_tokens = input_tokens or 0
+        output_tokens = output_tokens or 0
+        calls.append(
+            {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens if total_tokens is not None else input_tokens + output_tokens,
+            }
+        )
+
+    if not calls:
+        return None
+    return {
+        "input_tokens": sum(call["input_tokens"] for call in calls),
+        "output_tokens": sum(call["output_tokens"] for call in calls),
+        "total_tokens": sum(call["total_tokens"] for call in calls),
+        "calls": calls,
+    }
+
+
+def _non_negative_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value

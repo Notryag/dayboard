@@ -10,51 +10,45 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
 
-from dayboard.app.command_schemas import CommandRequest, CommandResponse
+from dayboard.app.command_schemas import CommandRequest
+from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import get_command_service
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
-from dayboard.db.models import AgentRunEventRow, AgentRunRow, CalendarEntryRow, TaskItemRow
+from dayboard.db.models import (
+    AgentRunEventRow,
+    AgentRunRow,
+    CalendarEntryRow,
+    ProviderUsageRecordRow,
+    TaskItemRow,
+)
 from dayboard.db.session import SessionLocal, get_session
 from dayboard.main import app
-from dayboard.tools import create_calendar_entry, create_task_item
 
 
 class TestCommandService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def handle_command(
+    async def create_command_run(
         self,
         context: TenantContext,
         request: CommandRequest,
-    ) -> CommandResponse:
-        session = self.session
-        runs = AgentRunService(session)
-        run = await runs.create_run(context, input_message=request.message)
-        await runs.mark_running(context, run)
-
-        if request.intent == "calendar_entry" and request.calendar_entry is not None:
-            result = await create_calendar_entry(session, context, request.calendar_entry, created_by_run_id=run.id)
-            await runs.mark_completed(context, run, result_message=result.summary)
-            await session.commit()
-            return CommandResponse(run_id=str(run.id), status="completed", message=result.summary, result=result)
-
-        if request.intent == "task_item" and request.task_item is not None:
-            result = await create_task_item(session, context, request.task_item, created_by_run_id=run.id)
-            await runs.mark_completed(context, run, result_message=result.summary)
-            await session.commit()
-            return CommandResponse(run_id=str(run.id), status="completed", message=result.summary, result=result)
-
-        question = "几点开始？"
-        await runs.mark_needs_clarification(context, run, question=question)
-        await session.commit()
-        return CommandResponse(
-            run_id=str(run.id),
-            status="needs_clarification",
-            message="More scheduling details are needed.",
-            clarification_question=question,
+    ) -> UUID:
+        run = await AgentRunService(self.session).create_run(
+            context,
+            input_message=request.message,
         )
+        await self.session.commit()
+        return run.id
+
+
+class TestCommandDispatcher:
+    def __init__(self) -> None:
+        self.started: list[tuple[UUID, TenantContext, CommandRequest]] = []
+
+    def start(self, run_id: UUID, context: TenantContext, request: CommandRequest) -> None:
+        self.started.append((run_id, context, request))
 
 
 @pytest.fixture
@@ -70,12 +64,14 @@ def tenant_context() -> TenantContext:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
+        await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(AgentRunRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
         await session.commit()
         yield session
+        await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(AgentRunRow))
         await session.execute(delete(CalendarEntryRow))
@@ -91,9 +87,12 @@ async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
     def override_tenant_context() -> TenantContext:
         return tenant_context
 
+    dispatcher = TestCommandDispatcher()
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_dev_tenant_context] = override_tenant_context
     app.dependency_overrides[get_command_service] = lambda: TestCommandService(db_session)
+    app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
+    app.state.test_command_dispatcher = dispatcher
     try:
         yield app
     finally:

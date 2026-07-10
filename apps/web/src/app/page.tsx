@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, SendHorizontal } from "lucide-react";
 import styles from "./page.module.css";
 
@@ -11,11 +11,14 @@ type ChatMessage = {
   time: string;
 };
 
-type CommandResponse = {
+type CommandRunResponse = {
   run_id: string;
-  status: "completed" | "needs_clarification";
-  message: string;
-  clarification_question: string | null;
+  status: "queued";
+};
+
+type RunEvent = {
+  event_type: string;
+  content: string | null;
 };
 
 const initialMessages: ChatMessage[] = [
@@ -48,10 +51,45 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const activeStreamRef = useRef<EventSource | null>(null);
 
   const apiBaseUrl = useMemo(() => {
     return process.env.NEXT_PUBLIC_DAYBOARD_API_BASE_URL ?? "http://127.0.0.1:8000";
   }, []);
+
+  useEffect(() => {
+    return () => activeStreamRef.current?.close();
+  }, []);
+
+  function followRun(runId: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const stream = new EventSource(`${apiBaseUrl}/api/runs/${runId}/events/stream`);
+      activeStreamRef.current = stream;
+
+      function finish(text: string) {
+        stream.close();
+        activeStreamRef.current = null;
+        resolve(text);
+      }
+
+      for (const eventType of ["run_completed", "clarification_requested"] as const) {
+        stream.addEventListener(eventType, (event) => {
+          const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
+          finish(runEvent.content ?? "已处理完成。");
+        });
+      }
+
+      stream.addEventListener("run_failed", (event) => {
+        const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
+        finish(runEvent.content ?? "请求没有成功。请稍后再试。");
+      });
+      stream.onerror = () => {
+        stream.close();
+        activeStreamRef.current = null;
+        reject(new Error("Run event stream disconnected"));
+      };
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +104,7 @@ export default function Home() {
     setMessages((current) => [...current, createMessage("user", text)]);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/commands`, {
+      const response = await fetch(`${apiBaseUrl}/api/command-runs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -78,11 +116,8 @@ export default function Home() {
         throw new Error(`Command request failed with ${response.status}`);
       }
 
-      const command: CommandResponse = await response.json();
-      const assistantText =
-        command.status === "needs_clarification"
-          ? (command.clarification_question ?? command.message)
-          : command.message;
+      const command: CommandRunResponse = await response.json();
+      const assistantText = await followRun(command.run_id);
 
       setMessages((current) => [...current, createMessage("assistant", assistantText)]);
     } catch {

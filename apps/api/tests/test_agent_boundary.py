@@ -6,40 +6,11 @@ from uuid import uuid4
 
 import pytest
 
-from dayboard.app.command_schemas import CommandRequest, CommandResponse
+from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.config import Settings
 from dayboard.context import TenantContext
 from dayboard.agent.factory import build_dayboard_agent
-
-
-class FakeCommandService:
-    async def handle_command(
-        self,
-        context: TenantContext,
-        request: CommandRequest,
-    ) -> CommandResponse:
-        del context
-        return CommandResponse(
-            run_id="fake-run",
-            status="needs_clarification",
-            message=request.message,
-            clarification_question="fake question",
-        )
-
-
-async def test_command_route_can_override_service_for_tests(
-    tenant_context: TenantContext,
-) -> None:
-    service = FakeCommandService()
-
-    response = await service.handle_command(
-        tenant_context,
-        CommandRequest(message="安排明天上午的事情"),
-    )
-
-    assert response.run_id == "fake-run"
-    assert response.clarification_question == "fake question"
 
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
@@ -58,7 +29,27 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert agent == {"agent": "fake"}
     assert captured["model_name"] == "openai:gpt-test"
     assert "scheduling assistant" in captured["system_prompt"]
-    assert captured["tools"] == ["tool"]
+    assert captured["tools"][0] == "tool"
+    assert captured["tools"][1].name == "ask_clarification"
+
+
+def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
+    captured = {}
+
+    def fake_build_agent(config, *, tools=None):
+        del config
+        captured["tools"] = tools
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+    from north.tools.builtin import ask_clarification
+
+    build_dayboard_agent(
+        Settings(APP_MODEL_NAME="openai:gpt-test"),
+        tools=[ask_clarification],
+    )
+
+    assert [tool.name for tool in captured["tools"]] == ["ask_clarification"]
 
 
 async def test_command_service_maps_north_clarification_result_to_run(
@@ -75,6 +66,10 @@ async def test_command_service_maps_north_clarification_result_to_run(
         async def create_run(self, context, *, input_message, thread_id=None):
             del context, input_message, thread_id
             return SimpleNamespace(id=uuid4())
+
+        async def get_run_row(self, context, run_id):
+            del context
+            return SimpleNamespace(id=run_id)
 
         async def mark_running(self, context, run):
             del context
@@ -121,12 +116,12 @@ async def test_command_service_maps_north_clarification_result_to_run(
         invoker=fake_invoker,
     )
 
-    response = await service.handle_command(tenant_context, CommandRequest(message="安排会议"))
+    request = CommandRequest(message="安排会议")
+    run_id = await service.create_command_run(tenant_context, request)
+    await service.execute_command_run(tenant_context, request, run_id)
 
-    assert response.status == "needs_clarification"
-    assert response.clarification_question == "几点开始？"
     assert built["context"] == tenant_context
-    assert str(built["run_id"]) == response.run_id
+    assert built["run_id"] == run_id
     assert recorded_events[-1] == ("clarification_requested", "几点开始？")
 
 
@@ -144,6 +139,10 @@ async def test_command_service_logs_and_marks_failed_run(
         async def create_run(self, context, *, input_message, thread_id=None):
             del context, input_message, thread_id
             return SimpleNamespace(id=uuid4())
+
+        async def get_run_row(self, context, run_id):
+            del context
+            return SimpleNamespace(id=run_id)
 
         async def mark_running(self, context, run):
             del context
@@ -185,7 +184,9 @@ async def test_command_service_logs_and_marks_failed_run(
 
     with caplog.at_level(logging.ERROR, logger="dayboard.app.commands"):
         with pytest.raises(RuntimeError, match="provider unavailable"):
-            await service.handle_command(tenant_context, CommandRequest(message="安排会议"))
+            request = CommandRequest(message="安排会议")
+            run_id = await service.create_command_run(tenant_context, request)
+            await service.execute_command_run(tenant_context, request, run_id)
 
     assert recorded_failures == [("RuntimeError", "provider unavailable")]
     assert "dayboard.command.failed" in caplog.text

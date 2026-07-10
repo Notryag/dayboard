@@ -85,12 +85,19 @@ class AgentRunEventRepository:
         await self.session.flush()
         return row
 
-    async def list_for_run(self, context: TenantContext, run_id: UUID) -> list[AgentRunEventRow]:
+    async def list_for_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        *,
+        after_seq: int = 0,
+    ) -> list[AgentRunEventRow]:
         result = await self.session.scalars(
             select(AgentRunEventRow)
             .where(
                 AgentRunEventRow.tenant_id == context.tenant_id,
                 AgentRunEventRow.run_id == run_id,
+                AgentRunEventRow.seq > after_seq,
             )
             .order_by(AgentRunEventRow.seq.asc())
         )

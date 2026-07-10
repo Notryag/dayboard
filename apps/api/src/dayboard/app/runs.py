@@ -148,6 +148,15 @@ class AgentRunService:
         row = await self.runs.get(context, run_id)
         return agent_run_from_row(row) if row else None
 
-    async def list_events(self, context: TenantContext, run_id: UUID) -> list[AgentRunEvent]:
-        rows = await self.events.list_for_run(context, run_id)
+    async def get_run_row(self, context: TenantContext, run_id: UUID) -> AgentRunRow | None:
+        return await self.runs.get(context, run_id)
+
+    async def list_events(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        *,
+        after_seq: int = 0,
+    ) -> list[AgentRunEvent]:
+        rows = await self.events.list_for_run(context, run_id, after_seq=after_seq)
         return [agent_run_event_from_row(row) for row in rows]

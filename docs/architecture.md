@@ -129,16 +129,16 @@ Text command flow:
 
 ```text
 Client
-  -> POST /api/commands
+  -> POST /api/command-runs
   -> API validates request and resolves TenantContext
-  -> application service creates agent_run
-  -> job is enqueued
-  -> worker runs north agent
+  -> application service persists a queued agent_run and returns 202
+  -> background dispatcher opens an independent database session
+  -> dispatcher runs north agent
   -> north calls Dayboard tools
   -> tool calls Dayboard domain service
   -> repository writes PostgreSQL
-  -> worker records run status and runtime events
-  -> client reads result or subscribes to run stream
+  -> dispatcher records run status and runtime events
+  -> client subscribes to the run SSE stream
 ```
 
 Clarification flow:
@@ -148,7 +148,7 @@ user text
   -> agent detects missing required scheduling data
   -> ask_clarification tool interrupts the run
   -> agent_run status becomes needs_clarification
-  -> API returns the question
+  -> SSE emits the question
   -> user answers on the same thread
   -> worker resumes the agent run
 ```
@@ -171,14 +171,15 @@ Phase 1 can skip full voice execution, but the boundary should exist.
 Phase 1 API:
 
 ```text
-POST /api/commands
+POST /api/command-runs
 GET  /api/runs/{run_id}
 GET  /api/runs/{run_id}/events
+GET  /api/runs/{run_id}/events/stream
 GET  /api/calendar-entries
 GET  /api/task-items
 ```
 
-`agent_runs` and `agent_run_events` are the source of truth for command execution state. Even before background workers are introduced, synchronous command handling should create a run and append lifecycle events so the API shape stays compatible with future async execution.
+`agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before the in-process dispatcher starts work with an independent database session. A durable Redis-backed worker can replace the dispatcher without changing the public run resource contract.
 
 Later API:
 
@@ -193,7 +194,7 @@ PATCH /api/task-items/{task_id}
 DELETE /api/task-items/{task_id}
 ```
 
-`POST /api/commands` should support idempotent retries with an `Idempotency-Key` header.
+`POST /api/command-runs` should support idempotent retries with an `Idempotency-Key` header.
 
 ## Rate Limiting
 
@@ -216,7 +217,7 @@ Initial keying:
 - temporarily use `X-Tenant-Id` when provided
 - otherwise fall back to client address
 
-Later, `/api/commands`, voice upload, and provider calls should each have separate limits because their cost profiles are different.
+Later, `/api/command-runs`, voice upload, and provider calls should each have separate limits because their cost profiles are different.
 
 Provider budgets are application/business controls and belong in code, not only
 at the gateway. The gateway cannot reliably know which command will call a
@@ -280,7 +281,18 @@ CommandService
   -> north.invoke_agent_once
 ```
 
-`CommandService` owns command interpretation, tool calling, and clarification for the north-backed path. It creates Dayboard run records, checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. Tests may inject a fake service or fake invoker, but product runtime should not keep a parallel placeholder interpretation path.
+`CommandService` owns queued run creation and execution of an existing Dayboard run. The execution path checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. The Gateway dispatcher owns task lifetime and database-session isolation. Tests may inject a fake service, dispatcher, or model invoker, but product runtime must not keep a parallel synchronous interpretation path.
+
+### DeerFlow Reference Boundary
+
+Evolution of `north` should use `/root/deer-flow` as its primary implementation reference. The most relevant reusable patterns are:
+
+- configuration-driven model construction with provider adapters and OpenAI-compatible gateway normalization
+- middleware with equivalent synchronous and asynchronous execution paths
+- a run manager separated from persisted event storage and stream fanout
+- explicit create, stream, join, wait, cancel, message, and event contracts for runs
+
+These patterns should be reduced to reusable runtime interfaces in `north`. DeerFlow's FastAPI Gateway, authentication, authorization, thread ownership, and application persistence remain application-layer concerns and should not become dependencies of `north`. Dayboard owns its tenant context, PostgreSQL records, scheduling tools, and public product API even when its run API follows DeerFlow semantics.
 
 The model must not generate trusted context fields. The server injects them:
 

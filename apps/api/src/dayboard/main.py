@@ -1,19 +1,29 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dayboard.api.rate_limit import configure_rate_limiting
 from dayboard.api.routes import router
+from dayboard.app.command_dispatcher import BackgroundCommandDispatcher
 from dayboard.config import get_settings
 from dayboard.observability.logging import configure_logging
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await app.state.command_dispatcher.shutdown()
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
-    app = FastAPI(title="Dayboard API", version="0.1.0")
+    app = FastAPI(title="Dayboard API", version="0.1.0", lifespan=lifespan)
+    app.state.command_dispatcher = BackgroundCommandDispatcher()
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_cors_origins,

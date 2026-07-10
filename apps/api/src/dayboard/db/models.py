@@ -103,3 +103,27 @@ class AgentRunEventRow(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class ProviderUsageRecordRow(Base):
+    __tablename__ = "provider_usage_records"
+    __table_args__ = (
+        Index("ix_provider_usage_tenant_user_created", "tenant_id", "owner_user_id", "created_at"),
+        Index("ix_provider_usage_tenant_run", "tenant_id", "run_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), nullable=False)
+    model: Mapped[str] = mapped_column(String(240), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(nullable=False)
+    output_tokens: Mapped[int] = mapped_column(nullable=False)
+    total_tokens: Mapped[int] = mapped_column(nullable=False)
+    usage_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )

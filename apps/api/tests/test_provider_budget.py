@@ -58,6 +58,10 @@ async def test_command_service_checks_budget_before_model_execution(
             del context, input_message, thread_id
             return SimpleNamespace(id="fake-run")
 
+        async def get_run_row(self, context, run_id):
+            del context
+            return SimpleNamespace(id=run_id)
+
         async def mark_running(self, context, run):
             del context
             return run
@@ -90,9 +94,11 @@ async def test_command_service_checks_budget_before_model_execution(
         invoker=fake_invoker,
     )
 
-    response = await service.handle_command(tenant_context, CommandRequest(message="安排明天开会"))
-
-    assert response.status == "completed"
+    first = CommandRequest(message="安排明天开会")
+    first_run_id = await service.create_command_run(tenant_context, first)
+    await service.execute_command_run(tenant_context, first, first_run_id)
 
     with pytest.raises(ProviderBudgetExceeded):
-        await service.handle_command(tenant_context, CommandRequest(message="安排后天开会"))
+        second = CommandRequest(message="安排后天开会")
+        second_run_id = await service.create_command_run(tenant_context, second)
+        await service.execute_command_run(tenant_context, second, second_run_id)
