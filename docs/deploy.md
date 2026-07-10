@@ -24,7 +24,6 @@ Deploy only the Next.js app to Vercel.
 Current Vercel deployment:
 
 ```text
-https://web-gj6a2l99g-notryags-projects.vercel.app
 https://web-red-rho-d3dz7i2rkr.vercel.app
 ```
 
@@ -70,11 +69,22 @@ OPENAI_API_KEY=...
 
 Keep provider credentials in the server environment or secret store only.
 
+Current API deployment:
+
+```text
+https://www.selfapi.art/dayboard-api
+```
+
+Nginx proxies `/dayboard-api/` to the loopback-only FastAPI service on port 8000. The API and arq worker run as the enabled `dayboard-api.service` and `dayboard-worker.service` systemd units.
+
 ## Current Deployment Shape
 
 ```text
 GitHub public repo
   -> Vercel project rooted at apps/web
-  -> API server runs apps/api
+  -> HTTPS Nginx proxy on www.selfapi.art
+  -> systemd FastAPI service and arq worker
   -> PostgreSQL and Redis/Valkey via Docker or managed services
 ```
+
+The server Docker Compose deployment binds PostgreSQL and Redis to `127.0.0.1`. Do not expose either data service directly to the public network.

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-dayboard}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dayboard}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - dayboard_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:8-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - dayboard_redis_data:/data
     healthcheck:
