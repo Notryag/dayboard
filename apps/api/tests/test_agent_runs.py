@@ -88,6 +88,60 @@ async def test_stale_running_runs_are_recovered_to_failed(
     assert events[-1].event_metadata["error_type"] == "StaleRunRecovered"
 
 
+async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    stale = await service.create_run(tenant_context, input_message="旧请求")
+    recent = await service.create_run(tenant_context, input_message="新请求")
+    stale_at = datetime.now(UTC) - timedelta(minutes=40)
+    await db_session.execute(
+        update(AgentRunRow).where(AgentRunRow.id == stale.id).values(created_at=stale_at)
+    )
+    await db_session.commit()
+
+    recovered = await service.recover_stale_queued(
+        created_before=datetime.now(UTC) - timedelta(minutes=30),
+        timezone="Asia/Shanghai",
+        locale="zh-CN",
+    )
+    await db_session.commit()
+    await db_session.refresh(stale)
+    await db_session.refresh(recent)
+    events = await service.list_events(tenant_context, stale.id)
+
+    assert recovered == [stale.id]
+    assert stale.status == AgentRunStatus.failed.value
+    assert stale.result_message == "排队超时，请重试"
+    assert recent.status == AgentRunStatus.queued.value
+    assert events[-1].event_type == "run_failed"
+    assert events[-1].event_metadata["error_type"] == "QueueWaitTimeout"
+
+
+async def test_queued_timeout_cannot_fail_a_run_that_has_started(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="正在启动")
+    await service.mark_running(tenant_context, run)
+
+    transitioned = await service.mark_failed(
+        tenant_context,
+        run,
+        error_type="QueueWaitTimeout",
+        error_message="排队超时，请重试",
+        from_statuses={AgentRunStatus.queued},
+    )
+    await db_session.commit()
+    events = await service.list_events(tenant_context, run.id)
+
+    assert not transitioned
+    assert run.status == AgentRunStatus.running.value
+    assert [event.event_type for event in events] == ["run_created", "run_started"]
+
+
 async def test_run_reads_refresh_status_changed_by_another_session(
     db_session: AsyncSession,
     tenant_context: TenantContext,

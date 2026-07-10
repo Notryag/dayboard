@@ -88,6 +88,16 @@ class AgentRunRepository:
         )
         return list(result)
 
+    async def list_stale_queued(self, *, created_before: datetime) -> list[AgentRunRow]:
+        result = await self.session.scalars(
+            select(AgentRunRow).where(
+                AgentRunRow.status == AgentRunStatus.queued.value,
+                AgentRunRow.created_at < created_before,
+                AgentRunRow.deleted_at.is_(None),
+            )
+        )
+        return list(result)
+
 
 class IdempotencyKeyRepository:
     def __init__(self, session: AsyncSession) -> None:

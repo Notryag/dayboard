@@ -62,19 +62,28 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
     del ctx
-    cutoff = datetime.now(UTC) - timedelta(seconds=settings.stale_run_seconds)
+    now = datetime.now(UTC)
+    running_cutoff = now - timedelta(seconds=settings.stale_run_seconds)
+    queued_cutoff = now - timedelta(seconds=settings.queued_run_timeout_seconds)
     async with SessionLocal() as session:
-        recovered = await AgentRunService(session).recover_stale_running(
-            updated_before=cutoff,
+        service = AgentRunService(session)
+        recovered_running = await service.recover_stale_running(
+            updated_before=running_cutoff,
+            timezone=settings.default_timezone,
+            locale=settings.default_locale,
+        )
+        recovered_queued = await service.recover_stale_queued(
+            created_before=queued_cutoff,
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
         await session.commit()
-    if recovered:
+    if recovered_running or recovered_queued:
         logger.warning(
             "dayboard.worker.stale_runs_recovered",
-            count=len(recovered),
-            run_ids=[str(run_id) for run_id in recovered],
+            running_count=len(recovered_running),
+            queued_count=len(recovered_queued),
+            run_ids=[str(run_id) for run_id in recovered_running + recovered_queued],
         )
 
 

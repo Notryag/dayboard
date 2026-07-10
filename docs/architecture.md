@@ -181,6 +181,8 @@ GET  /api/task-items
 
 `agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before enqueueing an arq job. The Redis queue provides cross-process delivery, while each worker opens an independent database session. Jobs use the run id as their unique queue id and re-check PostgreSQL state before execution because arq uses at-least-once delivery.
 
+The worker periodically recovers abandoned active runs. A `running` run uses its last update time and a shorter execution timeout; a `queued` run uses its creation time and a longer queue-wait timeout. Recovery uses atomic, status-specific transitions (`queued -> failed` or `running -> failed`), so a job that starts while recovery is scanning cannot be mistaken for an abandoned queued job. A delayed Redis job that arrives after recovery exits immediately after observing the terminal PostgreSQL state.
+
 Later API:
 
 ```text
@@ -467,6 +469,7 @@ Keep `tenant_id` in tables even when a future tenant uses a dedicated database. 
 - Tool writes should be transactional.
 - Command creation should support idempotency keys.
 - Run status should be explicit: `queued`, `running`, `needs_clarification`, `completed`, `failed`, `cancelled`.
+- Run status transitions should be atomic and terminal states must never be overwritten by late workers or cancellation requests.
 - Long-running run output should be delivered over SSE and recoverable from persisted run events.
 - Redis or Valkey can provide queueing, fanout, locks, and rate limits, but PostgreSQL remains the durable source.
 

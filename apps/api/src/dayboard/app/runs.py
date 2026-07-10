@@ -193,11 +193,13 @@ class AgentRunService:
         *,
         error_type: str,
         error_message: str,
+        from_statuses: set[AgentRunStatus] | None = None,
     ) -> bool:
         transitioned = await self.runs.transition_status(
             context,
             run,
-            from_statuses={AgentRunStatus.queued, AgentRunStatus.running},
+            from_statuses=from_statuses
+            or {AgentRunStatus.queued, AgentRunStatus.running},
             status=AgentRunStatus.failed,
             result_message=error_message,
         )
@@ -273,6 +275,34 @@ class AgentRunService:
                 run,
                 error_type="StaleRunRecovered",
                 error_message="执行超时，请重试",
+                from_statuses={AgentRunStatus.running},
+            )
+            if transitioned:
+                recovered.append(run.id)
+        return recovered
+
+    async def recover_stale_queued(
+        self,
+        *,
+        created_before: datetime,
+        timezone: str,
+        locale: str,
+    ) -> list[UUID]:
+        stale_runs = await self.runs.list_stale_queued(created_before=created_before)
+        recovered: list[UUID] = []
+        for run in stale_runs:
+            context = TenantContext(
+                tenant_id=run.tenant_id,
+                user_id=run.owner_user_id,
+                timezone=timezone,
+                locale=locale,
+            )
+            transitioned = await self.mark_failed(
+                context,
+                run,
+                error_type="QueueWaitTimeout",
+                error_message="排队超时，请重试",
+                from_statuses={AgentRunStatus.queued},
             )
             if transitioned:
                 recovered.append(run.id)
