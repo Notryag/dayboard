@@ -65,6 +65,27 @@ class AgentCreateTaskItemInput(BaseModel):
     status: TaskStatus = TaskStatus.open
 
 
+def _calendar_entry_view(entry) -> dict[str, Any]:
+    return {
+        "id": str(entry.id),
+        "title": entry.title,
+        "start_time": entry.start_time.isoformat(),
+        "end_time": entry.end_time.isoformat() if entry.end_time else None,
+        "timezone": entry.timezone,
+        "updated_at": entry.updated_at.isoformat(),
+    }
+
+
+def _task_item_view(task) -> dict[str, Any]:
+    return {
+        "id": str(task.id),
+        "title": task.title,
+        "due_at": task.due_at.isoformat() if task.due_at else None,
+        "timezone": task.timezone,
+        "status": task.status.value,
+    }
+
+
 def build_scheduling_tools(
     *,
     session: AsyncSession,
@@ -89,7 +110,12 @@ def build_scheduling_tools(
             data,
             created_by_run_id=run_id,
         )
-        return result.model_dump(mode="json")
+        return {
+            "type": result.type,
+            "calendar_entry_id": str(result.calendar_entry_id),
+            "calendar_entry": _calendar_entry_view(result.calendar_entry),
+            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
+        }
 
     async def agent_check_calendar_conflicts(**kwargs):
         input_data = CheckCalendarConflictsInput.model_validate(kwargs)
@@ -111,16 +137,21 @@ def build_scheduling_tools(
                 "发现日程冲突" if result.conflicts else "没有发现日程冲突",
                 {"conflict_count": len(result.conflicts)},
             )
-        return result.model_dump(mode="json")
+        return {
+            "type": result.type,
+            "requested_start_time": result.requested_start_time.isoformat(),
+            "requested_end_time": result.requested_end_time.isoformat(),
+            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
+        }
 
     async def agent_list_calendar_entries():
         entries = await list_calendar_entries(session, context)
-        return [entry.model_dump(mode="json") for entry in entries]
+        return [_calendar_entry_view(entry) for entry in entries]
 
     async def agent_search_calendar_entries(**kwargs):
         input_data = SearchCalendarEntriesInput.model_validate(kwargs)
         entries = await search_calendar_entries(session, context, input_data)
-        return [entry.model_dump(mode="json") for entry in entries]
+        return [_calendar_entry_view(entry) for entry in entries]
 
     async def agent_reschedule_calendar_entry(**kwargs):
         if run_id is None:
@@ -132,7 +163,13 @@ def build_scheduling_tools(
             input_data,
             updated_by_run_id=run_id,
         )
-        return result.model_dump(mode="json")
+        return {
+            "type": result.type,
+            "calendar_entry_id": str(result.calendar_entry_id),
+            "previous_start_time": result.previous_start_time.isoformat(),
+            "calendar_entry": _calendar_entry_view(result.calendar_entry),
+            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
+        }
 
     async def agent_cancel_calendar_entry(**kwargs):
         if run_id is None:
@@ -144,7 +181,11 @@ def build_scheduling_tools(
             input_data,
             cancelled_by_run_id=run_id,
         )
-        return result.model_dump(mode="json")
+        return {
+            "type": result.type,
+            "calendar_entry_id": str(result.calendar_entry_id),
+            "calendar_entry": _calendar_entry_view(result.calendar_entry),
+        }
 
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
@@ -157,11 +198,15 @@ def build_scheduling_tools(
             data,
             created_by_run_id=run_id,
         )
-        return result.model_dump(mode="json")
+        return {
+            "type": result.type,
+            "task_item_id": str(result.task_item_id),
+            "task_item": _task_item_view(result.task_item),
+        }
 
     async def agent_list_task_items():
         tasks = await list_task_items(session, context)
-        return [task.model_dump(mode="json") for task in tasks]
+        return [_task_item_view(task) for task in tasks]
 
     return [
         StructuredTool.from_function(

@@ -102,6 +102,23 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert task_result["type"] == "task_item_created"
     assert repeated_entry_result["calendar_entry_id"] == entry_result["calendar_entry_id"]
     assert repeated_task_result["task_item_id"] == task_result["task_item_id"]
+    assert set(entry_result["calendar_entry"]) == {
+        "id",
+        "title",
+        "start_time",
+        "end_time",
+        "timezone",
+        "updated_at",
+    }
+    assert "tenant_id" not in str(entry_result)
+    assert "created_by_run_id" not in str(entry_result)
+    assert set(task_result["task_item"]) == {
+        "id",
+        "title",
+        "due_at",
+        "timezone",
+        "status",
+    }
 
     entries = await list_calendar_entries(db_session, tenant_context)
     tasks = await list_task_items(db_session, tenant_context)

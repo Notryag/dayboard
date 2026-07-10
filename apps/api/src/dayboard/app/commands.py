@@ -23,7 +23,7 @@ from dayboard.context import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import get_session
-from dayboard.domain.runs import AgentRunEventCategory, AgentRunStatus
+from dayboard.domain.runs import AgentRunStatus
 from dayboard.domain.conversations import ConversationRole
 
 logger = structlog.get_logger(__name__)
@@ -233,18 +233,14 @@ class CommandService:
                     run.thread_id,
                     event.summary_text,
                 )
-                await runs.append_progress(
-                    context,
-                    run.id,
-                    event_type="context_compacted",
-                    content="已压缩较早的对话上下文",
-                    event_metadata={
-                        "summarized_message_count": len(event.summarized_messages),
-                        "preserved_message_count": len(event.preserved_messages),
-                    },
-                    category=AgentRunEventCategory.lifecycle,
-                )
                 await self.session.commit()
+                logger.info(
+                    "dayboard.command.context_compacted",
+                    run_id=str(run.id),
+                    thread_id=str(run.thread_id),
+                    summarized_message_count=len(event.summarized_messages),
+                    preserved_message_count=len(event.preserved_messages),
+                )
 
             result = await self.invoker(
                 agent_factory=lambda: build_dayboard_agent(
