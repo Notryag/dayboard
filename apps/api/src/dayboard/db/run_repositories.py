@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -58,6 +59,16 @@ class AgentRunRepository:
                 AgentRunRow.deleted_at.is_(None),
             )
         )
+
+    async def list_stale_running(self, *, updated_before: datetime) -> list[AgentRunRow]:
+        result = await self.session.scalars(
+            select(AgentRunRow).where(
+                AgentRunRow.status == AgentRunStatus.running.value,
+                AgentRunRow.updated_at < updated_before,
+                AgentRunRow.deleted_at.is_(None),
+            )
+        )
+        return list(result)
 
 
 class IdempotencyKeyRepository:

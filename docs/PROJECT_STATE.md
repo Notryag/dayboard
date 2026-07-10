@@ -104,6 +104,8 @@ Completed M2 work:
 - added database-enforced scheduling write idempotency keyed by tenant and creating run
 - added `Idempotency-Key` support for command creation so retried requests return the original run without duplicate queue delivery
 - added explicit Run cancellation with durable lifecycle events, best-effort arq job abortion, worker-side cancellation checks, and a web stop control
+- added periodic stale-running recovery that closes timed-out runs as failed with a durable recovery event
+- expanded `/health` to verify PostgreSQL, Redis, and the arq worker heartbeat
 
 Implementation notes:
 
@@ -119,10 +121,8 @@ Implementation notes:
 Next implementation slice:
 
 1. add an optional avoid-conflicts flow with suggested alternative times
-2. add request idempotency and explicit cancellation to the run resource
-3. add stale-running recovery and operational worker health checks
-4. tune prompt/tool schemas across additional live creation scenarios
-5. reconcile provider budget counters against persisted actual usage
+2. tune prompt/tool schemas across additional live creation scenarios
+3. reconcile provider budget counters against persisted actual usage
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     command_queue_url: str | None = Field(default=None, alias="DAYBOARD_COMMAND_QUEUE_URL")
     command_queue_name: str = Field(default="dayboard:commands", alias="DAYBOARD_COMMAND_QUEUE_NAME")
+    stale_run_seconds: int = Field(default=600, alias="DAYBOARD_STALE_RUN_SECONDS", ge=60)
     default_tenant_id: UUID = Field(
         default=UUID("00000000-0000-0000-0000-000000000001"),
         alias="DAYBOARD_DEFAULT_TENANT_ID",

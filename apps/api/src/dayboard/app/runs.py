@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -203,3 +204,28 @@ class AgentRunService:
     ) -> list[AgentRunEvent]:
         rows = await self.events.list_for_run(context, run_id, after_seq=after_seq)
         return [agent_run_event_from_row(row) for row in rows]
+
+    async def recover_stale_running(
+        self,
+        *,
+        updated_before: datetime,
+        timezone: str,
+        locale: str,
+    ) -> list[UUID]:
+        stale_runs = await self.runs.list_stale_running(updated_before=updated_before)
+        recovered: list[UUID] = []
+        for run in stale_runs:
+            context = TenantContext(
+                tenant_id=run.tenant_id,
+                user_id=run.owner_user_id,
+                timezone=timezone,
+                locale=locale,
+            )
+            await self.mark_failed(
+                context,
+                run,
+                error_type="StaleRunRecovered",
+                error_message="执行超时，请重试",
+            )
+            recovered.append(run.id)
+        return recovered

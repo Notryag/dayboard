@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from arq import cron
 from arq.connections import RedisSettings
 from arq.worker import func
 
@@ -11,6 +13,7 @@ from dayboard.app.commands import CommandService
 from dayboard.config import get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import SessionLocal
+from dayboard.app.runs import AgentRunService
 
 
 async def execute_command_run(
@@ -32,6 +35,18 @@ async def execute_command_run(
         await CommandService(session).execute_command_run(context, request, UUID(run_id))
 
 
+async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
+    del ctx
+    cutoff = datetime.now(UTC) - timedelta(seconds=settings.stale_run_seconds)
+    async with SessionLocal() as session:
+        await AgentRunService(session).recover_stale_running(
+            updated_before=cutoff,
+            timezone=settings.default_timezone,
+            locale=settings.default_locale,
+        )
+        await session.commit()
+
+
 settings = get_settings()
 
 
@@ -40,3 +55,5 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.effective_command_queue_url)
     queue_name = settings.command_queue_name
     max_jobs = 10
+    health_check_interval = 15
+    cron_jobs = [cron(recover_stale_command_runs, second={0, 30}, run_at_startup=True)]

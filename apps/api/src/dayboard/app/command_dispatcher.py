@@ -41,3 +41,8 @@ class RedisCommandDispatcher:
             _queue_name=self.queue_name,
         )
         return await job.abort(timeout=2)
+
+    async def health(self) -> dict[str, bool]:
+        redis_ok = bool(await self.redis.ping())
+        worker_ok = bool(await self.redis.get(f"{self.queue_name}:health-check"))
+        return {"redis": redis_ok, "worker": worker_ok}

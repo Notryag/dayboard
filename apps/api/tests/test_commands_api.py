@@ -40,6 +40,19 @@ async def test_create_background_command_run_returns_before_execution(
     assert dispatcher.started[0][2].message == "安排明天上午九点的项目会议"
 
 
+async def test_health_checks_database_redis_and_worker(api_app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json()["database"] == "ok"
+    assert response.json()["redis"] == "ok"
+    assert response.json()["worker"] == "ok"
+
+
 async def test_get_queued_run_and_events_after_creation(api_app: FastAPI) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),

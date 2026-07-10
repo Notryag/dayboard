@@ -38,10 +38,20 @@ def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
 async def health(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
 ) -> dict[str, str]:
     await session.execute(text("select 1"))
+    infrastructure = await dispatcher.health()
+    if not all(infrastructure.values()):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"status": "degraded", **infrastructure},
+        )
     return {
         "status": "ok",
+        "database": "ok",
+        "redis": "ok",
+        "worker": "ok",
         "tenant_id": str(tenant_context.tenant_id),
         "user_id": str(tenant_context.user_id),
     }

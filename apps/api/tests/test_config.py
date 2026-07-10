@@ -12,6 +12,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAYBOARD_LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("DAYBOARD_COMMAND_QUEUE_URL", "redis://localhost:6379/8")
     monkeypatch.setenv("DAYBOARD_COMMAND_QUEUE_NAME", "dayboard:test")
+    monkeypatch.setenv("DAYBOARD_STALE_RUN_SECONDS", "900")
 
     settings = Settings()
 
@@ -25,3 +26,4 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.log_level == "DEBUG"
     assert settings.effective_command_queue_url == "redis://localhost:6379/8"
     assert settings.command_queue_name == "dayboard:test"
+    assert settings.stale_run_seconds == 900

@@ -87,6 +87,9 @@ class TestCommandDispatcher:
         self.cancelled.append(run_id)
         return True
 
+    async def health(self) -> dict[str, bool]:
+        return {"redis": True, "worker": True}
+
 
 @pytest.fixture
 def tenant_context() -> TenantContext:

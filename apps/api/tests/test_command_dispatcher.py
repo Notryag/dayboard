@@ -72,3 +72,17 @@ async def test_redis_dispatcher_aborts_run_job(tenant_context, monkeypatch) -> N
         "queue_name": "dayboard:test",
         "timeout": 2,
     }
+
+
+async def test_redis_dispatcher_reports_worker_health() -> None:
+    class FakeRedis:
+        async def ping(self):
+            return True
+
+        async def get(self, key):
+            assert key == "dayboard:test:health-check"
+            return b"healthy"
+
+    dispatcher = RedisCommandDispatcher(FakeRedis(), queue_name="dayboard:test")
+
+    assert await dispatcher.health() == {"redis": True, "worker": True}
