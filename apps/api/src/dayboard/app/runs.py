@@ -77,6 +77,24 @@ class AgentRunService:
         )
         return run
 
+    async def append_progress(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        *,
+        event_type: str,
+        content: str,
+        event_metadata: dict[str, Any] | None = None,
+    ) -> None:
+        await self.events.append(
+            context,
+            run_id=run_id,
+            event_type=event_type,
+            category=AgentRunEventCategory.tool,
+            content=content,
+            event_metadata=event_metadata,
+        )
+
     async def mark_completed(
         self,
         context: TenantContext,

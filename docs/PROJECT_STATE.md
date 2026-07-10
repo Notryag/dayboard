@@ -96,6 +96,11 @@ Completed M2 work:
 - added `POST /api/command-runs`, which commits a queued run and returns 202 before execution
 - added an arq command dispatcher and independent Redis-backed worker sessions
 - removed the old synchronous `/api/commands` path and temporary structured intent input
+- added a one-hour default duration for calendar entries without an explicit end time
+- added deterministic, tenant-scoped calendar overlap checks before creation
+- added non-blocking conflict warnings while preserving default calendar creation
+- added persisted tool progress events and rendered their SSE-driven execution trace in the web UI
+- required timezone-aware datetimes at domain and agent-tool boundaries; PostgreSQL stores canonical instants while each calendar entry retains its intended IANA timezone
 
 Implementation notes:
 
@@ -106,13 +111,15 @@ Implementation notes:
 - Provider budget admission still uses a conservative pre-call estimate; actual provider usage is persisted after successful model calls and can be used for reconciliation in a later budget iteration.
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
 - A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
+- The current release defaults each entry's timezone to the trusted user timezone. Explicit natural-language event timezones such as "9 AM New York time" are not supported yet and must not be inferred as the user's default timezone.
 
 Next implementation slice:
 
-1. add request idempotency and explicit cancellation to the run resource
-2. add stale-running recovery and operational worker health checks
-3. tune prompt/tool schemas across additional live creation scenarios
-4. reconcile provider budget counters against persisted actual usage
+1. add an optional avoid-conflicts flow with suggested alternative times
+2. add request idempotency and explicit cancellation to the run resource
+3. add stale-running recovery and operational worker health checks
+4. tune prompt/tool schemas across additional live creation scenarios
+5. reconcile provider budget counters against persisted actual usage
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

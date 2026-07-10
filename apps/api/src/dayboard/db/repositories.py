@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from datetime import datetime, timedelta
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
@@ -36,6 +38,31 @@ class CalendarEntryRepository:
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
+            )
+            .order_by(CalendarEntryRow.start_time.asc())
+        )
+        return list(result)
+
+    async def list_overlapping(
+        self,
+        context: TenantContext,
+        *,
+        start_time: datetime,
+        end_time: datetime,
+        default_duration: timedelta,
+    ) -> list[CalendarEntryRow]:
+        effective_end = func.coalesce(
+            CalendarEntryRow.end_time,
+            CalendarEntryRow.start_time + default_duration,
+        )
+        result = await self.session.scalars(
+            select(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.start_time < end_time,
+                effective_end > start_time,
             )
             .order_by(CalendarEntryRow.start_time.asc())
         )

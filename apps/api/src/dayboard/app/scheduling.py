@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,6 +63,22 @@ class SchedulingService:
 
     async def list_calendar_entries(self, context: TenantContext) -> Sequence[CalendarEntry]:
         rows = await self.calendar_entries.list_active(context)
+        return [calendar_entry_from_row(row) for row in rows]
+
+    async def list_calendar_conflicts(
+        self,
+        context: TenantContext,
+        *,
+        start_time: datetime,
+        end_time: datetime,
+        default_duration: timedelta,
+    ) -> Sequence[CalendarEntry]:
+        rows = await self.calendar_entries.list_overlapping(
+            context,
+            start_time=start_time,
+            end_time=end_time,
+            default_duration=default_duration,
+        )
         return [calendar_entry_from_row(row) for row in rows]
 
     async def create_task_item(

@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
@@ -11,6 +13,7 @@ from dayboard.tools import (
     CreateTaskItemInput,
     create_calendar_entry,
     create_task_item,
+    check_calendar_conflicts,
     list_calendar_entries,
     list_task_items,
 )
@@ -38,7 +41,127 @@ async def test_create_and_list_calendar_entry(
     assert result.calendar_entry.title == "产品复盘"
     assert result.calendar_entry.tenant_id == tenant_context.tenant_id
     assert result.calendar_entry.owner_user_id == tenant_context.user_id
+    assert result.calendar_entry.end_time == datetime(
+        2026, 7, 10, 11, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+    )
     assert entries == [result.calendar_entry]
+
+
+async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    first = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="晨会",
+            start_time=datetime(2026, 7, 11, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    conflict = await check_calendar_conflicts(
+        db_session,
+        tenant_context,
+        start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    created_with_warning = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="产品会",
+            start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+            timezone="Asia/Shanghai",
+        ),
+    )
+    entries = await list_calendar_entries(db_session, tenant_context)
+
+    assert first.type == "calendar_entry_created"
+    assert conflict.type == "calendar_conflict"
+    assert conflict.requires_follow_up is True
+    assert [entry.title for entry in conflict.conflicts] == ["晨会"]
+    assert created_with_warning.type == "calendar_entry_created"
+    assert [entry.title for entry in created_with_warning.conflicts] == ["晨会"]
+    assert created_with_warning.requires_follow_up is False
+    assert [entry.title for entry in entries] == ["晨会", "产品会"]
+
+
+async def test_calendar_conflict_detection_allows_adjacent_entries(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="晨会",
+            start_time=datetime(2026, 7, 11, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    adjacent = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="产品会",
+            start_time=datetime(2026, 7, 11, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    assert adjacent.type == "calendar_entry_created"
+
+
+def test_calendar_input_rejects_naive_datetime() -> None:
+    with pytest.raises(ValidationError, match="timezone"):
+        CreateCalendarEntryInput(
+            title="无时区会议",
+            start_time=datetime(2026, 7, 11, 8, 0),
+            timezone="Asia/Shanghai",
+        )
+
+
+async def test_calendar_creation_rejects_end_before_start(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    with pytest.raises(ValidationError, match="end_time must be after start_time"):
+        await create_calendar_entry(
+            db_session,
+            tenant_context,
+            CreateCalendarEntryInput(
+                title="反向会议",
+                start_time=datetime(2026, 7, 11, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+                end_time=datetime(2026, 7, 11, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+                timezone="Asia/Shanghai",
+            ),
+        )
+
+
+async def test_conflicts_compare_absolute_instants_across_offsets(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="上海会议",
+            start_time="2026-07-11T08:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    result = await check_calendar_conflicts(
+        db_session,
+        tenant_context,
+        start_time=datetime.fromisoformat("2026-07-11T00:30:00+00:00"),
+        end_time=datetime.fromisoformat("2026-07-11T01:00:00+00:00"),
+    )
+
+    assert [entry.title for entry in result.conflicts] == ["上海会议"]
 
 
 async def test_create_and_list_task_item(

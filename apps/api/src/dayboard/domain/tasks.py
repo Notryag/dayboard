@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from dayboard.domain.calendar import Reminder
 
@@ -17,7 +17,7 @@ class TaskStatus(StrEnum):
 
 class TaskItemCreate(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    due_at: datetime | None = None
+    due_at: AwareDatetime | None = None
     timezone: str = Field(min_length=1, max_length=64)
     reminder: Reminder | None = None
     status: TaskStatus = TaskStatus.open
@@ -29,7 +29,7 @@ class TaskItem(BaseModel):
     tenant_id: UUID
     owner_user_id: UUID
     title: str
-    due_at: datetime | None
+    due_at: AwareDatetime | None
     timezone: str
     reminder: Reminder | None
     status: TaskStatus

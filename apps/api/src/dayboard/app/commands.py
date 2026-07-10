@@ -114,12 +114,28 @@ class CommandService:
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
             )
+
+            async def record_progress(
+                event_type: str,
+                content: str,
+                event_metadata: dict[str, Any],
+            ) -> None:
+                await runs.append_progress(
+                    context,
+                    run.id,
+                    event_type=event_type,
+                    content=content,
+                    event_metadata=event_metadata,
+                )
+                await self.session.commit()
+
             result = await self.invoker(
                 agent_factory=lambda: build_dayboard_agent(
                     self.settings,
                     session=self.session,
                     context=context,
                     run_id=run.id,
+                    progress=record_progress,
                 ),
                 graph_input={"messages": [HumanMessage(content=request.message)]},
                 config={"configurable": {"thread_id": str(run.id)}},

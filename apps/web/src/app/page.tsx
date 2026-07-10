@@ -9,6 +9,12 @@ type ChatMessage = {
   role: "assistant" | "user";
   text: string;
   time: string;
+  progress?: ProgressStep[];
+};
+
+type ProgressStep = {
+  eventType: string;
+  text: string;
 };
 
 type CommandRunResponse = {
@@ -38,12 +44,17 @@ function currentTimeLabel() {
   }).format(new Date());
 }
 
-function createMessage(role: ChatMessage["role"], text: string): ChatMessage {
+function createMessage(
+  role: ChatMessage["role"],
+  text: string,
+  progress?: ProgressStep[],
+): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role,
     text,
     time: currentTimeLabel(),
+    progress,
   };
 }
 
@@ -51,6 +62,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeProgress, setActiveProgress] = useState<ProgressStep[]>([]);
   const activeStreamRef = useRef<EventSource | null>(null);
 
   const apiBaseUrl = useMemo(() => {
@@ -61,15 +73,35 @@ export default function Home() {
     return () => activeStreamRef.current?.close();
   }, []);
 
-  function followRun(runId: string): Promise<string> {
+  function followRun(runId: string): Promise<{ text: string; progress: ProgressStep[] }> {
     return new Promise((resolve, reject) => {
       const stream = new EventSource(`${apiBaseUrl}/api/runs/${runId}/events/stream`);
       activeStreamRef.current = stream;
+      const progress: ProgressStep[] = [];
 
       function finish(text: string) {
         stream.close();
         activeStreamRef.current = null;
-        resolve(text);
+        resolve({ text, progress });
+      }
+
+      const progressLabels: Record<string, string> = {
+        run_created: "请求已进入队列",
+        run_started: "正在理解你的安排",
+        conflict_check_started: "正在检查日程冲突",
+        conflict_check_completed: "日程冲突检查完成",
+        calendar_entry_created: "日程已创建",
+        task_creation_started: "正在创建任务",
+        task_item_created: "任务已创建",
+      };
+
+      for (const [eventType, fallbackText] of Object.entries(progressLabels)) {
+        stream.addEventListener(eventType, (event) => {
+          const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
+          const step = { eventType, text: runEvent.content ?? fallbackText };
+          progress.push(step);
+          setActiveProgress([...progress]);
+        });
       }
 
       for (const eventType of ["run_completed", "clarification_requested"] as const) {
@@ -101,6 +133,7 @@ export default function Home() {
 
     setInput("");
     setIsSubmitting(true);
+    setActiveProgress([]);
     setMessages((current) => [...current, createMessage("user", text)]);
 
     try {
@@ -117,9 +150,12 @@ export default function Home() {
       }
 
       const command: CommandRunResponse = await response.json();
-      const assistantText = await followRun(command.run_id);
+      const result = await followRun(command.run_id);
 
-      setMessages((current) => [...current, createMessage("assistant", assistantText)]);
+      setMessages((current) => [
+        ...current,
+        createMessage("assistant", result.text, result.progress),
+      ]);
     } catch {
       setMessages((current) => [
         ...current,
@@ -127,6 +163,7 @@ export default function Home() {
       ]);
     } finally {
       setIsSubmitting(false);
+      setActiveProgress([]);
     }
   }
 
@@ -150,12 +187,26 @@ export default function Home() {
               key={message.id}
             >
               <p>{message.text}</p>
+              {message.progress?.length ? (
+                <ol className={styles.progressList} aria-label="执行过程">
+                  {message.progress.map((step, index) => (
+                    <li key={`${step.eventType}-${index}`}>{step.text}</li>
+                  ))}
+                </ol>
+              ) : null}
               <time>{message.time}</time>
             </article>
           ))}
           {isSubmitting ? (
             <article className={`${styles.message} ${styles.assistantMessage}`}>
-              <p>正在处理...</p>
+              <p>{activeProgress.length ? "正在处理你的安排" : "正在提交请求"}</p>
+              {activeProgress.length ? (
+                <ol className={styles.progressList} aria-label="当前执行过程">
+                  {activeProgress.map((step, index) => (
+                    <li key={`${step.eventType}-${index}`}>{step.text}</li>
+                  ))}
+                </ol>
+              ) : null}
             </article>
           ) : null}
         </section>
