@@ -26,6 +26,9 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         reminder=Reminder.model_validate(row.reminder) if row.reminder else None,
         created_by_run_id=row.created_by_run_id,
         updated_by_run_id=row.updated_by_run_id,
+        cancelled_by_run_id=row.cancelled_by_run_id,
+        cancellation_reason=row.cancellation_reason,
+        cancelled_at=row.deleted_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -91,6 +94,14 @@ class SchedulingService:
         row = await self.calendar_entries.get(context, entry_id)
         return calendar_entry_from_row(row) if row else None
 
+    async def get_calendar_entry_including_cancelled(
+        self,
+        context: TenantContext,
+        entry_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get_including_cancelled(context, entry_id)
+        return calendar_entry_from_row(row) if row else None
+
     async def get_calendar_entry_updated_by_run(
         self,
         context: TenantContext,
@@ -116,6 +127,36 @@ class SchedulingService:
             end_time=end_time,
             expected_updated_at=expected_updated_at,
             updated_by_run_id=updated_by_run_id,
+        )
+        if row is None:
+            return None
+        await self.session.commit()
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
+
+    async def get_calendar_entry_cancelled_by_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get_by_cancelled_run(context, run_id)
+        return calendar_entry_from_row(row) if row else None
+
+    async def cancel_calendar_entry(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+        cancelled_by_run_id: UUID,
+        cancellation_reason: str | None,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.cancel(
+            context,
+            entry_id=entry_id,
+            expected_updated_at=expected_updated_at,
+            cancelled_by_run_id=cancelled_by_run_id,
+            cancellation_reason=cancellation_reason,
         )
         if row is None:
             return None

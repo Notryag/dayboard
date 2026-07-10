@@ -10,12 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
 from dayboard.tools import (
+    CancelCalendarEntryInput,
     CalendarEntryChangedError,
     CreateCalendarEntryInput,
     CreateTaskItemInput,
     RescheduleCalendarEntryInput,
     SearchCalendarEntriesInput,
     create_calendar_entry,
+    cancel_calendar_entry,
     create_task_item,
     check_calendar_conflicts,
     list_calendar_entries,
@@ -289,4 +291,97 @@ async def test_reschedule_rejects_stale_selected_version(
                 expected_updated_at=selected.updated_at,
             ),
             updated_by_run_id=uuid4(),
+        )
+
+
+async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="客户会议",
+            start_time="2026-07-11T08:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    run_id = uuid4()
+    input_data = CancelCalendarEntryInput(
+        calendar_entry_id=created.calendar_entry_id,
+        expected_updated_at=created.calendar_entry.updated_at,
+        reason="客户改期",
+    )
+
+    cancelled = await cancel_calendar_entry(
+        db_session,
+        tenant_context,
+        input_data,
+        cancelled_by_run_id=run_id,
+    )
+    repeated = await cancel_calendar_entry(
+        db_session,
+        tenant_context,
+        input_data,
+        cancelled_by_run_id=run_id,
+    )
+    repeated_in_another_run = await cancel_calendar_entry(
+        db_session,
+        tenant_context,
+        input_data,
+        cancelled_by_run_id=uuid4(),
+    )
+
+    assert cancelled.type == "calendar_entry_cancelled"
+    assert cancelled.calendar_entry.cancelled_at is not None
+    assert cancelled.calendar_entry.cancelled_by_run_id == run_id
+    assert cancelled.calendar_entry.cancellation_reason == "客户改期"
+    assert repeated.calendar_entry_id == cancelled.calendar_entry_id
+    assert repeated_in_another_run.calendar_entry_id == cancelled.calendar_entry_id
+    assert await list_calendar_entries(db_session, tenant_context) == []
+    assert await search_calendar_entries(
+        db_session,
+        tenant_context,
+        SearchCalendarEntriesInput(
+            start_time="2026-07-11T00:00:00+08:00",
+            end_time="2026-07-12T00:00:00+08:00",
+        ),
+    ) == []
+
+
+async def test_cancel_rejects_stale_selected_version(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="评审会",
+            start_time="2026-07-11T10:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    selected = created.calendar_entry
+    await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=selected.id,
+            new_date="2026-07-12",
+            expected_updated_at=selected.updated_at,
+        ),
+        updated_by_run_id=uuid4(),
+    )
+
+    with pytest.raises(CalendarEntryChangedError, match="search again before cancelling"):
+        await cancel_calendar_entry(
+            db_session,
+            tenant_context,
+            CancelCalendarEntryInput(
+                calendar_entry_id=selected.id,
+                expected_updated_at=selected.updated_at,
+            ),
+            cancelled_by_run_id=uuid4(),
         )

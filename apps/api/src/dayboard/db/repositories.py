@@ -78,6 +78,19 @@ class CalendarEntryRepository:
             )
         )
 
+    async def get_including_cancelled(
+        self,
+        context: TenantContext,
+        entry_id: UUID,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            select(CalendarEntryRow).where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+            )
+        )
+
     async def get_by_updated_run(
         self,
         context: TenantContext,
@@ -116,6 +129,48 @@ class CalendarEntryRepository:
                 end_time=end_time,
                 updated_by_run_id=updated_by_run_id,
                 updated_at=func.now(),
+            )
+            .returning(CalendarEntryRow)
+        )
+
+    async def get_by_cancelled_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            select(CalendarEntryRow).where(
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.cancelled_by_run_id == run_id,
+                CalendarEntryRow.deleted_at.is_not(None),
+            )
+        )
+
+    async def cancel(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+        cancelled_by_run_id: UUID,
+        cancellation_reason: str | None,
+    ) -> CalendarEntryRow | None:
+        now = func.now()
+        return await self.session.scalar(
+            update(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.deleted_at.is_(None),
+            )
+            .values(
+                deleted_at=now,
+                updated_at=now,
+                cancelled_by_run_id=cancelled_by_run_id,
+                cancellation_reason=cancellation_reason,
             )
             .returning(CalendarEntryRow)
         )

@@ -12,11 +12,13 @@ from dayboard.context import TenantContext
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
 from dayboard.tools import (
+    CancelCalendarEntryInput,
     CreateCalendarEntryInput,
     CreateTaskItemInput,
     RescheduleCalendarEntryInput,
     SearchCalendarEntriesInput,
     check_calendar_conflicts,
+    cancel_calendar_entry,
     create_calendar_entry,
     create_task_item,
     list_calendar_entries,
@@ -132,6 +134,18 @@ def build_scheduling_tools(
         )
         return result.model_dump(mode="json")
 
+    async def agent_cancel_calendar_entry(**kwargs):
+        if run_id is None:
+            raise RuntimeError("Cancelling requires a run id")
+        input_data = CancelCalendarEntryInput.model_validate(kwargs)
+        result = await cancel_calendar_entry(
+            session,
+            context,
+            input_data,
+            cancelled_by_run_id=run_id,
+        )
+        return result.model_dump(mode="json")
+
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
         data = CreateTaskItemInput.model_validate(
@@ -188,6 +202,15 @@ def build_scheduling_tools(
                 "its duration, title, participants, reminder, and original timezone."
             ),
             args_schema=RescheduleCalendarEntryInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=agent_cancel_calendar_entry,
+            name="cancel_calendar_entry",
+            description=(
+                "Cancel one identified calendar entry. The entry is retained for audit, "
+                "but disappears from active calendar queries."
+            ),
+            args_schema=CancelCalendarEntryInput,
         ),
         StructuredTool.from_function(
             coroutine=agent_create_task_item,

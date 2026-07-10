@@ -34,12 +34,20 @@ class CalendarEntryRow(TimestampMixin, Base):
         Index("ix_calendar_entries_tenant_owner_start", "tenant_id", "owner_user_id", "start_time"),
         Index("ix_calendar_entries_tenant_start", "tenant_id", "start_time"),
         Index("ix_calendar_entries_tenant_created_by_run", "tenant_id", "created_by_run_id"),
+        Index("ix_calendar_entries_tenant_cancelled_by_run", "tenant_id", "cancelled_by_run_id"),
         Index(
             "uq_calendar_entries_tenant_created_by_run",
             "tenant_id",
             "created_by_run_id",
             unique=True,
             postgresql_where=text("created_by_run_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_calendar_entries_tenant_cancelled_by_run",
+            "tenant_id",
+            "cancelled_by_run_id",
+            unique=True,
+            postgresql_where=text("cancelled_by_run_id IS NOT NULL"),
         ),
     )
 
@@ -54,6 +62,8 @@ class CalendarEntryRow(TimestampMixin, Base):
     reminder: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    cancelled_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 
 class TaskItemRow(TimestampMixin, Base):

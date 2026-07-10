@@ -39,5 +39,8 @@ class CalendarEntry(BaseModel):
     reminder: Reminder | None
     created_by_run_id: UUID | None
     updated_by_run_id: UUID | None
+    cancelled_by_run_id: UUID | None
+    cancellation_reason: str | None
+    cancelled_at: datetime | None
     created_at: datetime
     updated_at: datetime

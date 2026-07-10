@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -44,6 +45,7 @@ class SearchCalendarEntriesInput(BaseModel):
     start_time: AwareDatetime
     end_time: AwareDatetime
     title_query: str | None = Field(default=None, min_length=1, max_length=240)
+    purpose: Literal["view", "reschedule", "cancel"] = "view"
 
 
 class RescheduleCalendarEntryInput(BaseModel):
@@ -72,6 +74,20 @@ class CalendarEntryRescheduleResult(BaseModel):
 
 class CalendarEntryChangedError(RuntimeError):
     pass
+
+
+class CancelCalendarEntryInput(BaseModel):
+    calendar_entry_id: UUID
+    expected_updated_at: AwareDatetime
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class CalendarEntryCancellationResult(BaseModel):
+    type: str = "calendar_entry_cancelled"
+    calendar_entry_id: UUID
+    calendar_entry: CalendarEntry
+    summary: str
+    requires_follow_up: bool = False
 
 
 class CreateTaskItemInput(BaseModel):
@@ -249,6 +265,62 @@ async def check_calendar_conflicts(
             else "No calendar conflicts found."
         ),
         requires_follow_up=bool(conflicts),
+    )
+
+
+async def cancel_calendar_entry(
+    session: AsyncSession,
+    context: TenantContext,
+    data: CancelCalendarEntryInput,
+    *,
+    cancelled_by_run_id: UUID,
+) -> CalendarEntryCancellationResult:
+    service = SchedulingService(session)
+    repeated = await service.get_calendar_entry_cancelled_by_run(
+        context, cancelled_by_run_id
+    )
+    if repeated is not None:
+        return CalendarEntryCancellationResult(
+            calendar_entry_id=repeated.id,
+            calendar_entry=repeated,
+            summary=f"{repeated.title} is already cancelled",
+        )
+
+    existing = await service.get_calendar_entry_including_cancelled(
+        context, data.calendar_entry_id
+    )
+    if existing is None:
+        raise LookupError("Calendar entry not found")
+    if existing.cancelled_at is not None:
+        return CalendarEntryCancellationResult(
+            calendar_entry_id=existing.id,
+            calendar_entry=existing,
+            summary=f"{existing.title} is already cancelled",
+        )
+    cancelled = await service.cancel_calendar_entry(
+        context,
+        entry_id=existing.id,
+        expected_updated_at=data.expected_updated_at,
+        cancelled_by_run_id=cancelled_by_run_id,
+        cancellation_reason=data.reason,
+    )
+    if cancelled is None:
+        current = await service.get_calendar_entry_including_cancelled(
+            context, existing.id
+        )
+        if current is not None and current.cancelled_at is not None:
+            return CalendarEntryCancellationResult(
+                calendar_entry_id=current.id,
+                calendar_entry=current,
+                summary=f"{current.title} is already cancelled",
+            )
+        raise CalendarEntryChangedError(
+            "Calendar entry changed after it was selected; search again before cancelling"
+        )
+    return CalendarEntryCancellationResult(
+        calendar_entry_id=cancelled.id,
+        calendar_entry=cancelled,
+        summary=f"Cancelled {cancelled.title} at {cancelled.start_time.isoformat()}",
     )
 
 

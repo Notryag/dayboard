@@ -18,6 +18,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     check_conflicts = next(tool for tool in tools if tool.name == "check_calendar_conflicts")
     search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
     reschedule_entry = next(tool for tool in tools if tool.name == "reschedule_calendar_entry")
+    cancel_entry = next(tool for tool in tools if tool.name == "cancel_calendar_entry")
 
     schema = create_entry.args_schema.model_json_schema()
     fields = set(schema["properties"])
@@ -37,12 +38,18 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
         "start_time",
         "end_time",
         "title_query",
+        "purpose",
     }
     assert set(reschedule_entry.args_schema.model_json_schema()["properties"]) == {
         "calendar_entry_id",
         "new_date",
         "new_start_time",
         "expected_updated_at",
+    }
+    assert set(cancel_entry.args_schema.model_json_schema()["properties"]) == {
+        "calendar_entry_id",
+        "expected_updated_at",
+        "reason",
     }
 
 
