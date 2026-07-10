@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.runs import AgentRunService
+from dayboard.api.routes import get_command_dispatcher
 from dayboard.context import TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
 
@@ -56,6 +57,35 @@ async def test_get_queued_run_and_events_after_creation(api_app: FastAPI) -> Non
     assert run_response.status_code == 200
     assert run_response.json()["status"] == "queued"
     assert [event["event_type"] for event in events_response.json()] == ["run_created"]
+
+
+async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> None:
+    class FailingDispatcher:
+        def __init__(self) -> None:
+            self.run_id = None
+
+        async def enqueue(self, run_id, context, request) -> None:
+            del context, request
+            self.run_id = run_id
+            raise ConnectionError("redis unavailable")
+
+    dispatcher = FailingDispatcher()
+    api_app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/command-runs",
+            json={"message": "安排会议"},
+        )
+        run_response = await client.get(f"/api/runs/{dispatcher.run_id}")
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["run_id"] == str(dispatcher.run_id)
+    assert run_response.json()["status"] == "failed"
+    assert run_response.json()["result_message"] == "redis unavailable"
 
 
 async def test_stream_run_events_replays_events_and_closes_at_terminal_event(

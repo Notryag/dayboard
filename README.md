@@ -40,7 +40,7 @@ Dayboard should consume those capabilities rather than re-implement them.
 - Agent runtime: `north`
 - Database: PostgreSQL
 - Queue/cache/stream fanout: Redis or Valkey
-- Worker runtime: async Python worker, with `arq` as the first candidate
+- Worker runtime: `arq` with Redis
 - Object storage: S3-compatible storage for voice audio and attachments
 
 ## First Goal

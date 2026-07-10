@@ -78,7 +78,7 @@ Real values belong in `.env`, which is ignored by git. `.env.example` should con
 - Agent runtime: local `north` package dependency
 - Database: PostgreSQL
 - Queue/cache/stream fanout: Redis or Valkey
-- Worker: async Python worker, with `arq` as the first implementation candidate
+- Worker: `arq` with Redis
 - API contract: OpenAPI generated from FastAPI, then consumed by the web app
 - Object storage: S3-compatible storage for audio and future attachments
 - Observability: structured JSON logs with `structlog` first, OpenTelemetry later
@@ -132,12 +132,12 @@ Client
   -> POST /api/command-runs
   -> API validates request and resolves TenantContext
   -> application service persists a queued agent_run and returns 202
-  -> background dispatcher opens an independent database session
-  -> dispatcher runs north agent
+  -> API enqueues an arq job in Redis using run_id as the job id
+  -> arq worker opens an independent database session and runs north
   -> north calls Dayboard tools
   -> tool calls Dayboard domain service
   -> repository writes PostgreSQL
-  -> dispatcher records run status and runtime events
+  -> worker records run status and runtime events
   -> client subscribes to the run SSE stream
 ```
 
@@ -179,7 +179,7 @@ GET  /api/calendar-entries
 GET  /api/task-items
 ```
 
-`agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before the in-process dispatcher starts work with an independent database session. A durable Redis-backed worker can replace the dispatcher without changing the public run resource contract.
+`agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before enqueueing an arq job. The Redis queue provides cross-process delivery, while each worker opens an independent database session. Jobs use the run id as their unique queue id and re-check PostgreSQL state before execution because arq uses at-least-once delivery.
 
 Later API:
 
@@ -281,7 +281,7 @@ CommandService
   -> north.invoke_agent_once
 ```
 
-`CommandService` owns queued run creation and execution of an existing Dayboard run. The execution path checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. The Gateway dispatcher owns task lifetime and database-session isolation. Tests may inject a fake service, dispatcher, or model invoker, but product runtime must not keep a parallel synchronous interpretation path.
+`CommandService` owns queued run creation and execution of an existing Dayboard run. The execution path checks provider budgets, injects Dayboard scheduling tools into `north`, invokes the agent through north's generic one-shot helper, and maps completion or clarification back into Dayboard run events. The Gateway owns Redis enqueueing and arq owns worker task lifetime; workers own database-session isolation. Tests may inject a fake service, dispatcher, or model invoker, but product runtime must not keep a parallel synchronous interpretation path.
 
 ### DeerFlow Reference Boundary
 

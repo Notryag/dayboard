@@ -69,7 +69,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
 
         async def get_run_row(self, context, run_id):
             del context
-            return SimpleNamespace(id=run_id)
+            return SimpleNamespace(id=run_id, status="queued")
 
         async def mark_running(self, context, run):
             del context
@@ -142,7 +142,7 @@ async def test_command_service_logs_and_marks_failed_run(
 
         async def get_run_row(self, context, run_id):
             del context
-            return SimpleNamespace(id=run_id)
+            return SimpleNamespace(id=run_id, status="queued")
 
         async def mark_running(self, context, run):
             del context

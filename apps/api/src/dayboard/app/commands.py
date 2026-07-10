@@ -17,6 +17,7 @@ from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.session import get_session
+from dayboard.domain.runs import AgentRunStatus
 
 logger = structlog.get_logger(__name__)
 
@@ -69,8 +70,18 @@ class CommandService:
         run = await runs.get_run_row(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
+        status = AgentRunStatus(run.status)
+        if status in {
+            AgentRunStatus.completed,
+            AgentRunStatus.failed,
+            AgentRunStatus.cancelled,
+            AgentRunStatus.needs_clarification,
+        }:
+            return
         try:
-            await runs.mark_running(context, run)
+            if status == AgentRunStatus.queued:
+                await runs.mark_running(context, run)
+                await self.session.commit()
             logger.info(
                 "dayboard.command.run_started",
                 run_id=str(run.id),
@@ -182,6 +193,24 @@ class CommandService:
                 error_type=type(exc).__name__,
             )
             raise
+
+    async def fail_command_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        exc: Exception,
+    ) -> None:
+        runs = AgentRunService(self.session)
+        run = await runs.get_run_row(context, run_id)
+        if run is None:
+            raise LookupError(f"Run {run_id} not found")
+        await runs.mark_failed(
+            context,
+            run,
+            error_type=type(exc).__name__,
+            error_message=_safe_error_message(exc),
+        )
+        await self.session.commit()
 
 
 async def _mark_run_failed(

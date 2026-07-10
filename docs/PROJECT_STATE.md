@@ -24,7 +24,7 @@ The current direction is:
 - model gateway config: OpenAI-compatible environment variables in `.env`
 - database: PostgreSQL
 - queue/cache/stream fanout: Redis or Valkey
-- worker candidate: `arq`
+- worker: `arq` with Redis
 - object storage: S3-compatible storage for voice audio and future attachments
 
 ## Important Decisions
@@ -94,7 +94,7 @@ Completed M2 work:
 - added an SSE run-event endpoint with incremental replay, keep-alives, and terminal-event closure
 - verified `gpt-5.4-mini` live tool selection for calendar creation and clarification through the configured gateway
 - added `POST /api/command-runs`, which commits a queued run and returns 202 before execution
-- added an application-lifecycle background dispatcher that executes runs with independent database sessions
+- added an arq command dispatcher and independent Redis-backed worker sessions
 - removed the old synchronous `/api/commands` path and temporary structured intent input
 
 Implementation notes:
@@ -105,12 +105,12 @@ Implementation notes:
 - Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
 - Provider budget admission still uses a conservative pre-call estimate; actual provider usage is persisted after successful model calls and can be used for reconciliation in a later budget iteration.
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
-- A live background smoke test returned a queued run in about 63 ms and then emitted created, started, and clarification events over SSE.
+- A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
 
 Next implementation slice:
 
-1. replace the in-process dispatcher with a durable Redis-backed worker while preserving the run API
-2. add idempotency and explicit cancellation to the run resource
+1. add request idempotency and explicit cancellation to the run resource
+2. add stale-running recovery and operational worker health checks
 3. tune prompt/tool schemas across additional live creation scenarios
 4. reconcile provider budget counters against persisted actual usage
 
@@ -176,7 +176,7 @@ Do not wait until the end to add tests. Do not make most tests depend on real LL
 
 ## Open Questions
 
-- first worker implementation: `arq` or another queue
+- worker deployment sizing and stale-running recovery policy
 - exact first UI component install set: shadcn/ui components, icons, form tools, and state libraries
 - final brand palette and detailed visual identity
 - first ASR provider

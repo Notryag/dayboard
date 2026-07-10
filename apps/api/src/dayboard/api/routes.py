@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
-from dayboard.app.command_dispatcher import BackgroundCommandDispatcher
+from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.app.runs import AgentRunService
@@ -30,7 +30,7 @@ TERMINAL_RUN_EVENTS = {
 TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
 
 
-def get_command_dispatcher(request: Request) -> BackgroundCommandDispatcher:
+def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
     return request.app.state.command_dispatcher
 
 
@@ -56,10 +56,17 @@ async def create_command_run(
     request: CommandRequest,
     tenant_context: TenantContext = Depends(get_dev_tenant_context),
     service: CommandService = Depends(get_command_service),
-    dispatcher: BackgroundCommandDispatcher = Depends(get_command_dispatcher),
+    dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
 ) -> CommandRunResponse:
     run_id = await service.create_command_run(tenant_context, request)
-    dispatcher.start(run_id, tenant_context, request)
+    try:
+        await dispatcher.enqueue(run_id, tenant_context, request)
+    except Exception as exc:
+        await service.fail_command_run(tenant_context, run_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"message": "Command queue unavailable", "run_id": str(run_id)},
+        ) from exc
     return CommandRunResponse(run_id=str(run_id))
 
 

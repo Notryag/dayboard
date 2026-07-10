@@ -19,6 +19,8 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
+    command_queue_url: str | None = Field(default=None, alias="DAYBOARD_COMMAND_QUEUE_URL")
+    command_queue_name: str = Field(default="dayboard:commands", alias="DAYBOARD_COMMAND_QUEUE_NAME")
     default_tenant_id: UUID = Field(
         default=UUID("00000000-0000-0000-0000-000000000001"),
         alias="DAYBOARD_DEFAULT_TENANT_ID",
@@ -56,6 +58,10 @@ class Settings(BaseSettings):
     @property
     def effective_rate_limit_storage_url(self) -> str:
         return self.rate_limit_storage_url or self.redis_url
+
+    @property
+    def effective_command_queue_url(self) -> str:
+        return self.command_queue_url or self.redis_url
 
     @property
     def effective_provider_budget_storage_url(self) -> str:

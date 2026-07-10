@@ -50,4 +50,4 @@ Do not adopt DeerFlow application features merely because they exist. A DeerFlow
 
 The API becomes easier to reconnect to, observe, cancel, and move across worker processes. The web client can follow one stable run resource rather than keeping an HTTP request open for model execution. Provider and middleware behavior can improve in `north` without leaking Dayboard concepts into it.
 
-The design requires explicit task lifecycle management, idempotency, cancellation semantics, and a durable queue. The current in-process dispatcher is only an intermediate implementation; it must be replaceable by a Redis-backed worker without changing the public run contract.
+The design requires explicit task lifecycle management, idempotency, cancellation semantics, and a durable queue. Dayboard uses arq with Redis and treats delivery as at least once: the run id is the unique job id, workers re-check PostgreSQL state, and product tools must remain transactionally safe to retry. Operational stale-running recovery is still required for workers terminated between the running transition and terminal commit.

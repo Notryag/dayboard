@@ -42,12 +42,29 @@ class TestCommandService:
         await self.session.commit()
         return run.id
 
+    async def fail_command_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        exc: Exception,
+    ) -> None:
+        runs = AgentRunService(self.session)
+        run = await runs.get_run_row(context, run_id)
+        assert run is not None
+        await runs.mark_failed(
+            context,
+            run,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+        )
+        await self.session.commit()
+
 
 class TestCommandDispatcher:
     def __init__(self) -> None:
         self.started: list[tuple[UUID, TenantContext, CommandRequest]] = []
 
-    def start(self, run_id: UUID, context: TenantContext, request: CommandRequest) -> None:
+    async def enqueue(self, run_id: UUID, context: TenantContext, request: CommandRequest) -> None:
         self.started.append((run_id, context, request))
 
 
