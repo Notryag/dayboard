@@ -6,6 +6,23 @@ from zoneinfo import ZoneInfo
 from dayboard.context import TenantContext
 
 
+DAYBOARD_SUMMARY_PROMPT = """Summarize the scheduling conversation for future turns.
+
+Keep only:
+- stable user scheduling preferences;
+- named calendar entries or tasks with relevant dates, times, and timezones;
+- completed create, reschedule, or cancellation actions;
+- unresolved choices or clarification questions.
+
+Omit reasoning, tool logs, credentials, tenant metadata, pleasantries, and obsolete details.
+Database tool results remain authoritative if the summary later conflicts with them.
+Use concise plain text with no more than 250 words.
+
+Conversation:
+{messages}
+"""
+
+
 def build_dayboard_system_prompt(
     context: TenantContext,
     *,

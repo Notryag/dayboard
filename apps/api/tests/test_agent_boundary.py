@@ -89,6 +89,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
         captured["summarization_enabled"] = config.summarization_enabled
+        captured["summarization_summary_prompt"] = config.summarization_summary_prompt
         return {"agent": "fake"}
 
     monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
@@ -101,6 +102,9 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
     assert captured["summarization_enabled"] is True
+    assert "{messages}" in captured["summarization_summary_prompt"]
+    assert "no more than 250 words" in captured["summarization_summary_prompt"]
+    assert len(captured["summarization_summary_prompt"]) < 800
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:

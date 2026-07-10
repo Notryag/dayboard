@@ -9,7 +9,7 @@ from north import CompactionHook
 from north.tools.builtin import ask_clarification
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.agent.prompts import build_dayboard_system_prompt
+from dayboard.agent.prompts import DAYBOARD_SUMMARY_PROMPT, build_dayboard_system_prompt
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
@@ -49,6 +49,7 @@ def build_dayboard_agent(
         )),
         summarization_enabled=resolved_settings.agent_summarization_enabled,
         summarization_model_name=resolved_settings.agent_summarization_model_name,
+        summarization_summary_prompt=DAYBOARD_SUMMARY_PROMPT,
         summarization_trigger_messages=resolved_settings.agent_summarization_trigger_messages,
         summarization_keep_messages=resolved_settings.agent_summarization_keep_messages,
     )
