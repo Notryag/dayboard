@@ -15,7 +15,7 @@ from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.app.conversations import ConversationService, conversation_thread_from_row
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
-from dayboard.app.runs import AgentRunService
+from dayboard.app.runs import ActiveThreadRunError, AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
@@ -94,6 +94,8 @@ async def create_command_run(
         )
     except IdempotencyConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ActiveThreadRunError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not creation.created:
         return CommandRunResponse(
             run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
@@ -170,6 +172,8 @@ async def create_thread_command_run(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ActiveThreadRunError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if creation.created:
         try:

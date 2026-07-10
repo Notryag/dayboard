@@ -72,6 +72,48 @@ async def test_thread_command_persists_user_message_once(
     ]
 
 
+async def test_thread_rejects_a_second_active_run_and_allows_next_after_completion(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        thread = await client.post("/api/threads", json={"title": "工作安排"})
+        thread_id = thread.json()["id"]
+        first = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            json={"message": "创建明天的会议"},
+        )
+        second = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            json={"message": "再创建一个任务"},
+        )
+
+        runs = AgentRunService(db_session)
+        first_row = await runs.get_run_row(tenant_context, UUID(first.json()["run_id"]))
+        assert first_row is not None
+        await runs.mark_completed(tenant_context, first_row, result_message="会议已创建")
+        await db_session.commit()
+
+        third = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            json={"message": "再创建一个任务"},
+        )
+        messages = await client.get(f"/api/threads/{thread_id}/messages")
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert second.json()["detail"] == "This conversation already has a command in progress"
+    assert third.status_code == 202
+    assert [message["content"] for message in messages.json()] == [
+        "创建明天的会议",
+        "再创建一个任务",
+    ]
+
+
 async def test_thread_routes_are_tenant_and_owner_scoped(
     api_app: FastAPI,
     tenant_context: TenantContext,

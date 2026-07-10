@@ -5,11 +5,31 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from dayboard.context import TenantContext
 from dayboard.db.models import AgentRunEventRow, AgentRunRow
 from dayboard.db.run_repositories import AgentRunEventRepository, AgentRunRepository
 from dayboard.domain.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+
+
+ACTIVE_THREAD_RUN_CONSTRAINT = "uq_agent_runs_active_thread"
+
+
+class ActiveThreadRunError(RuntimeError):
+    pass
+
+
+def _integrity_constraint_name(exc: IntegrityError) -> str | None:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        constraint_name = getattr(current, "constraint_name", None)
+        if constraint_name is not None:
+            return str(constraint_name)
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def agent_run_from_row(row: AgentRunRow) -> AgentRun:
@@ -54,20 +74,28 @@ class AgentRunService:
         thread_id: UUID | None = None,
         run_id: UUID | None = None,
     ) -> AgentRunRow:
-        run = await self.runs.create(
-            context,
-            input_message=input_message,
-            thread_id=thread_id,
-            status=AgentRunStatus.queued,
-            run_id=run_id,
-        )
-        await self.events.append(
-            context,
-            run_id=run.id,
-            event_type="run_created",
-            category=AgentRunEventCategory.lifecycle,
-            content=input_message,
-        )
+        try:
+            async with self.session.begin_nested():
+                run = await self.runs.create(
+                    context,
+                    input_message=input_message,
+                    thread_id=thread_id,
+                    status=AgentRunStatus.queued,
+                    run_id=run_id,
+                )
+                await self.events.append(
+                    context,
+                    run_id=run.id,
+                    event_type="run_created",
+                    category=AgentRunEventCategory.lifecycle,
+                    content=input_message,
+                )
+        except IntegrityError as exc:
+            if _integrity_constraint_name(exc) != ACTIVE_THREAD_RUN_CONSTRAINT:
+                raise
+            raise ActiveThreadRunError(
+                "This conversation already has a command in progress"
+            ) from exc
         return run
 
     async def mark_running(self, context: TenantContext, run: AgentRunRow) -> AgentRunRow:
