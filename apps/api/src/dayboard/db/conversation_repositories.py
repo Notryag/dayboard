@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, update
@@ -7,7 +8,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
-from dayboard.db.models import ConversationMessageRow, ConversationThreadRow
+from dayboard.db.models import (
+    ConversationMessageRow,
+    ConversationStateRow,
+    ConversationThreadRow,
+)
 from dayboard.domain.conversations import ConversationRole
 
 
@@ -33,6 +38,7 @@ class ConversationThreadRepository:
         row = ConversationThreadRow(**values)
         self.session.add(row)
         await self.session.flush()
+        await self.session.refresh(row)
         return row
 
     async def get(self, context: TenantContext, thread_id: UUID) -> ConversationThreadRow | None:
@@ -123,3 +129,70 @@ class ConversationMessageRepository:
             .order_by(ConversationMessageRow.created_at.asc(), ConversationMessageRow.id.asc())
         )
         return list(result)
+
+
+class ConversationStateRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> ConversationStateRow | None:
+        return await self.session.scalar(
+            select(ConversationStateRow).where(
+                ConversationStateRow.thread_id == thread_id,
+                ConversationStateRow.tenant_id == context.tenant_id,
+                ConversationStateRow.owner_user_id == context.user_id,
+            )
+        )
+
+    async def set_pending(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        action: str,
+        question: str,
+        state_data: dict,
+        expires_at: datetime,
+    ) -> ConversationStateRow:
+        row = await self.get(context, thread_id)
+        if row is None:
+            row = ConversationStateRow(
+                thread_id=thread_id,
+                tenant_id=context.tenant_id,
+                owner_user_id=context.user_id,
+                pending_action=action,
+                pending_question=question,
+                state_data=state_data,
+                expires_at=expires_at,
+            )
+            self.session.add(row)
+        else:
+            row.pending_action = action
+            row.pending_question = question
+            row.state_data = state_data
+            row.expires_at = expires_at
+            row.version += 1
+        await self.session.flush()
+        await self.session.refresh(row)
+        return row
+
+    async def clear_pending(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> ConversationStateRow | None:
+        row = await self.get(context, thread_id)
+        if row is None or row.pending_action is None:
+            return row
+        row.pending_action = None
+        row.pending_question = None
+        row.state_data = {}
+        row.expires_at = None
+        row.version += 1
+        await self.session.flush()
+        await self.session.refresh(row)
+        return row

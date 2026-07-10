@@ -298,6 +298,12 @@ class CommandService:
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
                 await runs.mark_needs_clarification(context, run, question=clarification_question)
+                await self.conversations.set_pending_clarification(
+                    context,
+                    thread_id=run.thread_id,
+                    run_id=run.id,
+                    question=clarification_question,
+                )
                 await self.conversations.append_message(
                     context,
                     thread_id=run.thread_id,
@@ -330,6 +336,7 @@ class CommandService:
                 content=message,
                 message_metadata={"status": "completed"},
             )
+            await self.conversations.clear_pending(context, run.thread_id)
             await self.session.commit()
             logger.info(
                 "dayboard.command.completed",

@@ -35,3 +35,10 @@ into `summary_text`, while run history preserves messages the product UI must co
 
 The first rollout step keeps the worker on the memory backend until Dayboard exposes stable
 product threads. This avoids accumulating permanent checkpoints that no client can resume yet.
+
+## Structured Pending State
+
+Dayboard persists clarification state separately from messages and checkpoints. The state stores
+only the pending action, user-facing question, bounded structured data, version, and expiration.
+A successful follow-up clears it; a failed or cancelled follow-up leaves it available for retry.
+This state is product data and remains available even when North compacts runtime messages.

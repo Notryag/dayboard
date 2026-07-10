@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,12 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.context import TenantContext
 from dayboard.db.conversation_repositories import (
     ConversationMessageRepository,
+    ConversationStateRepository,
     ConversationThreadRepository,
 )
-from dayboard.db.models import ConversationMessageRow, ConversationThreadRow
+from dayboard.db.models import ConversationMessageRow, ConversationStateRow, ConversationThreadRow
 from dayboard.domain.conversations import (
     ConversationMessage,
     ConversationRole,
+    ConversationState,
     ConversationThread,
 )
 
@@ -42,11 +45,24 @@ def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMe
     )
 
 
+def conversation_state_from_row(row: ConversationStateRow) -> ConversationState:
+    return ConversationState(
+        thread_id=row.thread_id,
+        pending_action=row.pending_action,
+        pending_question=row.pending_question,
+        state_data=row.state_data,
+        version=row.version,
+        expires_at=row.expires_at,
+        updated_at=row.updated_at,
+    )
+
+
 class ConversationService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.threads = ConversationThreadRepository(session)
         self.messages = ConversationMessageRepository(session)
+        self.states = ConversationStateRepository(session)
 
     async def create_thread(
         self,
@@ -114,3 +130,38 @@ class ConversationService:
         if row is None:
             raise LookupError("Conversation thread not found")
         return conversation_thread_from_row(row)
+
+    async def get_state(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> ConversationState | None:
+        await self.require_thread(context, thread_id)
+        row = await self.states.get(context, thread_id)
+        return conversation_state_from_row(row) if row else None
+
+    async def set_pending_clarification(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        run_id: UUID,
+        question: str,
+    ) -> ConversationState:
+        row = await self.states.set_pending(
+            context,
+            thread_id=thread_id,
+            action="clarification",
+            question=question,
+            state_data={"source_run_id": str(run_id)},
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+        return conversation_state_from_row(row)
+
+    async def clear_pending(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> ConversationState | None:
+        row = await self.states.clear_pending(context, thread_id)
+        return conversation_state_from_row(row) if row else None

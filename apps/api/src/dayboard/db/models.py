@@ -150,6 +150,25 @@ class ConversationMessageRow(Base):
     )
 
 
+class ConversationStateRow(Base):
+    __tablename__ = "conversation_states"
+
+    thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    pending_action: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    pending_question: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    state_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    version: Mapped[int] = mapped_column(nullable=False, default=1)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AgentRunEventRow(Base):
     __tablename__ = "agent_run_events"
     __table_args__ = (

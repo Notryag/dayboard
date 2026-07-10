@@ -30,6 +30,14 @@ class FakeConversationService:
         del context, thread_id, summary
         return None
 
+    async def set_pending_clarification(self, context, **kwargs):
+        del context, kwargs
+        return None
+
+    async def clear_pending(self, context, thread_id):
+        del context, thread_id
+        return None
+
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}

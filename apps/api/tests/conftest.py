@@ -30,6 +30,7 @@ from dayboard.db.models import (
     AgentRunRow,
     CalendarEntryRow,
     ConversationMessageRow,
+    ConversationStateRow,
     ConversationThreadRow,
     IdempotencyKeyRow,
     ProviderUsageRecordRow,
@@ -123,6 +124,7 @@ def tenant_context() -> TenantContext:
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
         await session.execute(delete(ConversationMessageRow))
+        await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(IdempotencyKeyRow))
@@ -133,6 +135,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.commit()
         yield session
         await session.execute(delete(ConversationMessageRow))
+        await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(IdempotencyKeyRow))

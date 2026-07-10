@@ -19,7 +19,12 @@ from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
-from dayboard.domain.conversations import ConversationMessage, ConversationRole, ConversationThread
+from dayboard.domain.conversations import (
+    ConversationMessage,
+    ConversationRole,
+    ConversationState,
+    ConversationThread,
+)
 from pydantic import BaseModel, Field
 
 router = APIRouter()
@@ -126,6 +131,18 @@ async def get_thread_messages(
 ) -> list[ConversationMessage]:
     try:
         return await ConversationService(session).list_messages(tenant_context, thread_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/api/threads/{thread_id}/state", response_model=ConversationState | None)
+async def get_thread_state(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+) -> ConversationState | None:
+    try:
+        return await ConversationService(session).get_state(tenant_context, thread_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

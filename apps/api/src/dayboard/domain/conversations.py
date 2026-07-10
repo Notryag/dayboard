@@ -32,3 +32,13 @@ class ConversationMessage(BaseModel):
     content: str
     message_metadata: dict[str, Any]
     created_at: datetime
+
+
+class ConversationState(BaseModel):
+    thread_id: UUID
+    pending_action: str | None
+    pending_question: str | None
+    state_data: dict[str, Any]
+    version: int
+    expires_at: datetime | None
+    updated_at: datetime
