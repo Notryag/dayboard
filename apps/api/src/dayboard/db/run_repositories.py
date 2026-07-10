@@ -53,11 +53,13 @@ class AgentRunRepository:
 
     async def get(self, context: TenantContext, run_id: UUID) -> AgentRunRow | None:
         return await self.session.scalar(
-            select(AgentRunRow).where(
+            select(AgentRunRow)
+            .where(
                 AgentRunRow.tenant_id == context.tenant_id,
                 AgentRunRow.id == run_id,
                 AgentRunRow.deleted_at.is_(None),
             )
+            .execution_options(populate_existing=True)
         )
 
     async def list_stale_running(self, *, updated_before: datetime) -> list[AgentRunRow]:
