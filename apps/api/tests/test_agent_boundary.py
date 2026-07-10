@@ -16,7 +16,8 @@ from dayboard.agent.factory import build_dayboard_agent
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None):
+    def fake_build_agent(config, *, tools=None, checkpointer=None):
+        del checkpointer
         captured["model_name"] = config.model_name
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
@@ -36,7 +37,8 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None):
+    def fake_build_agent(config, *, tools=None, checkpointer=None):
+        del checkpointer
         del config
         captured["tools"] = tools
         return {"agent": "fake"}
@@ -69,7 +71,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
 
         async def get_run_row(self, context, run_id):
             del context
-            return SimpleNamespace(id=run_id, status="queued")
+            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
         async def mark_running(self, context, run):
             del context
@@ -107,6 +109,8 @@ async def test_command_service_maps_north_clarification_result_to_run(
 
     async def fake_invoker(**kwargs):
         assert kwargs["agent_factory"]() == {"agent": "fake"}
+        assert kwargs["config"]["configurable"]["thread_id"] != str(run_id)
+        assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard"
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 
     monkeypatch.setattr("dayboard.app.commands.build_dayboard_agent", fake_build_dayboard_agent)
@@ -145,7 +149,7 @@ async def test_command_service_logs_and_marks_failed_run(
 
         async def get_run_row(self, context, run_id):
             del context
-            return SimpleNamespace(id=run_id, status="queued")
+            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
         async def mark_running(self, context, run):
             del context

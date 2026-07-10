@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 
@@ -60,7 +61,7 @@ async def test_command_service_checks_budget_before_model_execution(
 
         async def get_run_row(self, context, run_id):
             del context
-            return SimpleNamespace(id=run_id, status="queued")
+            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
         async def mark_running(self, context, run):
             del context

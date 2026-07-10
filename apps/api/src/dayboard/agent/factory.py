@@ -21,6 +21,7 @@ def build_dayboard_agent(
     session: AsyncSession | None = None,
     context: TenantContext | None = None,
     run_id: UUID | None = None,
+    checkpointer=None,
     progress: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
 ):
     resolved_settings = settings or get_settings()
@@ -45,4 +46,4 @@ def build_dayboard_agent(
             locale=resolved_settings.default_locale,
         )),
     )
-    return build_agent(config, tools=resolved_tools)
+    return build_agent(config, tools=resolved_tools, checkpointer=checkpointer)

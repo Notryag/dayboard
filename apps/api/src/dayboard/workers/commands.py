@@ -7,6 +7,7 @@ from uuid import UUID
 from arq import cron
 from arq.connections import RedisSettings
 from arq.worker import func
+from north import make_checkpointer
 import structlog
 
 from dayboard.app.command_schemas import CommandRequest
@@ -26,7 +27,6 @@ async def execute_command_run(
     context_data: dict[str, Any],
     request_data: dict[str, Any],
 ) -> None:
-    del ctx
     context = TenantContext(
         tenant_id=UUID(context_data["tenant_id"]),
         user_id=UUID(context_data["user_id"]),
@@ -36,7 +36,23 @@ async def execute_command_run(
     )
     request = CommandRequest.model_validate(request_data)
     async with SessionLocal() as session:
-        await CommandService(session).execute_command_run(context, request, UUID(run_id))
+        await CommandService(
+            session,
+            checkpointer=ctx.get("checkpointer"),
+        ).execute_command_run(context, request, UUID(run_id))
+
+
+async def startup(ctx: dict[str, Any]) -> None:
+    manager = make_checkpointer()
+    ctx["checkpointer_manager"] = manager
+    ctx["checkpointer"] = await manager.__aenter__()
+
+
+async def shutdown(ctx: dict[str, Any]) -> None:
+    manager = ctx.pop("checkpointer_manager", None)
+    ctx.pop("checkpointer", None)
+    if manager is not None:
+        await manager.__aexit__(None, None, None)
 
 
 async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
@@ -71,6 +87,8 @@ settings = get_settings()
 
 
 class WorkerSettings:
+    on_startup = startup
+    on_shutdown = shutdown
     functions = [func(execute_command_run, name="execute_command_run", max_tries=3, timeout=300)]
     redis_settings = RedisSettings.from_dsn(settings.effective_command_queue_url)
     queue_name = settings.command_queue_name

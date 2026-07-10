@@ -52,11 +52,13 @@ class CommandService:
         settings: Settings | None = None,
         budget_guard: ProviderBudgetGuard | None = None,
         invoker=invoke_agent_once,
+        checkpointer=None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
         self.invoker = invoker
+        self.checkpointer = checkpointer
 
     async def create_command_run(
         self,
@@ -205,10 +207,16 @@ class CommandService:
                     session=self.session,
                     context=context,
                     run_id=run.id,
+                    checkpointer=self.checkpointer,
                     progress=record_progress,
                 ),
                 graph_input={"messages": [HumanMessage(content=request.message)]},
-                config={"configurable": {"thread_id": str(run.id)}},
+                config={
+                    "configurable": {
+                        "thread_id": str(run.thread_id),
+                        "checkpoint_ns": "dayboard",
+                    }
+                },
                 context={
                     "tenant_id": str(context.tenant_id),
                     "user_id": str(context.user_id),
