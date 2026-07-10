@@ -274,7 +274,7 @@ class CommandService:
             )
         except Exception as exc:
             if run is not None:
-                await _mark_run_failed(runs, self.session, context, run, exc)
+                await _mark_run_failed(runs, self.session, context, run.id, exc)
             logger.exception(
                 "dayboard.command.failed",
                 run_id=str(run.id) if run is not None else None,
@@ -308,10 +308,14 @@ async def _mark_run_failed(
     runs: AgentRunService,
     session: AsyncSession,
     context: TenantContext,
-    run: Any,
+    run_id: UUID,
     exc: Exception,
 ) -> None:
     try:
+        await session.rollback()
+        run = await runs.get_run_row(context, run_id)
+        if run is None:
+            return
         await runs.mark_failed(
             context,
             run,
@@ -322,7 +326,7 @@ async def _mark_run_failed(
     except Exception:
         logger.exception(
             "dayboard.command.failed_status_update_failed",
-            run_id=str(run.id),
+            run_id=str(run_id),
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
         )

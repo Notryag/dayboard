@@ -39,6 +39,27 @@ async def test_agent_run_service_records_lifecycle_events(
     assert events[-1].content == "需要几点？"
 
 
+async def test_run_event_metadata_serializes_datetime(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="安排会议")
+    aware_time = datetime.now(UTC)
+    await service.append_progress(
+        tenant_context,
+        run.id,
+        event_type="time_resolved",
+        content="时间已识别",
+        event_metadata={"start_time": aware_time},
+    )
+    await db_session.commit()
+
+    events = await service.list_events(tenant_context, run.id)
+
+    assert events[-1].event_metadata == {"start_time": aware_time.isoformat()}
+
+
 async def test_stale_running_runs_are_recovered_to_failed(
     db_session: AsyncSession,
     tenant_context: TenantContext,

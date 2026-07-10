@@ -95,6 +95,9 @@ async def test_command_service_maps_north_clarification_result_to_run(
         async def commit(self) -> None:
             return None
 
+        async def rollback(self) -> None:
+            return None
+
     monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
 
     def fake_build_dayboard_agent(*args, **kwargs):
@@ -166,6 +169,9 @@ async def test_command_service_logs_and_marks_failed_run(
 
     class FakeSession:
         async def commit(self) -> None:
+            return None
+
+        async def rollback(self) -> None:
             return None
 
     async def failing_invoker(**kwargs):

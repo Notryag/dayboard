@@ -85,6 +85,9 @@ async def test_command_service_checks_budget_before_model_execution(
         async def commit(self) -> None:
             return None
 
+        async def rollback(self) -> None:
+            return None
+
     monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
 
     service = CommandService(

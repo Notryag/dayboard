@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.encoders import jsonable_encoder
 
 from dayboard.context import TenantContext
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
@@ -141,7 +142,7 @@ class AgentRunEventRepository:
             event_type=event_type,
             category=category.value,
             content=content,
-            event_metadata=event_metadata or {},
+            event_metadata=jsonable_encoder(event_metadata or {}),
         )
         self.session.add(row)
         await self.session.flush()
