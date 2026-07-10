@@ -7,6 +7,7 @@ from uuid import UUID
 from arq import cron
 from arq.connections import RedisSettings
 from arq.worker import func
+import structlog
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
@@ -14,6 +15,9 @@ from dayboard.config import get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import SessionLocal
 from dayboard.app.runs import AgentRunService
+from dayboard.db.run_repositories import IdempotencyKeyRepository
+
+logger = structlog.get_logger(__name__)
 
 
 async def execute_command_run(
@@ -39,12 +43,28 @@ async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
     del ctx
     cutoff = datetime.now(UTC) - timedelta(seconds=settings.stale_run_seconds)
     async with SessionLocal() as session:
-        await AgentRunService(session).recover_stale_running(
+        recovered = await AgentRunService(session).recover_stale_running(
             updated_before=cutoff,
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
         await session.commit()
+    if recovered:
+        logger.warning(
+            "dayboard.worker.stale_runs_recovered",
+            count=len(recovered),
+            run_ids=[str(run_id) for run_id in recovered],
+        )
+
+
+async def cleanup_expired_idempotency_keys(ctx: dict[str, Any]) -> None:
+    del ctx
+    cutoff = datetime.now(UTC) - timedelta(seconds=settings.idempotency_retention_seconds)
+    async with SessionLocal() as session:
+        deleted = await IdempotencyKeyRepository(session).delete_created_before(cutoff)
+        await session.commit()
+    if deleted:
+        logger.info("dayboard.worker.idempotency_keys_deleted", count=deleted)
 
 
 settings = get_settings()
@@ -56,4 +76,7 @@ class WorkerSettings:
     queue_name = settings.command_queue_name
     max_jobs = 10
     health_check_interval = 15
-    cron_jobs = [cron(recover_stale_command_runs, second={0, 30}, run_at_startup=True)]
+    cron_jobs = [
+        cron(recover_stale_command_runs, second={0, 30}, run_at_startup=True),
+        cron(cleanup_expired_idempotency_keys, hour=3, minute=15),
+    ]

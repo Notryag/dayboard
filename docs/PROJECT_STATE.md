@@ -106,6 +106,7 @@ Completed M2 work:
 - added explicit Run cancellation with durable lifecycle events, best-effort arq job abortion, worker-side cancellation checks, and a web stop control
 - added periodic stale-running recovery that closes timed-out runs as failed with a durable recovery event
 - expanded `/health` to verify PostgreSQL, Redis, and the arq worker heartbeat
+- added seven-day idempotency-key retention with a scheduled cleanup job and structured operational logs
 
 Implementation notes:
 

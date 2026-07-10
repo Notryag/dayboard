@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
-from dayboard.db.models import AgentRunRow
+from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
 from dayboard.db.session import SessionLocal
+from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.domain.runs import AgentRunStatus
 
 
@@ -85,3 +87,38 @@ async def test_run_reads_refresh_status_changed_by_another_session(
 
     assert refreshed is not None
     assert refreshed.status == "cancelled"
+
+
+async def test_expired_idempotency_keys_are_deleted(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    repository = IdempotencyKeyRepository(db_session)
+    old, _ = await repository.claim(
+        tenant_context,
+        key="old-key",
+        request_hash="a" * 64,
+        run_id=uuid4(),
+    )
+    await repository.claim(
+        tenant_context,
+        key="new-key",
+        request_hash="b" * 64,
+        run_id=uuid4(),
+    )
+    cutoff = datetime.now(UTC) - timedelta(days=7)
+    await db_session.execute(
+        update(IdempotencyKeyRow)
+        .where(IdempotencyKeyRow.id == old.id)
+        .values(created_at=cutoff - timedelta(seconds=1))
+    )
+    await db_session.commit()
+
+    deleted = await repository.delete_created_before(cutoff)
+    await db_session.commit()
+    remaining = await db_session.scalars(
+        select(IdempotencyKeyRow.key).order_by(IdempotencyKeyRow.key)
+    )
+
+    assert deleted == 1
+    assert list(remaining) == ["new-key"]

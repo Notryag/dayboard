@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -112,6 +112,12 @@ class IdempotencyKeyRepository:
         if existing is None:
             raise RuntimeError("Idempotency key claim was not persisted")
         return existing, False
+
+    async def delete_created_before(self, cutoff: datetime) -> int:
+        result = await self.session.execute(
+            delete(IdempotencyKeyRow).where(IdempotencyKeyRow.created_at < cutoff)
+        )
+        return int(result.rowcount or 0)
 
 class AgentRunEventRepository:
     def __init__(self, session: AsyncSession) -> None:
