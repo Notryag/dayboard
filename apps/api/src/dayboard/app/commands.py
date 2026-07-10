@@ -3,11 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import asyncio
+import json
 from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import Depends
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from north import CompactionEvent, invoke_agent_once
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
@@ -303,6 +304,7 @@ class CommandService:
                     thread_id=run.thread_id,
                     run_id=run.id,
                     question=clarification_question,
+                    state_data=_extract_clarification_state_data(result),
                 )
                 await self.conversations.append_message(
                     context,
@@ -440,6 +442,59 @@ def _extract_clarification_question(result: Any) -> str | None:
         return None
     question = clarification.get("question")
     return question if isinstance(question, str) and question else None
+
+
+def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
+    if not isinstance(result, dict) or not isinstance(result.get("messages"), list):
+        return {}
+
+    search_calls: dict[str, dict[str, Any]] = {}
+    latest: tuple[dict[str, Any], Any] | None = None
+    for message in result["messages"]:
+        tool_calls = getattr(message, "tool_calls", None)
+        if isinstance(message, dict):
+            tool_calls = message.get("tool_calls", tool_calls)
+        if isinstance(tool_calls, list):
+            for call in tool_calls:
+                if not isinstance(call, dict) or call.get("name") != "search_calendar_entries":
+                    continue
+                call_id = call.get("id")
+                args = call.get("args")
+                if isinstance(call_id, str) and isinstance(args, dict):
+                    search_calls[call_id] = args
+
+        if isinstance(message, ToolMessage):
+            call_id = message.tool_call_id
+            content = message.content
+        elif isinstance(message, dict) and message.get("type") == "tool":
+            call_id = message.get("tool_call_id")
+            content = message.get("content")
+        else:
+            continue
+        if isinstance(call_id, str) and call_id in search_calls:
+            latest = (search_calls[call_id], content)
+
+    if latest is None:
+        return {}
+    args, content = latest
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except json.JSONDecodeError:
+            return {}
+    if not isinstance(content, list):
+        return {}
+
+    allowed = ("id", "title", "start_time", "end_time", "timezone", "updated_at")
+    candidates = [
+        {key: item[key] for key in allowed if key in item}
+        for item in content[:10]
+        if isinstance(item, dict)
+    ]
+    return {
+        "intent": args.get("purpose", "view"),
+        "candidates": candidates,
+    }
 
 
 def _extract_final_message(result: Any) -> str:

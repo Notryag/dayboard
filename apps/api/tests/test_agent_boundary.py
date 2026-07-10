@@ -5,10 +5,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from langchain_core.messages import AIMessage, ToolMessage
 
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService
+from dayboard.app.commands import CommandService, _extract_clarification_state_data
 from dayboard.config import Settings
 from dayboard.context import TenantContext
 
@@ -38,6 +39,46 @@ class FakeConversationService:
         del context, thread_id
         return None
 
+
+def test_clarification_state_uses_real_search_tool_candidates() -> None:
+    result = {
+        "messages": [
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "search-1",
+                        "name": "search_calendar_entries",
+                        "args": {"purpose": "cancel"},
+                    }
+                ],
+            ),
+            ToolMessage(
+                name="search_calendar_entries",
+                tool_call_id="search-1",
+                content=(
+                    '[{"id":"entry-1","title":"产品会议",'
+                    '"start_time":"2026-07-11T08:00:00+08:00",'
+                    '"updated_at":"2026-07-10T09:00:00Z",'
+                    '"tenant_id":"must-not-persist"}]'
+                ),
+            ),
+        ]
+    }
+
+    state_data = _extract_clarification_state_data(result)
+
+    assert state_data == {
+        "intent": "cancel",
+        "candidates": [
+            {
+                "id": "entry-1",
+                "title": "产品会议",
+                "start_time": "2026-07-11T08:00:00+08:00",
+                "updated_at": "2026-07-10T09:00:00Z",
+            }
+        ],
+    }
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}

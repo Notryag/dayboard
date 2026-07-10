@@ -147,13 +147,14 @@ class ConversationService:
         thread_id: UUID,
         run_id: UUID,
         question: str,
+        state_data: dict | None = None,
     ) -> ConversationState:
         row = await self.states.set_pending(
             context,
             thread_id=thread_id,
             action="clarification",
             question=question,
-            state_data={"source_run_id": str(run_id)},
+            state_data={"source_run_id": str(run_id), **(state_data or {})},
             expires_at=datetime.now(UTC) + timedelta(days=7),
         )
         return conversation_state_from_row(row)
