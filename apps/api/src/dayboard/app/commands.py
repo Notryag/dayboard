@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import asyncio
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -168,6 +169,9 @@ class CommandService:
                 content: str,
                 event_metadata: dict[str, Any],
             ) -> None:
+                latest = await runs.get_run_row(context, run.id)
+                if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
+                    raise asyncio.CancelledError()
                 await runs.append_progress(
                     context,
                     run.id,
@@ -193,6 +197,10 @@ class CommandService:
                     "run_id": str(run.id),
                 },
             )
+
+            latest = await runs.get_run_row(context, run.id)
+            if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
+                return
 
             usage = _extract_provider_usage(result)
             if usage is not None:

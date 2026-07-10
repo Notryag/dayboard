@@ -133,6 +133,55 @@ async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> Non
     assert run_response.json()["result_message"] == "redis unavailable"
 
 
+async def test_cancel_queued_run_is_persisted_and_dispatched(api_app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        created = await client.post(
+            "/api/command-runs",
+            json={"message": "安排会议"},
+        )
+        run_id = created.json()["run_id"]
+        cancelled = await client.post(f"/api/runs/{run_id}/cancel")
+        events = await client.get(f"/api/runs/{run_id}/events")
+
+    dispatcher = api_app.state.test_command_dispatcher
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert [event["event_type"] for event in events.json()] == [
+        "run_created",
+        "run_cancelled",
+    ]
+    assert dispatcher.cancelled == [UUID(run_id)]
+
+
+async def test_cancel_terminal_run_does_not_overwrite_status(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="安排会议")
+    await service.mark_running(tenant_context, run)
+    await service.mark_completed(tenant_context, run, result_message="已安排")
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(f"/api/runs/{run.id}/cancel")
+        events = await client.get(f"/api/runs/{run.id}/events")
+
+    assert response.json()["status"] == "completed"
+    assert [event["event_type"] for event in events.json()] == [
+        "run_created",
+        "run_started",
+        "run_completed",
+    ]
+
+
 async def test_stream_run_events_replays_events_and_closes_at_terminal_event(
     api_app: FastAPI,
     db_session: AsyncSession,

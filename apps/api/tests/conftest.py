@@ -78,9 +78,14 @@ class TestCommandService:
 class TestCommandDispatcher:
     def __init__(self) -> None:
         self.started: list[tuple[UUID, TenantContext, CommandRequest]] = []
+        self.cancelled: list[UUID] = []
 
     async def enqueue(self, run_id: UUID, context: TenantContext, request: CommandRequest) -> None:
         self.started.append((run_id, context, request))
+
+    async def cancel(self, run_id: UUID) -> bool:
+        self.cancelled.append(run_id)
+        return True
 
 
 @pytest.fixture

@@ -97,6 +97,29 @@ async def get_run(
     return run
 
 
+@router.post("/api/runs/{run_id}/cancel", response_model=AgentRun)
+async def cancel_run(
+    run_id: UUID,
+    dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+) -> AgentRun:
+    service = AgentRunService(session)
+    run = await service.get_run_row(tenant_context, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    await service.mark_cancelled(tenant_context, run)
+    await session.commit()
+    try:
+        await dispatcher.cancel(run_id)
+    except Exception:
+        pass
+    cancelled = await service.get_run(tenant_context, run_id)
+    if cancelled is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return cancelled
+
+
 @router.get("/api/runs/{run_id}/events", response_model=list[AgentRunEvent])
 async def get_run_events(
     run_id: UUID,

@@ -164,6 +164,29 @@ class AgentRunService:
         )
         return run
 
+    async def mark_cancelled(
+        self,
+        context: TenantContext,
+        run: AgentRunRow,
+    ) -> AgentRunRow:
+        status = AgentRunStatus(run.status)
+        if status in {
+            AgentRunStatus.completed,
+            AgentRunStatus.failed,
+            AgentRunStatus.cancelled,
+            AgentRunStatus.needs_clarification,
+        }:
+            return run
+        await self.runs.update_status(run, AgentRunStatus.cancelled)
+        await self.events.append(
+            context,
+            run_id=run.id,
+            event_type="run_cancelled",
+            category=AgentRunEventCategory.lifecycle,
+            content="请求已取消",
+        )
+        return run
+
     async def get_run(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
         row = await self.runs.get(context, run_id)
         return agent_run_from_row(row) if row else None

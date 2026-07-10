@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, SendHorizontal } from "lucide-react";
+import { Mic, SendHorizontal, Square } from "lucide-react";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -63,6 +63,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeProgress, setActiveProgress] = useState<ProgressStep[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const activeStreamRef = useRef<EventSource | null>(null);
 
   const apiBaseUrl = useMemo(() => {
@@ -115,6 +116,10 @@ export default function Home() {
         const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
         finish(runEvent.content ?? "请求没有成功。请稍后再试。");
       });
+      stream.addEventListener("run_cancelled", (event) => {
+        const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
+        finish(runEvent.content ?? "请求已取消。");
+      });
       stream.onerror = () => {
         stream.close();
         activeStreamRef.current = null;
@@ -151,6 +156,7 @@ export default function Home() {
       }
 
       const command: CommandRunResponse = await response.json();
+      setActiveRunId(command.run_id);
       const result = await followRun(command.run_id);
 
       setMessages((current) => [
@@ -165,7 +171,15 @@ export default function Home() {
     } finally {
       setIsSubmitting(false);
       setActiveProgress([]);
+      setActiveRunId(null);
     }
+  }
+
+  async function handleCancel() {
+    if (!activeRunId) {
+      return;
+    }
+    await fetch(`${apiBaseUrl}/api/runs/${activeRunId}/cancel`, { method: "POST" });
   }
 
   return (
@@ -227,14 +241,26 @@ export default function Home() {
                 value={input}
               />
             </label>
-            <button
-              className={styles.sendButton}
-              disabled={!input.trim() || isSubmitting}
-              type="submit"
-              aria-label="发送"
-            >
-              <SendHorizontal size={20} strokeWidth={2.2} />
-            </button>
+            {isSubmitting ? (
+              <button
+                className={styles.stopButton}
+                disabled={!activeRunId}
+                onClick={handleCancel}
+                type="button"
+                aria-label="停止"
+              >
+                <Square size={17} fill="currentColor" strokeWidth={2.2} />
+              </button>
+            ) : (
+              <button
+                className={styles.sendButton}
+                disabled={!input.trim()}
+                type="submit"
+                aria-label="发送"
+              >
+                <SendHorizontal size={20} strokeWidth={2.2} />
+              </button>
+            )}
           </form>
         </div>
       </main>

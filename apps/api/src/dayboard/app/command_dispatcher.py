@@ -4,6 +4,7 @@ from dataclasses import asdict
 from uuid import UUID
 
 from arq.connections import ArqRedis
+from arq.jobs import Job
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.context import TenantContext
@@ -32,3 +33,11 @@ class RedisCommandDispatcher:
         )
         if job is None:
             raise RuntimeError(f"Run {run_id} is already queued")
+
+    async def cancel(self, run_id: UUID) -> bool:
+        job = Job(
+            f"dayboard-command:{run_id}",
+            self.redis,
+            _queue_name=self.queue_name,
+        )
+        return await job.abort(timeout=2)

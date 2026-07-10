@@ -47,3 +47,28 @@ async def test_redis_dispatcher_rejects_duplicate_job(
         assert str(run_id) in str(exc)
     else:
         raise AssertionError("duplicate job should be rejected")
+
+
+async def test_redis_dispatcher_aborts_run_job(tenant_context, monkeypatch) -> None:
+    captured = {}
+
+    class FakeJob:
+        def __init__(self, job_id, redis, _queue_name):
+            captured.update(job_id=job_id, redis=redis, queue_name=_queue_name)
+
+        async def abort(self, *, timeout):
+            captured["timeout"] = timeout
+            return True
+
+    monkeypatch.setattr("dayboard.app.command_dispatcher.Job", FakeJob)
+    redis = object()
+    dispatcher = RedisCommandDispatcher(redis, queue_name="dayboard:test")
+    run_id = uuid4()
+
+    assert await dispatcher.cancel(run_id) is True
+    assert captured == {
+        "job_id": f"dayboard-command:{run_id}",
+        "redis": redis,
+        "queue_name": "dayboard:test",
+        "timeout": 2,
+    }
