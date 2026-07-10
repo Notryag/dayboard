@@ -89,6 +89,11 @@ export default function Home() {
       const progressLabels: Record<string, string> = {
         run_created: "请求已进入队列",
         run_started: "正在理解你的安排",
+        agent_model_started: "正在理解你的安排",
+        agent_model_completed: "已完成分析，正在执行下一步",
+        tool_call_started: "正在执行操作",
+        tool_call_completed: "操作完成",
+        tool_call_error: "操作失败",
         conflict_check_started: "正在检查日程冲突",
         conflict_check_completed: "日程冲突检查完成",
         calendar_entry_created: "日程已创建",

@@ -88,12 +88,13 @@ class AgentRunService:
         event_type: str,
         content: str,
         event_metadata: dict[str, Any] | None = None,
+        category: AgentRunEventCategory = AgentRunEventCategory.tool,
     ) -> None:
         await self.events.append(
             context,
             run_id=run_id,
             event_type=event_type,
-            category=AgentRunEventCategory.tool,
+            category=category,
             content=content,
             event_metadata=event_metadata,
         )

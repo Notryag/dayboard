@@ -107,6 +107,7 @@ Completed M2 work:
 - added periodic stale-running recovery that closes timed-out runs as failed with a durable recovery event
 - expanded `/health` to verify PostgreSQL, Redis, and the arq worker heartbeat
 - added seven-day idempotency-key retention with a scheduled cleanup job and structured operational logs
+- added a DeerFlow-inspired `north.RuntimeJournal` integration that captures model/tool callbacks and projects allowlisted, user-safe execution events into Dayboard Run history
 
 Implementation notes:
 

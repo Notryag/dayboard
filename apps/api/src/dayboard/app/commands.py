@@ -14,6 +14,7 @@ import structlog
 
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
+from dayboard.agent.observability import project_runtime_event
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings, get_settings
@@ -181,6 +182,23 @@ class CommandService:
                 )
                 await self.session.commit()
 
+            async def record_runtime_event(event) -> None:
+                latest = await runs.get_run_row(context, run.id)
+                if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
+                    raise asyncio.CancelledError()
+                projected = project_runtime_event(event)
+                if projected is None:
+                    return
+                await runs.append_progress(
+                    context,
+                    run.id,
+                    event_type=projected.event_type,
+                    content=projected.content,
+                    event_metadata=projected.metadata,
+                    category=projected.category,
+                )
+                await self.session.commit()
+
             result = await self.invoker(
                 agent_factory=lambda: build_dayboard_agent(
                     self.settings,
@@ -196,6 +214,7 @@ class CommandService:
                     "user_id": str(context.user_id),
                     "run_id": str(run.id),
                 },
+                event_sink=record_runtime_event,
             )
 
             latest = await runs.get_run_row(context, run.id)

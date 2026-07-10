@@ -97,12 +97,6 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert [event[0] for event in progress_events] == [
         "conflict_check_started",
         "conflict_check_completed",
-        "calendar_entry_created",
-        "task_creation_started",
-        "task_item_created",
         "conflict_check_started",
         "conflict_check_completed",
-        "calendar_entry_created",
-        "task_creation_started",
-        "task_item_created",
     ]

@@ -97,11 +97,6 @@ def build_scheduling_tools(
                 else "没有发现日程冲突",
                 {"conflict_count": len(result.conflicts)},
             )
-            await progress(
-                "calendar_entry_created",
-                "日程已创建",
-                {"calendar_entry_id": str(result.calendar_entry_id)},
-            )
         return result.model_dump(mode="json")
 
     async def agent_check_calendar_conflicts(**kwargs):
@@ -132,8 +127,6 @@ def build_scheduling_tools(
 
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
-        if progress:
-            await progress("task_creation_started", "正在创建任务", {})
         data = CreateTaskItemInput.model_validate(
             {**input_data.model_dump(), "timezone": context.timezone}
         )
@@ -143,12 +136,6 @@ def build_scheduling_tools(
             data,
             created_by_run_id=run_id,
         )
-        if progress:
-            await progress(
-                "task_item_created",
-                "任务已创建",
-                {"task_item_id": str(result.task_item_id)},
-            )
         return result.model_dump(mode="json")
 
     async def agent_list_task_items():

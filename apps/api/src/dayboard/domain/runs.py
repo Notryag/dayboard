@@ -19,6 +19,7 @@ class AgentRunStatus(StrEnum):
 
 class AgentRunEventCategory(StrEnum):
     lifecycle = "lifecycle"
+    model = "model"
     tool = "tool"
     clarification = "clarification"
     error = "error"

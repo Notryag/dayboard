@@ -35,3 +35,4 @@ Initial ADRs to add when implementation starts:
 ## Accepted Decisions
 
 - [ADR-001: Adopt DeerFlow Run and Runtime Patterns](./001-adopt-deerflow-run-runtime-patterns.md)
+- [ADR-002: Adopt DeerFlow Runtime Observability Boundaries](./002-adopt-deerflow-runtime-observability.md)
