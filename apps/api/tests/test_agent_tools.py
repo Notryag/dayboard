@@ -107,9 +107,4 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].owner_user_id == tenant_context.user_id
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
-    assert [event[0] for event in progress_events] == [
-        "conflict_check_started",
-        "conflict_check_completed",
-        "conflict_check_started",
-        "conflict_check_completed",
-    ]
+    assert progress_events == []
