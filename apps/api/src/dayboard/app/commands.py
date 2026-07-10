@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage
-from north import invoke_agent_once
+from north import CompactionEvent, invoke_agent_once
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -23,7 +23,7 @@ from dayboard.context import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import get_session
-from dayboard.domain.runs import AgentRunStatus
+from dayboard.domain.runs import AgentRunEventCategory, AgentRunStatus
 from dayboard.domain.conversations import ConversationRole
 
 logger = structlog.get_logger(__name__)
@@ -227,6 +227,25 @@ class CommandService:
                 )
                 await self.session.commit()
 
+            async def record_compaction(event: CompactionEvent) -> None:
+                await self.conversations.update_summary(
+                    context,
+                    run.thread_id,
+                    event.summary_text,
+                )
+                await runs.append_progress(
+                    context,
+                    run.id,
+                    event_type="context_compacted",
+                    content="已压缩较早的对话上下文",
+                    event_metadata={
+                        "summarized_message_count": len(event.summarized_messages),
+                        "preserved_message_count": len(event.preserved_messages),
+                    },
+                    category=AgentRunEventCategory.lifecycle,
+                )
+                await self.session.commit()
+
             result = await self.invoker(
                 agent_factory=lambda: build_dayboard_agent(
                     self.settings,
@@ -234,6 +253,7 @@ class CommandService:
                     context=context,
                     run_id=run.id,
                     checkpointer=self.checkpointer,
+                    compaction_hooks=[record_compaction],
                     progress=record_progress,
                 ),
                 graph_input={"messages": [HumanMessage(content=request.message)]},

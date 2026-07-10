@@ -158,6 +158,7 @@ export default function Home() {
         run_started: "正在理解你的安排",
         agent_model_started: "正在理解你的安排",
         agent_model_completed: "已完成分析，正在执行下一步",
+        context_compacted: "已压缩较早的对话上下文",
         tool_call_started: "正在执行操作",
         tool_call_completed: "操作完成",
         tool_call_error: "操作失败",

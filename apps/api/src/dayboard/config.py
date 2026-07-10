@@ -47,6 +47,24 @@ class Settings(BaseSettings):
         default=None,
         alias="DAYBOARD_CHECKPOINTER_DATABASE_URL",
     )
+    agent_summarization_enabled: bool = Field(
+        default=True,
+        alias="DAYBOARD_SUMMARIZATION_ENABLED",
+    )
+    agent_summarization_model_name: str | None = Field(
+        default=None,
+        alias="DAYBOARD_SUMMARIZATION_MODEL_NAME",
+    )
+    agent_summarization_trigger_messages: int = Field(
+        default=40,
+        alias="DAYBOARD_SUMMARIZATION_TRIGGER_MESSAGES",
+        ge=4,
+    )
+    agent_summarization_keep_messages: int = Field(
+        default=12,
+        alias="DAYBOARD_SUMMARIZATION_KEEP_MESSAGES",
+        ge=2,
+    )
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")

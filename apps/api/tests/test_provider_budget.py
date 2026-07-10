@@ -25,6 +25,10 @@ class FakeConversationService:
         del context, kwargs
         return None
 
+    async def update_summary(self, context, thread_id, summary):
+        del context, thread_id, summary
+        return None
+
 
 def test_estimate_prompt_tokens_is_nonzero() -> None:
     assert estimate_prompt_tokens("") == 1

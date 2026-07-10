@@ -103,3 +103,14 @@ class ConversationService:
         await self.require_thread(context, thread_id)
         rows = await self.messages.list_for_thread(context, thread_id)
         return [conversation_message_from_row(row) for row in rows]
+
+    async def update_summary(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+        summary: str,
+    ) -> ConversationThread:
+        row = await self.threads.update_summary(context, thread_id, summary)
+        if row is None:
+            raise LookupError("Conversation thread not found")
+        return conversation_thread_from_row(row)

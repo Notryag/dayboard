@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +43,24 @@ class ConversationThreadRepository:
                 ConversationThreadRow.owner_user_id == context.user_id,
                 ConversationThreadRow.deleted_at.is_(None),
             )
+        )
+
+    async def update_summary(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+        summary: str,
+    ) -> ConversationThreadRow | None:
+        return await self.session.scalar(
+            update(ConversationThreadRow)
+            .where(
+                ConversationThreadRow.id == thread_id,
+                ConversationThreadRow.tenant_id == context.tenant_id,
+                ConversationThreadRow.owner_user_id == context.user_id,
+                ConversationThreadRow.deleted_at.is_(None),
+            )
+            .values(summary=summary, updated_at=func.now())
+            .returning(ConversationThreadRow)
         )
 
 

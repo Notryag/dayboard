@@ -26,15 +26,20 @@ class FakeConversationService:
         del context, kwargs
         return None
 
+    async def update_summary(self, context, thread_id, summary):
+        del context, thread_id, summary
+        return None
+
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None):
-        del checkpointer
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del checkpointer, compaction_hooks
         captured["model_name"] = config.model_name
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
+        captured["summarization_enabled"] = config.summarization_enabled
         return {"agent": "fake"}
 
     monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
@@ -46,13 +51,14 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert "scheduling assistant" in captured["system_prompt"]
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
+    assert captured["summarization_enabled"] is True
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None):
-        del checkpointer
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del checkpointer, compaction_hooks
         del config
         captured["tools"] = tools
         return {"agent": "fake"}
@@ -119,12 +125,14 @@ async def test_command_service_maps_north_clarification_result_to_run(
     def fake_build_dayboard_agent(*args, **kwargs):
         built["run_id"] = kwargs["run_id"]
         built["context"] = kwargs["context"]
+        built["compaction_hooks"] = kwargs["compaction_hooks"]
         return {"agent": "fake"}
 
     async def fake_invoker(**kwargs):
         assert kwargs["agent_factory"]() == {"agent": "fake"}
         assert kwargs["config"]["configurable"]["thread_id"] != str(run_id)
         assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard"
+        assert len(built["compaction_hooks"]) == 1
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 
     monkeypatch.setattr("dayboard.app.commands.build_dayboard_agent", fake_build_dayboard_agent)

@@ -5,6 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from north import AppConfig, build_agent
+from north import CompactionHook
 from north.tools.builtin import ask_clarification
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,7 @@ def build_dayboard_agent(
     context: TenantContext | None = None,
     run_id: UUID | None = None,
     checkpointer=None,
+    compaction_hooks: list[CompactionHook] | None = None,
     progress: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
 ):
     resolved_settings = settings or get_settings()
@@ -45,5 +47,14 @@ def build_dayboard_agent(
             timezone=resolved_settings.default_timezone,
             locale=resolved_settings.default_locale,
         )),
+        summarization_enabled=resolved_settings.agent_summarization_enabled,
+        summarization_model_name=resolved_settings.agent_summarization_model_name,
+        summarization_trigger_messages=resolved_settings.agent_summarization_trigger_messages,
+        summarization_keep_messages=resolved_settings.agent_summarization_keep_messages,
     )
-    return build_agent(config, tools=resolved_tools, checkpointer=checkpointer)
+    return build_agent(
+        config,
+        tools=resolved_tools,
+        checkpointer=checkpointer,
+        compaction_hooks=compaction_hooks,
+    )
