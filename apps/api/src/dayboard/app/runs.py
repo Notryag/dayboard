@@ -51,12 +51,14 @@ class AgentRunService:
         *,
         input_message: str,
         thread_id: UUID | None = None,
+        run_id: UUID | None = None,
     ) -> AgentRunRow:
         run = await self.runs.create(
             context,
             input_message=input_message,
             thread_id=thread_id,
             status=AgentRunStatus.queued,
+            run_id=run_id,
         )
         await self.events.append(
             context,

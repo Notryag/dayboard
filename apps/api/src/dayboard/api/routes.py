@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, status
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import StreamingResponse
@@ -13,7 +13,7 @@ from uuid import UUID
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
-from dayboard.app.commands import CommandService, get_command_service
+from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
@@ -57,17 +57,32 @@ async def create_command_run(
     tenant_context: TenantContext = Depends(get_dev_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
+    idempotency_key: str | None = Header(
+        default=None,
+        alias="Idempotency-Key",
+        min_length=1,
+        max_length=200,
+    ),
 ) -> CommandRunResponse:
-    run_id = await service.create_command_run(tenant_context, request)
     try:
-        await dispatcher.enqueue(run_id, tenant_context, request)
+        creation = await service.create_or_get_command_run(
+            tenant_context,
+            request,
+            idempotency_key=idempotency_key,
+        )
+    except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    if not creation.created:
+        return CommandRunResponse(run_id=str(creation.run_id), status=creation.status)
+    try:
+        await dispatcher.enqueue(creation.run_id, tenant_context, request)
     except Exception as exc:
-        await service.fail_command_run(tenant_context, run_id, exc)
+        await service.fail_command_run(tenant_context, creation.run_id, exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"message": "Command queue unavailable", "run_id": str(run_id)},
+            detail={"message": "Command queue unavailable", "run_id": str(creation.run_id)},
         ) from exc
-    return CommandRunResponse(run_id=str(run_id))
+    return CommandRunResponse(run_id=str(creation.run_id), status=creation.status)
 
 
 @router.get("/api/runs/{run_id}", response_model=AgentRun)

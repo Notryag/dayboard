@@ -101,6 +101,8 @@ Completed M2 work:
 - added non-blocking conflict warnings while preserving default calendar creation
 - added persisted tool progress events and rendered their SSE-driven execution trace in the web UI
 - required timezone-aware datetimes at domain and agent-tool boundaries; PostgreSQL stores canonical instants while each calendar entry retains its intended IANA timezone
+- added database-enforced scheduling write idempotency keyed by tenant and creating run
+- added `Idempotency-Key` support for command creation so retried requests return the original run without duplicate queue delivery
 
 Implementation notes:
 

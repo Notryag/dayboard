@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from hashlib import sha256
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage
@@ -16,10 +18,22 @@ from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
+from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRunStatus
 
 logger = structlog.get_logger(__name__)
+
+
+class IdempotencyConflictError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class CommandRunCreation:
+    run_id: UUID
+    status: AgentRunStatus
+    created: bool
 
 
 def get_command_service(session: AsyncSession = Depends(get_session)) -> CommandService:
@@ -46,11 +60,45 @@ class CommandService:
         self,
         context: TenantContext,
         request: CommandRequest,
+        idempotency_key: str | None = None,
     ) -> UUID:
-        run = await AgentRunService(self.session).create_run(
+        result = await self.create_or_get_command_run(
             context,
-            input_message=request.message,
+            request,
+            idempotency_key=idempotency_key,
         )
+        return result.run_id
+
+    async def create_or_get_command_run(
+        self,
+        context: TenantContext,
+        request: CommandRequest,
+        *,
+        idempotency_key: str | None = None,
+    ) -> CommandRunCreation:
+        run_id: UUID | None = None
+        if idempotency_key is not None:
+            request_hash = sha256(request.model_dump_json().encode("utf-8")).hexdigest()
+            record, claimed = await IdempotencyKeyRepository(self.session).claim(
+                context,
+                key=idempotency_key,
+                request_hash=request_hash,
+                run_id=uuid4(),
+            )
+            if not claimed:
+                if record.request_hash != request_hash:
+                    raise IdempotencyConflictError(
+                        "Idempotency-Key was already used for a different request"
+                    )
+                existing = await AgentRunService(self.session).get_run(context, record.run_id)
+                if existing is None:
+                    raise RuntimeError("Idempotency key references a missing run")
+                return CommandRunCreation(existing.id, existing.status, False)
+            run_id = record.run_id
+        create_kwargs: dict[str, Any] = {"input_message": request.message}
+        if run_id is not None:
+            create_kwargs["run_id"] = run_id
+        run = await AgentRunService(self.session).create_run(context, **create_kwargs)
         await self.session.commit()
         logger.info(
             "dayboard.command.run_queued",
@@ -58,7 +106,7 @@ class CommandService:
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
         )
-        return run.id
+        return CommandRunCreation(run.id, AgentRunStatus.queued, True)
 
     async def execute_command_run(
         self,

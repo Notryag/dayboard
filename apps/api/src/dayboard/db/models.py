@@ -119,6 +119,32 @@ class AgentRunEventRow(Base):
     )
 
 
+class IdempotencyKeyRow(Base):
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (
+        Index(
+            "uq_idempotency_keys_tenant_owner_key",
+            "tenant_id",
+            "owner_user_id",
+            "key",
+            unique=True,
+        ),
+        Index("ix_idempotency_keys_tenant_run", "tenant_id", "run_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    key: Mapped[str] = mapped_column(String(200), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class ProviderUsageRecordRow(Base):
     __tablename__ = "provider_usage_records"
     __table_args__ = (

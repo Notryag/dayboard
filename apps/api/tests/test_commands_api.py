@@ -59,6 +59,51 @@ async def test_get_queued_run_and_events_after_creation(api_app: FastAPI) -> Non
     assert [event["event_type"] for event in events_response.json()] == ["run_created"]
 
 
+async def test_command_run_creation_is_idempotent(api_app: FastAPI) -> None:
+    headers = {"Idempotency-Key": "create-meeting-1"}
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        first = await client.post(
+            "/api/command-runs",
+            headers=headers,
+            json={"message": "安排会议"},
+        )
+        second = await client.post(
+            "/api/command-runs",
+            headers=headers,
+            json={"message": "安排会议"},
+        )
+
+    dispatcher = api_app.state.test_command_dispatcher
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert second.json() == first.json()
+    assert len(dispatcher.started) == 1
+
+
+async def test_idempotency_key_rejects_different_request(api_app: FastAPI) -> None:
+    headers = {"Idempotency-Key": "create-meeting-2"}
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        first = await client.post(
+            "/api/command-runs",
+            headers=headers,
+            json={"message": "安排会议"},
+        )
+        conflict = await client.post(
+            "/api/command-runs",
+            headers=headers,
+            json={"message": "安排任务"},
+        )
+
+    assert first.status_code == 202
+    assert conflict.status_code == 409
+
+
 async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> None:
     class FailingDispatcher:
         def __init__(self) -> None:

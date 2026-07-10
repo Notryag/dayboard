@@ -4,10 +4,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
-from dayboard.db.models import AgentRunEventRow, AgentRunRow
+from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
 from dayboard.domain.runs import AgentRunEventCategory, AgentRunStatus
 
 
@@ -22,8 +23,10 @@ class AgentRunRepository:
         input_message: str,
         thread_id: UUID | None = None,
         status: AgentRunStatus = AgentRunStatus.queued,
+        run_id: UUID | None = None,
     ) -> AgentRunRow:
         row = AgentRunRow(
+            id=run_id or uuid4(),
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
             thread_id=thread_id or uuid4(),
@@ -56,6 +59,46 @@ class AgentRunRepository:
             )
         )
 
+
+class IdempotencyKeyRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def claim(
+        self,
+        context: TenantContext,
+        *,
+        key: str,
+        request_hash: str,
+        run_id: UUID,
+    ) -> tuple[IdempotencyKeyRow, bool]:
+        statement = (
+            insert(IdempotencyKeyRow)
+            .values(
+                tenant_id=context.tenant_id,
+                owner_user_id=context.user_id,
+                key=key,
+                request_hash=request_hash,
+                run_id=run_id,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["tenant_id", "owner_user_id", "key"],
+            )
+            .returning(IdempotencyKeyRow)
+        )
+        created = (await self.session.execute(statement)).scalar_one_or_none()
+        if created is not None:
+            return created, True
+        existing = await self.session.scalar(
+            select(IdempotencyKeyRow).where(
+                IdempotencyKeyRow.tenant_id == context.tenant_id,
+                IdempotencyKeyRow.owner_user_id == context.user_id,
+                IdempotencyKeyRow.key == key,
+            )
+        )
+        if existing is None:
+            raise RuntimeError("Idempotency key claim was not persisted")
+        return existing, False
 
 class AgentRunEventRepository:
     def __init__(self, session: AsyncSession) -> None:
