@@ -15,6 +15,7 @@ import structlog
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
+from dayboard.app.conversations import ConversationService
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings, get_settings
@@ -23,6 +24,7 @@ from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRunStatus
+from dayboard.domain.conversations import ConversationRole
 
 logger = structlog.get_logger(__name__)
 
@@ -36,6 +38,7 @@ class CommandRunCreation:
     run_id: UUID
     status: AgentRunStatus
     created: bool
+    thread_id: UUID
 
 
 def get_command_service(session: AsyncSession = Depends(get_session)) -> CommandService:
@@ -53,12 +56,14 @@ class CommandService:
         budget_guard: ProviderBudgetGuard | None = None,
         invoker=invoke_agent_once,
         checkpointer=None,
+        conversation_service: ConversationService | None = None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
         self.invoker = invoker
         self.checkpointer = checkpointer
+        self.conversations = conversation_service or ConversationService(session)
 
     async def create_command_run(
         self,
@@ -79,10 +84,12 @@ class CommandService:
         request: CommandRequest,
         *,
         idempotency_key: str | None = None,
+        thread_id: UUID | None = None,
     ) -> CommandRunCreation:
         run_id: UUID | None = None
         if idempotency_key is not None:
-            request_hash = sha256(request.model_dump_json().encode("utf-8")).hexdigest()
+            request_identity = f"{thread_id or 'new'}:{request.model_dump_json()}"
+            request_hash = sha256(request_identity.encode("utf-8")).hexdigest()
             record, claimed = await IdempotencyKeyRepository(self.session).claim(
                 context,
                 key=idempotency_key,
@@ -97,12 +104,31 @@ class CommandService:
                 existing = await AgentRunService(self.session).get_run(context, record.run_id)
                 if existing is None:
                     raise RuntimeError("Idempotency key references a missing run")
-                return CommandRunCreation(existing.id, existing.status, False)
+                return CommandRunCreation(existing.id, existing.status, False, existing.thread_id)
             run_id = record.run_id
-        create_kwargs: dict[str, Any] = {"input_message": request.message}
+        conversations = self.conversations
+        if thread_id is None:
+            thread = await conversations.create_thread(
+                context,
+                title=request.message[:80],
+            )
+            thread_id = thread.id
+        else:
+            await conversations.require_thread(context, thread_id)
+        create_kwargs: dict[str, Any] = {
+            "input_message": request.message,
+            "thread_id": thread_id,
+        }
         if run_id is not None:
             create_kwargs["run_id"] = run_id
         run = await AgentRunService(self.session).create_run(context, **create_kwargs)
+        await conversations.append_message(
+            context,
+            thread_id=thread_id,
+            run_id=run.id,
+            role=ConversationRole.user,
+            content=request.message,
+        )
         await self.session.commit()
         logger.info(
             "dayboard.command.run_queued",
@@ -110,7 +136,7 @@ class CommandService:
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
         )
-        return CommandRunCreation(run.id, AgentRunStatus.queued, True)
+        return CommandRunCreation(run.id, AgentRunStatus.queued, True, run.thread_id)
 
     async def execute_command_run(
         self,
@@ -256,6 +282,14 @@ class CommandService:
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
                 await runs.mark_needs_clarification(context, run, question=clarification_question)
+                await self.conversations.append_message(
+                    context,
+                    thread_id=run.thread_id,
+                    run_id=run.id,
+                    role=ConversationRole.assistant,
+                    content=clarification_question,
+                    message_metadata={"status": "needs_clarification"},
+                )
                 await self.session.commit()
                 logger.info(
                     "dayboard.command.needs_clarification",
@@ -272,6 +306,14 @@ class CommandService:
                 result_message=message,
                 event_metadata={"runtime": "north"},
             )
+            await self.conversations.append_message(
+                context,
+                thread_id=run.thread_id,
+                run_id=run.id,
+                role=ConversationRole.assistant,
+                content=message,
+                message_metadata={"status": "completed"},
+            )
             await self.session.commit()
             logger.info(
                 "dayboard.command.completed",
@@ -282,7 +324,9 @@ class CommandService:
             )
         except Exception as exc:
             if run is not None:
-                await _mark_run_failed(runs, self.session, context, run.id, exc)
+                await _mark_run_failed(
+                    runs, self.conversations, self.session, context, run.id, exc
+                )
             logger.exception(
                 "dayboard.command.failed",
                 run_id=str(run.id) if run is not None else None,
@@ -309,11 +353,20 @@ class CommandService:
             error_type=type(exc).__name__,
             error_message=_safe_error_message(exc),
         )
+        await self.conversations.append_message(
+            context,
+            thread_id=run.thread_id,
+            run_id=run.id,
+            role=ConversationRole.assistant,
+            content=_safe_error_message(exc),
+            message_metadata={"status": "failed"},
+        )
         await self.session.commit()
 
 
 async def _mark_run_failed(
     runs: AgentRunService,
+    conversations: ConversationService,
     session: AsyncSession,
     context: TenantContext,
     run_id: UUID,
@@ -329,6 +382,14 @@ async def _mark_run_failed(
             run,
             error_type=type(exc).__name__,
             error_message=_safe_error_message(exc),
+        )
+        await conversations.append_message(
+            context,
+            thread_id=run.thread_id,
+            run_id=run.id,
+            role=ConversationRole.assistant,
+            content=_safe_error_message(exc),
+            message_metadata={"status": "failed"},
         )
         await session.commit()
     except Exception:

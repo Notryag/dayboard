@@ -29,6 +29,8 @@ from dayboard.db.models import (
     AgentRunEventRow,
     AgentRunRow,
     CalendarEntryRow,
+    ConversationMessageRow,
+    ConversationThreadRow,
     IdempotencyKeyRow,
     ProviderUsageRecordRow,
     TaskItemRow,
@@ -59,13 +61,19 @@ class TestCommandService:
         request: CommandRequest,
         *,
         idempotency_key: str | None = None,
+        thread_id: UUID | None = None,
     ):
         from dayboard.app.commands import CommandRunCreation
         from dayboard.domain.runs import AgentRunStatus
 
         del idempotency_key
-        run_id = await self.create_command_run(context, request)
-        return CommandRunCreation(run_id, AgentRunStatus.queued, True)
+        run = await AgentRunService(self.session).create_run(
+            context,
+            input_message=request.message,
+            thread_id=thread_id,
+        )
+        await self.session.commit()
+        return CommandRunCreation(run.id, AgentRunStatus.queued, True, run.thread_id)
 
     async def fail_command_run(
         self,
@@ -114,18 +122,22 @@ def tenant_context() -> TenantContext:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
+        await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(IdempotencyKeyRow))
         await session.execute(delete(AgentRunRow))
+        await session.execute(delete(ConversationThreadRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
         await session.commit()
         yield session
+        await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
         await session.execute(delete(IdempotencyKeyRow))
         await session.execute(delete(AgentRunRow))
+        await session.execute(delete(ConversationThreadRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
         await session.commit()

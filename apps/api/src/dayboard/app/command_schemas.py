@@ -11,3 +11,4 @@ class CommandRequest(BaseModel):
 class CommandRunResponse(BaseModel):
     run_id: str
     status: AgentRunStatus = AgentRunStatus.queued
+    thread_id: str | None = None

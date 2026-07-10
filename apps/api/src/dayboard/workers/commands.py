@@ -7,7 +7,7 @@ from uuid import UUID
 from arq import cron
 from arq.connections import RedisSettings
 from arq.worker import func
-from north import make_checkpointer
+from north import CheckpointerConfig, make_checkpointer
 import structlog
 
 from dayboard.app.command_schemas import CommandRequest
@@ -43,7 +43,12 @@ async def execute_command_run(
 
 
 async def startup(ctx: dict[str, Any]) -> None:
-    manager = make_checkpointer()
+    manager = make_checkpointer(
+        CheckpointerConfig(
+            backend=settings.agent_checkpointer_backend,
+            connection_string=settings.effective_checkpointer_database_url,
+        )
+    )
     ctx["checkpointer_manager"] = manager
     ctx["checkpointer"] = await manager.__aenter__()
 

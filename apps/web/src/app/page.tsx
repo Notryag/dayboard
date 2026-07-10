@@ -20,6 +20,16 @@ type ProgressStep = {
 type CommandRunResponse = {
   run_id: string;
   status: "queued";
+  thread_id: string;
+};
+
+type ConversationThread = { id: string };
+
+type ConversationMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+  created_at: string;
 };
 
 type RunEvent = {
@@ -58,13 +68,28 @@ function createMessage(
   };
 }
 
+function persistedMessage(message: ConversationMessage): ChatMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.content,
+    time: new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date(message.created_at)),
+  };
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeProgress, setActiveProgress] = useState<ProgressStep[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const activeStreamRef = useRef<EventSource | null>(null);
+  const initializingThreadRef = useRef(false);
 
   const apiBaseUrl = useMemo(() => {
     return process.env.NEXT_PUBLIC_DAYBOARD_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -73,6 +98,48 @@ export default function Home() {
   useEffect(() => {
     return () => activeStreamRef.current?.close();
   }, []);
+
+  useEffect(() => {
+    if (initializingThreadRef.current) return;
+    initializingThreadRef.current = true;
+
+    async function createThread(): Promise<string> {
+      const response = await fetch(`${apiBaseUrl}/api/threads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!response.ok) throw new Error("Thread creation failed");
+      const thread = (await response.json()) as ConversationThread;
+      localStorage.setItem("dayboard.thread_id", thread.id);
+      return thread.id;
+    }
+
+    async function initializeThread() {
+      let resolvedThreadId = localStorage.getItem("dayboard.thread_id");
+      let history: ConversationMessage[] = [];
+      if (resolvedThreadId) {
+        const response = await fetch(
+          `${apiBaseUrl}/api/threads/${resolvedThreadId}/messages`,
+        );
+        if (response.ok) {
+          history = (await response.json()) as ConversationMessage[];
+        } else if (response.status === 404) {
+          localStorage.removeItem("dayboard.thread_id");
+          resolvedThreadId = null;
+        } else {
+          throw new Error("Thread history failed");
+        }
+      }
+      resolvedThreadId ??= await createThread();
+      setThreadId(resolvedThreadId);
+      setMessages(history.length ? history.map(persistedMessage) : initialMessages);
+    }
+
+    void initializeThread().catch(() => {
+      initializingThreadRef.current = false;
+    });
+  }, [apiBaseUrl]);
 
   function followRun(runId: string): Promise<{ text: string; progress: ProgressStep[] }> {
     return new Promise((resolve, reject) => {
@@ -137,7 +204,7 @@ export default function Home() {
     event.preventDefault();
 
     const text = input.trim();
-    if (!text || isSubmitting) {
+    if (!text || isSubmitting || !threadId) {
       return;
     }
 
@@ -147,7 +214,7 @@ export default function Home() {
     setMessages((current) => [...current, createMessage("user", text)]);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/command-runs`, {
+      const response = await fetch(`${apiBaseUrl}/api/threads/${threadId}/command-runs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -239,7 +306,7 @@ export default function Home() {
             <label className={styles.inputWrap}>
               <span className={styles.srOnly}>输入日程或任务</span>
               <input
-                disabled={isSubmitting}
+                disabled={isSubmitting || !threadId}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder="输入或按住说出你的安排"
                 type="text"
@@ -259,7 +326,7 @@ export default function Home() {
             ) : (
               <button
                 className={styles.sendButton}
-                disabled={!input.trim()}
+                disabled={!input.trim() || !threadId}
                 type="submit"
                 aria-label="发送"
               >

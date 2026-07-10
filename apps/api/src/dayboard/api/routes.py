@@ -12,14 +12,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
+from dayboard.app.conversations import ConversationService, conversation_thread_from_row
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
+from dayboard.domain.conversations import ConversationMessage, ConversationRole, ConversationThread
+from pydantic import BaseModel, Field
 
 router = APIRouter()
+
+
+class ThreadCreateRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=240)
 
 TERMINAL_RUN_EVENTS = {
     "run_completed",
@@ -83,7 +90,9 @@ async def create_command_run(
     except IdempotencyConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not creation.created:
-        return CommandRunResponse(run_id=str(creation.run_id), status=creation.status)
+        return CommandRunResponse(
+            run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
+        )
     try:
         await dispatcher.enqueue(creation.run_id, tenant_context, request)
     except Exception as exc:
@@ -92,7 +101,70 @@ async def create_command_run(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"message": "Command queue unavailable", "run_id": str(creation.run_id)},
         ) from exc
-    return CommandRunResponse(run_id=str(creation.run_id), status=creation.status)
+    return CommandRunResponse(
+        run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
+    )
+
+
+@router.post("/api/threads", response_model=ConversationThread, status_code=status.HTTP_201_CREATED)
+async def create_thread(
+    body: ThreadCreateRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+) -> ConversationThread:
+    row = await ConversationService(session).create_thread(tenant_context, title=body.title)
+    await session.commit()
+    await session.refresh(row)
+    return conversation_thread_from_row(row)
+
+
+@router.get("/api/threads/{thread_id}/messages", response_model=list[ConversationMessage])
+async def get_thread_messages(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+) -> list[ConversationMessage]:
+    try:
+        return await ConversationService(session).list_messages(tenant_context, thread_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/threads/{thread_id}/command-runs",
+    response_model=CommandRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_thread_command_run(
+    thread_id: UUID,
+    request: CommandRequest,
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    service: CommandService = Depends(get_command_service),
+    dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> CommandRunResponse:
+    try:
+        creation = await service.create_or_get_command_run(
+            tenant_context,
+            request,
+            idempotency_key=idempotency_key,
+            thread_id=thread_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except IdempotencyConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if creation.created:
+        try:
+            await dispatcher.enqueue(creation.run_id, tenant_context, request)
+        except Exception as exc:
+            await service.fail_command_run(tenant_context, creation.run_id, exc)
+            raise HTTPException(status_code=503, detail="Command queue unavailable") from exc
+    return CommandRunResponse(
+        run_id=str(creation.run_id),
+        status=creation.status,
+        thread_id=str(creation.thread_id),
+    )
 
 
 @router.get("/api/runs/{run_id}", response_model=AgentRun)
@@ -119,6 +191,15 @@ async def cancel_run(
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     await service.mark_cancelled(tenant_context, run)
+    if run.status == "cancelled":
+        await ConversationService(session).append_message(
+            tenant_context,
+            thread_id=run.thread_id,
+            run_id=run.id,
+            role=ConversationRole.assistant,
+            content=run.result_message or "请求已取消",
+            message_metadata={"status": "cancelled"},
+        )
     await session.commit()
     try:
         await dispatcher.cancel(run_id)

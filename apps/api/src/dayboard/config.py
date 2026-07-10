@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from uuid import UUID
+from typing import Literal
 
 from pydantic import AliasChoices
 from pydantic import Field
@@ -38,6 +39,14 @@ class Settings(BaseSettings):
     default_timezone: str = Field(default="Asia/Shanghai", alias="DAYBOARD_DEFAULT_TIMEZONE")
     default_locale: str = Field(default="zh-CN", alias="DAYBOARD_DEFAULT_LOCALE")
     agent_model_name: str = Field(default="openai:gpt-4o-mini", alias="APP_MODEL_NAME")
+    agent_checkpointer_backend: Literal["memory", "sqlite", "postgres"] = Field(
+        default="postgres",
+        alias="DAYBOARD_CHECKPOINTER_BACKEND",
+    )
+    agent_checkpointer_database_url: str | None = Field(
+        default=None,
+        alias="DAYBOARD_CHECKPOINTER_DATABASE_URL",
+    )
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
@@ -76,6 +85,16 @@ class Settings(BaseSettings):
     @property
     def allowed_cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def effective_checkpointer_database_url(self) -> str | None:
+        if self.agent_checkpointer_backend == "memory":
+            return None
+        if self.agent_checkpointer_database_url:
+            return self.agent_checkpointer_database_url
+        if self.agent_checkpointer_backend == "sqlite":
+            raise ValueError("SQLite checkpointer requires DAYBOARD_CHECKPOINTER_DATABASE_URL")
+        return self.database_url.replace("postgresql+asyncpg://", "postgresql://", 1)
 
 
 @lru_cache

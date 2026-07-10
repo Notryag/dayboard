@@ -107,6 +107,49 @@ class AgentRunRow(TimestampMixin, Base):
     result_message: Mapped[str | None] = mapped_column(String(4000), nullable=True)
 
 
+class ConversationThreadRow(TimestampMixin, Base):
+    __tablename__ = "conversation_threads"
+    __table_args__ = (
+        Index("ix_conversation_threads_tenant_owner_updated", "tenant_id", "owner_user_id", "updated_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    summary: Mapped[str | None] = mapped_column(String(8000), nullable=True)
+    summary_through_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class ConversationMessageRow(Base):
+    __tablename__ = "conversation_messages"
+    __table_args__ = (
+        Index("ix_conversation_messages_tenant_thread_created", "tenant_id", "thread_id", "created_at"),
+        Index(
+            "uq_conversation_messages_tenant_run_role",
+            "tenant_id",
+            "run_id",
+            "role",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[str] = mapped_column(String(4000), nullable=False)
+    message_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
 class AgentRunEventRow(Base):
     __tablename__ = "agent_run_events"
     __table_args__ = (

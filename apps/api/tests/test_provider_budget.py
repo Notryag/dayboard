@@ -12,6 +12,20 @@ from dayboard.config import Settings
 from dayboard.context import TenantContext
 
 
+class FakeConversationService:
+    async def create_thread(self, context, *, thread_id=None, title=None):
+        del context, title
+        return SimpleNamespace(id=thread_id or uuid4())
+
+    async def require_thread(self, context, thread_id):
+        del context
+        return SimpleNamespace(id=thread_id)
+
+    async def append_message(self, context, **kwargs):
+        del context, kwargs
+        return None
+
+
 def test_estimate_prompt_tokens_is_nonzero() -> None:
     assert estimate_prompt_tokens("") == 1
     assert estimate_prompt_tokens("安排明天上午十点开会") >= 1
@@ -56,8 +70,8 @@ async def test_command_service_checks_budget_before_model_execution(
             self.session = session
 
         async def create_run(self, context, *, input_message, thread_id=None):
-            del context, input_message, thread_id
-            return SimpleNamespace(id="fake-run")
+                del context, input_message
+                return SimpleNamespace(id="fake-run", thread_id=thread_id)
 
         async def get_run_row(self, context, run_id):
             del context
@@ -95,7 +109,8 @@ async def test_command_service_checks_budget_before_model_execution(
         FakeSession(),
         settings=guard.settings,
         budget_guard=guard,
-        invoker=fake_invoker,
+            invoker=fake_invoker,
+            conversation_service=FakeConversationService(),
     )
 
     first = CommandRequest(message="安排明天开会")

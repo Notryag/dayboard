@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.runs import AgentRunService
 from dayboard.api.routes import get_command_dispatcher
-from dayboard.context import TenantContext
+from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
 
 
@@ -35,9 +35,67 @@ async def test_create_background_command_run_returns_before_execution(
 
     assert response.status_code == 202
     assert body["status"] == "queued"
+    assert body["thread_id"]
     assert [event.event_type for event in events] == ["run_created"]
     assert dispatcher.started[0][0] == UUID(body["run_id"])
     assert dispatcher.started[0][2].message == "安排明天上午九点的项目会议"
+
+
+async def test_thread_command_persists_user_message_once(
+    api_app: FastAPI,
+) -> None:
+    headers = {"Idempotency-Key": "thread-message-1"}
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        thread_response = await client.post("/api/threads", json={"title": "工作安排"})
+        thread_id = thread_response.json()["id"]
+        first = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            headers=headers,
+            json={"message": "明天上午开会"},
+        )
+        repeated = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            headers=headers,
+            json={"message": "明天上午开会"},
+        )
+        messages = await client.get(f"/api/threads/{thread_id}/messages")
+
+    assert thread_response.status_code == 201
+    assert first.status_code == 202
+    assert repeated.json() == first.json()
+    assert first.json()["thread_id"] == thread_id
+    assert [(message["role"], message["content"]) for message in messages.json()] == [
+        ("user", "明天上午开会")
+    ]
+
+
+async def test_thread_routes_are_tenant_and_owner_scoped(
+    api_app: FastAPI,
+    tenant_context: TenantContext,
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        created = await client.post("/api/threads", json={})
+        thread_id = created.json()["id"]
+        api_app.dependency_overrides[get_dev_tenant_context] = lambda: TenantContext(
+            tenant_id=tenant_context.tenant_id,
+            user_id=uuid4(),
+            timezone=tenant_context.timezone,
+            locale=tenant_context.locale,
+        )
+        messages = await client.get(f"/api/threads/{thread_id}/messages")
+        command = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            json={"message": "不能访问"},
+        )
+
+    assert messages.status_code == 404
+    assert command.status_code == 404
 
 
 async def test_health_checks_database_redis_and_worker(api_app: FastAPI) -> None:

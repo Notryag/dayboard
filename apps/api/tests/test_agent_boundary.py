@@ -6,11 +6,25 @@ from uuid import uuid4
 
 import pytest
 
+from dayboard.agent.factory import build_dayboard_agent
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.config import Settings
 from dayboard.context import TenantContext
-from dayboard.agent.factory import build_dayboard_agent
+
+
+class FakeConversationService:
+    async def create_thread(self, context, *, thread_id=None, title=None):
+        del context, title
+        return SimpleNamespace(id=thread_id or uuid4())
+
+    async def require_thread(self, context, thread_id):
+        del context
+        return SimpleNamespace(id=thread_id)
+
+    async def append_message(self, context, **kwargs):
+        del context, kwargs
+        return None
 
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
@@ -66,8 +80,8 @@ async def test_command_service_maps_north_clarification_result_to_run(
             self.session = session
 
         async def create_run(self, context, *, input_message, thread_id=None):
-            del context, input_message, thread_id
-            return SimpleNamespace(id=uuid4())
+                del context, input_message
+                return SimpleNamespace(id=uuid4(), thread_id=thread_id)
 
         async def get_run_row(self, context, run_id):
             del context
@@ -120,7 +134,8 @@ async def test_command_service_maps_north_clarification_result_to_run(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=fake_invoker,
+            invoker=fake_invoker,
+            conversation_service=FakeConversationService(),
     )
 
     request = CommandRequest(message="安排会议")
@@ -144,8 +159,8 @@ async def test_command_service_logs_and_marks_failed_run(
             self.session = session
 
         async def create_run(self, context, *, input_message, thread_id=None):
-            del context, input_message, thread_id
-            return SimpleNamespace(id=uuid4())
+                del context, input_message
+                return SimpleNamespace(id=uuid4(), thread_id=thread_id)
 
         async def get_run_row(self, context, run_id):
             del context
@@ -189,7 +204,8 @@ async def test_command_service_logs_and_marks_failed_run(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=failing_invoker,
+            invoker=failing_invoker,
+            conversation_service=FakeConversationService(),
     )
 
     with caplog.at_level(logging.ERROR, logger="dayboard.app.commands"):
