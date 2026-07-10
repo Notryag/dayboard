@@ -65,9 +65,23 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
             "due_at": "2026-07-10T18:00:00+08:00",
         }
     )
+    repeated_entry_result = await create_entry.ainvoke(
+        {
+            "title": "不应重复创建",
+            "start_time": "2026-07-10T11:00:00+08:00",
+        }
+    )
+    repeated_task_result = await create_task.ainvoke(
+        {
+            "title": "不应重复创建的任务",
+            "due_at": "2026-07-11T18:00:00+08:00",
+        }
+    )
 
     assert entry_result["type"] == "calendar_entry_created"
     assert task_result["type"] == "task_item_created"
+    assert repeated_entry_result["calendar_entry_id"] == entry_result["calendar_entry_id"]
+    assert repeated_task_result["task_item_id"] == task_result["task_item_id"]
 
     entries = await list_calendar_entries(db_session, tenant_context)
     tasks = await list_task_items(db_session, tenant_context)
@@ -81,6 +95,11 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
     assert [event[0] for event in progress_events] == [
+        "conflict_check_started",
+        "conflict_check_completed",
+        "calendar_entry_created",
+        "task_creation_started",
+        "task_item_created",
         "conflict_check_started",
         "conflict_check_completed",
         "calendar_entry_created",

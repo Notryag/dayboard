@@ -63,6 +63,14 @@ async def create_calendar_entry(
     created_by_run_id: UUID | None = None,
 ) -> CalendarEntryToolResult:
     service = SchedulingService(session)
+    if created_by_run_id is not None:
+        existing = await service.get_calendar_entry_created_by_run(context, created_by_run_id)
+        if existing is not None:
+            return CalendarEntryToolResult(
+                calendar_entry_id=existing.id,
+                summary=f"{existing.title} at {existing.start_time.isoformat()}",
+                calendar_entry=existing,
+            )
     end_time = data.end_time or data.start_time + timedelta(hours=1)
     conflicts = await service.list_calendar_conflicts(
         context,
@@ -134,6 +142,18 @@ async def create_task_item(
     created_by_run_id: UUID | None = None,
 ) -> TaskItemToolResult:
     service = SchedulingService(session)
+    if created_by_run_id is not None:
+        existing = await service.get_task_item_created_by_run(context, created_by_run_id)
+        if existing is not None:
+            return TaskItemToolResult(
+                task_item_id=existing.id,
+                summary=(
+                    existing.title
+                    if existing.due_at is None
+                    else f"{existing.title} due {existing.due_at.isoformat()}"
+                ),
+                task_item=existing,
+            )
     task = await service.create_task_item(
         context,
         TaskItemCreate(**data.model_dump(), created_by_run_id=created_by_run_id),

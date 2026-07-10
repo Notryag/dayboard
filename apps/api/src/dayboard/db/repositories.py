@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +43,20 @@ class CalendarEntryRepository:
             .order_by(CalendarEntryRow.start_time.asc())
         )
         return list(result)
+
+    async def get_by_created_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            select(CalendarEntryRow).where(
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.created_by_run_id == run_id,
+                CalendarEntryRow.deleted_at.is_(None),
+            )
+        )
 
     async def list_overlapping(
         self,
@@ -99,3 +114,17 @@ class TaskItemRepository:
             .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
         )
         return list(result)
+
+    async def get_by_created_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> TaskItemRow | None:
+        return await self.session.scalar(
+            select(TaskItemRow).where(
+                TaskItemRow.tenant_id == context.tenant_id,
+                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.created_by_run_id == run_id,
+                TaskItemRow.deleted_at.is_(None),
+            )
+        )

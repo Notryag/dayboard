@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -65,6 +66,14 @@ class SchedulingService:
         rows = await self.calendar_entries.list_active(context)
         return [calendar_entry_from_row(row) for row in rows]
 
+    async def get_calendar_entry_created_by_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get_by_created_run(context, run_id)
+        return calendar_entry_from_row(row) if row else None
+
     async def list_calendar_conflicts(
         self,
         context: TenantContext,
@@ -94,3 +103,11 @@ class SchedulingService:
     async def list_task_items(self, context: TenantContext) -> Sequence[TaskItem]:
         rows = await self.task_items.list_active(context)
         return [task_item_from_row(row) for row in rows]
+
+    async def get_task_item_created_by_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> TaskItem | None:
+        row = await self.task_items.get_by_created_run(context, run_id)
+        return task_item_from_row(row) if row else None

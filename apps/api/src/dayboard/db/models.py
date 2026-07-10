@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Index, String, func
+from sqlalchemy import DateTime, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -34,6 +34,13 @@ class CalendarEntryRow(TimestampMixin, Base):
         Index("ix_calendar_entries_tenant_owner_start", "tenant_id", "owner_user_id", "start_time"),
         Index("ix_calendar_entries_tenant_start", "tenant_id", "start_time"),
         Index("ix_calendar_entries_tenant_created_by_run", "tenant_id", "created_by_run_id"),
+        Index(
+            "uq_calendar_entries_tenant_created_by_run",
+            "tenant_id",
+            "created_by_run_id",
+            unique=True,
+            postgresql_where=text("created_by_run_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -53,6 +60,13 @@ class TaskItemRow(TimestampMixin, Base):
     __tablename__ = "task_items"
     __table_args__ = (
         Index("ix_task_items_tenant_owner_status_due", "tenant_id", "owner_user_id", "status", "due_at"),
+        Index(
+            "uq_task_items_tenant_created_by_run",
+            "tenant_id",
+            "created_by_run_id",
+            unique=True,
+            postgresql_where=text("created_by_run_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
