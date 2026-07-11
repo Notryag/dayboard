@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -145,3 +146,24 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
     assert progress_events == []
+
+
+async def test_parallel_agent_tool_calls_are_serialized_on_shared_session(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    tools = build_scheduling_tools(
+        session=db_session,
+        context=tenant_context,
+        run_id=uuid4(),
+    )
+    create_task = next(tool for tool in tools if tool.name == "create_task_item")
+
+    first, second = await asyncio.gather(
+        create_task.ainvoke({"title": "并行任务一"}),
+        create_task.ainvoke({"title": "并行任务二"}),
+    )
+
+    assert first["task_item_id"] != second["task_item_id"]
+    tasks = await list_task_items(db_session, tenant_context)
+    assert {task.title for task in tasks} == {"并行任务一", "并行任务二"}

@@ -121,6 +121,7 @@ Completed M2 work:
 - added an explicit live Agent acceptance runner for multi-create, calendar/task mutations, missing targets, durable tool events, status, and latency
 - isolated runtime callback event persistence from the Agent tool transaction and serialized per-Run event writes, preventing concurrent AsyncSession use during parallel tool calls
 - production acceptance passed mixed multi-create after the 202607110005 deployment; calendar mutation acceptance was blocked before tool execution by repeated upstream model-gateway 503 responses, with no recurrence of the AsyncSession callback concurrency error
+- serialized Dayboard scheduling tool execution within each Run after production task acceptance exposed LangGraph parallel tool calls sharing one business AsyncSession
 
 Implementation notes:
 

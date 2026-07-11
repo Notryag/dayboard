@@ -207,6 +207,12 @@ Runtime callback events use an independent short-lived database session rather t
 business-tool session. A per-Run async lock serializes callback writes so parallel tool calls do
 not concurrently operate on one SQLAlchemy session or race event sequence allocation.
 
+Scheduling tools within one Agent Run are serialized at the Dayboard tool assembly boundary
+because they share one business `AsyncSession`. LangGraph may dispatch tool calls concurrently,
+but short PostgreSQL scheduling operations execute in model order to preserve session safety,
+idempotency, and audit semantics. Future slow external tools require their own concurrency and
+session boundary instead of bypassing this lock.
+
 Later API:
 
 ```text

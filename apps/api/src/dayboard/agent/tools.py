@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+import asyncio
 from hashlib import sha256
 from typing import Any
 from uuid import UUID
@@ -109,6 +110,14 @@ def build_scheduling_tools(
     The model only sees product fields. Database session, tenant/user context,
     and run identity stay server-owned and are captured by these closures.
     """
+    tool_lock = asyncio.Lock()
+
+    def serialize_tool(function):
+        async def serialized(**kwargs):
+            async with tool_lock:
+                return await function(**kwargs)
+
+        return serialized
 
     async def agent_create_calendar_entry(**kwargs):
         input_data = AgentCreateCalendarEntryInput.model_validate(kwargs)
@@ -247,7 +256,7 @@ def build_scheduling_tools(
 
     return [
         StructuredTool.from_function(
-            coroutine=agent_check_calendar_conflicts,
+            coroutine=serialize_tool(agent_check_calendar_conflicts),
             name="check_calendar_conflicts",
             description=(
                 "Check whether a proposed calendar time overlaps existing entries. "
@@ -256,19 +265,19 @@ def build_scheduling_tools(
             args_schema=CheckCalendarConflictsInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_create_calendar_entry,
+            coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description="Create a Dayboard calendar entry when title and start time are known.",
             args_schema=AgentCreateCalendarEntryInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_list_calendar_entries,
+            coroutine=serialize_tool(agent_list_calendar_entries),
             name="list_calendar_entries",
             description="List active Dayboard calendar entries for the current user.",
             args_schema=ListCalendarEntriesInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_search_calendar_entries,
+            coroutine=serialize_tool(agent_search_calendar_entries),
             name="search_calendar_entries",
             description=(
                 "Search the current user's calendar entries in a start-time range, "
@@ -277,7 +286,7 @@ def build_scheduling_tools(
             args_schema=SearchCalendarEntriesInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_reschedule_calendar_entry,
+            coroutine=serialize_tool(agent_reschedule_calendar_entry),
             name="reschedule_calendar_entry",
             description=(
                 "Move one identified calendar entry to a new start time while preserving "
@@ -286,7 +295,7 @@ def build_scheduling_tools(
             args_schema=RescheduleCalendarEntryInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_cancel_calendar_entry,
+            coroutine=serialize_tool(agent_cancel_calendar_entry),
             name="cancel_calendar_entry",
             description=(
                 "Cancel one identified calendar entry. The entry is retained for audit, "
@@ -295,19 +304,19 @@ def build_scheduling_tools(
             args_schema=CancelCalendarEntryInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_create_task_item,
+            coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
             description="Create a Dayboard task item when the user asks to track work without a scheduled start time.",
             args_schema=AgentCreateTaskItemInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_list_task_items,
+            coroutine=serialize_tool(agent_list_task_items),
             name="list_task_items",
             description="List active Dayboard task items for the current user.",
             args_schema=ListTaskItemsInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_search_task_items,
+            coroutine=serialize_tool(agent_search_task_items),
             name="search_task_items",
             description=(
                 "Search the current user's tasks by title and status before changing, "
@@ -316,7 +325,7 @@ def build_scheduling_tools(
             args_schema=SearchTaskItemsInput,
         ),
         StructuredTool.from_function(
-            coroutine=agent_update_task_item,
+            coroutine=serialize_tool(agent_update_task_item),
             name="update_task_item",
             description=(
                 "Update one identified task's title, due time, or status. Use status "
