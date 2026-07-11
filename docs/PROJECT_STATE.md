@@ -93,7 +93,7 @@ Completed M2 work:
 - added LangChain/north-compatible scheduling tool wrappers with server-injected session, tenant context, and run id
 - removed `created_by_run_id` from model-visible scheduling tool input
 - added provider-level request and estimated token budget guard before real model calls
-- added a provider-neutral speech-to-text boundary and persisted voice transcription API; the production Volcengine adapter still requires credentials and contract implementation
+- added a provider-neutral speech-to-text boundary, persisted voice transcription API, and Alibaba Cloud `qwen3-asr-flash` adapter; real transcription requires a China-region Model Studio API key
 - added generic `north.invoke_agent_once` helper in the reusable `north` package
 - implemented `CommandService` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
 - added a PostgreSQL provider usage ledger that records actual input, output, and total tokens reported by LangChain model messages

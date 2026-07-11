@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     )
     default_timezone: str = Field(default="Asia/Shanghai", alias="DAYBOARD_DEFAULT_TIMEZONE")
     default_locale: str = Field(default="zh-CN", alias="DAYBOARD_DEFAULT_LOCALE")
-    asr_provider: str = Field(default="volcengine", alias="DAYBOARD_ASR_PROVIDER")
+    asr_provider: str = Field(default="aliyun", alias="DAYBOARD_ASR_PROVIDER")
     asr_max_audio_seconds: int = Field(
         default=120,
         alias="DAYBOARD_ASR_MAX_AUDIO_SECONDS",
@@ -63,6 +63,15 @@ class Settings(BaseSettings):
     volcengine_asr_resource_id: str = Field(
         default="volc.bigasr.auc",
         alias="VOLCENGINE_ASR_RESOURCE_ID",
+    )
+    aliyun_asr_api_key: SecretStr | None = Field(default=None, alias="ALIYUN_ASR_API_KEY")
+    aliyun_asr_model: str = Field(
+        default="qwen3-asr-flash",
+        alias="ALIYUN_ASR_MODEL",
+    )
+    aliyun_asr_base_url: str = Field(
+        default="https://dashscope.aliyuncs.com/api/v1",
+        alias="ALIYUN_ASR_BASE_URL",
     )
     agent_model_name: str = Field(default="openai:gpt-4o-mini", alias="APP_MODEL_NAME")
     agent_checkpointer_backend: Literal["memory", "sqlite", "postgres"] = Field(

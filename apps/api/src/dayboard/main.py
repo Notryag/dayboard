@@ -12,6 +12,7 @@ from dayboard.api.rate_limit import configure_rate_limiting
 from dayboard.api.routes import router
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.config import get_settings
+from dayboard.integrations.speech import AliyunSpeechProvider, SpeechProviderRegistry
 from dayboard.observability.logging import configure_logging
 
 
@@ -23,9 +24,25 @@ async def lifespan(app: FastAPI):
         redis,
         queue_name=settings.command_queue_name,
     )
+    speech_registry = SpeechProviderRegistry()
+    if settings.aliyun_asr_api_key is not None:
+        speech_registry.register(
+            "aliyun",
+            lambda: AliyunSpeechProvider(
+                api_key=settings.aliyun_asr_api_key.get_secret_value(),
+                model=settings.aliyun_asr_model,
+                base_url=settings.aliyun_asr_base_url,
+            ),
+        )
+    speech_provider = None
+    if settings.asr_provider in speech_registry.names:
+        speech_provider = speech_registry.create(settings.asr_provider)
+        app.state.speech_provider = speech_provider
     try:
         yield
     finally:
+        if speech_provider is not None:
+            await speech_provider.aclose()
         await redis.aclose()
 
 
