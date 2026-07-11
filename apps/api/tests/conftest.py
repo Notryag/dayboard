@@ -35,6 +35,7 @@ from dayboard.db.models import (
     IdempotencyKeyRow,
     ProviderUsageRecordRow,
     TaskItemRow,
+    VoiceTranscriptRow,
 )
 from dayboard.db.session import SessionLocal, get_session
 from dayboard.main import app
@@ -132,6 +133,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(ConversationThreadRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
+        await session.execute(delete(VoiceTranscriptRow))
         await session.commit()
         yield session
         await session.execute(delete(ConversationMessageRow))
@@ -143,6 +145,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(ConversationThreadRow))
         await session.execute(delete(CalendarEntryRow))
         await session.execute(delete(TaskItemRow))
+        await session.execute(delete(VoiceTranscriptRow))
         await session.commit()
 
 

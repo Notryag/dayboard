@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile, status
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import StreamingResponse
@@ -20,9 +20,13 @@ from dayboard.app.conversations import (
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
+from dayboard.app.voice import VoiceTranscriptionService
+from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
+from dayboard.domain.voice import VoiceTranscript
+from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
     ConversationMessage,
@@ -33,6 +37,15 @@ from dayboard.domain.conversations import (
 from pydantic import BaseModel, Field
 
 router = APIRouter()
+
+SUPPORTED_AUDIO_TYPES = {
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/wav",
+    "audio/x-wav",
+    "audio/webm",
+    "audio/ogg",
+}
 
 
 class ThreadCreateRequest(BaseModel):
@@ -49,6 +62,16 @@ TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled", "needs_clarificatio
 
 def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
     return request.app.state.command_dispatcher
+
+
+def get_speech_provider(request: Request) -> SpeechToTextProvider:
+    provider = getattr(request.app.state, "speech_provider", None)
+    if provider is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Speech recognition provider is not configured",
+        )
+    return provider
 
 
 @router.get("/health")
@@ -152,6 +175,58 @@ async def get_thread_state(
         return await ConversationService(session).get_state(tenant_context, thread_id)
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post(
+    "/api/voice/transcriptions",
+    response_model=VoiceTranscript,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_voice_transcription(
+    audio: UploadFile = File(...),
+    language: str | None = Form(default="zh"),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    provider: SpeechToTextProvider = Depends(get_speech_provider),
+    settings: Settings = Depends(get_settings),
+) -> VoiceTranscript:
+    content_type = (audio.content_type or "").lower()
+    if content_type not in SUPPORTED_AUDIO_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported audio format")
+    content = await audio.read(settings.asr_max_upload_bytes + 1)
+    await audio.close()
+    if not content:
+        raise HTTPException(status_code=422, detail="Audio file is empty")
+    if len(content) > settings.asr_max_upload_bytes:
+        raise HTTPException(status_code=413, detail="Audio file is too large")
+    try:
+        return await VoiceTranscriptionService(session).transcribe(
+            tenant_context,
+            provider,
+            AudioInput(
+                content=content,
+                content_type=content_type,
+                filename=audio.filename,
+            ),
+            language=language,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Speech transcription failed") from exc
+
+
+@router.get(
+    "/api/voice/transcriptions/{transcript_id}",
+    response_model=VoiceTranscript,
+)
+async def get_voice_transcription(
+    transcript_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+) -> VoiceTranscript:
+    transcript = await VoiceTranscriptionService(session).get(tenant_context, transcript_id)
+    if transcript is None:
+        raise HTTPException(status_code=404, detail="Voice transcript not found")
+    return transcript
 
 
 @router.post(

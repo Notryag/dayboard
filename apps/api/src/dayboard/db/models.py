@@ -186,6 +186,35 @@ class ConversationStateRow(Base):
     )
 
 
+class VoiceTranscriptRow(Base):
+    __tablename__ = "voice_transcripts"
+    __table_args__ = (
+        Index("ix_voice_transcripts_tenant_owner_created", "tenant_id", "owner_user_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="processing")
+    filename: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    content_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    audio_size_bytes: Mapped[int] = mapped_column(nullable=False)
+    text: Mapped[str | None] = mapped_column(String(12000), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    language: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(nullable=True)
+    confidence: Mapped[float | None] = mapped_column(nullable=True)
+    provider_request_id: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AgentRunEventRow(Base):
     __tablename__ = "agent_run_events"
     __table_args__ = (

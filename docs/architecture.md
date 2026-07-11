@@ -192,8 +192,8 @@ A command or future voice transcript may contain multiple distinct scheduling in
 Later API:
 
 ```text
-POST /api/voice/uploads
-GET  /api/voice/transcripts/{transcript_id}
+POST /api/voice/transcriptions
+GET  /api/voice/transcriptions/{transcript_id}
 POST /api/calendar-entries
 PATCH /api/calendar-entries/{entry_id}
 DELETE /api/calendar-entries/{entry_id}
