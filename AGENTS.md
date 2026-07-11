@@ -21,6 +21,9 @@ These notes are for coding agents working on Dayboard.
 
 ## Test Execution
 
+- Do not run tests after routine small changes. Use diff review and relevant static checks by default.
+- Run the smallest affected tests only at key moments: shared runtime or database contract changes, concurrency/idempotency work, substantial feature completion, production incident fixes, and release/deployment batches.
+- Reserve full regression and live-model tests for broad high-risk changes or release verification.
 - Unit tests may use fakes for database sessions, model invokers, provider gateways, and run services when testing orchestration, logging, budgeting, or status mapping.
 - Repository tests, API persistence tests, and scheduling tool tests must still run against PostgreSQL.
 - Tests must use `TEST_DATABASE_URL` with a database name ending in `_test`. The test suite refuses to run against the product database because fixtures truncate tables.

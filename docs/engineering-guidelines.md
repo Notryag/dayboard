@@ -308,7 +308,24 @@ Split by responsibility, not by arbitrary line count.
 
 ## Testing Strategy
 
-Use slice-based testing. Do not wait until the end to add tests, and do not require strict test-first development for every small piece.
+Add focused tests when they protect important behavior, but do not routinely execute tests
+after ordinary small changes. Test execution consumes time and infrastructure and should be
+reserved for meaningful verification points.
+
+Run tests at key moments:
+
+- shared runtime, database schema, concurrency, idempotency, or cross-module contract changes;
+- production incident fixes and other regression-prone reliability work;
+- completion of a substantial feature slice;
+- before a release, deployment batch, or merge that changes production behavior;
+- when static inspection cannot establish correctness.
+
+For small documentation, copy, styling, or narrowly mechanical code changes, default to diff
+review and relevant static checks only. Do not run a test suite merely because files changed.
+When tests are warranted, run the smallest affected set first; full regression and live-model
+tests are reserved for release-level or broad/high-risk changes.
+
+Use slice-based test design, and do not require strict test-first development for every small piece.
 
 Default rhythm:
 
@@ -334,7 +351,8 @@ LLM-dependent tests should be limited and optional in normal local runs. Most co
 
 Unit tests for application orchestration may use fakes for database sessions, model invokers, and provider gateways when the behavior under test is routing, budgeting, logging, or status mapping. Repository tests, API persistence tests, and tool tests must still run against PostgreSQL because PostgreSQL is the source of truth and its constraints, JSONB behavior, timestamps, and transaction behavior are part of the product contract.
 
-For Dayboard Phase 1, each milestone should include tests for the completed slice before moving far ahead.
+For Dayboard Phase 1, verify completed substantial slices before moving far ahead; do not turn
+every incremental edit into a test execution checkpoint.
 
 ## Dependency Decisions
 
