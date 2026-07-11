@@ -31,7 +31,7 @@ class FakeConversationService:
 
     async def set_pending_clarification(self, context, **kwargs):
         del context, kwargs
-        return None
+        return SimpleNamespace(version=1, state_data={})
 
     async def clear_pending(self, context, thread_id):
         del context, thread_id
@@ -93,9 +93,11 @@ async def test_command_service_checks_budget_before_model_execution(
             del context
             return run
 
-        async def mark_needs_clarification(self, context, run, *, question):
+        async def mark_needs_clarification(
+            self, context, run, *, question, event_metadata=None
+        ):
             result = run
-            del context, question, run
+            del context, question, run, event_metadata
             return result
 
         async def mark_completed(self, context, run, *, result_message, event_metadata=None):

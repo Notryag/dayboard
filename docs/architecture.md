@@ -183,6 +183,8 @@ GET  /api/task-items
 
 The worker periodically recovers abandoned active runs. A `running` run uses its last update time and a shorter execution timeout; a `queued` run uses its creation time and a longer queue-wait timeout. Recovery uses atomic, status-specific transitions (`queued -> failed` or `running -> failed`), so a job that starts while recovery is scanning cannot be mistaken for an abandoned queued job. A delayed Redis job that arrives after recovery exits immediately after observing the terminal PostgreSQL state.
 
+Structured clarification is persisted in `conversation_states` and delivered as part of the existing clarification lifecycle. The agent decides that business information is ambiguous and supplies relevant candidates; Dayboard validates and persists those candidates, exposes only stable option keys plus display data to the frontend, and keeps database ids and optimistic-lock versions server-side. A choice response contains the state version and option key. Dayboard resolves that key to trusted context, creates a normal follow-up run on the same thread, and continues observability through the existing run-event SSE stream. Visual component names and UI-library models must not enter this backend contract.
+
 Later API:
 
 ```text

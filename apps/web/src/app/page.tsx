@@ -2,6 +2,15 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, SendHorizontal, Square } from "lucide-react";
+import { CalendarEntryChoice } from "@/features/clarifications/CalendarEntryChoice";
+import {
+  getConversationState,
+  submitClarificationChoice,
+} from "@/features/clarifications/api";
+import type {
+  CalendarEntryChoiceOption,
+  ConversationState,
+} from "@/features/clarifications/types";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -10,6 +19,7 @@ type ChatMessage = {
   text: string;
   time: string;
   progress?: ProgressStep[];
+  runId?: string;
 };
 
 type ProgressStep = {
@@ -30,6 +40,7 @@ type ConversationMessage = {
   role: "assistant" | "user";
   content: string;
   created_at: string;
+  run_id: string;
 };
 
 type RunEvent = {
@@ -54,10 +65,23 @@ function currentTimeLabel() {
   }).format(new Date());
 }
 
+function clarificationChoiceLabel(option: CalendarEntryChoiceOption) {
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: option.timezone,
+  }).format(new Date(option.start_time));
+  return `选择“${option.title} · ${time}”`;
+}
+
 function createMessage(
   role: ChatMessage["role"],
   text: string,
   progress?: ProgressStep[],
+  runId?: string,
 ): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -65,6 +89,7 @@ function createMessage(
     text,
     time: currentTimeLabel(),
     progress,
+    runId,
   };
 }
 
@@ -78,6 +103,7 @@ function persistedMessage(message: ConversationMessage): ChatMessage {
       minute: "2-digit",
       hour12: false,
     }).format(new Date(message.created_at)),
+    runId: message.run_id,
   };
 }
 
@@ -88,6 +114,7 @@ export default function Home() {
   const [activeProgress, setActiveProgress] = useState<ProgressStep[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [conversationState, setConversationState] = useState<ConversationState | null>(null);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
 
@@ -132,7 +159,9 @@ export default function Home() {
         }
       }
       resolvedThreadId ??= await createThread();
+      const state = await getConversationState(apiBaseUrl, resolvedThreadId);
       setThreadId(resolvedThreadId);
+      setConversationState(state);
       setMessages(history.length ? history.map(persistedMessage) : initialMessages);
     }
 
@@ -200,6 +229,11 @@ export default function Home() {
     });
   }
 
+  async function refreshConversationState(resolvedThreadId: string) {
+    const state = await getConversationState(apiBaseUrl, resolvedThreadId);
+    setConversationState(state);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -231,14 +265,53 @@ export default function Home() {
       setActiveRunId(command.run_id);
       const result = await followRun(command.run_id);
 
+      await refreshConversationState(threadId);
+
       setMessages((current) => [
         ...current,
-        createMessage("assistant", result.text, result.progress),
+        createMessage("assistant", result.text, result.progress, command.run_id),
       ]);
     } catch {
       setMessages((current) => [
         ...current,
         createMessage("assistant", "请求没有成功。请稍后再试。"),
+      ]);
+    } finally {
+      setIsSubmitting(false);
+      setActiveProgress([]);
+      setActiveRunId(null);
+    }
+  }
+
+  async function handleClarificationChoice(optionKey: string) {
+    const interaction = conversationState?.state_data.interaction;
+    if (!threadId || !interaction || isSubmitting) return;
+    const option = interaction.options.find((candidate) => candidate.key === optionKey);
+    if (!option) return;
+
+    setIsSubmitting(true);
+    setActiveProgress([]);
+    setMessages((current) => [
+      ...current,
+      createMessage("user", clarificationChoiceLabel(option)),
+    ]);
+    try {
+      const command = await submitClarificationChoice(apiBaseUrl, threadId, {
+        state_version: conversationState.version,
+        option_key: optionKey,
+      });
+      setActiveRunId(command.run_id);
+      const result = await followRun(command.run_id);
+      await refreshConversationState(threadId);
+      setMessages((current) => [
+        ...current,
+        createMessage("assistant", result.text, result.progress, command.run_id),
+      ]);
+    } catch {
+      await refreshConversationState(threadId).catch(() => undefined);
+      setMessages((current) => [
+        ...current,
+        createMessage("assistant", "这个选项已经失效，请重新选择。"),
       ]);
     } finally {
       setIsSubmitting(false);
@@ -280,6 +353,16 @@ export default function Home() {
                     <li key={`${step.eventType}-${index}`}>{step.text}</li>
                   ))}
                 </ol>
+              ) : null}
+              {conversationState &&
+              message.role === "assistant" &&
+              message.runId === conversationState.state_data.source_run_id &&
+              conversationState.state_data.interaction?.type === "calendar_entry_choice" ? (
+                <CalendarEntryChoice
+                  disabled={isSubmitting}
+                  interaction={conversationState.state_data.interaction}
+                  onSelect={handleClarificationChoice}
+                />
               ) : null}
               <time>{message.time}</time>
             </article>

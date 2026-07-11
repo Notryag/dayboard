@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+import json
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -46,15 +49,30 @@ def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMe
 
 
 def conversation_state_from_row(row: ConversationStateRow) -> ConversationState:
+    public_state_data = {
+        key: row.state_data[key]
+        for key in ("source_run_id", "interaction")
+        if key in row.state_data
+    }
     return ConversationState(
         thread_id=row.thread_id,
         pending_action=row.pending_action,
         pending_question=row.pending_question,
-        state_data=row.state_data,
+        state_data=public_state_data,
         version=row.version,
         expires_at=row.expires_at,
         updated_at=row.updated_at,
     )
+
+
+class ClarificationStateError(ValueError):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedClarificationChoice:
+    agent_message: str
+    display_message: str
 
 
 class ConversationService:
@@ -166,3 +184,63 @@ class ConversationService:
     ) -> ConversationState | None:
         row = await self.states.clear_pending(context, thread_id)
         return conversation_state_from_row(row) if row else None
+
+    async def resolve_clarification_choice(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        state_version: int,
+        option_key: str,
+    ) -> ResolvedClarificationChoice:
+        await self.require_thread(context, thread_id)
+        row = await self.states.get(context, thread_id)
+        now = datetime.now(UTC)
+        if row is None or row.pending_action != "clarification":
+            raise ClarificationStateError("This clarification is no longer active")
+        if row.version != state_version:
+            raise ClarificationStateError("This clarification has changed; refresh and choose again")
+        if row.expires_at is not None and row.expires_at <= now:
+            raise ClarificationStateError("This clarification has expired")
+
+        candidates = row.state_data.get("candidates")
+        if not isinstance(candidates, list):
+            raise ClarificationStateError("This clarification does not accept a choice")
+        selected = next(
+            (
+                candidate
+                for candidate in candidates
+                if isinstance(candidate, dict) and candidate.get("key") == option_key
+            ),
+            None,
+        )
+        if selected is None:
+            raise ClarificationStateError("The selected option is not available")
+
+        trusted_candidate = {
+            key: selected[key]
+            for key in ("id", "title", "start_time", "end_time", "timezone", "updated_at")
+            if key in selected
+        }
+        title = str(trusted_candidate.get("title") or "所选日程")
+        start_time = trusted_candidate.get("start_time")
+        display_message = f"选择“{title}”"
+        if isinstance(start_time, str):
+            try:
+                parsed_start = datetime.fromisoformat(start_time)
+                timezone_name = trusted_candidate.get("timezone")
+                if isinstance(timezone_name, str):
+                    parsed_start = parsed_start.astimezone(ZoneInfo(timezone_name))
+                display_time = parsed_start.strftime("%m月%d日 %H:%M")
+            except (ValueError, TypeError):
+                display_time = start_time
+            display_message = f"选择“{title} · {display_time}”"
+        agent_message = (
+            "The user selected this server-validated calendar candidate for the pending "
+            f"clarification: {json.dumps(trusted_candidate, ensure_ascii=False)}. "
+            "Continue the previous request using this exact candidate."
+        )
+        return ResolvedClarificationChoice(
+            agent_message=agent_message,
+            display_message=display_message,
+        )

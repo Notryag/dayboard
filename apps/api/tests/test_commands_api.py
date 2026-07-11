@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.runs import AgentRunService
+from dayboard.app.conversations import ConversationService
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
@@ -139,6 +140,98 @@ async def test_thread_routes_are_tenant_and_owner_scoped(
 
     assert messages.status_code == 404
     assert command.status_code == 404
+
+
+async def test_structured_clarification_choice_creates_trusted_follow_up_run(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    conversations = ConversationService(db_session)
+    thread = await conversations.create_thread(tenant_context, title="工作安排")
+    source_run_id = uuid4()
+    pending = await conversations.set_pending_clarification(
+        tenant_context,
+        thread_id=thread.id,
+        run_id=source_run_id,
+        question="你想修改哪一个日程？",
+        state_data={
+            "intent": "reschedule",
+            "candidates": [
+                {
+                    "key": "candidate_1",
+                    "id": "entry-secret-id",
+                    "title": "产品会议",
+                    "start_time": "2026-07-12T15:00:00+08:00",
+                    "timezone": "Asia/Shanghai",
+                    "updated_at": "2026-07-11T01:00:00Z",
+                }
+            ],
+            "interaction": {
+                "type": "calendar_entry_choice",
+                "options": [
+                    {
+                        "key": "candidate_1",
+                        "title": "产品会议",
+                        "start_time": "2026-07-12T15:00:00+08:00",
+                        "timezone": "Asia/Shanghai",
+                    }
+                ],
+            },
+        },
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/threads/{thread.id}/clarification-responses",
+            headers={"Idempotency-Key": "choose-calendar-entry-1"},
+            json={"state_version": pending.version, "option_key": "candidate_1"},
+        )
+        messages = await client.get(f"/api/threads/{thread.id}/messages")
+        state = await client.get(f"/api/threads/{thread.id}/state")
+
+    dispatcher = api_app.state.test_command_dispatcher
+    queued_request = dispatcher.started[-1][2]
+    assert response.status_code == 202
+    assert response.json()["thread_id"] == str(thread.id)
+    assert "entry-secret-id" in queued_request.message
+    assert messages.json()[-1]["content"].startswith("选择“产品会议")
+    assert "entry-secret-id" not in messages.json()[-1]["content"]
+    assert "candidates" not in state.json()["state_data"]
+    assert state.json()["state_data"]["interaction"]["options"][0]["key"] == "candidate_1"
+
+
+async def test_structured_clarification_rejects_stale_state_version(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    conversations = ConversationService(db_session)
+    thread = await conversations.create_thread(tenant_context)
+    pending = await conversations.set_pending_clarification(
+        tenant_context,
+        thread_id=thread.id,
+        run_id=uuid4(),
+        question="选择一个日程",
+        state_data={"candidates": [{"key": "candidate_1", "title": "会议"}]},
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/threads/{thread.id}/clarification-responses",
+            json={"state_version": pending.version + 1, "option_key": "candidate_1"},
+        )
+
+    assert response.status_code == 409
+    assert "changed" in response.json()["detail"]
 
 
 async def test_health_checks_database_redis_and_worker(api_app: FastAPI) -> None:

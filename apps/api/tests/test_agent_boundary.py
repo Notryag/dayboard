@@ -33,7 +33,7 @@ class FakeConversationService:
 
     async def set_pending_clarification(self, context, **kwargs):
         del context, kwargs
-        return None
+        return SimpleNamespace(version=1, state_data={})
 
     async def clear_pending(self, context, thread_id):
         del context, thread_id
@@ -72,12 +72,23 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
         "intent": "cancel",
         "candidates": [
             {
+                "key": "candidate_1",
                 "id": "entry-1",
                 "title": "产品会议",
                 "start_time": "2026-07-11T08:00:00+08:00",
                 "updated_at": "2026-07-10T09:00:00Z",
             }
         ],
+        "interaction": {
+            "type": "calendar_entry_choice",
+            "options": [
+                {
+                    "key": "candidate_1",
+                    "title": "产品会议",
+                    "start_time": "2026-07-11T08:00:00+08:00",
+                }
+            ],
+        },
     }
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
@@ -150,9 +161,11 @@ async def test_command_service_maps_north_clarification_result_to_run(
             del context
             return run
 
-        async def mark_needs_clarification(self, context, run, *, question):
+        async def mark_needs_clarification(
+            self, context, run, *, question, event_metadata=None
+        ):
             result = run
-            del context, run
+            del context, run, event_metadata
             recorded_events.append(("clarification_requested", question))
             return result
 
@@ -231,9 +244,11 @@ async def test_command_service_logs_and_marks_failed_run(
             del context
             return run
 
-        async def mark_needs_clarification(self, context, run, *, question):
+        async def mark_needs_clarification(
+            self, context, run, *, question, event_metadata=None
+        ):
             result = run
-            del context, question, run
+            del context, question, run, event_metadata
             return result
 
         async def mark_completed(self, context, run, *, result_message, event_metadata=None):

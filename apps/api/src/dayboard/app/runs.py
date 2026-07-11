@@ -167,6 +167,7 @@ class AgentRunService:
         run: AgentRunRow,
         *,
         question: str,
+        event_metadata: dict[str, Any] | None = None,
     ) -> bool:
         transitioned = await self.runs.transition_status(
             context,
@@ -183,6 +184,7 @@ class AgentRunService:
             event_type="clarification_requested",
             category=AgentRunEventCategory.clarification,
             content=question,
+            event_metadata=event_metadata,
         )
         return True
 

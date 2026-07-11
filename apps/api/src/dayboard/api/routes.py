@@ -12,13 +12,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
-from dayboard.app.conversations import ConversationService, conversation_thread_from_row
+from dayboard.app.conversations import (
+    ClarificationStateError,
+    ConversationService,
+    conversation_thread_from_row,
+)
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
+from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
     ConversationMessage,
     ConversationRole,
@@ -175,6 +180,52 @@ async def create_thread_command_run(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ActiveThreadRunError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if creation.created:
+        try:
+            await dispatcher.enqueue(creation.run_id, tenant_context, request)
+        except Exception as exc:
+            await service.fail_command_run(tenant_context, creation.run_id, exc)
+            raise HTTPException(status_code=503, detail="Command queue unavailable") from exc
+    return CommandRunResponse(
+        run_id=str(creation.run_id),
+        status=creation.status,
+        thread_id=str(creation.thread_id),
+    )
+
+
+@router.post(
+    "/api/threads/{thread_id}/clarification-responses",
+    response_model=CommandRunResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def respond_to_clarification(
+    thread_id: UUID,
+    body: ClarificationChoiceRequest,
+    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    service: CommandService = Depends(get_command_service),
+    dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+) -> CommandRunResponse:
+    try:
+        choice = await service.conversations.resolve_clarification_choice(
+            tenant_context,
+            thread_id=thread_id,
+            state_version=body.state_version,
+            option_key=body.option_key,
+        )
+        request = CommandRequest(message=choice.agent_message)
+        creation = await service.create_or_get_command_run(
+            tenant_context,
+            request,
+            idempotency_key=idempotency_key,
+            thread_id=thread_id,
+            conversation_message=choice.display_message,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ClarificationStateError, IdempotencyConflictError, ActiveThreadRunError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     if creation.created:
         try:
             await dispatcher.enqueue(creation.run_id, tenant_context, request)

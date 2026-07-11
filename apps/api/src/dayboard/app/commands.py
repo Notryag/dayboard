@@ -86,6 +86,7 @@ class CommandService:
         *,
         idempotency_key: str | None = None,
         thread_id: UUID | None = None,
+        conversation_message: str | None = None,
     ) -> CommandRunCreation:
         run_id: UUID | None = None
         if idempotency_key is not None:
@@ -128,7 +129,7 @@ class CommandService:
             thread_id=thread_id,
             run_id=run.id,
             role=ConversationRole.user,
-            content=request.message,
+            content=conversation_message or request.message,
         )
         await self.session.commit()
         logger.info(
@@ -299,18 +300,24 @@ class CommandService:
 
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
-                if not await runs.mark_needs_clarification(
-                    context, run, question=clarification_question
-                ):
-                    await self.session.rollback()
-                    return
-                await self.conversations.set_pending_clarification(
+                pending = await self.conversations.set_pending_clarification(
                     context,
                     thread_id=run.thread_id,
                     run_id=run.id,
                     question=clarification_question,
                     state_data=_extract_clarification_state_data(result),
                 )
+                if not await runs.mark_needs_clarification(
+                    context,
+                    run,
+                    question=clarification_question,
+                    event_metadata={
+                        "state_version": pending.version,
+                        "interaction": pending.state_data.get("interaction"),
+                    },
+                ):
+                    await self.session.rollback()
+                    return
                 await self.conversations.append_message(
                     context,
                     thread_id=run.thread_id,
@@ -500,14 +507,28 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
 
     allowed = ("id", "title", "start_time", "end_time", "timezone", "updated_at")
     candidates = [
-        {key: item[key] for key in allowed if key in item}
-        for item in content[:10]
-        if isinstance(item, dict)
+        {"key": f"candidate_{index}", **{key: item[key] for key in allowed if key in item}}
+        for index, item in enumerate(
+            (item for item in content[:10] if isinstance(item, dict)), start=1
+        )
     ]
-    return {
+    state_data: dict[str, Any] = {
         "intent": args.get("purpose", "view"),
         "candidates": candidates,
     }
+    if candidates:
+        state_data["interaction"] = {
+            "type": "calendar_entry_choice",
+            "options": [
+                {
+                    key: candidate[key]
+                    for key in ("key", "title", "start_time", "end_time", "timezone")
+                    if key in candidate
+                }
+                for candidate in candidates
+            ],
+        }
+    return state_data
 
 
 def _extract_final_message(result: Any) -> str:
