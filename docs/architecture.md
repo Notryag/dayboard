@@ -195,8 +195,10 @@ of an identical tool call resolves to the object changed by the original operati
 
 North normalizes token usage for every observed model call and aggregates it by call ID.
 Dayboard owns durable usage records, tenant/user attribution, pricing, admission budgets,
-and later reconciliation. Successful Runs persist North's normalized totals; exactly-once
-usage persistence for failed and cancelled Runs remains required before budget reconciliation.
+and later reconciliation. Run finalization settles normalized usage through an independent
+database session for success, clarification, failure, interruption, and cancellation. A unique
+`(tenant_id, run_id)` index plus upsert provides exactly-once aggregate records across retries;
+settlement failure is logged without replacing the Run outcome.
 See [ADR-004](./adr/004-adopt-callback-first-token-accounting.md) for the ownership model,
 current implementation boundary, and finalization requirements.
 

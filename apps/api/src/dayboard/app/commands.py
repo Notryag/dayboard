@@ -23,7 +23,7 @@ from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
-from dayboard.db.session import get_session
+from dayboard.db.session import SessionLocal, get_session
 from dayboard.domain.runs import AgentRunStatus
 from dayboard.domain.conversations import ConversationRole
 
@@ -58,6 +58,7 @@ class CommandService:
         invoker=invoke_agent_once,
         checkpointer=None,
         conversation_service: ConversationService | None = None,
+        usage_session_factory=SessionLocal,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
@@ -65,6 +66,7 @@ class CommandService:
         self.invoker = invoker
         self.checkpointer = checkpointer
         self.conversations = conversation_service or ConversationService(session)
+        self.usage_session_factory = usage_session_factory
 
     async def create_command_run(
         self,
@@ -158,6 +160,7 @@ class CommandService:
             AgentRunStatus.needs_clarification,
         }:
             return
+        usage_accumulator = RuntimeUsageAccumulator()
         try:
             if status == AgentRunStatus.queued:
                 if not await runs.mark_running(context, run):
@@ -195,8 +198,6 @@ class CommandService:
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
             )
-            usage_accumulator = RuntimeUsageAccumulator()
-
             async def record_progress(
                 event_type: str,
                 content: str,
@@ -276,30 +277,6 @@ class CommandService:
             if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
                 return
 
-            usage = usage_accumulator.total
-            if usage is not None:
-                provider, _, _ = self.settings.agent_model_name.partition(":")
-                await ProviderUsageRepository(self.session).create(
-                    context,
-                    run_id=run.id,
-                    provider=provider or "unknown",
-                    model=self.settings.agent_model_name,
-                    input_tokens=usage.input_tokens,
-                    output_tokens=usage.output_tokens,
-                    total_tokens=usage.total_tokens,
-                    usage_metadata={"calls": usage_accumulator.calls},
-                )
-                logger.info(
-                    "dayboard.command.provider_usage_recorded",
-                    run_id=str(run.id),
-                    tenant_id=str(context.tenant_id),
-                    user_id=str(context.user_id),
-                    model=self.settings.agent_model_name,
-                    input_tokens=usage.input_tokens,
-                    output_tokens=usage.output_tokens,
-                    total_tokens=usage.total_tokens,
-                )
-
             clarification_question = _extract_clarification_question(result)
             if clarification_question:
                 pending = await self.conversations.set_pending_clarification(
@@ -377,6 +354,50 @@ class CommandService:
                 error_type=type(exc).__name__,
             )
             raise
+        finally:
+            await self._settle_provider_usage(context, run_id, usage_accumulator)
+
+    async def _settle_provider_usage(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        usage_accumulator: RuntimeUsageAccumulator,
+    ) -> None:
+        usage = usage_accumulator.total
+        if usage is None:
+            return
+        provider, _, _ = self.settings.agent_model_name.partition(":")
+        try:
+            async with self.usage_session_factory() as usage_session:
+                await ProviderUsageRepository(usage_session).settle(
+                    context,
+                    run_id=run_id,
+                    provider=provider or "unknown",
+                    model=self.settings.agent_model_name,
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    total_tokens=usage.total_tokens,
+                    usage_metadata={"calls": usage_accumulator.calls},
+                )
+                await usage_session.commit()
+            logger.info(
+                "dayboard.command.provider_usage_settled",
+                run_id=str(run_id),
+                tenant_id=str(context.tenant_id),
+                user_id=str(context.user_id),
+                model=self.settings.agent_model_name,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                total_tokens=usage.total_tokens,
+            )
+        except Exception:
+            logger.exception(
+                "dayboard.command.provider_usage_settlement_failed",
+                run_id=str(run_id),
+                tenant_id=str(context.tenant_id),
+                user_id=str(context.user_id),
+                model=self.settings.agent_model_name,
+            )
 
     async def fail_command_run(
         self,

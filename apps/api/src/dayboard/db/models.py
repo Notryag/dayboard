@@ -293,7 +293,7 @@ class ProviderUsageRecordRow(Base):
     __tablename__ = "provider_usage_records"
     __table_args__ = (
         Index("ix_provider_usage_tenant_user_created", "tenant_id", "owner_user_id", "created_at"),
-        Index("ix_provider_usage_tenant_run", "tenant_id", "run_id"),
+        Index("uq_provider_usage_tenant_run", "tenant_id", "run_id", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

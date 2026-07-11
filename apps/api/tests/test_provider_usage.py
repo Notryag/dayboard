@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+
 from langchain_core.messages import AIMessage, HumanMessage
 from north import RuntimeEvent
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.command_schemas import CommandRequest
@@ -99,3 +102,69 @@ async def test_command_service_does_not_invent_missing_provider_usage(
     await service.execute_command_run(tenant_context, request, run_id)
 
     assert await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id) == []
+
+
+@pytest.mark.parametrize("error", [RuntimeError("provider failed"), asyncio.CancelledError()])
+async def test_command_service_settles_usage_when_invocation_does_not_return(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+    error: BaseException,
+) -> None:
+    async def fake_invoker(**kwargs):
+        await kwargs["event_sink"](
+            RuntimeEvent(
+                "model.completed",
+                "model",
+                metadata={
+                    "call_id": "charged-call",
+                    "usage": {"input_tokens": 11, "output_tokens": 4, "total_tokens": 15},
+                },
+            )
+        )
+        raise error
+
+    service = CommandService(
+        db_session,
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        invoker=fake_invoker,
+    )
+    request = CommandRequest(message="安排会议")
+    run_id = await service.create_command_run(tenant_context, request)
+
+    with pytest.raises(type(error)):
+        await service.execute_command_run(tenant_context, request, run_id)
+
+    records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
+    assert len(records) == 1
+    assert records[0].total_tokens == 15
+
+
+async def test_provider_usage_settlement_is_idempotent(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    repository = ProviderUsageRepository(db_session)
+    run_id = await CommandService(
+        db_session,
+        settings=Settings(DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://"),
+    ).create_command_run(tenant_context, CommandRequest(message="安排会议"))
+    values = {
+        "run_id": run_id,
+        "provider": "openai",
+        "model": "openai:gpt-test",
+        "input_tokens": 10,
+        "output_tokens": 2,
+        "total_tokens": 12,
+        "usage_metadata": {"calls": [{"call_id": "call-1"}]},
+    }
+
+    await repository.settle(tenant_context, **values)
+    await repository.settle(tenant_context, **{**values, "total_tokens": 13})
+    await db_session.commit()
+
+    records = await repository.list_for_run(tenant_context, run_id)
+    assert len(records) == 1
+    assert records[0].total_tokens == 13

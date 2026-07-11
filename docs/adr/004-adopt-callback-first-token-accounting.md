@@ -59,23 +59,24 @@ tool calls after a hard limit, or attributing subagent usage back to a parent st
 
 ## Current Implementation
 
-North currently emits normalized usage and `RuntimeUsageAccumulator` aggregates successful
-`model.completed` callbacks by `call_id`. Dayboard consumes that accumulator and writes a
-`provider_usage_records` row for a successfully returned invocation.
+North emits normalized usage and `RuntimeUsageAccumulator` aggregates successful
+`model.completed` callbacks by `call_id`. Dayboard consumes that accumulator and settles a
+single `provider_usage_records` row from the Run's `finally` path using an independent database
+session. Success, clarification, failure, interruption, and cancellation therefore share the
+same settlement path whenever a model completion reported usage.
+
+The database enforces uniqueness on `(tenant_id, run_id)`. Settlement uses an upsert, so worker
+or finalization retries update the same aggregate record instead of creating a duplicate. A
+settlement failure is logged independently and does not replace the Run's product outcome.
 
 Dayboard also performs a conservative pre-call budget admission check. This estimate protects
 provider spend but is not the authoritative actual usage record.
 
 ## Required Follow-Up
 
-Move Dayboard usage settlement into a Run finalization path that executes for success,
-clarification, failure, interruption, and cancellation. Add a database uniqueness constraint
-for one aggregate usage record per tenant and Run, and make retries return or update that
-record instead of inserting duplicates.
-
-Usage persistence failure must not overwrite the original Run outcome. It must be logged as
-an operational accounting failure and remain recoverable. Actual usage can then reconcile
-the conservative admission counters.
+Reconcile the conservative admission counters against persisted actual usage. Add an
+operational recovery path for the rare case where independent settlement exhausts its database
+retry opportunity; the structured settlement failure log is the current detection mechanism.
 
 Per-model buckets, cache-read tokens, lead/middleware/subagent attribution, running snapshots,
 and token-budget middleware are deferred until the product uses multiple models, subagents,
@@ -88,6 +89,5 @@ databases, prices, or plans. Dayboard can evolve billing independently while ret
 runtime usage facts.
 
 Short scheduling commands avoid DeerFlow's full attribution and enforcement complexity. The
-tradeoff is that failed and cancelled usage remains incomplete until the finalization follow-up
-is implemented; the architecture explicitly treats that as reliability work rather than a new
-middleware feature.
+remaining tradeoff is that a database outage during settlement requires operational recovery;
+the architecture treats that as accounting reliability work rather than a new middleware feature.
