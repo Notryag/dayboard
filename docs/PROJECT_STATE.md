@@ -118,6 +118,7 @@ Completed M2 work:
 - moved provider token normalization and per-call aggregation into north runtime events; Dayboard persists the normalized totals with tenant, user, model, and Run attribution
 - added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with one immutable tenant/Run record
 - reconciled the pre-call token reservation with first-settled actual usage by charging any positive difference exactly once
+- added an explicit live Agent acceptance runner for multi-create, calendar/task mutations, missing targets, durable tool events, status, and latency
 
 Implementation notes:
 
@@ -131,7 +132,7 @@ Implementation notes:
 
 Next implementation slice:
 
-1. tune prompt/tool schemas across additional live create/change/cancel and multi-command scenarios
+1. run the explicit acceptance catalog after the next deployment batch and tune prompts/tool schemas only from observed failures
 2. add the minimal browser recording flow when live ASR credentials and sample audio are available
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
