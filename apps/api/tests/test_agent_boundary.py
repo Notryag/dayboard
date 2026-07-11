@@ -91,6 +91,38 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
         },
     }
 
+
+def test_clarification_state_uses_agent_suggested_choices_without_search_results() -> None:
+    state_data = _extract_clarification_state_data(
+        {
+            "thread_data": {
+                "clarification": {
+                    "status": "pending",
+                    "question": "会议几点开始？",
+                    "response_kind": "single_choice",
+                    "options": ["09:00", "14:00", "其他时间"],
+                }
+            },
+            "messages": [],
+        }
+    )
+
+    assert state_data == {
+        "candidates": [
+            {"key": "candidate_1", "value": "09:00", "label": "09:00"},
+            {"key": "candidate_2", "value": "14:00", "label": "14:00"},
+            {"key": "candidate_3", "value": "其他时间", "label": "其他时间"},
+        ],
+        "interaction": {
+            "type": "suggested_choice",
+            "options": [
+                {"key": "candidate_1", "label": "09:00"},
+                {"key": "candidate_2", "label": "14:00"},
+                {"key": "candidate_3", "label": "其他时间"},
+            ],
+        },
+    }
+
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}
 

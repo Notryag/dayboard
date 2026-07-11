@@ -217,6 +217,18 @@ class ConversationService:
         if selected is None:
             raise ClarificationStateError("The selected option is not available")
 
+        if "value" in selected:
+            value = str(selected["value"])
+            label = str(selected.get("label") or value)
+            return ResolvedClarificationChoice(
+                agent_message=(
+                    "The user selected this server-validated answer for the pending "
+                    f"clarification: {json.dumps(value, ensure_ascii=False)}. "
+                    "Continue the previous request using this answer."
+                ),
+                display_message=f"选择“{label}”",
+            )
+
         trusted_candidate = {
             key: selected[key]
             for key in ("id", "title", "start_time", "end_time", "timezone", "updated_at")

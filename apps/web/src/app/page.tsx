@@ -2,13 +2,13 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Mic, SendHorizontal, Square } from "lucide-react";
-import { CalendarEntryChoice } from "@/features/clarifications/CalendarEntryChoice";
+import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import {
   getConversationState,
   submitClarificationChoice,
 } from "@/features/clarifications/api";
 import type {
-  CalendarEntryChoiceOption,
+  ClarificationInteraction as Interaction,
   ConversationState,
 } from "@/features/clarifications/types";
 import styles from "./page.module.css";
@@ -65,7 +65,13 @@ function currentTimeLabel() {
   }).format(new Date());
 }
 
-function clarificationChoiceLabel(option: CalendarEntryChoiceOption) {
+function clarificationChoiceLabel(interaction: Interaction, optionKey: string) {
+  if (interaction.type === "suggested_choice") {
+    const option = interaction.options.find((candidate) => candidate.key === optionKey);
+    return option ? `选择“${option.label}”` : null;
+  }
+  const option = interaction.options.find((candidate) => candidate.key === optionKey);
+  if (!option) return null;
   const time = new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
@@ -286,14 +292,14 @@ export default function Home() {
   async function handleClarificationChoice(optionKey: string) {
     const interaction = conversationState?.state_data.interaction;
     if (!threadId || !interaction || isSubmitting) return;
-    const option = interaction.options.find((candidate) => candidate.key === optionKey);
-    if (!option) return;
+    const choiceLabel = clarificationChoiceLabel(interaction, optionKey);
+    if (!choiceLabel) return;
 
     setIsSubmitting(true);
     setActiveProgress([]);
     setMessages((current) => [
       ...current,
-      createMessage("user", clarificationChoiceLabel(option)),
+      createMessage("user", choiceLabel),
     ]);
     try {
       const command = await submitClarificationChoice(apiBaseUrl, threadId, {
@@ -357,8 +363,8 @@ export default function Home() {
               {conversationState &&
               message.role === "assistant" &&
               message.runId === conversationState.state_data.source_run_id &&
-              conversationState.state_data.interaction?.type === "calendar_entry_choice" ? (
-                <CalendarEntryChoice
+              conversationState.state_data.interaction ? (
+                <ClarificationInteraction
                   disabled={isSubmitting}
                   interaction={conversationState.state_data.interaction}
                   onSelect={handleClarificationChoice}

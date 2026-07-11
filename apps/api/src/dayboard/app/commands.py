@@ -465,8 +465,36 @@ def _extract_clarification_question(result: Any) -> str | None:
 
 
 def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
-    if not isinstance(result, dict) or not isinstance(result.get("messages"), list):
+    if not isinstance(result, dict):
         return {}
+
+    state_data: dict[str, Any] = {}
+    thread_data = result.get("thread_data")
+    clarification = thread_data.get("clarification") if isinstance(thread_data, dict) else None
+    if isinstance(clarification, dict) and clarification.get("response_kind") == "single_choice":
+        options = clarification.get("options")
+        if isinstance(options, list):
+            choices = [
+                {"key": f"candidate_{index}", "value": option, "label": option}
+                for index, option in enumerate(
+                    (option for option in options[:10] if isinstance(option, str) and option.strip()),
+                    start=1,
+                )
+            ]
+            if choices:
+                state_data = {
+                    "candidates": choices,
+                    "interaction": {
+                        "type": "suggested_choice",
+                        "options": [
+                            {"key": choice["key"], "label": choice["label"]}
+                            for choice in choices
+                        ],
+                    },
+                }
+
+    if not isinstance(result.get("messages"), list):
+        return state_data
 
     search_calls: dict[str, dict[str, Any]] = {}
     latest: tuple[dict[str, Any], Any] | None = None
@@ -495,15 +523,15 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
             latest = (search_calls[call_id], content)
 
     if latest is None:
-        return {}
+        return state_data
     args, content = latest
     if isinstance(content, str):
         try:
             content = json.loads(content)
         except json.JSONDecodeError:
-            return {}
+            return state_data
     if not isinstance(content, list):
-        return {}
+        return state_data
 
     allowed = ("id", "title", "start_time", "end_time", "timezone", "updated_at")
     candidates = [
@@ -512,12 +540,12 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
             (item for item in content[:10] if isinstance(item, dict)), start=1
         )
     ]
-    state_data: dict[str, Any] = {
+    calendar_state_data: dict[str, Any] = {
         "intent": args.get("purpose", "view"),
         "candidates": candidates,
     }
     if candidates:
-        state_data["interaction"] = {
+        calendar_state_data["interaction"] = {
             "type": "calendar_entry_choice",
             "options": [
                 {
@@ -528,7 +556,7 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
                 for candidate in candidates
             ],
         }
-    return state_data
+    return calendar_state_data
 
 
 def _extract_final_message(result: Any) -> str:
