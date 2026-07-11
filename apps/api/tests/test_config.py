@@ -15,6 +15,8 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAYBOARD_STALE_RUN_SECONDS", "900")
     monkeypatch.setenv("DAYBOARD_QUEUED_RUN_TIMEOUT_SECONDS", "2400")
     monkeypatch.setenv("DAYBOARD_IDEMPOTENCY_RETENTION_SECONDS", "86400")
+    monkeypatch.setenv("DAYBOARD_ASR_PROVIDER", "volcengine")
+    monkeypatch.setenv("DAYBOARD_ASR_MAX_AUDIO_SECONDS", "90")
 
     settings = Settings()
 
@@ -31,3 +33,5 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.stale_run_seconds == 900
     assert settings.queued_run_timeout_seconds == 2400
     assert settings.idempotency_retention_seconds == 86400
+    assert settings.asr_provider == "volcengine"
+    assert settings.asr_max_audio_seconds == 90

@@ -43,6 +43,27 @@ class Settings(BaseSettings):
     )
     default_timezone: str = Field(default="Asia/Shanghai", alias="DAYBOARD_DEFAULT_TIMEZONE")
     default_locale: str = Field(default="zh-CN", alias="DAYBOARD_DEFAULT_LOCALE")
+    asr_provider: str = Field(default="volcengine", alias="DAYBOARD_ASR_PROVIDER")
+    asr_max_audio_seconds: int = Field(
+        default=120,
+        alias="DAYBOARD_ASR_MAX_AUDIO_SECONDS",
+        ge=5,
+        le=600,
+    )
+    asr_max_upload_bytes: int = Field(
+        default=10 * 1024 * 1024,
+        alias="DAYBOARD_ASR_MAX_UPLOAD_BYTES",
+        ge=1024,
+    )
+    volcengine_asr_app_id: str | None = Field(default=None, alias="VOLCENGINE_ASR_APP_ID")
+    volcengine_asr_access_key: SecretStr | None = Field(
+        default=None,
+        alias="VOLCENGINE_ASR_ACCESS_KEY",
+    )
+    volcengine_asr_resource_id: str = Field(
+        default="volc.bigasr.auc",
+        alias="VOLCENGINE_ASR_RESOURCE_ID",
+    )
     agent_model_name: str = Field(default="openai:gpt-4o-mini", alias="APP_MODEL_NAME")
     agent_checkpointer_backend: Literal["memory", "sqlite", "postgres"] = Field(
         default="postgres",

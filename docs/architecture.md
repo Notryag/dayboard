@@ -166,6 +166,8 @@ Client audio upload
 
 Phase 1 can skip full voice execution, but the boundary should exist.
 
+Speech recognition is provider-neutral inside Dayboard. `SpeechToTextProvider` accepts validated audio plus optional language and vocabulary hints and returns a normalized `Transcript`. Deployment selects a provider through `DAYBOARD_ASR_PROVIDER`; the first intended adapter is Volcengine for mainland-China availability. Provider credentials, request signatures, and raw response formats remain inside `dayboard.integrations.speech`. Adding Alibaba Cloud, Tencent Cloud, OpenAI, or an on-premise adapter must not change Dayboard's public upload API or transcript domain model.
+
 ## API Surface
 
 Phase 1 API:

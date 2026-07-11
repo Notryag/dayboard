@@ -1,1 +1,1 @@
-"""External service integrations."""
+"""External service adapters owned by Dayboard."""
