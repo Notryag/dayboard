@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
+from north import RuntimeEvent
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.command_schemas import CommandRequest
@@ -15,7 +16,27 @@ async def test_command_service_records_provider_usage(
     tenant_context: TenantContext,
 ) -> None:
     async def fake_invoker(**kwargs):
-        del kwargs
+        sink = kwargs["event_sink"]
+        await sink(
+            RuntimeEvent(
+                "model.completed",
+                "model",
+                metadata={
+                    "call_id": "call-1",
+                    "usage": {"input_tokens": 20, "output_tokens": 5, "total_tokens": 25},
+                },
+            )
+        )
+        await sink(
+            RuntimeEvent(
+                "model.completed",
+                "model",
+                metadata={
+                    "call_id": "call-2",
+                    "usage": {"input_tokens": 30, "output_tokens": 8, "total_tokens": 38},
+                },
+            )
+        )
         return {
             "messages": [
                 HumanMessage(content="安排会议"),

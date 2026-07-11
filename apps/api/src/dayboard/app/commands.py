@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, ToolMessage
-from north import CompactionEvent, invoke_agent_once
+from north import CompactionEvent, RuntimeUsageAccumulator, invoke_agent_once
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
@@ -195,6 +195,7 @@ class CommandService:
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
             )
+            usage_accumulator = RuntimeUsageAccumulator()
 
             async def record_progress(
                 event_type: str,
@@ -214,6 +215,7 @@ class CommandService:
                 await self.session.commit()
 
             async def record_runtime_event(event) -> None:
+                await usage_accumulator(event)
                 latest = await runs.get_run_row(context, run.id)
                 if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
                     raise asyncio.CancelledError()
@@ -274,7 +276,7 @@ class CommandService:
             if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
                 return
 
-            usage = _extract_provider_usage(result)
+            usage = usage_accumulator.total
             if usage is not None:
                 provider, _, _ = self.settings.agent_model_name.partition(":")
                 await ProviderUsageRepository(self.session).create(
@@ -282,10 +284,10 @@ class CommandService:
                     run_id=run.id,
                     provider=provider or "unknown",
                     model=self.settings.agent_model_name,
-                    input_tokens=usage["input_tokens"],
-                    output_tokens=usage["output_tokens"],
-                    total_tokens=usage["total_tokens"],
-                    usage_metadata={"calls": usage["calls"]},
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    total_tokens=usage.total_tokens,
+                    usage_metadata={"calls": usage_accumulator.calls},
                 )
                 logger.info(
                     "dayboard.command.provider_usage_recorded",
@@ -293,9 +295,9 @@ class CommandService:
                     tenant_id=str(context.tenant_id),
                     user_id=str(context.user_id),
                     model=self.settings.agent_model_name,
-                    input_tokens=usage["input_tokens"],
-                    output_tokens=usage["output_tokens"],
-                    total_tokens=usage["total_tokens"],
+                    input_tokens=usage.input_tokens,
+                    output_tokens=usage.output_tokens,
+                    total_tokens=usage.total_tokens,
                 )
 
             clarification_question = _extract_clarification_question(result)
@@ -576,46 +578,3 @@ def _extract_final_message(result: Any) -> str:
             if isinstance(dict_content, str) and dict_content.strip():
                 return dict_content.strip()
     return "Done."
-
-
-def _extract_provider_usage(result: Any) -> dict[str, Any] | None:
-    if not isinstance(result, dict) or not isinstance(result.get("messages"), list):
-        return None
-
-    calls: list[dict[str, int]] = []
-    for message in result["messages"]:
-        metadata = getattr(message, "usage_metadata", None)
-        if metadata is None and isinstance(message, dict):
-            metadata = message.get("usage_metadata")
-        if not isinstance(metadata, dict):
-            continue
-
-        input_tokens = _non_negative_int(metadata.get("input_tokens"))
-        output_tokens = _non_negative_int(metadata.get("output_tokens"))
-        total_tokens = _non_negative_int(metadata.get("total_tokens"))
-        if input_tokens is None and output_tokens is None and total_tokens is None:
-            continue
-        input_tokens = input_tokens or 0
-        output_tokens = output_tokens or 0
-        calls.append(
-            {
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "total_tokens": total_tokens if total_tokens is not None else input_tokens + output_tokens,
-            }
-        )
-
-    if not calls:
-        return None
-    return {
-        "input_tokens": sum(call["input_tokens"] for call in calls),
-        "output_tokens": sum(call["output_tokens"] for call in calls),
-        "total_tokens": sum(call["total_tokens"] for call in calls),
-        "calls": calls,
-    }
-
-
-def _non_negative_int(value: Any) -> int | None:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        return None
-    return value

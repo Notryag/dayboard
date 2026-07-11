@@ -193,6 +193,11 @@ Calendar rescheduling, calendar cancellation, and task updates use the same serv
 per-operation identity. This permits multiple distinct mutations in one Run while a retry
 of an identical tool call resolves to the object changed by the original operation.
 
+North normalizes token usage for every observed model call and aggregates it by call ID.
+Dayboard owns durable usage records, tenant/user attribution, pricing, admission budgets,
+and later reconciliation. Successful Runs persist North's normalized totals; exactly-once
+usage persistence for failed and cancelled Runs remains required before budget reconciliation.
+
 Later API:
 
 ```text
