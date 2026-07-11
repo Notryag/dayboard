@@ -127,6 +127,9 @@ Completed M2 work:
 - selected FastAPI-native username/password authentication for the first beta, using Argon2id password hashes, revocable server-side sessions, Dayboard-owned tenants and memberships, and a provider-neutral external identity extension point
 - added validated request IDs, structured request completion/failure logs, authenticated user/tenant log context, and request-to-thread-to-Run correlation without logging command text or authentication secrets
 - removed caller-supplied tenant headers from the API rate-limit identity boundary
+- added a reusable web authentication provider and credentialed API client, with register, login,
+  logout, session recovery, request-reference errors, and credentialed SSE support; production
+  release remains blocked on a same-site web/API domain and coordinated auth-mode switch
 
 Implementation notes:
 
@@ -140,7 +143,7 @@ Implementation notes:
 
 Next implementation slice:
 
-1. connect a minimal web register/login/logout/session flow, then run two-user ownership and SSE isolation acceptance before switching production from `development` to `password` auth mode
+1. configure a same-site production web/API domain, then run two-user HTTP and SSE isolation acceptance before switching production from `development` to `password` auth mode
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 3. implement one reliable reminder delivery channel now that authenticated user profiles exist
 

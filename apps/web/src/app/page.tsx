@@ -1,7 +1,10 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Mic, SendHorizontal, Square } from "lucide-react";
+import { LogOut, Mic, SendHorizontal, Square } from "lucide-react";
+import { AuthBoundary } from "@/features/auth/AuthBoundary";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { ApiError, apiBaseUrl, apiFetch, userFacingApiError } from "@/lib/api/client";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import {
   getConversationState,
@@ -113,7 +116,8 @@ function persistedMessage(message: ConversationMessage): ChatMessage {
   };
 }
 
-export default function Home() {
+function ChatHome() {
+  const { logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,9 +128,7 @@ export default function Home() {
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
 
-  const apiBaseUrl = useMemo(() => {
-    return process.env.NEXT_PUBLIC_DAYBOARD_API_BASE_URL ?? "http://127.0.0.1:8000";
-  }, []);
+  const apiUrl = useMemo(apiBaseUrl, []);
 
   useEffect(() => {
     return () => activeStreamRef.current?.close();
@@ -137,12 +139,11 @@ export default function Home() {
     initializingThreadRef.current = true;
 
     async function createThread(): Promise<string> {
-      const response = await fetch(`${apiBaseUrl}/api/threads`, {
+      const response = await apiFetch("/api/threads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      if (!response.ok) throw new Error("Thread creation failed");
       const thread = (await response.json()) as ConversationThread;
       localStorage.setItem("dayboard.thread_id", thread.id);
       return thread.id;
@@ -152,33 +153,38 @@ export default function Home() {
       let resolvedThreadId = localStorage.getItem("dayboard.thread_id");
       let history: ConversationMessage[] = [];
       if (resolvedThreadId) {
-        const response = await fetch(
-          `${apiBaseUrl}/api/threads/${resolvedThreadId}/messages`,
-        );
-        if (response.ok) {
+        try {
+          const response = await apiFetch(`/api/threads/${resolvedThreadId}/messages`);
           history = (await response.json()) as ConversationMessage[];
-        } else if (response.status === 404) {
-          localStorage.removeItem("dayboard.thread_id");
-          resolvedThreadId = null;
-        } else {
-          throw new Error("Thread history failed");
+        } catch (error) {
+          if (error instanceof ApiError && error.status === 404) {
+            localStorage.removeItem("dayboard.thread_id");
+            resolvedThreadId = null;
+          } else {
+            throw error;
+          }
         }
       }
       resolvedThreadId ??= await createThread();
-      const state = await getConversationState(apiBaseUrl, resolvedThreadId);
+      const state = await getConversationState(resolvedThreadId);
       setThreadId(resolvedThreadId);
       setConversationState(state);
       setMessages(history.length ? history.map(persistedMessage) : initialMessages);
     }
 
-    void initializeThread().catch(() => {
+    void initializeThread().catch((error: unknown) => {
       initializingThreadRef.current = false;
+      setMessages([
+        createMessage("assistant", userFacingApiError(error, "无法加载对话，请稍后重试。")),
+      ]);
     });
-  }, [apiBaseUrl]);
+  }, []);
 
   function followRun(runId: string): Promise<{ text: string; progress: ProgressStep[] }> {
     return new Promise((resolve, reject) => {
-      const stream = new EventSource(`${apiBaseUrl}/api/runs/${runId}/events/stream`);
+      const stream = new EventSource(`${apiUrl}/api/runs/${runId}/events/stream`, {
+        withCredentials: true,
+      });
       activeStreamRef.current = stream;
       const progress: ProgressStep[] = [];
 
@@ -236,7 +242,7 @@ export default function Home() {
   }
 
   async function refreshConversationState(resolvedThreadId: string) {
-    const state = await getConversationState(apiBaseUrl, resolvedThreadId);
+    const state = await getConversationState(resolvedThreadId);
     setConversationState(state);
   }
 
@@ -254,7 +260,7 @@ export default function Home() {
     setMessages((current) => [...current, createMessage("user", text)]);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/threads/${threadId}/command-runs`, {
+      const response = await apiFetch(`/api/threads/${threadId}/command-runs`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -262,10 +268,6 @@ export default function Home() {
         },
         body: JSON.stringify({ message: text }),
       });
-
-      if (!response.ok) {
-        throw new Error(`Command request failed with ${response.status}`);
-      }
 
       const command: CommandRunResponse = await response.json();
       setActiveRunId(command.run_id);
@@ -277,10 +279,13 @@ export default function Home() {
         ...current,
         createMessage("assistant", result.text, result.progress, command.run_id),
       ]);
-    } catch {
+    } catch (error) {
       setMessages((current) => [
         ...current,
-        createMessage("assistant", "请求没有成功。请稍后再试。"),
+        createMessage(
+          "assistant",
+          userFacingApiError(error, "请求没有成功。请稍后再试。"),
+        ),
       ]);
     } finally {
       setIsSubmitting(false);
@@ -302,7 +307,7 @@ export default function Home() {
       createMessage("user", choiceLabel),
     ]);
     try {
-      const command = await submitClarificationChoice(apiBaseUrl, threadId, {
+      const command = await submitClarificationChoice(threadId, {
         state_version: conversationState.version,
         option_key: optionKey,
       });
@@ -330,7 +335,7 @@ export default function Home() {
     if (!activeRunId) {
       return;
     }
-    await fetch(`${apiBaseUrl}/api/runs/${activeRunId}/cancel`, { method: "POST" });
+    await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
   }
 
   return (
@@ -341,7 +346,18 @@ export default function Home() {
             <p className={styles.kicker}>Dayboard</p>
             <h1>日程助手</h1>
           </div>
-          <span className={styles.status}>在线</span>
+          <div className={styles.headerActions}>
+            <span className={styles.status}>在线</span>
+            <button
+              className={styles.headerButton}
+              onClick={() => void logout()}
+              type="button"
+              aria-label="退出登录"
+              title="退出登录"
+            >
+              <LogOut size={18} />
+            </button>
+          </div>
         </header>
 
         <section className={styles.messages} aria-label="对话记录">
@@ -426,5 +442,13 @@ export default function Home() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AuthBoundary>
+      <ChatHome />
+    </AuthBoundary>
   );
 }

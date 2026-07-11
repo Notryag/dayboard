@@ -51,6 +51,11 @@ For local development:
 NEXT_PUBLIC_DAYBOARD_API_BASE_URL=http://127.0.0.1:8000
 ```
 
+Password authentication uses an `HttpOnly`, `SameSite=Lax` server session cookie. Production web
+and API endpoints must therefore be same-site, normally custom subdomains under one registrable
+domain. Do not assume that a `vercel.app` web origin can use a session cookie issued by an unrelated
+API domain. Keep `credentials: include` on HTTP requests and `withCredentials` on SSE connections.
+
 ## API Deployment
 
 Do not deploy the FastAPI API to Vercel in the first version. Run it as a normal server service with Docker-managed PostgreSQL and Redis/Valkey.
@@ -62,6 +67,8 @@ DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 DAYBOARD_RATE_LIMIT_STORAGE_URL=redis://...
 DAYBOARD_CORS_ORIGINS=https://your-vercel-domain
+DAYBOARD_AUTH_MODE=password
+DAYBOARD_AUTH_COOKIE_SECURE=true
 APP_MODEL_NAME=openai:gpt-4o-mini
 OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
 OPENAI_API_KEY=...
@@ -76,6 +83,11 @@ https://www.selfapi.art/dayboard-api
 ```
 
 Nginx proxies `/dayboard-api/` to the loopback-only FastAPI service on port 8000. The API and arq worker run as the enabled `dayboard-api.service` and `dayboard-worker.service` systemd units.
+
+Coordinate the account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch.
+Deploying only the mode switch makes the existing web client return 401; deploying only the login
+UI while business APIs remain in development mode authenticates the browser but still uses the
+shared development identity.
 
 ## Current Deployment Shape
 
