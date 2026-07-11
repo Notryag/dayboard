@@ -92,16 +92,18 @@ class CalendarEntryRepository:
             )
         )
 
-    async def get_by_updated_run(
+    async def get_by_updated_operation(
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.updated_by_run_id == run_id,
+                CalendarEntryRow.updated_operation_key == operation_key,
                 CalendarEntryRow.deleted_at.is_(None),
             )
         )
@@ -115,6 +117,7 @@ class CalendarEntryRepository:
         end_time: datetime,
         expected_updated_at: datetime,
         updated_by_run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
             update(CalendarEntryRow)
@@ -129,21 +132,24 @@ class CalendarEntryRepository:
                 start_time=start_time,
                 end_time=end_time,
                 updated_by_run_id=updated_by_run_id,
+                updated_operation_key=operation_key,
                 updated_at=func.now(),
             )
             .returning(CalendarEntryRow)
         )
 
-    async def get_by_cancelled_run(
+    async def get_by_cancelled_operation(
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.cancelled_by_run_id == run_id,
+                CalendarEntryRow.cancelled_operation_key == operation_key,
                 CalendarEntryRow.deleted_at.is_not(None),
             )
         )
@@ -155,6 +161,7 @@ class CalendarEntryRepository:
         entry_id: UUID,
         expected_updated_at: datetime,
         cancelled_by_run_id: UUID,
+        operation_key: str,
         cancellation_reason: str | None,
     ) -> CalendarEntryRow | None:
         now = func.now()
@@ -171,6 +178,7 @@ class CalendarEntryRepository:
                 deleted_at=now,
                 updated_at=now,
                 cancelled_by_run_id=cancelled_by_run_id,
+                cancelled_operation_key=operation_key,
                 cancellation_reason=cancellation_reason,
             )
             .returning(CalendarEntryRow)

@@ -27,7 +27,9 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         created_by_run_id=row.created_by_run_id,
         created_operation_key=row.created_operation_key,
         updated_by_run_id=row.updated_by_run_id,
+        updated_operation_key=row.updated_operation_key,
         cancelled_by_run_id=row.cancelled_by_run_id,
+        cancelled_operation_key=row.cancelled_operation_key,
         cancellation_reason=row.cancellation_reason,
         cancelled_at=row.deleted_at,
         created_at=row.created_at,
@@ -106,12 +108,15 @@ class SchedulingService:
         row = await self.calendar_entries.get_including_cancelled(context, entry_id)
         return calendar_entry_from_row(row) if row else None
 
-    async def get_calendar_entry_updated_by_run(
+    async def get_calendar_entry_updated_by_operation(
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntry | None:
-        row = await self.calendar_entries.get_by_updated_run(context, run_id)
+        row = await self.calendar_entries.get_by_updated_operation(
+            context, run_id, operation_key
+        )
         return calendar_entry_from_row(row) if row else None
 
     async def reschedule_calendar_entry(
@@ -123,6 +128,7 @@ class SchedulingService:
         end_time: datetime,
         expected_updated_at: datetime,
         updated_by_run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.reschedule(
             context,
@@ -131,6 +137,7 @@ class SchedulingService:
             end_time=end_time,
             expected_updated_at=expected_updated_at,
             updated_by_run_id=updated_by_run_id,
+            operation_key=operation_key,
         )
         if row is None:
             return None
@@ -138,12 +145,15 @@ class SchedulingService:
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
 
-    async def get_calendar_entry_cancelled_by_run(
+    async def get_calendar_entry_cancelled_by_operation(
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str,
     ) -> CalendarEntry | None:
-        row = await self.calendar_entries.get_by_cancelled_run(context, run_id)
+        row = await self.calendar_entries.get_by_cancelled_operation(
+            context, run_id, operation_key
+        )
         return calendar_entry_from_row(row) if row else None
 
     async def cancel_calendar_entry(
@@ -153,6 +163,7 @@ class SchedulingService:
         entry_id: UUID,
         expected_updated_at: datetime,
         cancelled_by_run_id: UUID,
+        operation_key: str,
         cancellation_reason: str | None,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.cancel(
@@ -160,6 +171,7 @@ class SchedulingService:
             entry_id=entry_id,
             expected_updated_at=expected_updated_at,
             cancelled_by_run_id=cancelled_by_run_id,
+            operation_key=operation_key,
             cancellation_reason=cancellation_reason,
         )
         if row is None:

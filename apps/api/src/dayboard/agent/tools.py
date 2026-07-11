@@ -174,6 +174,7 @@ def build_scheduling_tools(
             context,
             input_data,
             updated_by_run_id=run_id,
+            operation_key=_create_operation_key("calendar_entry_reschedule", input_data),
         )
         return {
             "type": result.type,
@@ -192,6 +193,7 @@ def build_scheduling_tools(
             context,
             input_data,
             cancelled_by_run_id=run_id,
+            operation_key=_create_operation_key("calendar_entry_cancel", input_data),
         )
         return {
             "type": result.type,

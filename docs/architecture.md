@@ -189,6 +189,10 @@ Structured clarification is persisted in `conversation_states` and delivered as 
 
 A command or future voice transcript may contain multiple distinct scheduling instructions. Create-tool idempotency is scoped to `(tenant_id, run_id, operation_key)`, where Dayboard derives `operation_key` from the normalized server-side tool input. Repeating the same tool call in a retried run step returns the original object, while different calendar entries or tasks in the same run are persisted independently. The model never supplies this key.
 
+Calendar rescheduling, calendar cancellation, and task updates use the same server-derived
+per-operation identity. This permits multiple distinct mutations in one Run while a retry
+of an identical tool call resolves to the object changed by the original operation.
+
 Later API:
 
 ```text

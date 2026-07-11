@@ -46,11 +46,24 @@ class CalendarEntryRow(TimestampMixin, Base):
             ),
         ),
         Index(
-            "uq_calendar_entries_tenant_cancelled_by_run",
+            "uq_calendar_entries_tenant_run_update_operation",
+            "tenant_id",
+            "updated_by_run_id",
+            "updated_operation_key",
+            unique=True,
+            postgresql_where=text(
+                "updated_by_run_id IS NOT NULL AND updated_operation_key IS NOT NULL"
+            ),
+        ),
+        Index(
+            "uq_calendar_entries_tenant_run_cancel_operation",
             "tenant_id",
             "cancelled_by_run_id",
+            "cancelled_operation_key",
             unique=True,
-            postgresql_where=text("cancelled_by_run_id IS NOT NULL"),
+            postgresql_where=text(
+                "cancelled_by_run_id IS NOT NULL AND cancelled_operation_key IS NOT NULL"
+            ),
         ),
     )
 
@@ -66,7 +79,9 @@ class CalendarEntryRow(TimestampMixin, Base):
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     cancelled_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    cancelled_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
 

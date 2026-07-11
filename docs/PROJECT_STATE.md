@@ -114,6 +114,7 @@ Completed M2 work:
 - added reliable calendar cancellation with search-first targeting, optimistic concurrency, Run idempotency, and audit attribution
 - added PostgreSQL-backed conversation history, resumable structured clarification, bounded agent context, and persisted compaction summaries
 - added task search and natural-language task updates for title, due time, completion, and cancellation, with optimistic concurrency, per-operation Run idempotency, and update audit attribution
+- extended calendar rescheduling and cancellation to per-operation Run idempotency so one command can safely modify multiple entries
 
 Implementation notes:
 
@@ -129,9 +130,8 @@ Implementation notes:
 Next implementation slice:
 
 1. tune prompt/tool schemas across additional live create/change/cancel and multi-command scenarios
-2. extend calendar update idempotency from one update per Run to per-operation keys, matching task updates
-3. reconcile provider budget counters against persisted actual usage
-4. add the minimal browser recording flow when live ASR credentials and sample audio are available
+2. reconcile provider budget counters against persisted actual usage
+3. add the minimal browser recording flow when live ASR credentials and sample audio are available
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

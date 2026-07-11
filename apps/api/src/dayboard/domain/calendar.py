@@ -41,7 +41,9 @@ class CalendarEntry(BaseModel):
     created_by_run_id: UUID | None
     created_operation_key: str | None
     updated_by_run_id: UUID | None
+    updated_operation_key: str | None
     cancelled_by_run_id: UUID | None
+    cancelled_operation_key: str | None
     cancellation_reason: str | None
     cancelled_at: datetime | None
     created_at: datetime

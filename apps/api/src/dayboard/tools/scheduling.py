@@ -216,9 +216,12 @@ async def reschedule_calendar_entry(
     data: RescheduleCalendarEntryInput,
     *,
     updated_by_run_id: UUID,
+    operation_key: str,
 ) -> CalendarEntryRescheduleResult:
     service = SchedulingService(session)
-    repeated = await service.get_calendar_entry_updated_by_run(context, updated_by_run_id)
+    repeated = await service.get_calendar_entry_updated_by_operation(
+        context, updated_by_run_id, operation_key
+    )
     if repeated is not None:
         return CalendarEntryRescheduleResult(
             calendar_entry_id=repeated.id,
@@ -260,6 +263,7 @@ async def reschedule_calendar_entry(
         end_time=new_end_time,
         expected_updated_at=data.expected_updated_at,
         updated_by_run_id=updated_by_run_id,
+        operation_key=operation_key,
     )
     if updated is None:
         raise CalendarEntryChangedError(
@@ -311,10 +315,11 @@ async def cancel_calendar_entry(
     data: CancelCalendarEntryInput,
     *,
     cancelled_by_run_id: UUID,
+    operation_key: str,
 ) -> CalendarEntryCancellationResult:
     service = SchedulingService(session)
-    repeated = await service.get_calendar_entry_cancelled_by_run(
-        context, cancelled_by_run_id
+    repeated = await service.get_calendar_entry_cancelled_by_operation(
+        context, cancelled_by_run_id, operation_key
     )
     if repeated is not None:
         return CalendarEntryCancellationResult(
@@ -339,6 +344,7 @@ async def cancel_calendar_entry(
         entry_id=existing.id,
         expected_updated_at=data.expected_updated_at,
         cancelled_by_run_id=cancelled_by_run_id,
+        operation_key=operation_key,
         cancellation_reason=data.reason,
     )
     if cancelled is None:

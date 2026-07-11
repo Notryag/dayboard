@@ -331,6 +331,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
             expected_updated_at=matches[0].updated_at,
         ),
         updated_by_run_id=update_run_id,
+        operation_key="move-product-meeting",
     )
     repeated = await reschedule_calendar_entry(
         db_session,
@@ -341,6 +342,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
             expected_updated_at=matches[0].updated_at,
         ),
         updated_by_run_id=update_run_id,
+        operation_key="move-product-meeting",
     )
 
     assert [entry.id for entry in matches] == [created.calendar_entry_id]
@@ -380,6 +382,7 @@ async def test_reschedule_rejects_stale_selected_version(
             expected_updated_at=selected.updated_at,
         ),
         updated_by_run_id=uuid4(),
+        operation_key="first-move",
     )
 
     with pytest.raises(CalendarEntryChangedError, match="changed after it was selected"):
@@ -392,7 +395,92 @@ async def test_reschedule_rejects_stale_selected_version(
                 expected_updated_at=selected.updated_at,
             ),
             updated_by_run_id=uuid4(),
+            operation_key="stale-move",
         )
+
+
+async def test_multiple_calendar_updates_and_cancellations_in_one_run(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    entries = []
+    for index, title in enumerate(("晨会", "评审", "访谈", "复盘"), start=8):
+        entries.append(
+            (
+                await create_calendar_entry(
+                    db_session,
+                    tenant_context,
+                    CreateCalendarEntryInput(
+                        title=title,
+                        start_time=f"2026-07-11T{index:02d}:00:00+08:00",
+                        timezone="Asia/Shanghai",
+                    ),
+                )
+            ).calendar_entry
+        )
+    run_id = uuid4()
+
+    first_move = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=entries[0].id,
+            new_date="2026-07-12",
+            expected_updated_at=entries[0].updated_at,
+        ),
+        updated_by_run_id=run_id,
+        operation_key="move-morning-meeting",
+    )
+    second_move = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=entries[1].id,
+            new_date="2026-07-13",
+            expected_updated_at=entries[1].updated_at,
+        ),
+        updated_by_run_id=run_id,
+        operation_key="move-review",
+    )
+    first_cancel = await cancel_calendar_entry(
+        db_session,
+        tenant_context,
+        CancelCalendarEntryInput(
+            calendar_entry_id=entries[2].id,
+            expected_updated_at=entries[2].updated_at,
+        ),
+        cancelled_by_run_id=run_id,
+        operation_key="cancel-interview",
+    )
+    second_cancel = await cancel_calendar_entry(
+        db_session,
+        tenant_context,
+        CancelCalendarEntryInput(
+            calendar_entry_id=entries[3].id,
+            expected_updated_at=entries[3].updated_at,
+        ),
+        cancelled_by_run_id=run_id,
+        operation_key="cancel-retrospective",
+    )
+    repeated_move = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=entries[0].id,
+            new_date="2026-07-12",
+            expected_updated_at=entries[0].updated_at,
+        ),
+        updated_by_run_id=run_id,
+        operation_key="move-morning-meeting",
+    )
+
+    assert first_move.calendar_entry_id == entries[0].id
+    assert second_move.calendar_entry_id == entries[1].id
+    assert repeated_move.calendar_entry_id == first_move.calendar_entry_id
+    assert first_cancel.calendar_entry_id == entries[2].id
+    assert second_cancel.calendar_entry_id == entries[3].id
+    assert first_move.calendar_entry.updated_operation_key == "move-morning-meeting"
+    assert second_cancel.calendar_entry.cancelled_operation_key == "cancel-retrospective"
 
 
 async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
@@ -420,18 +508,21 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
         tenant_context,
         input_data,
         cancelled_by_run_id=run_id,
+        operation_key="cancel-client-meeting",
     )
     repeated = await cancel_calendar_entry(
         db_session,
         tenant_context,
         input_data,
         cancelled_by_run_id=run_id,
+        operation_key="cancel-client-meeting",
     )
     repeated_in_another_run = await cancel_calendar_entry(
         db_session,
         tenant_context,
         input_data,
         cancelled_by_run_id=uuid4(),
+        operation_key="cancel-client-meeting-again",
     )
 
     assert cancelled.type == "calendar_entry_cancelled"
@@ -474,6 +565,7 @@ async def test_cancel_rejects_stale_selected_version(
             expected_updated_at=selected.updated_at,
         ),
         updated_by_run_id=uuid4(),
+        operation_key="move-before-cancel",
     )
 
     with pytest.raises(CalendarEntryChangedError, match="search again before cancelling"):
@@ -485,4 +577,5 @@ async def test_cancel_rejects_stale_selected_version(
                 expected_updated_at=selected.updated_at,
             ),
             cancelled_by_run_id=uuid4(),
+            operation_key="stale-cancel",
         )
