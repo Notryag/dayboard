@@ -174,7 +174,15 @@ async def _run_scenario(
                 "result": run.get("result_message"),
             }
         )
-    return {"scenario": scenario.name, "thread_id": thread_id, "passed": passed, "turns": turns}
+        if not turn_passed:
+            break
+    return {
+        "scenario": scenario.name,
+        "thread_id": thread_id,
+        "passed": passed,
+        "turns": turns,
+        "skipped_turns": len(scenario.turns) - len(turns),
+    }
 
 
 async def _main(args: argparse.Namespace) -> int:

@@ -25,7 +25,9 @@ uv run python scripts/agent_acceptance.py \
 
 Each turn records terminal status, elapsed time, expected and observed completed tools, missing
 tools, result text, Run ID, and thread ID. A non-zero process exit means at least one expectation
-failed. Use the returned Run ID to inspect its durable events.
+failed. A scenario stops after its first failed turn so a failed setup cannot trigger invalid or
+costly dependent commands; `skipped_turns` reports the remainder. Use the returned Run ID to
+inspect its durable events.
 
 Initial scenarios cover:
 
