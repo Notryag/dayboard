@@ -30,7 +30,7 @@ SCENARIOS = (
         description="Create distinct calendar and task objects from one command.",
         turns=(
             Turn(
-                "[ACCEPTANCE] 明天上午 9 点创建项目晨会，并创建一个后天下午 6 点前提交验收报告的任务",
+                "明天上午 9 点创建标题为「验收{tag}项目晨会」的日程，并创建标题为「验收{tag}提交验收报告」、后天下午 6 点截止的任务",
                 {"create_calendar_entry": 1, "create_task_item": 1},
             ),
         ),
@@ -40,11 +40,11 @@ SCENARIOS = (
         description="Create two entries, then move one and cancel the other in one Run.",
         turns=(
             Turn(
-                "[ACCEPTANCE] 明天上午 10 点创建需求评审，明天下午 3 点创建客户访谈",
+                "创建两个日程，标题分别为「验收{tag}需求评审」和「验收{tag}客户访谈」，时间分别是明天上午 10 点和明天下午 3 点",
                 {"create_calendar_entry": 2},
             ),
             Turn(
-                "把 [ACCEPTANCE] 需求评审改到后天上午 11 点，并取消 [ACCEPTANCE] 客户访谈",
+                "把「验收{tag}需求评审」改到后天上午 11 点，并取消「验收{tag}客户访谈」",
                 {
                     "search_calendar_entries": 2,
                     "reschedule_calendar_entry": 1,
@@ -58,11 +58,11 @@ SCENARIOS = (
         description="Create two tasks, then complete one and move the other in one Run.",
         turns=(
             Turn(
-                "创建任务 [ACCEPTANCE] 整理周报，再创建任务 [ACCEPTANCE] 提交报销",
+                "创建两个任务，标题分别为「验收{tag}整理周报」和「验收{tag}提交报销」",
                 {"create_task_item": 2},
             ),
             Turn(
-                "完成 [ACCEPTANCE] 整理周报，并把 [ACCEPTANCE] 提交报销的截止时间改到后天下午 5 点",
+                "完成「验收{tag}整理周报」，并把「验收{tag}提交报销」的截止时间改到后天下午 5 点",
                 {"search_task_items": 2, "update_task_item": 2},
             ),
         ),
@@ -72,7 +72,7 @@ SCENARIOS = (
         description="Do not create a replacement when a mutation target does not exist.",
         turns=(
             Turn(
-                "把 [ACCEPTANCE] 完全不存在的会议改到后天上午 9 点",
+                "把「验收{tag}完全不存在的会议」改到后天上午 9 点",
                 {"search_calendar_entries": 1},
             ),
         ),
@@ -141,13 +141,14 @@ async def _run_scenario(
     )
     thread_response.raise_for_status()
     thread_id = thread_response.json()["id"]
+    tag = thread_id[:8]
     turns = []
     passed = True
     for index, turn in enumerate(scenario.turns, start=1):
         started_at = time.monotonic()
         response = await client.post(
             f"/api/threads/{thread_id}/command-runs",
-            json={"message": turn.message},
+            json={"message": turn.message.format(tag=tag)},
             headers={"Idempotency-Key": f"acceptance:{scenario.name}:{thread_id}:{index}"},
         )
         response.raise_for_status()

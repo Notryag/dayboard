@@ -6,7 +6,9 @@ with real model calls.
 
 The runner is safe by default: without `--execute` it only lists scenarios. Execution also
 requires `--allow-writes` because it creates persistent threads, calendar entries, tasks, Runs,
-events, and provider usage records. Test titles use the `[ACCEPTANCE]` prefix.
+events, and provider usage records. Test titles include a per-thread `验收<tag>` prefix as
+explicit title text so repeated catalog runs do not produce ambiguous mutation targets. Avoid
+decorative bracket tags because a model may correctly omit them while inferring a concise title.
 
 ```bash
 cd apps/api
