@@ -37,3 +37,4 @@ Initial ADRs to add when implementation starts:
 - [ADR-001: Adopt DeerFlow Run and Runtime Patterns](./001-adopt-deerflow-run-runtime-patterns.md)
 - [ADR-002: Adopt DeerFlow Runtime Observability Boundaries](./002-adopt-deerflow-runtime-observability.md)
 - [ADR-003: Separate Conversation and Checkpoint Persistence](./003-separate-conversation-and-checkpoint-persistence.md)
+- [ADR-004: Adopt Callback-First Token Accounting](./004-adopt-callback-first-token-accounting.md)
