@@ -43,6 +43,7 @@ Product scope:
 Current milestone planning:
 
 - [phase-1-plan.md](./phase-1-plan.md)
+- [phase-2-plan.md](./phase-2-plan.md)
 
 Architecture decisions:
 

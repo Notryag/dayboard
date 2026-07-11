@@ -51,7 +51,8 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 ## Next Milestone
 
-Continue M2 from [phase-1-plan.md](./phase-1-plan.md).
+Phase 1 has proved the natural-language scheduling loop. Continue the usable account beta from
+[phase-2-plan.md](./phase-2-plan.md), starting with authenticated identity and ownership.
 
 Completed M1 work:
 
@@ -136,8 +137,9 @@ Implementation notes:
 
 Next implementation slice:
 
-1. run the explicit acceptance catalog after the next deployment batch and tune prompts/tool schemas only from observed failures
-2. add the minimal browser recording flow when live ASR credentials and sample audio are available
+1. select the first authentication service or standard OIDC/JWT deployment and implement the provider-neutral identity, user, membership, and profile boundary
+2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
+3. implement one reliable reminder delivery channel after authenticated user profiles exist
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
