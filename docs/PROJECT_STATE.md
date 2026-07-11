@@ -130,6 +130,8 @@ Completed M2 work:
 - added a reusable web authentication provider and credentialed API client, with register, login,
   logout, session recovery, request-reference errors, and credentialed SSE support; production
   release remains blocked on a same-site web/API domain and coordinated auth-mode switch
+- verified two password-authenticated users cannot read, stream, or cancel each other's Runs;
+  unauthorized Run status, event history, SSE, and cancellation consistently return 404
 
 Implementation notes:
 
@@ -143,7 +145,8 @@ Implementation notes:
 
 Next implementation slice:
 
-1. configure a same-site production web/API domain, then run two-user HTTP and SSE isolation acceptance before switching production from `development` to `password` auth mode
+1. configure a same-site production web/API domain, apply the account migration, and coordinate the
+   web release with the switch from `development` to `password` auth mode
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 3. implement one reliable reminder delivery channel now that authenticated user profiles exist
 

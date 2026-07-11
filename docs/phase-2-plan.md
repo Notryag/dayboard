@@ -42,6 +42,10 @@ The web experience remains a prototype and browser voice capture is not connecte
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.
 
+Backend acceptance now covers password-session isolation for threads, Run status, durable Run
+events, SSE, and cancellation. Production enablement still requires a same-site web/API domain
+and one coordinated web, migration, and auth-mode release.
+
 ### P2.2 Reminder Delivery
 
 - normalize stored reminder intent into a scheduled delivery time;

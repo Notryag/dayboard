@@ -52,6 +52,7 @@ SUPPORTED_AUDIO_TYPES = {
 class ThreadCreateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=240)
 
+
 TERMINAL_RUN_EVENTS = {
     "run_completed",
     "run_failed",
@@ -362,7 +363,10 @@ async def get_run_events(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[AgentRunEvent]:
-    return await AgentRunService(session).list_events(tenant_context, run_id)
+    service = AgentRunService(session)
+    if await service.get_run(tenant_context, run_id) is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return await service.list_events(tenant_context, run_id)
 
 
 @router.get("/api/runs/{run_id}/events/stream")

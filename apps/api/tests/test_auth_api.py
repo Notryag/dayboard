@@ -1,15 +1,33 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.config import Settings, get_settings
+from dayboard.api.routes import get_command_dispatcher
+from dayboard.app.commands import CommandService, get_command_service
+from dayboard.context import TenantContext
 from dayboard.db.models import UserCredentialRow, UserSessionRow
 from dayboard.db.session import get_session
 from dayboard.main import app
+
+
+class RecordingDispatcher:
+    def __init__(self) -> None:
+        self.enqueued: list[UUID] = []
+        self.cancelled: list[UUID] = []
+
+    async def enqueue(self, run_id: UUID, context: TenantContext, request: object) -> None:
+        del context, request
+        self.enqueued.append(run_id)
+
+    async def cancel(self, run_id: UUID) -> bool:
+        self.cancelled.append(run_id)
+        return True
 
 
 async def test_register_login_logout_and_resolve_tenant_context(
@@ -119,5 +137,55 @@ async def test_password_sessions_cannot_read_another_users_thread(
             ).status_code == 201
             hidden = await bob.get(f"/api/threads/{thread.json()['id']}/messages")
             assert hidden.status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_password_sessions_isolate_run_status_events_stream_and_cancel(
+    db_session: AsyncSession,
+) -> None:
+    settings = Settings(DAYBOARD_AUTH_MODE="password", DAYBOARD_RATE_LIMIT_ENABLED=False)
+    dispatcher = RecordingDispatcher()
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
+    app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
+    try:
+        transport = ASGITransport(app=app)
+        async with (
+            AsyncClient(transport=transport, base_url="http://test") as alice,
+            AsyncClient(transport=transport, base_url="http://test") as bob,
+        ):
+            assert (
+                await alice.post(
+                    "/api/auth/register",
+                    json={"username": "alice-run", "password": "alice-run-password"},
+                )
+            ).status_code == 201
+            created = await alice.post(
+                "/api/command-runs",
+                json={"message": "安排明天八点的会议"},
+            )
+            assert created.status_code == 202
+            run_id = created.json()["run_id"]
+            assert dispatcher.enqueued == [UUID(run_id)]
+            assert (await alice.get(f"/api/runs/{run_id}")).status_code == 200
+            assert (await alice.get(f"/api/runs/{run_id}/events")).status_code == 200
+
+            assert (
+                await bob.post(
+                    "/api/auth/register",
+                    json={"username": "bob-run", "password": "bob-run-password-12"},
+                )
+            ).status_code == 201
+            assert (await bob.get(f"/api/runs/{run_id}")).status_code == 404
+            assert (await bob.get(f"/api/runs/{run_id}/events")).status_code == 404
+            assert (await bob.get(f"/api/runs/{run_id}/events/stream")).status_code == 404
+            assert (await bob.post(f"/api/runs/{run_id}/cancel")).status_code == 404
+            assert dispatcher.cancelled == []
     finally:
         app.dependency_overrides.clear()
