@@ -235,12 +235,17 @@ proves scheduling, idempotency, status, and observability without an external ne
 Future Alibaba Cloud SMS, WeChat, or email adapters reuse this outbox and must use the delivery ID
 as their provider idempotency key where supported.
 
-Later API:
+Current supporting API:
 
 ```text
 POST /api/voice/transcriptions
 GET  /api/voice/transcriptions/{transcript_id}
 GET  /api/reminders
+```
+
+Planned direct object API:
+
+```text
 POST /api/calendar-entries
 PATCH /api/calendar-entries/{entry_id}
 DELETE /api/calendar-entries/{entry_id}
@@ -249,7 +254,7 @@ PATCH /api/task-items/{task_id}
 DELETE /api/task-items/{task_id}
 ```
 
-`POST /api/command-runs` should support idempotent retries with an `Idempotency-Key` header.
+`POST /api/command-runs` supports idempotent retries with an `Idempotency-Key` header.
 
 ## Rate Limiting
 
@@ -268,9 +273,9 @@ The first application implementation uses FastAPI middleware backed by Redis or 
 
 Initial keying:
 
-- prefer trusted `tenant_id` or authenticated user id when auth exists
-- temporarily use `X-Tenant-Id` when provided
-- otherwise fall back to client address
+- use client address in HTTP middleware before authentication resolution;
+- use trusted `tenant_id` and user id only after server-side session resolution;
+- never use caller-supplied tenant or user headers as an identity or rate-limit key.
 
 Later, `/api/command-runs`, voice upload, and provider calls should each have separate limits because their cost profiles are different.
 
@@ -432,8 +437,8 @@ Dayboard business data:
 - task items
 - reminders
 - voice transcripts
-- user settings
-- audit logs
+- user profiles
+- audit attribution on business objects and Runs
 
 `CalendarEntry` should never be added to `north` state as a core runtime concept. A tool result may reference a `calendar_entry_id`.
 
@@ -446,19 +451,26 @@ Core tables:
 ```text
 tenants
 users
+user_credentials
+external_identities
 tenant_memberships
-user_settings
+user_profiles
+user_sessions
 calendar_entries
 task_items
-agent_threads
+reminder_deliveries
+conversation_threads
+conversation_messages
+conversation_states
 agent_runs
 agent_run_events
 voice_transcripts
-audit_logs
 idempotency_keys
+provider_usage_records
 ```
 
-Phase 1 can use a single development tenant, but the schema should include `tenant_id` from the start.
+Local development and controlled demos may use one configured identity. Password mode resolves
+tenant and owner identity from a server-side session and active membership.
 
 Required common fields:
 

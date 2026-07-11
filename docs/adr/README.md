@@ -24,13 +24,13 @@ What are we choosing?
 What gets easier, what gets harder, and what follow-up work does this imply?
 ```
 
-Initial ADRs to add when implementation starts:
+Create another ADR when a new decision in one of these areas becomes expensive to reverse:
 
-- choose Next.js for the first UI
-- use PostgreSQL from Phase 1
-- keep `CalendarEntry` out of `north`
-- use `tenant_id` with future isolation resolver
-- choose the first worker/queue implementation
+- UI framework or component-system replacement
+- database or tenancy-isolation strategy
+- Dayboard/North ownership boundary
+- worker or queue replacement
+- authentication or external notification provider boundary
 
 ## Accepted Decisions
 

@@ -22,22 +22,30 @@ The natural-language scheduling backend is an MVP-quality closed loop:
 - run API, worker, PostgreSQL, Redis, migrations, usage accounting, and budgets in production.
 
 The product is not ready for external users because the deployed API still resolves every
-request to one development tenant/user. Reminder intent is stored but no notification is sent.
-The web experience remains a prototype and browser voice capture is not connected.
+request to one development tenant/user. Password authentication and an in-app reminder outbox are
+implemented but not deployed as one coordinated release. The web experience remains a prototype,
+the reminder inbox is not rendered, and browser voice capture is not connected.
 
 ## Milestone Order
 
 ### P2.1 Real Identity And Ownership
 
-- implement username/password registration and login in FastAPI;
-- hash passwords with Argon2id and use revocable server-side sessions in `HttpOnly` cookies;
-- map authenticated sessions to Dayboard users and tenant membership;
-- retain external identity records as the extension point for future WeChat or OIDC login;
-- derive `TenantContext` only from trusted identity and membership data;
-- store per-user timezone and locale;
-- enforce ownership on threads, Runs, calendar entries, tasks, voice transcripts, and usage;
-- remove the fixed development identity from production mode;
-- add a minimal login/logout/session flow to the web app.
+Status: backend, web session flow, and isolation acceptance complete; production enablement pending.
+
+Completed:
+
+- username/password registration and login in FastAPI;
+- Argon2id password hashes and revocable server-side sessions in `HttpOnly` cookies;
+- Dayboard users, memberships, timezone/locale profiles, and an external-identity extension point;
+- trusted `TenantContext` resolution from sessions and memberships;
+- minimal web registration, login, logout, session recovery, and credentialed SSE;
+- two-user ownership acceptance for threads and Run status, events, streaming, and cancellation.
+
+Remaining:
+
+- configure a same-site web/API domain;
+- apply account migrations and switch production to `password` mode in the same release;
+- complete external-beta ownership acceptance for calendar entries, tasks, transcripts, and usage.
 
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.
@@ -48,12 +56,21 @@ and one coordinated web, migration, and auth-mode release.
 
 ### P2.2 Reminder Delivery
 
-- normalize stored reminder intent into a scheduled delivery time;
-- enqueue due reminders through the existing worker infrastructure;
-- implement one notification channel suitable for the first target users;
-- persist delivery status, attempts, provider IDs, and terminal failure;
-- make retries idempotent and timezone-safe;
-- expose sent/failed reminder state without claiming delivery before provider acknowledgement.
+Status: durable in-app delivery foundation complete; user-visible inbox and external provider pending.
+
+Completed:
+
+- normalize fixed-duration reminder intent into a scheduled delivery time;
+- synchronize create, reschedule, completion, and cancellation with a PostgreSQL outbox;
+- claim due in-app reminders through the existing worker using `FOR UPDATE SKIP LOCKED`;
+- persist tenant-scoped status, attempts, provider IDs, and delivery timestamps;
+- expose delivery records through `GET /api/reminders`.
+
+Remaining:
+
+- render a minimal in-app reminder inbox;
+- select one external provider suitable for target users in China;
+- implement provider acknowledgement, retry scheduling, and terminal failure acceptance.
 
 Completion means a created reminder produces one observable notification or one explicit,
 recoverable failure record.
@@ -85,11 +102,12 @@ redesign. It does not include brand polish or a large component-system migration
 - detailed visual redesign;
 - per-step token cost UI.
 
-## Immediate Next Decision
+## Immediate Next Work
 
-Implement the FastAPI account/session boundary and request correlation, then connect the minimal
-web login flow before enabling password mode in production. Do not deploy the backend mode switch
-alone because the existing web client has no login surface yet.
+1. Configure a same-site web/API domain and release the account migration, web login flow, and
+   `DAYBOARD_AUTH_MODE=password` switch together.
+2. Render delivered in-app reminders through the existing tenant-scoped API.
+3. Select one China-reliable external notification provider and add acknowledgement-based retry.
 
 ## Operational Acceptance
 

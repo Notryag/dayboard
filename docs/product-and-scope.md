@@ -70,7 +70,7 @@ A task represents something to do. It may have a due time, but it does not occup
 Required fields:
 
 - `title`: short user-facing name
-- `status`: `open`, `done`, or `cancelled`
+- `status`: `open`, `completed`, or `cancelled`
 
 Optional fields:
 
@@ -85,6 +85,7 @@ Defaults and clarification:
 - Missing `status` defaults to `open`.
 - Missing `timezone` should default to the user's configured timezone when time data exists.
 - A task without `due_at` is allowed.
+- A task reminder requires `due_at` and is anchored to it.
 
 ## Out Of Scope For Phase 1
 

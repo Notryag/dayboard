@@ -1,5 +1,8 @@
 # Phase 1 Plan
 
+Status: completed. This document is retained as historical foundation context; current work is in
+[phase-2-plan.md](./phase-2-plan.md).
+
 ## Goal
 
 Ship the smallest loop that proves Dayboard can use `north` as its core agent capability.

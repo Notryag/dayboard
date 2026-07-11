@@ -60,18 +60,29 @@ API domain. Keep `credentials: include` on HTTP requests and `withCredentials` o
 
 Do not deploy the FastAPI API to Vercel in the first version. Run it as a normal server service with Docker-managed PostgreSQL and Redis/Valkey.
 
-Required API environment variables:
+Core API environment variables:
 
 ```text
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 DAYBOARD_RATE_LIMIT_STORAGE_URL=redis://...
 DAYBOARD_CORS_ORIGINS=https://your-vercel-domain
-DAYBOARD_AUTH_MODE=password
-DAYBOARD_AUTH_COOKIE_SECURE=true
 APP_MODEL_NAME=openai:gpt-4o-mini
 OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
 OPENAI_API_KEY=...
+```
+
+The current controlled production demo remains explicit development auth:
+
+```text
+DAYBOARD_AUTH_MODE=development
+```
+
+The coordinated external-beta switch adds:
+
+```text
+DAYBOARD_AUTH_MODE=password
+DAYBOARD_AUTH_COOKIE_SECURE=true
 ```
 
 Keep provider credentials in the server environment or secret store only.

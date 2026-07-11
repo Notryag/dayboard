@@ -16,7 +16,8 @@ Backend implementation:
 
 - [architecture.md](./architecture.md)
 - [engineering-guidelines.md](./engineering-guidelines.md)
-- [phase-1-plan.md](./phase-1-plan.md)
+- [phase-2-plan.md](./phase-2-plan.md) for current milestone work
+- [phase-1-plan.md](./phase-1-plan.md) for the completed foundation plan
 
 Authentication and account ownership:
 
@@ -24,6 +25,12 @@ Authentication and account ownership:
 - [architecture.md](./architecture.md), sections "Tenant Extensibility" and "API Surface"
 - [engineering-guidelines.md](./engineering-guidelines.md), sections "Tenant Context", "Database Rules", and "API Rules"
 - [phase-2-plan.md](./phase-2-plan.md), section "P2.1 Real Identity And Ownership"
+
+Reminder delivery:
+
+- [architecture.md](./architecture.md), section "Reminder Delivery"
+- [phase-2-plan.md](./phase-2-plan.md), section "P2.2 Reminder Delivery"
+- [engineering-guidelines.md](./engineering-guidelines.md), sections "Database Rules" and "Backend Layers"
 
 Agent and tools:
 
@@ -49,8 +56,8 @@ Product scope:
 
 Current milestone planning:
 
-- [phase-1-plan.md](./phase-1-plan.md)
 - [phase-2-plan.md](./phase-2-plan.md)
+- [phase-1-plan.md](./phase-1-plan.md) as completed historical context
 
 Architecture decisions:
 

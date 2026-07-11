@@ -4,7 +4,9 @@ This document is a current-status and planning summary. Canonical implementation
 
 ## Current Status
 
-Dayboard has started implementation. M1 scaffolding is in place for the API, web app, local infrastructure, and initial database schema.
+Dayboard has completed its natural-language scheduling foundation and is now building the usable
+account beta. Authentication and in-app reminder foundations are implemented but not enabled in
+the current production deployment.
 
 The repository is initialized at `/root/dayboard`.
 
@@ -34,9 +36,10 @@ The bullets below summarize decisions that affect current work; they do not repl
 - `north` owns runtime concepts such as `StreamEvent` and `RunEvent`.
 - Dayboard owns product concepts such as `CalendarEntry` and `TaskItem`.
 - Do not use plain `Event` for Dayboard calendar data.
-- PostgreSQL is the Phase 1 source of truth.
+- PostgreSQL is the product source of truth.
 - Redis or Valkey is infrastructure, not a source of truth.
-- Phase 1 should carry `TenantContext`, but not implement full tenant administration or dedicated tenant databases.
+- All product boundaries carry `TenantContext`; full tenant administration and dedicated tenant
+  databases remain deferred.
 - Agent tools should be narrow and explicit, such as `create_calendar_entry` and `create_task_item`.
 - Voice recognition is a Dayboard input-layer integration. It should produce transcript text that enters the normal command flow.
 - Next.js is the first UI. React Native can be revisited later.
@@ -52,89 +55,30 @@ The bullets below summarize decisions that affect current work; they do not repl
 ## Next Milestone
 
 Phase 1 has proved the natural-language scheduling loop. Continue the usable account beta from
-[phase-2-plan.md](./phase-2-plan.md), starting with authenticated identity and ownership.
+[phase-2-plan.md](./phase-2-plan.md). The immediate release boundary is a coordinated account
+migration, same-site web/API deployment, and production password-auth switch.
 
-Completed M1 work:
+## Implemented Capabilities
 
-- scaffolded `apps/api` with FastAPI, SQLAlchemy, Alembic, and local `north` dependency
-- scaffolded `apps/web` with Next.js, React, TypeScript, and `lucide-react`
-- added `TenantContext`
-- added `CalendarEntry` and `TaskItem` domain schemas
-- added PostgreSQL session wiring
-- added repository foundations for calendar entries and task items
-- added Alembic baseline migration
-- added Docker Compose for PostgreSQL and Redis
-- added the first mobile-first conversation UI
+- Scheduling: natural-language create, search, reschedule, complete, and cancel for calendar entries
+  and tasks, including multiple instructions per message and structured clarification.
+- Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
+  idempotency, queued arq execution, cancellation, stale-run recovery, and health checks.
+- Conversations: durable threads and messages, resumable clarification state, bounded context, and
+  persisted compaction summaries.
+- Agent runtime: North-backed execution, safe tool progress events, durable Run history, SSE,
+  provider budgets, normalized token accounting, and exactly-once usage settlement.
+- Identity: FastAPI password accounts, Argon2id credentials, server-side sessions, memberships,
+  profiles, reusable web login state, and two-user HTTP/SSE ownership acceptance.
+- Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
+  correlation without logging credentials or full command text.
+- Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
+  tenant-scoped status API, SKIP LOCKED worker claiming, and idempotent in-app delivery.
+- Voice: provider-neutral transcription API and Alibaba Cloud ASR adapter; browser capture and live
+  credential acceptance remain pending.
 
-Completed M2 work:
-
-- added `SchedulingService` for calendar entries and task items
-- added deterministic scheduling tool adapters:
-  - `create_calendar_entry`
-  - `list_calendar_entries`
-  - `create_task_item`
-  - `list_task_items`
-- added PostgreSQL-backed tests for the create/list tool paths
-- added and later removed the temporary synchronous command placeholder
-- reduced command input to natural-language text interpreted only by north
-- added OpenAI-compatible model gateway configuration placeholders
-- added Redis-backed FastAPI rate limiting configuration
-- connected the Next.js composer to queued command creation and SSE terminal events
-- added local CORS configuration for Next.js dev origins
-- added `agent_runs` and `agent_run_events` persistence
-- added `AgentRunService` and run event repositories
-- added `GET /api/runs/{run_id}` and `GET /api/runs/{run_id}/events`
-- changed the temporary command path to create real run records and lifecycle events
-- added Dayboard agent assembly boundary around `north.build_agent`
-- added replaceable command executor boundary so the placeholder can be swapped for a north-backed executor
-- added LangChain/north-compatible scheduling tool wrappers with server-injected session, tenant context, and run id
-- removed `created_by_run_id` from model-visible scheduling tool input
-- added provider-level request and estimated token budget guard before real model calls
-- added a provider-neutral speech-to-text boundary, persisted voice transcription API, and Alibaba Cloud `qwen3-asr-flash` adapter; real transcription requires a China-region Model Studio API key
-- added generic `north.invoke_agent_once` helper in the reusable `north` package
-- implemented `CommandService` to create Dayboard runs, check provider budgets, build Dayboard scheduling tools, invoke `north`, and map completion or clarification results back to run events
-- added a PostgreSQL provider usage ledger that records actual input, output, and total tokens reported by LangChain model messages
-- added an SSE run-event endpoint with incremental replay, keep-alives, and terminal-event closure
-- verified `gpt-5.4-mini` live tool selection for calendar creation and clarification through the configured gateway
-- added `POST /api/command-runs`, which commits a queued run and returns 202 before execution
-- added an arq command dispatcher and independent Redis-backed worker sessions
-- removed the old synchronous `/api/commands` path and temporary structured intent input
-- added a one-hour default duration for calendar entries without an explicit end time
-- added deterministic, tenant-scoped calendar overlap checks before creation
-- added non-blocking conflict warnings while preserving default calendar creation
-- added persisted tool progress events and rendered their SSE-driven execution trace in the web UI
-- required timezone-aware datetimes at domain and agent-tool boundaries; PostgreSQL stores canonical instants while each calendar entry retains its intended IANA timezone
-- added database-enforced scheduling write idempotency keyed by tenant and creating run
-- added `Idempotency-Key` support for command creation so retried requests return the original run without duplicate queue delivery
-- added explicit Run cancellation with durable lifecycle events, best-effort arq job abortion, worker-side cancellation checks, and a web stop control
-- added periodic stale-running recovery that closes timed-out runs as failed with a durable recovery event
-- expanded `/health` to verify PostgreSQL, Redis, and the arq worker heartbeat
-- added seven-day idempotency-key retention with a scheduled cleanup job and structured operational logs
-- added a DeerFlow-inspired `north.RuntimeJournal` integration that captures model/tool callbacks and projects allowlisted, user-safe execution events into Dayboard Run history
-- added tenant-scoped calendar search and safe rescheduling that preserves duration, event timezone, participants, and reminders, with optimistic concurrency, Run idempotency, and update audit attribution
-- added reliable calendar cancellation with search-first targeting, optimistic concurrency, Run idempotency, and audit attribution
-- added PostgreSQL-backed conversation history, resumable structured clarification, bounded agent context, and persisted compaction summaries
-- added task search and natural-language task updates for title, due time, completion, and cancellation, with optimistic concurrency, per-operation Run idempotency, and update audit attribution
-- extended calendar rescheduling and cancellation to per-operation Run idempotency so one command can safely modify multiple entries
-- moved provider token normalization and per-call aggregation into north runtime events; Dayboard persists the normalized totals with tenant, user, model, and Run attribution
-- added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with one immutable tenant/Run record
-- reconciled the pre-call token reservation with first-settled actual usage by charging any positive difference exactly once
-- added an explicit live Agent acceptance runner for multi-create, calendar/task changes, missing targets, durable tool events, status, and latency
-- isolated runtime callback event persistence from the Agent tool transaction and serialized per-Run event writes, preventing concurrent AsyncSession use during parallel tool calls
-- production acceptance passed mixed multi-create after the 202607110005 deployment; calendar change acceptance was blocked before tool execution by repeated upstream model-gateway 503 responses, with no recurrence of the AsyncSession callback concurrency error
-- serialized Dayboard scheduling tool execution within each Run after production task acceptance exposed LangGraph parallel tool calls sharing one business AsyncSession
-- production re-verification confirmed two parallel task creates succeed after tool serialization; remaining calendar/task change acceptance stopped at the configured 60000/day provider token budget without calling the model, and must resume after the budget window resets or with a separately budgeted acceptance tenant
-- selected FastAPI-native username/password authentication for the first beta, using Argon2id password hashes, revocable server-side sessions, Dayboard-owned tenants and memberships, and a provider-neutral external identity extension point
-- added validated request IDs, structured request completion/failure logs, authenticated user/tenant log context, and request-to-thread-to-Run correlation without logging command text or authentication secrets
-- removed caller-supplied tenant headers from the API rate-limit identity boundary
-- added a reusable web authentication provider and credentialed API client, with register, login,
-  logout, session recovery, request-reference errors, and credentialed SSE support; production
-  release remains blocked on a same-site web/API domain and coordinated auth-mode switch
-- verified two password-authenticated users cannot read, stream, or cancel each other's Runs;
-  unauthorized Run status, event history, SSE, and cancellation consistently return 404
-- added a PostgreSQL reminder-delivery outbox with strict fixed ISO duration validation,
-  transactional create/reschedule/cancel synchronization, tenant-scoped query API, SKIP LOCKED
-  worker claiming, and idempotent in-app delivery
+Git history is the detailed implementation chronology. ADRs record decisions that remain
+architecturally significant.
 
 Implementation notes:
 
@@ -158,14 +102,16 @@ Use scaffolding tools where available. Do not manually recreate boilerplate that
 
 ## Verification
 
-Latest verified commands:
+Reference verification commands are listed below. Follow the test policy in
+[engineering-guidelines.md](./engineering-guidelines.md): use the smallest affected checks for a
+normal slice and reserve full regression or live-model runs for release and high-risk changes.
 
 ```bash
 cd apps/web && npm run lint
 cd apps/web && npm run build
 cd apps/api && uv sync
 cd apps/api && uv run ruff check .
-cd apps/api && uv run pytest
+cd apps/api && uv run pytest -q tests/<affected_test_file>.py
 cd apps/api && uv run python -c "from north import invoke_agent_once; print(invoke_agent_once)"
 cd apps/api && uv run alembic upgrade head
 cd apps/api && uv run python -c "from dayboard.main import app; from dayboard.context import get_dev_tenant_context; print(app.title, get_dev_tenant_context().timezone)"
@@ -204,7 +150,9 @@ small implementation slice
   -> limited agent-flow tests after tool behavior is stable
 ```
 
-Do not wait until the end to add tests. Do not make most tests depend on real LLM calls.
+Add coverage in proportion to risk and do not make most tests depend on real LLM calls. Routine
+small edits use diff review and static checks; database, shared runtime, authentication, release,
+and production-incident changes use focused tests at the relevant key moment.
 
 ## Do Not Change Without Discussion
 
@@ -222,6 +170,5 @@ Do not wait until the end to add tests. Do not make most tests depend on real LL
 - worker deployment sizing and stale-running recovery policy
 - exact first UI component install set: shadcn/ui components, icons, form tools, and state libraries
 - final brand palette and detailed visual identity
-- first ASR provider
 - social login provider after password-auth beta (for example WeChat)
-- local development database setup
+- first external notification provider after the in-app reminder surface
