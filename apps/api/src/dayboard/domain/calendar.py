@@ -1,14 +1,34 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from isodate import Duration, parse_duration
 
 
 class Reminder(BaseModel):
     offset: str
-    anchor: str = "start_time"
+    anchor: Literal["start_time", "due_at"] = "start_time"
+
+    @model_validator(mode="after")
+    def validate_offset(self) -> Reminder:
+        try:
+            duration = parse_duration(self.offset)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("offset must be an ISO 8601 duration") from exc
+        if isinstance(duration, Duration) or not isinstance(duration, timedelta):
+            raise ValueError("offset cannot contain calendar months or years")
+        if duration <= timedelta(0):
+            raise ValueError("offset must be greater than zero")
+        return self
+
+    def as_timedelta(self) -> timedelta:
+        duration = parse_duration(self.offset)
+        if not isinstance(duration, timedelta):
+            raise ValueError("offset cannot contain calendar months or years")
+        return duration
 
 
 class CalendarEntryCreate(BaseModel):
@@ -25,6 +45,8 @@ class CalendarEntryCreate(BaseModel):
     def validate_time_range(self) -> CalendarEntryCreate:
         if self.end_time is not None and self.end_time <= self.start_time:
             raise ValueError("end_time must be after start_time")
+        if self.reminder is not None and self.reminder.anchor != "start_time":
+            raise ValueError("calendar reminders must use start_time")
         return self
 
 

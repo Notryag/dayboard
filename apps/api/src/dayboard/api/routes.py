@@ -21,12 +21,14 @@ from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
 from dayboard.app.voice import VoiceTranscriptionService
+from dayboard.app.reminders import ReminderService
 from dayboard.api.auth import get_tenant_context
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceTranscript
+from dayboard.domain.reminders import ReminderDelivery
 from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
@@ -94,6 +96,14 @@ async def health(
         "redis": "ok",
         "worker": "ok",
     }
+
+
+@router.get("/api/reminders", response_model=list[ReminderDelivery])
+async def list_reminders(
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> list[ReminderDelivery]:
+    return await ReminderService(session).list_for_user(tenant_context)
 
 
 @router.post(

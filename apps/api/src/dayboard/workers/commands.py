@@ -17,6 +17,7 @@ from dayboard.context import TenantContext
 from dayboard.db.session import SessionLocal
 from dayboard.app.runs import AgentRunService
 from dayboard.db.run_repositories import IdempotencyKeyRepository
+from dayboard.app.reminders import ReminderService
 
 logger = structlog.get_logger(__name__)
 
@@ -97,6 +98,19 @@ async def cleanup_expired_idempotency_keys(ctx: dict[str, Any]) -> None:
         logger.info("dayboard.worker.idempotency_keys_deleted", count=deleted)
 
 
+async def deliver_due_reminders(ctx: dict[str, Any]) -> None:
+    del ctx
+    async with SessionLocal() as session:
+        delivered_ids = await ReminderService(session).deliver_due_in_app()
+    if delivered_ids:
+        logger.info(
+            "dayboard.worker.reminders_delivered",
+            channel="in_app",
+            count=len(delivered_ids),
+            delivery_ids=delivered_ids,
+        )
+
+
 settings = get_settings()
 
 
@@ -111,4 +125,5 @@ class WorkerSettings:
     cron_jobs = [
         cron(recover_stale_command_runs, second={0, 30}, run_at_startup=True),
         cron(cleanup_expired_idempotency_keys, hour=3, minute=15),
+        cron(deliver_due_reminders, second={0, 15, 30, 45}, run_at_startup=True),
     ]

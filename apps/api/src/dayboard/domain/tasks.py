@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from dayboard.domain.calendar import Reminder
 
@@ -23,6 +23,14 @@ class TaskItemCreate(BaseModel):
     status: TaskStatus = TaskStatus.open
     created_by_run_id: UUID | None = None
     created_operation_key: str | None = None
+
+    @model_validator(mode="after")
+    def normalize_reminder_anchor(self) -> TaskItemCreate:
+        if self.reminder is not None:
+            if self.due_at is None:
+                raise ValueError("task reminders require due_at")
+            self.reminder = self.reminder.model_copy(update={"anchor": "due_at"})
+        return self
 
 
 class TaskItemUpdate(BaseModel):

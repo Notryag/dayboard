@@ -11,6 +11,7 @@ from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Reminder
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
+from dayboard.app.reminders import ReminderService
 
 
 def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
@@ -68,6 +69,7 @@ class SchedulingService:
         data: CalendarEntryCreate,
     ) -> CalendarEntry:
         row = await self.calendar_entries.create(context, data)
+        await ReminderService(self.session).sync_calendar_entry(context, row)
         await self.session.commit()
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
@@ -114,9 +116,7 @@ class SchedulingService:
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
-        row = await self.calendar_entries.get_by_updated_operation(
-            context, run_id, operation_key
-        )
+        row = await self.calendar_entries.get_by_updated_operation(context, run_id, operation_key)
         return calendar_entry_from_row(row) if row else None
 
     async def reschedule_calendar_entry(
@@ -141,6 +141,7 @@ class SchedulingService:
         )
         if row is None:
             return None
+        await ReminderService(self.session).sync_calendar_entry(context, row)
         await self.session.commit()
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
@@ -151,9 +152,7 @@ class SchedulingService:
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
-        row = await self.calendar_entries.get_by_cancelled_operation(
-            context, run_id, operation_key
-        )
+        row = await self.calendar_entries.get_by_cancelled_operation(context, run_id, operation_key)
         return calendar_entry_from_row(row) if row else None
 
     async def cancel_calendar_entry(
@@ -176,6 +175,7 @@ class SchedulingService:
         )
         if row is None:
             return None
+        await ReminderService(self.session).cancel_calendar_entry(context, row)
         await self.session.commit()
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
@@ -213,6 +213,7 @@ class SchedulingService:
         data: TaskItemCreate,
     ) -> TaskItem:
         row = await self.task_items.create(context, data)
+        await ReminderService(self.session).sync_task_item(context, row)
         await self.session.commit()
         await self.session.refresh(row)
         return task_item_from_row(row)
@@ -254,6 +255,7 @@ class SchedulingService:
         )
         if row is None:
             return None
+        await ReminderService(self.session).sync_task_item(context, row)
         await self.session.commit()
         await self.session.refresh(row)
         return task_item_from_row(row)

@@ -60,7 +60,8 @@ Defaults and clarification:
 - Missing `start_time` should trigger clarification.
 - Missing `timezone` should default to the user's configured timezone.
 - Missing `end_time` is allowed in Phase 1. The app may either store it as empty or apply a product default later.
-- `reminder` is stored as data only in Phase 1. It does not mean Dayboard sends a push notification yet.
+- `reminder` was stored as intent only in Phase 1. Phase 2 resolves it into a durable delivery
+  outbox; `in_app` delivery is implemented, while external push/SMS/WeChat delivery remains pending.
 
 ### Task
 

@@ -213,11 +213,34 @@ but short PostgreSQL scheduling operations execute in model order to preserve se
 idempotency, and audit semantics. Future slow external tools require their own concurrency and
 session boundary instead of bypassing this lock.
 
+## Reminder Delivery
+
+Reminder intent remains attached to its calendar entry or task. A separate PostgreSQL
+`reminder_deliveries` outbox stores the resolved delivery instant and operational state:
+
+```text
+business-object write
+  -> validate fixed ISO 8601 offset
+  -> cancel the previous pending source/channel delivery
+  -> insert the replacement delivery in the same transaction
+  -> worker claims due rows with FOR UPDATE SKIP LOCKED
+  -> provider acknowledgement
+  -> delivered or explicit retry/failure state
+```
+
+Calendar reminders are anchored to `start_time`; task reminders are normalized to `due_at`.
+Rescheduling replaces a pending delivery, while calendar cancellation and task completion or
+cancellation cancel it. Delivery rows are tenant and owner scoped. The first `in_app` provider
+proves scheduling, idempotency, status, and observability without an external network dependency.
+Future Alibaba Cloud SMS, WeChat, or email adapters reuse this outbox and must use the delivery ID
+as their provider idempotency key where supported.
+
 Later API:
 
 ```text
 POST /api/voice/transcriptions
 GET  /api/voice/transcriptions/{transcript_id}
+GET  /api/reminders
 POST /api/calendar-entries
 PATCH /api/calendar-entries/{entry_id}
 DELETE /api/calendar-entries/{entry_id}

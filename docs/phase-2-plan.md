@@ -58,6 +58,11 @@ and one coordinated web, migration, and auth-mode release.
 Completion means a created reminder produces one observable notification or one explicit,
 recoverable failure record.
 
+The PostgreSQL outbox, fixed-duration normalization, source replacement/cancellation rules,
+tenant-scoped query API, worker claiming, and idempotent `in_app` delivery are implemented.
+Remaining work is a minimal web notification surface and, after product-channel selection, one
+external provider adapter with retry and acknowledgement acceptance.
+
 ### P2.3 Minimal Usable Experience
 
 - show today, tomorrow, and open-task views;

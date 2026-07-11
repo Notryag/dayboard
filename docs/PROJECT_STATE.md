@@ -132,6 +132,9 @@ Completed M2 work:
   release remains blocked on a same-site web/API domain and coordinated auth-mode switch
 - verified two password-authenticated users cannot read, stream, or cancel each other's Runs;
   unauthorized Run status, event history, SSE, and cancellation consistently return 404
+- added a PostgreSQL reminder-delivery outbox with strict fixed ISO duration validation,
+  transactional create/reschedule/cancel synchronization, tenant-scoped query API, SKIP LOCKED
+  worker claiming, and idempotent in-app delivery
 
 Implementation notes:
 
@@ -148,7 +151,8 @@ Next implementation slice:
 1. configure a same-site production web/API domain, apply the account migration, and coordinate the
    web release with the switch from `development` to `password` auth mode
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. implement one reliable reminder delivery channel now that authenticated user profiles exist
+3. expose delivered in-app reminders in the minimal web UI, then select and add one external
+   China-reliable notification provider
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
