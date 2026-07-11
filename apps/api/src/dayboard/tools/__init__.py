@@ -20,6 +20,12 @@ from dayboard.tools.scheduling import (
     reschedule_calendar_entry,
     search_calendar_entries,
     list_task_items,
+    SearchTaskItemsInput,
+    TaskItemChangedError,
+    TaskItemUpdateResult,
+    UpdateTaskItemInput,
+    search_task_items,
+    update_task_item,
 )
 
 __all__ = [
@@ -42,4 +48,10 @@ __all__ = [
     "reschedule_calendar_entry",
     "search_calendar_entries",
     "list_task_items",
+    "SearchTaskItemsInput",
+    "TaskItemChangedError",
+    "TaskItemUpdateResult",
+    "UpdateTaskItemInput",
+    "search_task_items",
+    "update_task_item",
 ]

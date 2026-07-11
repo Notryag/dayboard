@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.context import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.domain.calendar import CalendarEntryCreate
-from dayboard.domain.tasks import TaskItemCreate
+from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
 class CalendarEntryRepository:
@@ -255,6 +255,87 @@ class TaskItemRepository:
             .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
         )
         return list(result)
+
+    async def search(
+        self,
+        context: TenantContext,
+        *,
+        title_query: str | None = None,
+        status: TaskStatus | None = TaskStatus.open,
+    ) -> list[TaskItemRow]:
+        conditions = [
+            TaskItemRow.tenant_id == context.tenant_id,
+            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.deleted_at.is_(None),
+        ]
+        if title_query:
+            conditions.append(TaskItemRow.title.ilike(f"%{title_query}%"))
+        if status is not None:
+            conditions.append(TaskItemRow.status == status.value)
+        result = await self.session.scalars(
+            select(TaskItemRow)
+            .where(*conditions)
+            .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
+        )
+        return list(result)
+
+    async def get(self, context: TenantContext, task_id: UUID) -> TaskItemRow | None:
+        return await self.session.scalar(
+            select(TaskItemRow).where(
+                TaskItemRow.id == task_id,
+                TaskItemRow.tenant_id == context.tenant_id,
+                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.deleted_at.is_(None),
+            )
+        )
+
+    async def get_by_updated_operation(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        operation_key: str,
+    ) -> TaskItemRow | None:
+        return await self.session.scalar(
+            select(TaskItemRow).where(
+                TaskItemRow.tenant_id == context.tenant_id,
+                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.updated_by_run_id == run_id,
+                TaskItemRow.updated_operation_key == operation_key,
+                TaskItemRow.deleted_at.is_(None),
+            )
+        )
+
+    async def update(
+        self,
+        context: TenantContext,
+        *,
+        task_id: UUID,
+        data: TaskItemUpdate,
+        expected_updated_at: datetime,
+    ) -> TaskItemRow | None:
+        values = {
+            "updated_by_run_id": data.updated_by_run_id,
+            "updated_operation_key": data.updated_operation_key,
+            "updated_at": func.now(),
+        }
+        if data.title is not None:
+            values["title"] = data.title
+        if data.due_at is not None:
+            values["due_at"] = data.due_at
+        if data.status is not None:
+            values["status"] = data.status.value
+        return await self.session.scalar(
+            update(TaskItemRow)
+            .where(
+                TaskItemRow.id == task_id,
+                TaskItemRow.tenant_id == context.tenant_id,
+                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.updated_at == expected_updated_at,
+                TaskItemRow.deleted_at.is_(None),
+            )
+            .values(**values)
+            .returning(TaskItemRow)
+        )
 
     async def get_by_created_run(
         self,

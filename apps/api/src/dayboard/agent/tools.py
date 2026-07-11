@@ -18,6 +18,8 @@ from dayboard.tools import (
     CreateTaskItemInput,
     RescheduleCalendarEntryInput,
     SearchCalendarEntriesInput,
+    SearchTaskItemsInput,
+    UpdateTaskItemInput,
     check_calendar_conflicts,
     cancel_calendar_entry,
     create_calendar_entry,
@@ -26,6 +28,8 @@ from dayboard.tools import (
     list_task_items,
     reschedule_calendar_entry,
     search_calendar_entries,
+    search_task_items,
+    update_task_item,
 )
 
 
@@ -84,6 +88,7 @@ def _task_item_view(task) -> dict[str, Any]:
         "due_at": task.due_at.isoformat() if task.due_at else None,
         "timezone": task.timezone,
         "status": task.status.value,
+        "updated_at": task.updated_at.isoformat(),
     }
 
 
@@ -216,6 +221,28 @@ def build_scheduling_tools(
         tasks = await list_task_items(session, context)
         return [_task_item_view(task) for task in tasks]
 
+    async def agent_search_task_items(**kwargs):
+        input_data = SearchTaskItemsInput.model_validate(kwargs)
+        tasks = await search_task_items(session, context, input_data)
+        return [_task_item_view(task) for task in tasks]
+
+    async def agent_update_task_item(**kwargs):
+        if run_id is None:
+            raise RuntimeError("Updating a task requires a run id")
+        input_data = UpdateTaskItemInput.model_validate(kwargs)
+        result = await update_task_item(
+            session,
+            context,
+            input_data,
+            updated_by_run_id=run_id,
+            operation_key=_create_operation_key("task_item_update", input_data),
+        )
+        return {
+            "type": result.type,
+            "task_item_id": str(result.task_item_id),
+            "task_item": _task_item_view(result.task_item),
+        }
+
     return [
         StructuredTool.from_function(
             coroutine=agent_check_calendar_conflicts,
@@ -276,5 +303,23 @@ def build_scheduling_tools(
             name="list_task_items",
             description="List active Dayboard task items for the current user.",
             args_schema=ListTaskItemsInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=agent_search_task_items,
+            name="search_task_items",
+            description=(
+                "Search the current user's tasks by title and status before changing, "
+                "completing, or cancelling one."
+            ),
+            args_schema=SearchTaskItemsInput,
+        ),
+        StructuredTool.from_function(
+            coroutine=agent_update_task_item,
+            name="update_task_item",
+            description=(
+                "Update one identified task's title, due time, or status. Use status "
+                "completed when work is done and cancelled when the user drops it."
+            ),
+            args_schema=UpdateTaskItemInput,
         ),
     ]

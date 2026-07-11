@@ -322,13 +322,16 @@ Initial tools:
 - `reschedule_calendar_entry`
 - `create_task_item`
 - `list_task_items`
+- `search_task_items`
+- `update_task_item`
 
 Later tools:
 
 - `update_calendar_entry`
 - `delete_calendar_entry`
-- `update_task_item`
-- `delete_task_item`
+
+Task completion and cancellation are status transitions through `update_task_item`, not
+hard deletion. Business objects remain available for history and audit.
 
 These tools live in Dayboard unless they prove broadly reusable across products.
 

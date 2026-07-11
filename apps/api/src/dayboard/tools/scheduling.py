@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.scheduling import SchedulingService
 from dayboard.context import TenantContext
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Reminder
-from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskStatus
+from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
 class CreateCalendarEntryInput(BaseModel):
@@ -104,6 +104,39 @@ class TaskItemToolResult(BaseModel):
     summary: str
     task_item: TaskItem
     requires_follow_up: bool = False
+
+
+class SearchTaskItemsInput(BaseModel):
+    title_query: str | None = Field(default=None, min_length=1, max_length=240)
+    status: TaskStatus | None = TaskStatus.open
+    purpose: Literal["view", "update", "complete", "cancel"] = "view"
+
+
+class UpdateTaskItemInput(BaseModel):
+    task_item_id: UUID
+    expected_updated_at: AwareDatetime
+    new_title: str | None = Field(default=None, min_length=1, max_length=240)
+    new_due_at: AwareDatetime | None = None
+    new_status: TaskStatus | None = None
+
+    @model_validator(mode="after")
+    def validate_change(self) -> UpdateTaskItemInput:
+        if self.new_title is None and self.new_due_at is None and self.new_status is None:
+            raise ValueError("provide at least one task change")
+        return self
+
+
+class TaskItemUpdateResult(BaseModel):
+    type: str = "task_item_updated"
+    task_item_id: UUID
+    previous_task_item: TaskItem
+    task_item: TaskItem
+    summary: str
+    requires_follow_up: bool = False
+
+
+class TaskItemChangedError(RuntimeError):
+    pass
 
 
 async def create_calendar_entry(
@@ -372,3 +405,62 @@ async def list_task_items(
 ) -> list[TaskItem]:
     service = SchedulingService(session)
     return list(await service.list_task_items(context))
+
+
+async def search_task_items(
+    session: AsyncSession,
+    context: TenantContext,
+    data: SearchTaskItemsInput,
+) -> list[TaskItem]:
+    return list(
+        await SchedulingService(session).search_task_items(
+            context, title_query=data.title_query, status=data.status
+        )
+    )
+
+
+async def update_task_item(
+    session: AsyncSession,
+    context: TenantContext,
+    data: UpdateTaskItemInput,
+    *,
+    updated_by_run_id: UUID,
+    operation_key: str,
+) -> TaskItemUpdateResult:
+    service = SchedulingService(session)
+    repeated = await service.get_task_item_updated_by_operation(
+        context, updated_by_run_id, operation_key
+    )
+    if repeated is not None:
+        return TaskItemUpdateResult(
+            task_item_id=repeated.id,
+            previous_task_item=repeated,
+            task_item=repeated,
+            summary=f"{repeated.title} was already updated",
+        )
+
+    existing = await service.get_task_item(context, data.task_item_id)
+    if existing is None:
+        raise LookupError("Task item not found")
+    updated = await service.update_task_item(
+        context,
+        task_id=existing.id,
+        expected_updated_at=data.expected_updated_at,
+        data=TaskItemUpdate(
+            title=data.new_title,
+            due_at=data.new_due_at,
+            status=data.new_status,
+            updated_by_run_id=updated_by_run_id,
+            updated_operation_key=operation_key,
+        ),
+    )
+    if updated is None:
+        raise TaskItemChangedError(
+            "Task item changed after it was selected; search again before updating"
+        )
+    return TaskItemUpdateResult(
+        task_item_id=updated.id,
+        previous_task_item=existing,
+        task_item=updated,
+        summary=f"Updated {updated.title} ({updated.status.value})",
+    )

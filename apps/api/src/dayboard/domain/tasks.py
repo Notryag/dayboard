@@ -25,6 +25,14 @@ class TaskItemCreate(BaseModel):
     created_operation_key: str | None = None
 
 
+class TaskItemUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=240)
+    due_at: AwareDatetime | None = None
+    status: TaskStatus | None = None
+    updated_by_run_id: UUID
+    updated_operation_key: str
+
+
 class TaskItem(BaseModel):
     id: UUID
     tenant_id: UUID
@@ -36,5 +44,7 @@ class TaskItem(BaseModel):
     status: TaskStatus
     created_by_run_id: UUID | None
     created_operation_key: str | None
+    updated_by_run_id: UUID | None
+    updated_operation_key: str | None
     created_at: datetime
     updated_at: datetime

@@ -19,6 +19,8 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
     reschedule_entry = next(tool for tool in tools if tool.name == "reschedule_calendar_entry")
     cancel_entry = next(tool for tool in tools if tool.name == "cancel_calendar_entry")
+    search_tasks = next(tool for tool in tools if tool.name == "search_task_items")
+    update_task = next(tool for tool in tools if tool.name == "update_task_item")
 
     schema = create_entry.args_schema.model_json_schema()
     fields = set(schema["properties"])
@@ -50,6 +52,18 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
         "calendar_entry_id",
         "expected_updated_at",
         "reason",
+    }
+    assert set(search_tasks.args_schema.model_json_schema()["properties"]) == {
+        "title_query",
+        "status",
+        "purpose",
+    }
+    assert set(update_task.args_schema.model_json_schema()["properties"]) == {
+        "task_item_id",
+        "expected_updated_at",
+        "new_title",
+        "new_due_at",
+        "new_status",
     }
 
 
@@ -114,6 +128,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "due_at",
         "timezone",
         "status",
+        "updated_at",
     }
 
     entries = await list_calendar_entries(db_session, tenant_context)

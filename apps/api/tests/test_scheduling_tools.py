@@ -16,6 +16,9 @@ from dayboard.tools import (
     CreateTaskItemInput,
     RescheduleCalendarEntryInput,
     SearchCalendarEntriesInput,
+    SearchTaskItemsInput,
+    TaskItemChangedError,
+    UpdateTaskItemInput,
     create_calendar_entry,
     cancel_calendar_entry,
     create_task_item,
@@ -24,6 +27,8 @@ from dayboard.tools import (
     list_task_items,
     reschedule_calendar_entry,
     search_calendar_entries,
+    search_task_items,
+    update_task_item,
 )
 
 
@@ -194,6 +199,102 @@ async def test_create_and_list_task_item(
     assert result.task_item.tenant_id == tenant_context.tenant_id
     assert result.task_item.owner_user_id == tenant_context.user_id
     assert tasks == [result.task_item]
+
+
+async def test_search_and_update_multiple_tasks_in_one_run(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    first = await create_task_item(
+        db_session,
+        tenant_context,
+        CreateTaskItemInput(title="整理周报", timezone="Asia/Shanghai"),
+    )
+    second = await create_task_item(
+        db_session,
+        tenant_context,
+        CreateTaskItemInput(title="提交报销", timezone="Asia/Shanghai"),
+    )
+    matches = await search_task_items(
+        db_session,
+        tenant_context,
+        SearchTaskItemsInput(title_query="报"),
+    )
+    run_id = uuid4()
+    completed = await update_task_item(
+        db_session,
+        tenant_context,
+        UpdateTaskItemInput(
+            task_item_id=first.task_item_id,
+            expected_updated_at=first.task_item.updated_at,
+            new_status="completed",
+        ),
+        updated_by_run_id=run_id,
+        operation_key="complete-weekly-report",
+    )
+    moved = await update_task_item(
+        db_session,
+        tenant_context,
+        UpdateTaskItemInput(
+            task_item_id=second.task_item_id,
+            expected_updated_at=second.task_item.updated_at,
+            new_due_at="2026-07-13T18:00:00+08:00",
+        ),
+        updated_by_run_id=run_id,
+        operation_key="move-expense-report",
+    )
+    repeated = await update_task_item(
+        db_session,
+        tenant_context,
+        UpdateTaskItemInput(
+            task_item_id=second.task_item_id,
+            expected_updated_at=second.task_item.updated_at,
+            new_due_at="2026-07-13T18:00:00+08:00",
+        ),
+        updated_by_run_id=run_id,
+        operation_key="move-expense-report",
+    )
+
+    assert {task.id for task in matches} == {first.task_item_id, second.task_item_id}
+    assert completed.task_item.status.value == "completed"
+    assert moved.task_item.due_at is not None
+    assert moved.task_item.updated_by_run_id == run_id
+    assert repeated.task_item_id == moved.task_item_id
+
+
+async def test_update_task_rejects_stale_selected_version(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_task_item(
+        db_session,
+        tenant_context,
+        CreateTaskItemInput(title="整理纪要", timezone="Asia/Shanghai"),
+    )
+    await update_task_item(
+        db_session,
+        tenant_context,
+        UpdateTaskItemInput(
+            task_item_id=created.task_item_id,
+            expected_updated_at=created.task_item.updated_at,
+            new_title="整理会议纪要",
+        ),
+        updated_by_run_id=uuid4(),
+        operation_key="rename",
+    )
+
+    with pytest.raises(TaskItemChangedError, match="changed after it was selected"):
+        await update_task_item(
+            db_session,
+            tenant_context,
+            UpdateTaskItemInput(
+                task_item_id=created.task_item_id,
+                expected_updated_at=created.task_item.updated_at,
+                new_status="cancelled",
+            ),
+            updated_by_run_id=uuid4(),
+            operation_key="cancel",
+        )
 
 
 async def test_search_and_reschedule_calendar_entry_preserves_event_details(

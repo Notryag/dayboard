@@ -10,7 +10,7 @@ from dayboard.context import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Reminder
-from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskStatus
+from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
 def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
@@ -47,6 +47,8 @@ def task_item_from_row(row: TaskItemRow) -> TaskItem:
         status=TaskStatus(row.status),
         created_by_run_id=row.created_by_run_id,
         created_operation_key=row.created_operation_key,
+        updated_by_run_id=row.updated_by_run_id,
+        updated_operation_key=row.updated_operation_key,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -206,6 +208,43 @@ class SchedulingService:
     async def list_task_items(self, context: TenantContext) -> Sequence[TaskItem]:
         rows = await self.task_items.list_active(context)
         return [task_item_from_row(row) for row in rows]
+
+    async def search_task_items(
+        self,
+        context: TenantContext,
+        *,
+        title_query: str | None = None,
+        status: TaskStatus | None = TaskStatus.open,
+    ) -> Sequence[TaskItem]:
+        rows = await self.task_items.search(context, title_query=title_query, status=status)
+        return [task_item_from_row(row) for row in rows]
+
+    async def get_task_item(self, context: TenantContext, task_id: UUID) -> TaskItem | None:
+        row = await self.task_items.get(context, task_id)
+        return task_item_from_row(row) if row else None
+
+    async def get_task_item_updated_by_operation(
+        self, context: TenantContext, run_id: UUID, operation_key: str
+    ) -> TaskItem | None:
+        row = await self.task_items.get_by_updated_operation(context, run_id, operation_key)
+        return task_item_from_row(row) if row else None
+
+    async def update_task_item(
+        self,
+        context: TenantContext,
+        *,
+        task_id: UUID,
+        data: TaskItemUpdate,
+        expected_updated_at: datetime,
+    ) -> TaskItem | None:
+        row = await self.task_items.update(
+            context, task_id=task_id, data=data, expected_updated_at=expected_updated_at
+        )
+        if row is None:
+            return None
+        await self.session.commit()
+        await self.session.refresh(row)
+        return task_item_from_row(row)
 
     async def get_task_item_created_by_run(
         self,

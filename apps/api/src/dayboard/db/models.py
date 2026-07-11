@@ -84,6 +84,16 @@ class TaskItemRow(TimestampMixin, Base):
                 "created_by_run_id IS NOT NULL AND created_operation_key IS NOT NULL"
             ),
         ),
+        Index(
+            "uq_task_items_tenant_run_update_operation",
+            "tenant_id",
+            "updated_by_run_id",
+            "updated_operation_key",
+            unique=True,
+            postgresql_where=text(
+                "updated_by_run_id IS NOT NULL AND updated_operation_key IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -97,6 +107,7 @@ class TaskItemRow(TimestampMixin, Base):
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class AgentRunRow(TimestampMixin, Base):

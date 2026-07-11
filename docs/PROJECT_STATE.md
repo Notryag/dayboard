@@ -8,19 +8,15 @@ Dayboard has started implementation. M1 scaffolding is in place for the API, web
 
 The repository is initialized at `/root/dayboard`.
 
-Latest committed baseline:
-
-```text
-84e046c Initial Dayboard scaffold
-Author: Notryag <1135814285@qq.com>
-```
+The Git history is the source of truth for the latest committed baseline; do not copy a
+commit hash into this document because it becomes stale on the next change.
 
 The current direction is:
 
 - product name: Dayboard
 - frontend: Next.js, React, TypeScript
 - first UI surface: mobile-first chat-style command screen
-- voice status: the microphone is currently a visual placeholder; recording, upload, and ASR are not implemented yet
+- voice status: the microphone is currently a visual placeholder; the provider-neutral upload API and Alibaba Cloud ASR adapter are implemented, while browser recording and live credential verification remain pending
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`
@@ -115,6 +111,9 @@ Completed M2 work:
 - added seven-day idempotency-key retention with a scheduled cleanup job and structured operational logs
 - added a DeerFlow-inspired `north.RuntimeJournal` integration that captures model/tool callbacks and projects allowlisted, user-safe execution events into Dayboard Run history
 - added tenant-scoped calendar search and safe rescheduling that preserves duration, event timezone, participants, and reminders, with optimistic concurrency, Run idempotency, and update audit attribution
+- added reliable calendar cancellation with search-first targeting, optimistic concurrency, Run idempotency, and audit attribution
+- added PostgreSQL-backed conversation history, resumable structured clarification, bounded agent context, and persisted compaction summaries
+- added task search and natural-language task updates for title, due time, completion, and cancellation, with optimistic concurrency, per-operation Run idempotency, and update audit attribution
 
 Implementation notes:
 
@@ -129,10 +128,10 @@ Implementation notes:
 
 Next implementation slice:
 
-1. add calendar cancellation with the same search, optimistic concurrency, idempotency, and audit guarantees
-2. add persistent conversations and resumable clarification without replaying unbounded chat history
-3. tune prompt/tool schemas across additional live create/change/cancel scenarios
-4. reconcile provider budget counters against persisted actual usage
+1. tune prompt/tool schemas across additional live create/change/cancel and multi-command scenarios
+2. extend calendar update idempotency from one update per Run to per-operation keys, matching task updates
+3. reconcile provider budget counters against persisted actual usage
+4. add the minimal browser recording flow when live ASR credentials and sample audio are available
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
