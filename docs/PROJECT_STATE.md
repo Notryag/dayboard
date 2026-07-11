@@ -119,6 +119,7 @@ Completed M2 work:
 - added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with one immutable tenant/Run record
 - reconciled the pre-call token reservation with first-settled actual usage by charging any positive difference exactly once
 - added an explicit live Agent acceptance runner for multi-create, calendar/task mutations, missing targets, durable tool events, status, and latency
+- isolated runtime callback event persistence from the Agent tool transaction and serialized per-Run event writes, preventing concurrent AsyncSession use during parallel tool calls
 
 Implementation notes:
 

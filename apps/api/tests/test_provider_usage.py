@@ -80,6 +80,52 @@ async def test_command_service_records_provider_usage(
     assert len(records[0].usage_metadata["calls"]) == 2
 
 
+async def test_runtime_events_are_serialized_with_independent_sessions(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    async def fake_invoker(**kwargs):
+        sink = kwargs["event_sink"]
+        await asyncio.gather(
+            sink(
+                RuntimeEvent(
+                    "tool.started",
+                    "tool",
+                    content={"title": "并行任务一"},
+                    metadata={"call_id": "tool-1", "tool_name": "create_task_item"},
+                )
+            ),
+            sink(
+                RuntimeEvent(
+                    "tool.started",
+                    "tool",
+                    content={"title": "并行任务二"},
+                    metadata={"call_id": "tool-2", "tool_name": "create_task_item"},
+                )
+            ),
+        )
+        return {"messages": [AIMessage(content="完成")]}
+
+    service = CommandService(
+        db_session,
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        invoker=fake_invoker,
+    )
+    request = CommandRequest(message="创建两个任务")
+    run_id = await service.create_command_run(tenant_context, request)
+    await service.execute_command_run(tenant_context, request, run_id)
+
+    from dayboard.app.runs import AgentRunService
+
+    events = await AgentRunService(db_session).list_events(tenant_context, run_id)
+    starts = [event for event in events if event.event_type == "tool_call_started"]
+    assert [event.seq for event in starts] == sorted(event.seq for event in starts)
+    assert {event.event_metadata["call_id"] for event in starts} == {"tool-1", "tool-2"}
+
+
 async def test_command_service_does_not_invent_missing_provider_usage(
     db_session: AsyncSession,
     tenant_context: TenantContext,

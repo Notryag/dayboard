@@ -59,6 +59,7 @@ class CommandService:
         checkpointer=None,
         conversation_service: ConversationService | None = None,
         usage_session_factory=SessionLocal,
+        runtime_event_session_factory=SessionLocal,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
@@ -67,6 +68,7 @@ class CommandService:
         self.checkpointer = checkpointer
         self.conversations = conversation_service or ConversationService(session)
         self.usage_session_factory = usage_session_factory
+        self.runtime_event_session_factory = runtime_event_session_factory
 
     async def create_command_run(
         self,
@@ -161,6 +163,7 @@ class CommandService:
         }:
             return
         usage_accumulator = RuntimeUsageAccumulator()
+        runtime_event_lock = asyncio.Lock()
         budget_estimate = None
         try:
             if status == AgentRunStatus.queued:
@@ -219,21 +222,27 @@ class CommandService:
 
             async def record_runtime_event(event) -> None:
                 await usage_accumulator(event)
-                latest = await runs.get_run_row(context, run.id)
-                if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
-                    raise asyncio.CancelledError()
                 projected = project_runtime_event(event)
                 if projected is None:
                     return
-                await runs.append_progress(
-                    context,
-                    run.id,
-                    event_type=projected.event_type,
-                    content=projected.content,
-                    event_metadata=projected.metadata,
-                    category=projected.category,
-                )
-                await self.session.commit()
+                async with runtime_event_lock:
+                    async with self.runtime_event_session_factory() as event_session:
+                        event_runs = AgentRunService(event_session)
+                        latest = await event_runs.get_run_row(context, run.id)
+                        if (
+                            latest is not None
+                            and AgentRunStatus(latest.status) == AgentRunStatus.cancelled
+                        ):
+                            raise asyncio.CancelledError()
+                        await event_runs.append_progress(
+                            context,
+                            run.id,
+                            event_type=projected.event_type,
+                            content=projected.content,
+                            event_metadata=projected.metadata,
+                            category=projected.category,
+                        )
+                        await event_session.commit()
 
             async def record_compaction(event: CompactionEvent) -> None:
                 await self.conversations.update_summary(

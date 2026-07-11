@@ -203,6 +203,10 @@ the Run outcome.
 See [ADR-004](./adr/004-adopt-callback-first-token-accounting.md) for the ownership model,
 current implementation boundary, and finalization requirements.
 
+Runtime callback events use an independent short-lived database session rather than the Agent's
+business-tool session. A per-Run async lock serializes callback writes so parallel tool calls do
+not concurrently operate on one SQLAlchemy session or race event sequence allocation.
+
 Later API:
 
 ```text
