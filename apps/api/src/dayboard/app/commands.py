@@ -13,7 +13,7 @@ from north import CompactionEvent, RuntimeUsageAccumulator, invoke_agent_once
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from dayboard.agent.budget import ProviderBudgetGuard
+from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.app.conversations import ConversationService
@@ -161,6 +161,7 @@ class CommandService:
         }:
             return
         usage_accumulator = RuntimeUsageAccumulator()
+        budget_estimate = None
         try:
             if status == AgentRunStatus.queued:
                 if not await runs.mark_running(context, run):
@@ -176,6 +177,7 @@ class CommandService:
             )
 
             estimate = self.budget_guard.estimate(input_text=request.message)
+            budget_estimate = estimate
             logger.info(
                 "dayboard.command.budget_check_started",
                 run_id=str(run.id),
@@ -355,13 +357,16 @@ class CommandService:
             )
             raise
         finally:
-            await self._settle_provider_usage(context, run_id, usage_accumulator)
+            await self._settle_provider_usage(
+                context, run_id, usage_accumulator, budget_estimate
+            )
 
     async def _settle_provider_usage(
         self,
         context: TenantContext,
         run_id: UUID,
         usage_accumulator: RuntimeUsageAccumulator,
+        budget_estimate: ProviderBudgetEstimate | None,
     ) -> None:
         usage = usage_accumulator.total
         if usage is None:
@@ -369,7 +374,7 @@ class CommandService:
         provider, _, _ = self.settings.agent_model_name.partition(":")
         try:
             async with self.usage_session_factory() as usage_session:
-                await ProviderUsageRepository(usage_session).settle(
+                settlement = await ProviderUsageRepository(usage_session).settle(
                     context,
                     run_id=run_id,
                     provider=provider or "unknown",
@@ -380,6 +385,23 @@ class CommandService:
                     usage_metadata={"calls": usage_accumulator.calls},
                 )
                 await usage_session.commit()
+            reconciled_tokens = 0
+            if settlement.created and budget_estimate is not None:
+                try:
+                    reconciled_tokens = self.budget_guard.reconcile_actual(
+                        context=context,
+                        model_name=self.settings.agent_model_name,
+                        estimate=budget_estimate,
+                        actual_tokens=usage.total_tokens,
+                    )
+                except Exception:
+                    logger.exception(
+                        "dayboard.command.provider_budget_reconciliation_failed",
+                        run_id=str(run_id),
+                        tenant_id=str(context.tenant_id),
+                        user_id=str(context.user_id),
+                        model=self.settings.agent_model_name,
+                    )
             logger.info(
                 "dayboard.command.provider_usage_settled",
                 run_id=str(run_id),
@@ -389,6 +411,8 @@ class CommandService:
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 total_tokens=usage.total_tokens,
+                reconciled_tokens=reconciled_tokens,
+                usage_record_created=settlement.created,
             )
         except Exception:
             logger.exception(

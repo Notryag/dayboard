@@ -116,15 +116,15 @@ Completed M2 work:
 - added task search and natural-language task updates for title, due time, completion, and cancellation, with optimistic concurrency, per-operation Run idempotency, and update audit attribution
 - extended calendar rescheduling and cancellation to per-operation Run idempotency so one command can safely modify multiple entries
 - moved provider token normalization and per-call aggregation into north runtime events; Dayboard persists the normalized totals with tenant, user, model, and Run attribution
-- added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with a unique tenant/Run record and idempotent upsert
+- added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with one immutable tenant/Run record
+- reconciled the pre-call token reservation with first-settled actual usage by charging any positive difference exactly once
 
 Implementation notes:
 
 - `CommandService` now calls `north.invoke_agent_once` directly; the old runtime placeholder path has been removed.
 - Tests can still inject a fake service or fake invoker to avoid live model calls.
 - Do not add natural-language interpretation outside the north-backed executor path.
-- Provider token budgets currently use an estimate. Add a provider usage ledger with real input/output token accounting after the first live LLM call is enabled.
-- Provider budget admission still uses a conservative pre-call estimate; actual provider usage is persisted after successful model calls and can be used for reconciliation in a later budget iteration.
+- Provider budget admission reserves a cheap prompt-size estimate. The first immutable usage settlement charges any positive difference between actual and estimated tokens; lower provider-reported usage does not trigger an unsafe cross-window refund.
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
 - A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
 - The current release defaults each entry's timezone to the trusted user timezone. Explicit natural-language event timezones such as "9 AM New York time" are not supported yet and must not be inferred as the user's default timezone.
@@ -132,8 +132,7 @@ Implementation notes:
 Next implementation slice:
 
 1. tune prompt/tool schemas across additional live create/change/cancel and multi-command scenarios
-2. reconcile provider budget admission counters against persisted actual usage
-3. add the minimal browser recording flow when live ASR credentials and sample audio are available
+2. add the minimal browser recording flow when live ASR credentials and sample audio are available
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

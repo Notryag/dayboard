@@ -61,6 +61,32 @@ def test_provider_budget_guard_rejects_request_over_limit(tenant_context: Tenant
     assert exc_info.value.budget_type == "request"
 
 
+def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
+    tenant_context: TenantContext,
+) -> None:
+    guard = ProviderBudgetGuard(
+        Settings(
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+            DAYBOARD_PROVIDER_BUDGET_REQUEST_LIMIT="10/minute",
+            DAYBOARD_PROVIDER_BUDGET_TOKEN_LIMIT="20/minute",
+        )
+    )
+    estimate = guard.estimate(input_text="安排会议")
+    guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+
+    charged = guard.reconcile_actual(
+        context=tenant_context,
+        model_name="openai:gpt-test",
+        estimate=estimate,
+        actual_tokens=20,
+    )
+
+    assert charged == 20 - estimate.token_units
+    with pytest.raises(ProviderBudgetExceeded) as exc_info:
+        guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+    assert exc_info.value.budget_type == "token"
+
+
 async def test_command_service_checks_budget_before_model_execution(
     tenant_context: TenantContext,
     monkeypatch,

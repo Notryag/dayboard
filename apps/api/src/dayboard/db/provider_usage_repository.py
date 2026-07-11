@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -53,7 +54,7 @@ class ProviderUsageRepository:
         output_tokens: int,
         total_tokens: int,
         usage_metadata: dict[str, Any] | None = None,
-    ) -> ProviderUsageRecordRow:
+    ) -> ProviderUsageSettlement:
         values = {
             "tenant_id": context.tenant_id,
             "owner_user_id": context.user_id,
@@ -66,25 +67,24 @@ class ProviderUsageRepository:
             "usage_metadata": usage_metadata or {},
         }
         statement = insert(ProviderUsageRecordRow).values(**values)
-        statement = statement.on_conflict_do_update(
+        statement = statement.on_conflict_do_nothing(
             index_elements=[
                 ProviderUsageRecordRow.tenant_id,
                 ProviderUsageRecordRow.run_id,
             ],
-            set_={
-                "owner_user_id": statement.excluded.owner_user_id,
-                "provider": statement.excluded.provider,
-                "model": statement.excluded.model,
-                "input_tokens": statement.excluded.input_tokens,
-                "output_tokens": statement.excluded.output_tokens,
-                "total_tokens": statement.excluded.total_tokens,
-                "usage_metadata": statement.excluded.usage_metadata,
-            },
         ).returning(ProviderUsageRecordRow)
         row = await self.session.scalar(statement)
         if row is None:
-            raise RuntimeError("Provider usage settlement returned no row")
-        return row
+            row = await self.session.scalar(
+                select(ProviderUsageRecordRow).where(
+                    ProviderUsageRecordRow.tenant_id == context.tenant_id,
+                    ProviderUsageRecordRow.run_id == run_id,
+                )
+            )
+            if row is None:
+                raise RuntimeError("Provider usage settlement returned no row")
+            return ProviderUsageSettlement(row=row, created=False)
+        return ProviderUsageSettlement(row=row, created=True)
 
     async def list_for_run(
         self,
@@ -100,3 +100,9 @@ class ProviderUsageRepository:
             .order_by(ProviderUsageRecordRow.created_at.asc())
         )
         return list(rows)
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderUsageSettlement:
+    row: ProviderUsageRecordRow
+    created: bool

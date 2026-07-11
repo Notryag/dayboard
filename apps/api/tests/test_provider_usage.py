@@ -161,10 +161,14 @@ async def test_provider_usage_settlement_is_idempotent(
         "usage_metadata": {"calls": [{"call_id": "call-1"}]},
     }
 
-    await repository.settle(tenant_context, **values)
-    await repository.settle(tenant_context, **{**values, "total_tokens": 13})
+    first = await repository.settle(tenant_context, **values)
+    repeated = await repository.settle(
+        tenant_context, **{**values, "total_tokens": 13}
+    )
     await db_session.commit()
 
     records = await repository.list_for_run(tenant_context, run_id)
     assert len(records) == 1
-    assert records[0].total_tokens == 13
+    assert first.created is True
+    assert repeated.created is False
+    assert records[0].total_tokens == 12

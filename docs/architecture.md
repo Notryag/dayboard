@@ -197,8 +197,9 @@ North normalizes token usage for every observed model call and aggregates it by 
 Dayboard owns durable usage records, tenant/user attribution, pricing, admission budgets,
 and later reconciliation. Run finalization settles normalized usage through an independent
 database session for success, clarification, failure, interruption, and cancellation. A unique
-`(tenant_id, run_id)` index plus upsert provides exactly-once aggregate records across retries;
-settlement failure is logged without replacing the Run outcome.
+`(tenant_id, run_id)` index plus immutable insert-once settlement provides one aggregate record
+and one budget reconciliation across retries; settlement failure is logged without replacing
+the Run outcome.
 See [ADR-004](./adr/004-adopt-callback-first-token-accounting.md) for the ownership model,
 current implementation boundary, and finalization requirements.
 
@@ -253,9 +254,11 @@ Initial provider budget controls:
 - shared Redis or Valkey storage in server environments
 - memory storage only for tests or local isolated development
 
-The first token budget uses a cheap prompt-size estimate. Once real provider
-calls are enabled, Dayboard should add a usage ledger that records provider
-reported input/output tokens, cost, `tenant_id`, `user_id`, `run_id`, and model.
+The token budget reserves a cheap prompt-size estimate before invocation. The first immutable
+usage settlement charges any positive actual-versus-estimated difference exactly once. It does
+not refund a negative difference across fixed windows. PostgreSQL records provider-reported
+input/output tokens with `tenant_id`, `user_id`, `run_id`, and model as the actual usage source
+of truth.
 
 ## Agent Assembly Boundary
 

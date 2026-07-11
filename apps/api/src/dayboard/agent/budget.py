@@ -61,3 +61,30 @@ class ProviderBudgetGuard:
             raise ProviderBudgetExceeded("request", str(self.request_limit))
         if not self.limiter.hit(self.token_limit, f"provider-tokens:{key}", cost=estimate.token_units):
             raise ProviderBudgetExceeded("token", str(self.token_limit))
+
+    def reconcile_actual(
+        self,
+        *,
+        context: TenantContext,
+        model_name: str,
+        estimate: ProviderBudgetEstimate,
+        actual_tokens: int,
+    ) -> int:
+        """Charge actual usage above the pre-call reservation.
+
+        Fixed-window storage cannot safely refund a Run that settles after its
+        admission window expires, so lower-than-estimated usage remains reserved.
+        """
+
+        if not self.settings.provider_budget_enabled:
+            return 0
+        additional_tokens = max(0, actual_tokens - estimate.token_units)
+        if additional_tokens == 0:
+            return 0
+        key = f"tenant:{context.tenant_id}:user:{context.user_id}:model:{model_name}"
+        self.limiter.hit(
+            self.token_limit,
+            f"provider-tokens:{key}",
+            cost=additional_tokens,
+        )
+        return additional_tokens

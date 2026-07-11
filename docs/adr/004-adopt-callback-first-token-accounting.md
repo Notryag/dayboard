@@ -65,18 +65,23 @@ single `provider_usage_records` row from the Run's `finally` path using an indep
 session. Success, clarification, failure, interruption, and cancellation therefore share the
 same settlement path whenever a model completion reported usage.
 
-The database enforces uniqueness on `(tenant_id, run_id)`. Settlement uses an upsert, so worker
-or finalization retries update the same aggregate record instead of creating a duplicate. A
-settlement failure is logged independently and does not replace the Run's product outcome.
+The database enforces uniqueness on `(tenant_id, run_id)`. Settlement inserts an immutable
+aggregate and treats a conflict as an already-settled Run, so retries do not create a duplicate
+or charge the budget again. A settlement failure is logged independently and does not replace
+the Run's product outcome.
 
-Dayboard also performs a conservative pre-call budget admission check. This estimate protects
-provider spend but is not the authoritative actual usage record.
+Dayboard also performs a conservative pre-call budget admission check. The first successful
+settlement charges `max(actual_tokens - estimated_tokens, 0)` to the same fixed window. A lower
+actual value is not refunded because a Run may settle after its admission window expires; a
+negative adjustment could otherwise corrupt the next window. The PostgreSQL record remains the
+authoritative actual usage fact.
 
 ## Required Follow-Up
 
-Reconcile the conservative admission counters against persisted actual usage. Add an
-operational recovery path for the rare case where independent settlement exhausts its database
-retry opportunity; the structured settlement failure log is the current detection mechanism.
+Add an operational recovery path for the rare case where independent settlement exhausts its
+database retry opportunity; the structured settlement failure log is the current detection
+mechanism. If exact refunds become commercially necessary, replace fixed-window reservations
+with a durable reservation model instead of applying negative counter adjustments.
 
 Per-model buckets, cache-read tokens, lead/middleware/subagent attribution, running snapshots,
 and token-budget middleware are deferred until the product uses multiple models, subagents,
