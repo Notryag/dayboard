@@ -2,6 +2,13 @@
 
 These notes are for coding agents working on Dayboard.
 
+## Documentation Routing
+
+- Start implementation tasks at `docs/README.md` and follow its task-based reading list.
+- Read `docs/engineering-guidelines.md` before adding code.
+- Before changing the frontend, also read the frontend sections routed by `docs/README.md`, including `docs/ui-design.md`.
+- Treat `docs/PROJECT_STATE.md` as a current-status summary, not the canonical source for engineering or UI rules.
+
 ## Engineering Preferences
 
 - Prefer stable, mature dependencies over hand-rolled lightweight code when the dependency improves reliability, operability, or maintainability.

@@ -1,5 +1,7 @@
 # Project State
 
+This document is a current-status and planning summary. Canonical implementation rules live in [engineering-guidelines.md](./engineering-guidelines.md), UI rules live in [ui-design.md](./ui-design.md), and task-specific reading starts at [README.md](./README.md). If this summary becomes stale or conflicts with those documents, follow the canonical guideline and update this file.
+
 ## Current Status
 
 Dayboard has started implementation. M1 scaffolding is in place for the API, web app, local infrastructure, and initial database schema.
@@ -28,6 +30,8 @@ The current direction is:
 - object storage: S3-compatible storage for voice audio and future attachments
 
 ## Important Decisions
+
+The bullets below summarize decisions that affect current work; they do not replace the canonical engineering and UI guidelines linked above.
 
 - Dayboard depends on `north`; `north` must not depend on Dayboard.
 - `north` owns runtime concepts such as `StreamEvent` and `RunEvent`.
