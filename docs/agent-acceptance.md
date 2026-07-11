@@ -7,7 +7,7 @@ with real model calls.
 The runner is safe by default: without `--execute` it only lists scenarios. Execution also
 requires `--allow-writes` because it creates persistent threads, calendar entries, tasks, Runs,
 events, and provider usage records. Test titles include a per-thread `验收<tag>` prefix as
-explicit title text so repeated catalog runs do not produce ambiguous mutation targets. Avoid
+explicit title text so repeated catalog runs do not produce ambiguous change targets. Avoid
 decorative bracket tags because a model may correctly omit them while inferring a concise title.
 
 ```bash
@@ -34,9 +34,9 @@ inspect its durable events.
 Initial scenarios cover:
 
 - mixed calendar/task creation in one message;
-- multiple calendar mutations in one Run;
-- multiple task mutations in one Run;
-- refusing to create a replacement when a mutation target does not exist.
+- modifying and cancelling multiple calendar entries in one Run (`calendar-changes`);
+- completing and changing multiple tasks in one Run (`task-changes`);
+- refusing to create a replacement when a change target does not exist.
 
 Add scenarios only for meaningful product behavior or a real regression. Keep wording natural
 and assertions focused on durable outcomes rather than exact model prose.

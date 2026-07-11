@@ -36,7 +36,7 @@ SCENARIOS = (
         ),
     ),
     Scenario(
-        name="calendar-mutations",
+        name="calendar-changes",
         description="Create two entries, then move one and cancel the other in one Run.",
         turns=(
             Turn(
@@ -54,7 +54,7 @@ SCENARIOS = (
         ),
     ),
     Scenario(
-        name="task-mutations",
+        name="task-changes",
         description="Create two tasks, then complete one and move the other in one Run.",
         turns=(
             Turn(
@@ -69,7 +69,7 @@ SCENARIOS = (
     ),
     Scenario(
         name="missing-target",
-        description="Do not create a replacement when a mutation target does not exist.",
+        description="Do not create a replacement when a change target does not exist.",
         turns=(
             Turn(
                 "把「验收{tag}完全不存在的会议」改到后天上午 9 点",

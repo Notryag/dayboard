@@ -118,11 +118,11 @@ Completed M2 work:
 - moved provider token normalization and per-call aggregation into north runtime events; Dayboard persists the normalized totals with tenant, user, model, and Run attribution
 - added independent finalization-time provider usage settlement for successful, clarification, failed, interrupted, and cancelled Runs, with one immutable tenant/Run record
 - reconciled the pre-call token reservation with first-settled actual usage by charging any positive difference exactly once
-- added an explicit live Agent acceptance runner for multi-create, calendar/task mutations, missing targets, durable tool events, status, and latency
+- added an explicit live Agent acceptance runner for multi-create, calendar/task changes, missing targets, durable tool events, status, and latency
 - isolated runtime callback event persistence from the Agent tool transaction and serialized per-Run event writes, preventing concurrent AsyncSession use during parallel tool calls
-- production acceptance passed mixed multi-create after the 202607110005 deployment; calendar mutation acceptance was blocked before tool execution by repeated upstream model-gateway 503 responses, with no recurrence of the AsyncSession callback concurrency error
+- production acceptance passed mixed multi-create after the 202607110005 deployment; calendar change acceptance was blocked before tool execution by repeated upstream model-gateway 503 responses, with no recurrence of the AsyncSession callback concurrency error
 - serialized Dayboard scheduling tool execution within each Run after production task acceptance exposed LangGraph parallel tool calls sharing one business AsyncSession
-- production re-verification confirmed two parallel task creates succeed after tool serialization; remaining mutation acceptance stopped at the configured 60000/day provider token budget without calling the model, and must resume after the budget window resets or with a separately budgeted acceptance tenant
+- production re-verification confirmed two parallel task creates succeed after tool serialization; remaining calendar/task change acceptance stopped at the configured 60000/day provider token budget without calling the model, and must resume after the budget window resets or with a separately budgeted acceptance tenant
 
 Implementation notes:
 
