@@ -139,6 +139,7 @@ class CommandService:
         logger.info(
             "dayboard.command.run_queued",
             run_id=str(run.id),
+            thread_id=str(run.thread_id),
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
         )
@@ -173,6 +174,7 @@ class CommandService:
             logger.info(
                 "dayboard.command.run_started",
                 run_id=str(run.id),
+                thread_id=str(run.thread_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
@@ -184,6 +186,7 @@ class CommandService:
             logger.info(
                 "dayboard.command.budget_check_started",
                 run_id=str(run.id),
+                thread_id=str(run.thread_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
@@ -199,6 +202,7 @@ class CommandService:
             logger.info(
                 "dayboard.command.north_invoke_started",
                 run_id=str(run.id),
+                thread_id=str(run.thread_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,

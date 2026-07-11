@@ -21,8 +21,9 @@ from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
 from dayboard.app.voice import VoiceTranscriptionService
+from dayboard.api.auth import get_tenant_context
 from dayboard.config import Settings, get_settings
-from dayboard.context import TenantContext, get_dev_tenant_context
+from dayboard.context import TenantContext
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceTranscript
@@ -77,7 +78,6 @@ def get_speech_provider(request: Request) -> SpeechToTextProvider:
 @router.get("/health")
 async def health(
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
 ) -> dict[str, str]:
     await session.execute(text("select 1"))
@@ -92,8 +92,6 @@ async def health(
         "database": "ok",
         "redis": "ok",
         "worker": "ok",
-        "tenant_id": str(tenant_context.tenant_id),
-        "user_id": str(tenant_context.user_id),
     }
 
 
@@ -104,7 +102,7 @@ async def health(
 )
 async def create_command_run(
     request: CommandRequest,
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(
@@ -145,7 +143,7 @@ async def create_command_run(
 async def create_thread(
     body: ThreadCreateRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationThread:
     row = await ConversationService(session).create_thread(tenant_context, title=body.title)
     await session.commit()
@@ -157,7 +155,7 @@ async def create_thread(
 async def get_thread_messages(
     thread_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[ConversationMessage]:
     try:
         return await ConversationService(session).list_messages(tenant_context, thread_id)
@@ -169,7 +167,7 @@ async def get_thread_messages(
 async def get_thread_state(
     thread_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationState | None:
     try:
         return await ConversationService(session).get_state(tenant_context, thread_id)
@@ -186,7 +184,7 @@ async def create_voice_transcription(
     audio: UploadFile = File(...),
     language: str | None = Form(default="zh"),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
     provider: SpeechToTextProvider = Depends(get_speech_provider),
     settings: Settings = Depends(get_settings),
 ) -> VoiceTranscript:
@@ -221,7 +219,7 @@ async def create_voice_transcription(
 async def get_voice_transcription(
     transcript_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> VoiceTranscript:
     transcript = await VoiceTranscriptionService(session).get(tenant_context, transcript_id)
     if transcript is None:
@@ -237,7 +235,7 @@ async def get_voice_transcription(
 async def create_thread_command_run(
     thread_id: UUID,
     request: CommandRequest,
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -276,7 +274,7 @@ async def create_thread_command_run(
 async def respond_to_clarification(
     thread_id: UUID,
     body: ClarificationChoiceRequest,
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -318,7 +316,7 @@ async def respond_to_clarification(
 async def get_run(
     run_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
     run = await AgentRunService(session).get_run(tenant_context, run_id)
     if run is None:
@@ -331,7 +329,7 @@ async def cancel_run(
     run_id: UUID,
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
     service = AgentRunService(session)
     run = await service.get_run_row(tenant_context, run_id)
@@ -362,7 +360,7 @@ async def cancel_run(
 async def get_run_events(
     run_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[AgentRunEvent]:
     return await AgentRunService(session).list_events(tenant_context, run_id)
 
@@ -373,7 +371,7 @@ async def stream_run_events(
     request: Request,
     after_seq: int = 0,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_dev_tenant_context),
+    tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> StreamingResponse:
     service = AgentRunService(session)
     run = await service.get_run(tenant_context, run_id)

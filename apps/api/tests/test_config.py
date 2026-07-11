@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dayboard.config import Settings
+from pydantic import ValidationError
+import pytest
 
 
 def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
@@ -35,3 +37,8 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.idempotency_retention_seconds == 86400
     assert settings.asr_provider == "aliyun"
     assert settings.asr_max_audio_seconds == 90
+
+
+def test_password_auth_requires_secure_cookie_in_production() -> None:
+    with pytest.raises(ValidationError, match="AUTH_COOKIE_SECURE"):
+        Settings(DAYBOARD_ENV="production", DAYBOARD_AUTH_MODE="password")

@@ -24,7 +24,8 @@ from dayboard.app.command_schemas import CommandRequest
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.app.runs import AgentRunService
-from dayboard.context import TenantContext, get_dev_tenant_context
+from dayboard.context import TenantContext
+from dayboard.api.auth import get_tenant_context
 from dayboard.db.models import (
     AgentRunEventRow,
     AgentRunRow,
@@ -36,6 +37,13 @@ from dayboard.db.models import (
     ProviderUsageRecordRow,
     TaskItemRow,
     VoiceTranscriptRow,
+    ExternalIdentityRow,
+    TenantMembershipRow,
+    TenantRow,
+    UserCredentialRow,
+    UserProfileRow,
+    UserRow,
+    UserSessionRow,
 )
 from dayboard.db.session import SessionLocal, get_session
 from dayboard.main import app
@@ -124,6 +132,13 @@ def tenant_context() -> TenantContext:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
+        await session.execute(delete(UserSessionRow))
+        await session.execute(delete(ExternalIdentityRow))
+        await session.execute(delete(UserCredentialRow))
+        await session.execute(delete(UserProfileRow))
+        await session.execute(delete(TenantMembershipRow))
+        await session.execute(delete(UserRow))
+        await session.execute(delete(TenantRow))
         await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
@@ -136,6 +151,13 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(VoiceTranscriptRow))
         await session.commit()
         yield session
+        await session.execute(delete(UserSessionRow))
+        await session.execute(delete(ExternalIdentityRow))
+        await session.execute(delete(UserCredentialRow))
+        await session.execute(delete(UserProfileRow))
+        await session.execute(delete(TenantMembershipRow))
+        await session.execute(delete(UserRow))
+        await session.execute(delete(TenantRow))
         await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
@@ -159,7 +181,7 @@ async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
 
     dispatcher = TestCommandDispatcher()
     app.dependency_overrides[get_session] = override_session
-    app.dependency_overrides[get_dev_tenant_context] = override_tenant_context
+    app.dependency_overrides[get_tenant_context] = override_tenant_context
     app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
     app.state.test_command_dispatcher = dispatcher

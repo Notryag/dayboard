@@ -18,6 +18,13 @@ Backend implementation:
 - [engineering-guidelines.md](./engineering-guidelines.md)
 - [phase-1-plan.md](./phase-1-plan.md)
 
+Authentication and account ownership:
+
+- [adr/005-authenticated-identity-boundary.md](./adr/005-authenticated-identity-boundary.md)
+- [architecture.md](./architecture.md), sections "Tenant Extensibility" and "API Surface"
+- [engineering-guidelines.md](./engineering-guidelines.md), sections "Tenant Context", "Database Rules", and "API Rules"
+- [phase-2-plan.md](./phase-2-plan.md), section "P2.1 Real Identity And Ownership"
+
 Agent and tools:
 
 - [architecture.md](./architecture.md), sections "Agent Assembly Boundary", "Product Tools", and "Create Calendar Entry Flow"

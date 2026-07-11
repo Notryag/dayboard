@@ -206,6 +206,13 @@ Time rules:
 - Apply rate limiting at the API boundary for user-facing write and command endpoints.
 - Use Redis or Valkey for shared rate limit state in server environments.
 - Do not rely only on frontend throttling for cost or abuse control.
+- Never use a caller-supplied tenant or user header as a rate-limit or authorization identity.
+- Give every HTTP request a validated or generated request ID and return it in `X-Request-ID`.
+- Bind authenticated user and tenant IDs to structured request logs after session resolution.
+- Correlate queued Agent work with thread and Run IDs; durable Run events remain the user-visible
+  execution record while logs are the operator diagnostic record.
+- Never log passwords, password hashes, raw session tokens, cookies, authorization headers, raw
+  audio, or full command text.
 
 Suggested error shape:
 

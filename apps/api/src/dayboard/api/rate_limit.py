@@ -10,9 +10,8 @@ from dayboard.config import Settings
 
 
 def rate_limit_key(request: Request) -> str:
-    tenant_id = request.headers.get("x-tenant-id")
-    if tenant_id:
-        return f"tenant:{tenant_id}"
+    # Authentication runs inside endpoint dependencies, after this middleware.
+    # Never trust a caller-supplied tenant header for abuse controls.
     return get_remote_address(request)
 
 

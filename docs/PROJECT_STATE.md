@@ -124,6 +124,9 @@ Completed M2 work:
 - production acceptance passed mixed multi-create after the 202607110005 deployment; calendar change acceptance was blocked before tool execution by repeated upstream model-gateway 503 responses, with no recurrence of the AsyncSession callback concurrency error
 - serialized Dayboard scheduling tool execution within each Run after production task acceptance exposed LangGraph parallel tool calls sharing one business AsyncSession
 - production re-verification confirmed two parallel task creates succeed after tool serialization; remaining calendar/task change acceptance stopped at the configured 60000/day provider token budget without calling the model, and must resume after the budget window resets or with a separately budgeted acceptance tenant
+- selected FastAPI-native username/password authentication for the first beta, using Argon2id password hashes, revocable server-side sessions, Dayboard-owned tenants and memberships, and a provider-neutral external identity extension point
+- added validated request IDs, structured request completion/failure logs, authenticated user/tenant log context, and request-to-thread-to-Run correlation without logging command text or authentication secrets
+- removed caller-supplied tenant headers from the API rate-limit identity boundary
 
 Implementation notes:
 
@@ -137,9 +140,9 @@ Implementation notes:
 
 Next implementation slice:
 
-1. select the first authentication service or standard OIDC/JWT deployment and implement the provider-neutral identity, user, membership, and profile boundary
+1. connect a minimal web register/login/logout/session flow, then run two-user ownership and SSE isolation acceptance before switching production from `development` to `password` auth mode
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. implement one reliable reminder delivery channel after authenticated user profiles exist
+3. implement one reliable reminder delivery channel now that authenticated user profiles exist
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
@@ -168,8 +171,9 @@ The `/health` response was:
 ```json
 {
   "status": "ok",
-  "tenant_id": "00000000-0000-0000-0000-000000000001",
-  "user_id": "00000000-0000-0000-0000-000000000002"
+  "database": "ok",
+  "redis": "ok",
+  "worker": "ok"
 }
 ```
 
@@ -209,5 +213,5 @@ Do not wait until the end to add tests. Do not make most tests depend on real LL
 - exact first UI component install set: shadcn/ui components, icons, form tools, and state libraries
 - final brand palette and detailed visual identity
 - first ASR provider
-- auth provider and login flow
+- social login provider after password-auth beta (for example WeChat)
 - local development database setup

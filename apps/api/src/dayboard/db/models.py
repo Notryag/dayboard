@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Index, String, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -26,6 +26,86 @@ class TimestampMixin:
         onupdate=func.now(),
     )
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TenantRow(TimestampMixin, Base):
+    __tablename__ = "tenants"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+
+
+class UserRow(TimestampMixin, Base):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True, unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class UserCredentialRow(TimestampMixin, Base):
+    __tablename__ = "user_credentials"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    password_hash: Mapped[str] = mapped_column(String(500), nullable=False)
+
+
+class ExternalIdentityRow(TimestampMixin, Base):
+    __tablename__ = "external_identities"
+    __table_args__ = (UniqueConstraint("issuer", "subject", name="uq_external_identity_subject"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    issuer: Mapped[str] = mapped_column(String(160), nullable=False)
+    subject: Mapped[str] = mapped_column(String(320), nullable=False)
+
+
+class TenantMembershipRow(TimestampMixin, Base):
+    __tablename__ = "tenant_memberships"
+    __table_args__ = (UniqueConstraint("tenant_id", "user_id", name="uq_tenant_membership_user"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(32), nullable=False, default="owner")
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+
+class UserProfileRow(TimestampMixin, Base):
+    __tablename__ = "user_profiles"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+    locale: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class UserSessionRow(Base):
+    __tablename__ = "user_sessions"
+    __table_args__ = (Index("ix_user_sessions_token_hash", "token_hash", unique=True),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class CalendarEntryRow(TimestampMixin, Base):
@@ -88,7 +168,13 @@ class CalendarEntryRow(TimestampMixin, Base):
 class TaskItemRow(TimestampMixin, Base):
     __tablename__ = "task_items"
     __table_args__ = (
-        Index("ix_task_items_tenant_owner_status_due", "tenant_id", "owner_user_id", "status", "due_at"),
+        Index(
+            "ix_task_items_tenant_owner_status_due",
+            "tenant_id",
+            "owner_user_id",
+            "status",
+            "due_at",
+        ),
         Index(
             "uq_task_items_tenant_run_create_operation",
             "tenant_id",
@@ -135,9 +221,7 @@ class AgentRunRow(TimestampMixin, Base):
             "tenant_id",
             "thread_id",
             unique=True,
-            postgresql_where=text(
-                "status IN ('queued', 'running') AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("status IN ('queued', 'running') AND deleted_at IS NULL"),
         ),
     )
 
@@ -153,7 +237,12 @@ class AgentRunRow(TimestampMixin, Base):
 class ConversationThreadRow(TimestampMixin, Base):
     __tablename__ = "conversation_threads"
     __table_args__ = (
-        Index("ix_conversation_threads_tenant_owner_updated", "tenant_id", "owner_user_id", "updated_at"),
+        Index(
+            "ix_conversation_threads_tenant_owner_updated",
+            "tenant_id",
+            "owner_user_id",
+            "updated_at",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -162,13 +251,17 @@ class ConversationThreadRow(TimestampMixin, Base):
     title: Mapped[str | None] = mapped_column(String(240), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     summary: Mapped[str | None] = mapped_column(String(8000), nullable=True)
-    summary_through_message_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    summary_through_message_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
 
 
 class ConversationMessageRow(Base):
     __tablename__ = "conversation_messages"
     __table_args__ = (
-        Index("ix_conversation_messages_tenant_thread_created", "tenant_id", "thread_id", "created_at"),
+        Index(
+            "ix_conversation_messages_tenant_thread_created", "tenant_id", "thread_id", "created_at"
+        ),
         Index(
             "uq_conversation_messages_tenant_run_role",
             "tenant_id",
@@ -215,7 +308,9 @@ class ConversationStateRow(Base):
 class VoiceTranscriptRow(Base):
     __tablename__ = "voice_transcripts"
     __table_args__ = (
-        Index("ix_voice_transcripts_tenant_owner_created", "tenant_id", "owner_user_id", "created_at"),
+        Index(
+            "ix_voice_transcripts_tenant_owner_created", "tenant_id", "owner_user_id", "created_at"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

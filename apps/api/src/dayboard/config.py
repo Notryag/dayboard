@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import AliasChoices
 from pydantic import Field
 from pydantic import SecretStr
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,13 +16,27 @@ class Settings(BaseSettings):
 
     environment: str = Field(default="local", alias="DAYBOARD_ENV")
     log_level: str = Field(default="INFO", alias="DAYBOARD_LOG_LEVEL")
+    auth_mode: Literal["development", "password"] = Field(
+        default="development", alias="DAYBOARD_AUTH_MODE"
+    )
+    auth_session_cookie_name: str = Field(
+        default="dayboard_session", alias="DAYBOARD_AUTH_SESSION_COOKIE_NAME"
+    )
+    auth_session_ttl_seconds: int = Field(
+        default=30 * 24 * 60 * 60,
+        alias="DAYBOARD_AUTH_SESSION_TTL_SECONDS",
+        ge=3600,
+    )
+    auth_cookie_secure: bool = Field(default=False, alias="DAYBOARD_AUTH_COOKIE_SECURE")
     database_url: str = Field(
         default="postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard",
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     command_queue_url: str | None = Field(default=None, alias="DAYBOARD_COMMAND_QUEUE_URL")
-    command_queue_name: str = Field(default="dayboard:commands", alias="DAYBOARD_COMMAND_QUEUE_NAME")
+    command_queue_name: str = Field(
+        default="dayboard:commands", alias="DAYBOARD_COMMAND_QUEUE_NAME"
+    )
     stale_run_seconds: int = Field(default=600, alias="DAYBOARD_STALE_RUN_SECONDS", ge=60)
     queued_run_timeout_seconds: int = Field(
         default=1800,
@@ -104,7 +119,9 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
-    rate_limit_storage_url: str | None = Field(default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL")
+    rate_limit_storage_url: str | None = Field(
+        default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL"
+    )
     provider_budget_enabled: bool = Field(default=True, alias="DAYBOARD_PROVIDER_BUDGET_ENABLED")
     provider_budget_request_limit: str = Field(
         default="30/minute",
@@ -122,6 +139,18 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000",
         validation_alias=AliasChoices("DAYBOARD_CORS_ORIGINS", "CORS_ORIGINS"),
     )
+
+    @model_validator(mode="after")
+    def require_secure_production_auth_cookie(self) -> "Settings":
+        if (
+            self.environment.lower() == "production"
+            and self.auth_mode == "password"
+            and not self.auth_cookie_secure
+        ):
+            raise ValueError(
+                "Password auth in production requires DAYBOARD_AUTH_COOKIE_SECURE=true"
+            )
+        return self
 
     @property
     def effective_rate_limit_storage_url(self) -> str:

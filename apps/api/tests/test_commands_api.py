@@ -9,7 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.runs import AgentRunService
 from dayboard.app.conversations import ConversationService
 from dayboard.api.routes import get_command_dispatcher
-from dayboard.context import TenantContext, get_dev_tenant_context
+from dayboard.context import TenantContext
+from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
 
 
@@ -126,7 +127,7 @@ async def test_thread_routes_are_tenant_and_owner_scoped(
     ) as client:
         created = await client.post("/api/threads", json={})
         thread_id = created.json()["id"]
-        api_app.dependency_overrides[get_dev_tenant_context] = lambda: TenantContext(
+        api_app.dependency_overrides[get_tenant_context] = lambda: TenantContext(
             tenant_id=tenant_context.tenant_id,
             user_id=uuid4(),
             timezone=tenant_context.timezone,

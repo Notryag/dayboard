@@ -9,11 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dayboard.api.rate_limit import configure_rate_limiting
+from dayboard.api.auth import router as auth_router
 from dayboard.api.routes import router
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.config import get_settings
 from dayboard.integrations.speech import AliyunSpeechProvider, SpeechProviderRegistry
-from dayboard.observability.logging import configure_logging
+from dayboard.observability.logging import RequestContextMiddleware, configure_logging
 
 
 @asynccontextmanager
@@ -57,7 +58,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestContextMiddleware)
     configure_rate_limiting(app, settings)
+    app.include_router(auth_router)
     app.include_router(router)
     return app
 

@@ -29,9 +29,10 @@ The web experience remains a prototype and browser voice capture is not connecte
 
 ### P2.1 Real Identity And Ownership
 
-- define a provider-neutral authenticated identity contract;
-- verify signed credentials at the API boundary;
-- map external subject IDs to Dayboard users and tenant membership;
+- implement username/password registration and login in FastAPI;
+- hash passwords with Argon2id and use revocable server-side sessions in `HttpOnly` cookies;
+- map authenticated sessions to Dayboard users and tenant membership;
+- retain external identity records as the extension point for future WeChat or OIDC login;
 - derive `TenantContext` only from trusted identity and membership data;
 - store per-user timezone and locale;
 - enforce ownership on threads, Runs, calendar entries, tasks, voice transcripts, and usage;
@@ -77,6 +78,18 @@ redesign. It does not include brand polish or a large component-system migration
 
 ## Immediate Next Decision
 
-Select the first authentication service or deployment pattern. It must support deployment in
-the target China environment or be replaceable through standard OIDC/JWT claims. The choice
-must not leak provider SDK types into Dayboard domain, repository, or scheduling tool APIs.
+Implement the FastAPI account/session boundary and request correlation, then connect the minimal
+web login flow before enabling password mode in production. Do not deploy the backend mode switch
+alone because the existing web client has no login surface yet.
+
+## Operational Acceptance
+
+A support report must be traceable without reading private user content. API logs and durable Run
+events should allow an operator to follow:
+
+```text
+request_id -> authenticated user/tenant -> thread_id -> run_id -> runtime/tool event -> object id
+```
+
+Logs record status, latency, provider request IDs when available, safe error types, and correlation
+IDs. They do not record passwords, session tokens, cookies, raw audio, or full command text.
