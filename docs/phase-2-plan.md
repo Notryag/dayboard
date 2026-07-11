@@ -30,7 +30,7 @@ the reminder inbox is not rendered, and browser voice capture is not connected.
 
 ### P2.1 Real Identity And Ownership
 
-Status: backend, web session flow, and isolation acceptance complete; production enablement pending.
+Status: backend, web session flow, isolation acceptance, and production enablement complete.
 
 Completed:
 
@@ -43,9 +43,7 @@ Completed:
 
 Remaining:
 
-- configure a same-site web/API domain;
-- apply account migrations and switch production to `password` mode in the same release;
-- complete external-beta ownership acceptance for calendar entries, tasks, transcripts, and usage.
+- complete beta ownership acceptance for calendar entries, tasks, transcripts, and usage.
 
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.
@@ -104,10 +102,9 @@ redesign. It does not include brand polish or a large component-system migration
 
 ## Immediate Next Work
 
-1. Configure a same-site web/API domain and release the account migration, web login flow, and
-   `DAYBOARD_AUTH_MODE=password` switch together.
-2. Render delivered in-app reminders through the existing tenant-scoped API.
-3. Select one China-reliable external notification provider and add acknowledgement-based retry.
+1. Verify registration and the scheduling flow with the first real beta user.
+2. Build the minimal inspectable calendar/task experience.
+3. Keep reminder UI and external provider work deferred until it becomes a product priority.
 
 ## Operational Acceptance
 

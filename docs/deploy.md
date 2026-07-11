@@ -49,6 +49,14 @@ For local development:
 
 ```text
 NEXT_PUBLIC_DAYBOARD_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_DAYBOARD_BASE_PATH=
+```
+
+The server-hosted build uses:
+
+```text
+NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api
+NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard
 ```
 
 Password authentication uses an `HttpOnly`, `SameSite=Lax` server session cookie. Production web
@@ -72,13 +80,7 @@ OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
 OPENAI_API_KEY=...
 ```
 
-The current controlled production demo remains explicit development auth:
-
-```text
-DAYBOARD_AUTH_MODE=development
-```
-
-The coordinated external-beta switch adds:
+The current server-hosted deployment uses password auth:
 
 ```text
 DAYBOARD_AUTH_MODE=password
@@ -93,18 +95,33 @@ Current API deployment:
 https://www.selfapi.art/dayboard-api
 ```
 
+Current server-hosted web deployment:
+
+```text
+https://www.selfapi.art/dayboard
+```
+
 Nginx proxies `/dayboard-api/` to the loopback-only FastAPI service on port 8000. The API and arq worker run as the enabled `dayboard-api.service` and `dayboard-worker.service` systemd units.
 
-Coordinate the account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch.
-Deploying only the mode switch makes the existing web client return 401; deploying only the login
-UI while business APIs remain in development mode authenticates the browser but still uses the
-shared development identity.
+The account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch were deployed as
+one batch. Preserve that coordination in future environments: deploying only the mode switch makes
+an old web client return 401, while deploying only the login UI with development-mode business APIs
+still uses the shared development identity.
+
+The checked-in deployment templates are:
+
+- `deploy/systemd/dayboard-web.service`
+- `deploy/nginx/dayboard-locations.conf`
+
+Build the server-hosted frontend with the server values above, enable the systemd unit, validate
+Nginx with `nginx -t`, and reload it only after the web service is healthy on `127.0.0.1:3001`.
 
 ## Current Deployment Shape
 
 ```text
 GitHub public repo
-  -> Vercel project rooted at apps/web
+  -> server-hosted Next.js at /dayboard/ (primary China-access path)
+  -> optional Vercel preview project rooted at apps/web
   -> HTTPS Nginx proxy on www.selfapi.art
   -> systemd FastAPI service and arq worker
   -> PostgreSQL and Redis/Valkey via Docker or managed services

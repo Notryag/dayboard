@@ -5,8 +5,8 @@ This document is a current-status and planning summary. Canonical implementation
 ## Current Status
 
 Dayboard has completed its natural-language scheduling foundation and is now building the usable
-account beta. Authentication and in-app reminder foundations are implemented but not enabled in
-the current production deployment.
+account beta. Password authentication and the Next.js web app are deployed on the same HTTPS site;
+the in-app reminder foundation is implemented but not yet rendered in the web UI.
 
 The repository is initialized at `/root/dayboard`.
 
@@ -16,7 +16,8 @@ commit hash into this document because it becomes stale on the next change.
 The current direction is:
 
 - product name: Dayboard
-- frontend: Next.js, React, TypeScript
+- frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
+  Vercel remains an optional preview deployment
 - first UI surface: mobile-first chat-style command screen
 - voice status: the microphone is currently a visual placeholder; the provider-neutral upload API and Alibaba Cloud ASR adapter are implemented, while browser recording and live credential verification remain pending
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
@@ -55,8 +56,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 ## Next Milestone
 
 Phase 1 has proved the natural-language scheduling loop. Continue the usable account beta from
-[phase-2-plan.md](./phase-2-plan.md). The immediate release boundary is a coordinated account
-migration, same-site web/API deployment, and production password-auth switch.
+[phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
+deployment, and production password-auth switch are complete. The next product slice should focus
+on the minimal inspectable experience rather than reminder UI unless that priority changes.
 
 ## Implemented Capabilities
 
@@ -92,11 +94,10 @@ Implementation notes:
 
 Next implementation slice:
 
-1. configure a same-site production web/API domain, apply the account migration, and coordinate the
-   web release with the switch from `development` to `password` auth mode
+1. verify account registration and the normal scheduling flow with a real beta user
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. expose delivered in-app reminders in the minimal web UI, then select and add one external
-   China-reliable notification provider
+3. improve the minimal inspectable calendar/task experience; reminder UI and external notification
+   providers remain explicitly deferred
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
