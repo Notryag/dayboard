@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -86,6 +87,11 @@ def _task_item_view(task) -> dict[str, Any]:
     }
 
 
+def _create_operation_key(kind: str, data: BaseModel) -> str:
+    identity = f"{kind}:{data.model_dump_json()}"
+    return sha256(identity.encode("utf-8")).hexdigest()
+
+
 def build_scheduling_tools(
     *,
     session: AsyncSession,
@@ -109,6 +115,7 @@ def build_scheduling_tools(
             context,
             data,
             created_by_run_id=run_id,
+            operation_key=_create_operation_key("calendar_entry", input_data),
         )
         return {
             "type": result.type,
@@ -197,6 +204,7 @@ def build_scheduling_tools(
             context,
             data,
             created_by_run_id=run_id,
+            operation_key=_create_operation_key("task_item", input_data),
         )
         return {
             "type": result.type,

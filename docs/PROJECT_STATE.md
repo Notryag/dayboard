@@ -20,6 +20,7 @@ The current direction is:
 - product name: Dayboard
 - frontend: Next.js, React, TypeScript
 - first UI surface: mobile-first chat-style command screen
+- voice status: the microphone is currently a visual placeholder; recording, upload, and ASR are not implemented yet
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`

@@ -185,6 +185,8 @@ The worker periodically recovers abandoned active runs. A `running` run uses its
 
 Structured clarification is persisted in `conversation_states` and delivered as part of the existing clarification lifecycle. The agent decides that business information is ambiguous and supplies relevant candidates; Dayboard validates and persists those candidates, exposes only stable option keys plus display data to the frontend, and keeps database ids and optimistic-lock versions server-side. A choice response contains the state version and option key. Dayboard resolves that key to trusted context, creates a normal follow-up run on the same thread, and continues observability through the existing run-event SSE stream. Visual component names and UI-library models must not enter this backend contract.
 
+A command or future voice transcript may contain multiple distinct scheduling instructions. Create-tool idempotency is scoped to `(tenant_id, run_id, operation_key)`, where Dayboard derives `operation_key` from the normalized server-side tool input. Repeating the same tool call in a retried run step returns the original object, while different calendar entries or tasks in the same run are persisted independently. The model never supplies this key.
+
 Later API:
 
 ```text

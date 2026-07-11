@@ -25,6 +25,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         participants=row.participants,
         reminder=Reminder.model_validate(row.reminder) if row.reminder else None,
         created_by_run_id=row.created_by_run_id,
+        created_operation_key=row.created_operation_key,
         updated_by_run_id=row.updated_by_run_id,
         cancelled_by_run_id=row.cancelled_by_run_id,
         cancellation_reason=row.cancellation_reason,
@@ -45,6 +46,7 @@ def task_item_from_row(row: TaskItemRow) -> TaskItem:
         reminder=Reminder.model_validate(row.reminder) if row.reminder else None,
         status=TaskStatus(row.status),
         created_by_run_id=row.created_by_run_id,
+        created_operation_key=row.created_operation_key,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -168,8 +170,9 @@ class SchedulingService:
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str | None = None,
     ) -> CalendarEntry | None:
-        row = await self.calendar_entries.get_by_created_run(context, run_id)
+        row = await self.calendar_entries.get_by_created_run(context, run_id, operation_key)
         return calendar_entry_from_row(row) if row else None
 
     async def list_calendar_conflicts(
@@ -208,6 +211,7 @@ class SchedulingService:
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str | None = None,
     ) -> TaskItem | None:
-        row = await self.task_items.get_by_created_run(context, run_id)
+        row = await self.task_items.get_by_created_run(context, run_id, operation_key)
         return task_item_from_row(row) if row else None

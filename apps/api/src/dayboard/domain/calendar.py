@@ -19,6 +19,7 @@ class CalendarEntryCreate(BaseModel):
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = None
     created_by_run_id: UUID | None = None
+    created_operation_key: str | None = None
 
     @model_validator(mode="after")
     def validate_time_range(self) -> CalendarEntryCreate:
@@ -38,6 +39,7 @@ class CalendarEntry(BaseModel):
     participants: list[str]
     reminder: Reminder | None
     created_by_run_id: UUID | None
+    created_operation_key: str | None
     updated_by_run_id: UUID | None
     cancelled_by_run_id: UUID | None
     cancellation_reason: str | None

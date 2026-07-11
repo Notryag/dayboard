@@ -112,10 +112,13 @@ async def create_calendar_entry(
     data: CreateCalendarEntryInput,
     *,
     created_by_run_id: UUID | None = None,
+    operation_key: str | None = None,
 ) -> CalendarEntryToolResult:
     service = SchedulingService(session)
     if created_by_run_id is not None:
-        existing = await service.get_calendar_entry_created_by_run(context, created_by_run_id)
+        existing = await service.get_calendar_entry_created_by_run(
+            context, created_by_run_id, operation_key
+        )
         if existing is not None:
             return CalendarEntryToolResult(
                 calendar_entry_id=existing.id,
@@ -135,6 +138,7 @@ async def create_calendar_entry(
             **data.model_dump(exclude={"end_time"}),
             end_time=end_time,
             created_by_run_id=created_by_run_id,
+            created_operation_key=operation_key,
         ),
     )
     return CalendarEntryToolResult(
@@ -330,10 +334,13 @@ async def create_task_item(
     data: CreateTaskItemInput,
     *,
     created_by_run_id: UUID | None = None,
+    operation_key: str | None = None,
 ) -> TaskItemToolResult:
     service = SchedulingService(session)
     if created_by_run_id is not None:
-        existing = await service.get_task_item_created_by_run(context, created_by_run_id)
+        existing = await service.get_task_item_created_by_run(
+            context, created_by_run_id, operation_key
+        )
         if existing is not None:
             return TaskItemToolResult(
                 task_item_id=existing.id,
@@ -346,7 +353,11 @@ async def create_task_item(
             )
     task = await service.create_task_item(
         context,
-        TaskItemCreate(**data.model_dump(), created_by_run_id=created_by_run_id),
+        TaskItemCreate(
+            **data.model_dump(),
+            created_by_run_id=created_by_run_id,
+            created_operation_key=operation_key,
+        ),
     )
     return TaskItemToolResult(
         task_item_id=task.id,

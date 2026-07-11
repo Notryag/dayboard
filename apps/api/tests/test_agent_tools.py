@@ -72,36 +72,32 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
     create_task = next(tool for tool in tools if tool.name == "create_task_item")
 
-    entry_result = await create_entry.ainvoke(
-        {
-            "title": "产品复盘",
-            "start_time": "2026-07-10T10:00:00+08:00",
-            "participants": ["Alice"],
-        }
+    entry_input = {
+        "title": "产品复盘",
+        "start_time": "2026-07-10T10:00:00+08:00",
+        "participants": ["Alice"],
+    }
+    task_input = {
+        "title": "整理会议纪要",
+        "due_at": "2026-07-10T18:00:00+08:00",
+    }
+    entry_result = await create_entry.ainvoke(entry_input)
+    second_entry_result = await create_entry.ainvoke(
+        {"title": "客户会议", "start_time": "2026-07-10T11:00:00+08:00"}
     )
-    task_result = await create_task.ainvoke(
-        {
-            "title": "整理会议纪要",
-            "due_at": "2026-07-10T18:00:00+08:00",
-        }
+    repeated_entry_result = await create_entry.ainvoke(entry_input)
+    task_result = await create_task.ainvoke(task_input)
+    second_task_result = await create_task.ainvoke(
+        {"title": "回复邮件", "due_at": "2026-07-11T18:00:00+08:00"}
     )
-    repeated_entry_result = await create_entry.ainvoke(
-        {
-            "title": "不应重复创建",
-            "start_time": "2026-07-10T11:00:00+08:00",
-        }
-    )
-    repeated_task_result = await create_task.ainvoke(
-        {
-            "title": "不应重复创建的任务",
-            "due_at": "2026-07-11T18:00:00+08:00",
-        }
-    )
+    repeated_task_result = await create_task.ainvoke(task_input)
 
     assert entry_result["type"] == "calendar_entry_created"
     assert task_result["type"] == "task_item_created"
     assert repeated_entry_result["calendar_entry_id"] == entry_result["calendar_entry_id"]
     assert repeated_task_result["task_item_id"] == task_result["task_item_id"]
+    assert second_entry_result["calendar_entry_id"] != entry_result["calendar_entry_id"]
+    assert second_task_result["task_item_id"] != task_result["task_item_id"]
     assert set(entry_result["calendar_entry"]) == {
         "id",
         "title",
@@ -123,6 +119,8 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     entries = await list_calendar_entries(db_session, tenant_context)
     tasks = await list_task_items(db_session, tenant_context)
 
+    assert len(entries) == 2
+    assert len(tasks) == 2
     assert entries[0].tenant_id == tenant_context.tenant_id
     assert entries[0].owner_user_id == tenant_context.user_id
     assert entries[0].created_by_run_id == run_id

@@ -27,6 +27,7 @@ class CalendarEntryRepository:
             participants=data.participants,
             reminder=data.reminder.model_dump() if data.reminder else None,
             created_by_run_id=data.created_by_run_id,
+            created_operation_key=data.created_operation_key,
         )
         self.session.add(row)
         await self.session.flush()
@@ -179,14 +180,18 @@ class CalendarEntryRepository:
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str | None = None,
     ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
-            select(CalendarEntryRow).where(
+        conditions = [
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.created_by_run_id == run_id,
                 CalendarEntryRow.deleted_at.is_(None),
-            )
+        ]
+        if operation_key is not None:
+            conditions.append(CalendarEntryRow.created_operation_key == operation_key)
+        return await self.session.scalar(
+            select(CalendarEntryRow).where(*conditions)
         )
 
     async def list_overlapping(
@@ -233,6 +238,7 @@ class TaskItemRepository:
             reminder=data.reminder.model_dump() if data.reminder else None,
             status=data.status.value,
             created_by_run_id=data.created_by_run_id,
+            created_operation_key=data.created_operation_key,
         )
         self.session.add(row)
         await self.session.flush()
@@ -254,12 +260,16 @@ class TaskItemRepository:
         self,
         context: TenantContext,
         run_id: UUID,
+        operation_key: str | None = None,
     ) -> TaskItemRow | None:
-        return await self.session.scalar(
-            select(TaskItemRow).where(
+        conditions = [
                 TaskItemRow.tenant_id == context.tenant_id,
                 TaskItemRow.owner_user_id == context.user_id,
                 TaskItemRow.created_by_run_id == run_id,
                 TaskItemRow.deleted_at.is_(None),
-            )
+        ]
+        if operation_key is not None:
+            conditions.append(TaskItemRow.created_operation_key == operation_key)
+        return await self.session.scalar(
+            select(TaskItemRow).where(*conditions)
         )

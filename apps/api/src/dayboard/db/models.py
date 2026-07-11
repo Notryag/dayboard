@@ -36,11 +36,14 @@ class CalendarEntryRow(TimestampMixin, Base):
         Index("ix_calendar_entries_tenant_created_by_run", "tenant_id", "created_by_run_id"),
         Index("ix_calendar_entries_tenant_cancelled_by_run", "tenant_id", "cancelled_by_run_id"),
         Index(
-            "uq_calendar_entries_tenant_created_by_run",
+            "uq_calendar_entries_tenant_run_create_operation",
             "tenant_id",
             "created_by_run_id",
+            "created_operation_key",
             unique=True,
-            postgresql_where=text("created_by_run_id IS NOT NULL"),
+            postgresql_where=text(
+                "created_by_run_id IS NOT NULL AND created_operation_key IS NOT NULL"
+            ),
         ),
         Index(
             "uq_calendar_entries_tenant_cancelled_by_run",
@@ -61,6 +64,7 @@ class CalendarEntryRow(TimestampMixin, Base):
     participants: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     reminder: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     cancelled_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -71,11 +75,14 @@ class TaskItemRow(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_task_items_tenant_owner_status_due", "tenant_id", "owner_user_id", "status", "due_at"),
         Index(
-            "uq_task_items_tenant_created_by_run",
+            "uq_task_items_tenant_run_create_operation",
             "tenant_id",
             "created_by_run_id",
+            "created_operation_key",
             unique=True,
-            postgresql_where=text("created_by_run_id IS NOT NULL"),
+            postgresql_where=text(
+                "created_by_run_id IS NOT NULL AND created_operation_key IS NOT NULL"
+            ),
         ),
     )
 
@@ -88,6 +95,7 @@ class TaskItemRow(TimestampMixin, Base):
     reminder: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="open")
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 

@@ -22,6 +22,7 @@ class TaskItemCreate(BaseModel):
     reminder: Reminder | None = None
     status: TaskStatus = TaskStatus.open
     created_by_run_id: UUID | None = None
+    created_operation_key: str | None = None
 
 
 class TaskItem(BaseModel):
@@ -34,5 +35,6 @@ class TaskItem(BaseModel):
     reminder: Reminder | None
     status: TaskStatus
     created_by_run_id: UUID | None
+    created_operation_key: str | None
     created_at: datetime
     updated_at: datetime
