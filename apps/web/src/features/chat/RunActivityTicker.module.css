@@ -1,0 +1,92 @@
+.viewport {
+  height: 28px;
+  overflow: hidden;
+  padding: 0 var(--space-1);
+  color: var(--color-text-muted);
+}
+
+.track,
+.slidingTrack {
+  display: flex;
+  flex-direction: column;
+}
+
+.track {
+  animation: appear 180ms ease-out both;
+}
+
+.slidingTrack {
+  animation: advance 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.step {
+  height: 28px;
+  flex: 0 0 28px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ellipsis {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 14px;
+}
+
+.ellipsis span {
+  animation: pulse 1.2s infinite;
+  opacity: 0.25;
+}
+
+.ellipsis span:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.ellipsis span:nth-child(3) {
+  animation-delay: 320ms;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes advance {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-28px);
+  }
+}
+
+@keyframes pulse {
+  0%, 60%, 100% {
+    opacity: 0.25;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track,
+  .slidingTrack,
+  .ellipsis span {
+    animation: none;
+  }
+
+  .slidingTrack {
+    transform: translateY(-28px);
+  }
+}

@@ -106,17 +106,6 @@
   opacity: 0.62;
 }
 
-.progressList {
-  display: grid;
-  gap: var(--space-1);
-  margin: var(--space-3) 0 0;
-  padding: var(--space-3) 0 0 20px;
-  border-top: 1px solid color-mix(in srgb, currentColor, transparent 82%);
-  color: color-mix(in srgb, currentColor, transparent 22%);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 .assistantMessage {
   align-self: flex-start;
   border-bottom-left-radius: var(--radius-md);
@@ -133,6 +122,8 @@
 }
 
 .composerDock {
+  display: grid;
+  gap: var(--space-1);
   padding: var(--space-3) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-4));
   border-top: 1px solid var(--color-border);
   background: color-mix(in srgb, var(--color-surface), white 42%);

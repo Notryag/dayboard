@@ -14,6 +14,10 @@ import type {
   ClarificationInteraction as Interaction,
   ConversationState,
 } from "@/features/clarifications/types";
+import {
+  RunActivityTicker,
+  type RunActivityStep,
+} from "@/features/chat/RunActivityTicker";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -21,13 +25,7 @@ type ChatMessage = {
   role: "assistant" | "user";
   text: string;
   time: string;
-  progress?: ProgressStep[];
   runId?: string;
-};
-
-type ProgressStep = {
-  eventType: string;
-  text: string;
 };
 
 type CommandRunResponse = {
@@ -89,7 +87,6 @@ function clarificationChoiceLabel(interaction: Interaction, optionKey: string) {
 function createMessage(
   role: ChatMessage["role"],
   text: string,
-  progress?: ProgressStep[],
   runId?: string,
 ): ChatMessage {
   return {
@@ -97,7 +94,6 @@ function createMessage(
     role,
     text,
     time: currentTimeLabel(),
-    progress,
     runId,
   };
 }
@@ -121,7 +117,7 @@ function ChatHome() {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeProgress, setActiveProgress] = useState<ProgressStep[]>([]);
+  const [activeProgress, setActiveProgress] = useState<RunActivityStep[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
@@ -180,7 +176,7 @@ function ChatHome() {
     });
   }, []);
 
-  function followRun(runId: string): Promise<{ text: string; progress: ProgressStep[] }> {
+  function followRun(runId: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const stream = new EventSource(`${apiUrl}/api/runs/${runId}/events/stream`, {
         withCredentials: true,
@@ -191,7 +187,7 @@ function ChatHome() {
       function finish(text: string) {
         stream.close();
         activeStreamRef.current = null;
-        resolve({ text, progress });
+        resolve(text);
       }
 
       const progressLabels: Record<string, string> = {
@@ -281,7 +277,7 @@ function ChatHome() {
 
       setMessages((current) => [
         ...current,
-        createMessage("assistant", result.text, result.progress, command.run_id),
+        createMessage("assistant", result, command.run_id),
       ]);
     } catch (error) {
       setMessages((current) => [
@@ -320,7 +316,7 @@ function ChatHome() {
       await refreshConversationState(threadId);
       setMessages((current) => [
         ...current,
-        createMessage("assistant", result.text, result.progress, command.run_id),
+        createMessage("assistant", result, command.run_id),
       ]);
     } catch {
       await refreshConversationState(threadId).catch(() => undefined);
@@ -373,13 +369,6 @@ function ChatHome() {
               key={message.id}
             >
               <p>{message.text}</p>
-              {message.progress?.length ? (
-                <ol className={styles.progressList} aria-label="执行过程">
-                  {message.progress.map((step, index) => (
-                    <li key={`${step.eventType}-${index}`}>{step.text}</li>
-                  ))}
-                </ol>
-              ) : null}
               {conversationState &&
               message.role === "assistant" &&
               message.runId === conversationState.state_data.source_run_id &&
@@ -393,21 +382,17 @@ function ChatHome() {
               <time>{message.time}</time>
             </article>
           ))}
-          {isSubmitting ? (
-            <article className={`${styles.message} ${styles.assistantMessage}`}>
-              <p>{activeProgress.length ? "正在处理你的安排" : "正在提交请求"}</p>
-              {activeProgress.length ? (
-                <ol className={styles.progressList} aria-label="当前执行过程">
-                  {activeProgress.map((step, index) => (
-                    <li key={`${step.eventType}-${index}`}>{step.text}</li>
-                  ))}
-                </ol>
-              ) : null}
-            </article>
-          ) : null}
         </section>
 
         <div className={styles.composerDock}>
+          {isSubmitting ? (
+            <RunActivityTicker
+              steps={activeProgress.length ? activeProgress : [{
+                eventType: "submitting",
+                text: "正在提交请求",
+              }]}
+            />
+          ) : null}
           <form className={styles.composer} onSubmit={handleSubmit}>
             <button className={styles.iconButton} type="button" aria-label="语音输入">
               <Mic size={20} strokeWidth={2.2} />
