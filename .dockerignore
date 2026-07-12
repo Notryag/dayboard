@@ -1,0 +1,10 @@
+.env
+.git
+.github
+.next
+node_modules
+apps/api/.venv
+apps/web/node_modules
+__pycache__
+*.py[cod]
+*.log

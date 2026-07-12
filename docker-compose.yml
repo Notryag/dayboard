@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-dayboard}
       POSTGRES_USER: ${POSTGRES_USER:-dayboard}
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:8-alpine
+    restart: unless-stopped
     ports:
       - "127.0.0.1:6379:6379"
     volumes:
@@ -26,6 +28,84 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dayboard}:${POSTGRES_PASSWORD:-dayboard}@postgres:5432/${POSTGRES_DB:-dayboard}
+      REDIS_URL: redis://redis:6379/0
+      DAYBOARD_COMMAND_QUEUE_URL: redis://redis:6379/0
+      DAYBOARD_RATE_LIMIT_STORAGE_URL: redis://redis:6379/1
+      DAYBOARD_PROVIDER_BUDGET_STORAGE_URL: redis://redis:6379/2
+    command:
+      - sh
+      - -c
+      - /app/.venv/bin/alembic upgrade head && exec /app/.venv/bin/fastapi run src/dayboard/main.py --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/openapi.json')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-dayboard}:${POSTGRES_PASSWORD:-dayboard}@postgres:5432/${POSTGRES_DB:-dayboard}
+      REDIS_URL: redis://redis:6379/0
+      DAYBOARD_COMMAND_QUEUE_URL: redis://redis:6379/0
+      DAYBOARD_RATE_LIMIT_STORAGE_URL: redis://redis:6379/1
+      DAYBOARD_PROVIDER_BUDGET_STORAGE_URL: redis://redis:6379/2
+    command: ["/app/.venv/bin/arq", "dayboard.workers.commands.WorkerSettings"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import os, sys; from redis import Redis; key = os.environ.get('DAYBOARD_COMMAND_QUEUE_NAME', 'dayboard:commands') + ':health-check'; client = Redis.from_url(os.environ['DAYBOARD_COMMAND_QUEUE_URL']); sys.exit(0 if client.exists(key) else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_DAYBOARD_API_BASE_URL: /dayboard-api
+        NEXT_PUBLIC_DAYBOARD_BASE_PATH: /dayboard
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_DAYBOARD_API_BASE_URL: /dayboard-api
+      NEXT_PUBLIC_DAYBOARD_BASE_PATH: /dayboard
+    command: ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3001"]
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   dayboard_postgres_data:

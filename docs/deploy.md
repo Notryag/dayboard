@@ -53,8 +53,8 @@ NEXT_PUBLIC_DAYBOARD_BASE_PATH=
 ```
 
 These variables are compiled into the browser bundle by Next.js. They must be present when
-`npm run build` runs. Setting them only on the later `next start` or systemd process does not
-change an already-built bundle.
+`npm run build` runs. Setting them only at container runtime does not change an already-built
+bundle.
 
 The server-hosted build uses:
 
@@ -105,7 +105,7 @@ Current server-hosted web deployment:
 https://www.selfapi.art/dayboard
 ```
 
-Nginx proxies `/dayboard-api/` to the loopback-only FastAPI service on port 8000. The API and arq worker run as the enabled `dayboard-api.service` and `dayboard-worker.service` systemd units.
+Nginx proxies `/dayboard-api/` to the loopback-only FastAPI container on port 8000. The API, Web, Worker, PostgreSQL, and Redis services run from the root `docker-compose.yml` file. The application containers bind only to loopback ports; Nginx remains the public entry point.
 
 The account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch were deployed as
 one batch. Preserve that coordination in future environments: deploying only the mode switch makes
@@ -116,25 +116,22 @@ The checked-in deployment templates are:
 
 - `deploy/github-actions/ci.yml` (copy to `.github/workflows/ci.yml` using GitHub credentials with
   workflow-write permission to enable it)
-- `deploy/systemd/dayboard-api.service`
-- `deploy/systemd/dayboard-worker.service`
-- `deploy/systemd/dayboard-web.service`
+- `docker-compose.yml` and the application Dockerfiles
 - `deploy/nginx/dayboard-locations.conf`
 
 Build the server-hosted frontend with the server values above:
 
 ```bash
-cd /path/to/dayboard/apps/web
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api \
-NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard \
-npm run build
-sudo systemctl restart dayboard-web.service
+cd /path/to/dayboard
+docker compose build api worker web
+docker compose up -d
+docker compose ps
 ```
 
-Do not run a plain `npm run build` for this subpath deployment. After restarting, verify the page,
-one hashed static asset under `/dayboard/_next/static/`, and the API independently. A page `200`
-alone is insufficient because the prerendered loading screen can render without a working browser
-bundle or API URL.
+The Compose build injects `/dayboard-api` and `/dayboard` into the Web bundle. After restarting,
+verify the page, one hashed static asset under `/dayboard/_next/static/`, and the API independently.
+A page `200` alone is insufficient because the prerendered loading screen can render without a
+working browser bundle or API URL.
 
 ```bash
 curl -I https://your-host/dayboard
@@ -142,8 +139,8 @@ curl -I https://your-host/dayboard/_next/static/chunks/<chunk-from-page-source>.
 curl -I https://your-host/dayboard-api/api/auth/me
 ```
 
-An unauthenticated `401` from `/api/auth/me` is a healthy response. Enable the systemd unit,
-validate Nginx with `nginx -t`, and reload it only after the web service is healthy on
+An unauthenticated `401` from `/api/auth/me` is a healthy response. Validate Nginx with `nginx -t`,
+and reload it only after the web container is healthy on
 `127.0.0.1:3001`.
 
 ## Local Deployment
@@ -255,7 +252,7 @@ GitHub public repo
   -> server-hosted Next.js at /dayboard/ (primary China-access path)
   -> optional Vercel preview project rooted at apps/web
   -> HTTPS Nginx proxy on www.selfapi.art
-  -> systemd FastAPI service and arq worker
+  -> Docker Compose FastAPI service and arq worker
   -> PostgreSQL and Redis/Valkey via Docker or managed services
 ```
 
