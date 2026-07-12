@@ -15,12 +15,13 @@ from dayboard.domain.reminders import ReminderDeliveryStatus
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
-def test_reminder_requires_positive_fixed_iso_duration() -> None:
+def test_reminder_accepts_zero_and_normalizes_short_fixed_duration() -> None:
     assert Reminder(offset="PT15M").as_timedelta() == timedelta(minutes=15)
+    assert Reminder(offset="0m").offset == "PT0M"
+    assert Reminder(offset="PT0M").as_timedelta() == timedelta(0)
+    assert Reminder(offset="1h").offset == "PT1H"
     with pytest.raises(ValidationError):
         Reminder(offset="P1M")
-    with pytest.raises(ValidationError):
-        Reminder(offset="PT0S")
 
 
 async def test_calendar_reminder_reschedule_replaces_pending_delivery(
@@ -130,3 +131,24 @@ async def test_due_in_app_reminder_is_delivered_once_and_tenant_scoped(
         locale="zh-CN",
     )
     assert await reminders.list_for_user(other_context) == []
+
+
+async def test_zero_offset_reminder_is_scheduled_at_calendar_start(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    start = datetime.now(UTC) + timedelta(hours=2)
+    await SchedulingService(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="产品会",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="0m"),
+        ),
+    )
+
+    deliveries = await ReminderService(db_session).list_for_user(tenant_context)
+    assert len(deliveries) == 1
+    assert deliveries[0].scheduled_for == start
+    assert deliveries[0].status == ReminderDeliveryStatus.pending

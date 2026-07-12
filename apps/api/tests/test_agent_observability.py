@@ -51,6 +51,45 @@ def test_model_projection_does_not_persist_message_or_reasoning_content() -> Non
     assert "hidden" not in str(projected)
 
 
+def test_later_model_calls_are_presented_as_result_synthesis() -> None:
+    started = project_runtime_event(
+        RuntimeEvent(
+            event_type="model.started",
+            category="model",
+            metadata={"call_id": "model-2", "call_index": 2},
+        )
+    )
+    completed = project_runtime_event(
+        RuntimeEvent(
+            event_type="model.completed",
+            category="model",
+            metadata={"call_id": "model-2", "call_index": 2},
+        )
+    )
+
+    assert started is not None
+    assert started.content == "正在整理处理结果"
+    assert completed is not None
+    assert completed.content == "处理结果已整理完成"
+
+
+def test_validation_error_is_presented_as_recoverable_retry() -> None:
+    projected = project_runtime_event(
+        RuntimeEvent(
+            event_type="tool.error",
+            category="error",
+            metadata={
+                "call_id": "tool-1",
+                "tool_name": "create_calendar_entry",
+                "error_type": "ValidationError",
+            },
+        )
+    )
+
+    assert projected is not None
+    assert projected.content == "创建日程参数需要调整，正在重试"
+
+
 def test_cancel_search_and_tool_have_product_specific_progress() -> None:
     search = project_runtime_event(
         RuntimeEvent(

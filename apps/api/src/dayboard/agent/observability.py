@@ -18,17 +18,19 @@ class ProjectedRuntimeEvent:
 
 def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
     if event.event_type == "model.started":
+        call_index = event.metadata.get("call_index")
         return ProjectedRuntimeEvent(
             "agent_model_started",
             AgentRunEventCategory.model,
-            "正在理解你的安排",
+            "正在理解你的安排" if call_index in (None, 1) else "正在整理处理结果",
             _model_metadata(event.metadata),
         )
     if event.event_type == "model.completed":
+        call_index = event.metadata.get("call_index")
         return ProjectedRuntimeEvent(
             "agent_model_completed",
             AgentRunEventCategory.model,
-            "已完成分析，正在执行下一步",
+            "已完成分析，正在执行下一步" if call_index in (None, 1) else "处理结果已整理完成",
             _model_metadata(event.metadata),
         )
     if event.event_type == "model.error":
@@ -61,10 +63,15 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
         )
     if event.event_type == "tool.error":
         tool_name = _tool_name(event.metadata)
+        error_type = event.metadata.get("error_type")
         return ProjectedRuntimeEvent(
             "tool_call_error",
             AgentRunEventCategory.error,
-            f"{_tool_label(tool_name)}失败",
+            (
+                f"{_tool_label(tool_name)}参数需要调整，正在重试"
+                if error_type == "ValidationError"
+                else f"{_tool_label(tool_name)}失败"
+            ),
             {**_tool_terminal_metadata(event.metadata), **_error_metadata(event.metadata)},
         )
     return None
@@ -142,9 +149,7 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             + (f"，截止 {due_at}" if due_at else "")
         )
     if tool_name == "check_calendar_conflicts":
-        return "正在查询日程冲突" + _time_suffix(
-            inputs.get("start_time"), inputs.get("end_time")
-        )
+        return "正在查询日程冲突" + _time_suffix(inputs.get("start_time"), inputs.get("end_time"))
     if tool_name == "search_calendar_entries":
         action = {
             "cancel": "取消",

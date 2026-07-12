@@ -229,6 +229,8 @@ business-object write
 ```
 
 Calendar reminders are anchored to `start_time`; task reminders are normalized to `due_at`.
+An offset of `PT0M` means delivery at the anchor time. The tool boundary also normalizes common
+model shorthand such as `0m`, `10m`, `1h`, and `1d` into canonical ISO 8601 durations.
 Rescheduling replaces a pending delivery, while calendar cancellation and task completion or
 cancellation cancel it. Delivery rows are tenant and owner scoped. The first `in_app` provider
 proves scheduling, idempotency, status, and observability without an external network dependency.

@@ -1,16 +1,37 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import re
 from typing import Literal
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 from isodate import Duration, parse_duration
 
 
 class Reminder(BaseModel):
-    offset: str
+    offset: str = Field(
+        description=(
+            "ISO 8601 duration before the anchor. Use PT0M at the anchor, "
+            "PT10M for ten minutes before, PT1H for one hour, or P1D for one day."
+        )
+    )
     anchor: Literal["start_time", "due_at"] = "start_time"
+
+    @field_validator("offset", mode="before")
+    @classmethod
+    def normalize_short_offset(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        match = re.fullmatch(r"\s*(\d+)\s*([mhd])\s*", value, re.IGNORECASE)
+        if not match:
+            return value
+        amount, unit = match.groups()
+        return {
+            "m": f"PT{amount}M",
+            "h": f"PT{amount}H",
+            "d": f"P{amount}D",
+        }[unit.lower()]
 
     @model_validator(mode="after")
     def validate_offset(self) -> Reminder:
@@ -20,8 +41,8 @@ class Reminder(BaseModel):
             raise ValueError("offset must be an ISO 8601 duration") from exc
         if isinstance(duration, Duration) or not isinstance(duration, timedelta):
             raise ValueError("offset cannot contain calendar months or years")
-        if duration <= timedelta(0):
-            raise ValueError("offset must be greater than zero")
+        if duration < timedelta(0):
+            raise ValueError("offset cannot be negative")
         return self
 
     def as_timedelta(self) -> timedelta:
