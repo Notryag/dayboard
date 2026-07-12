@@ -49,23 +49,23 @@ Initial token groups:
 
 ```css
 :root {
-  --color-bg: #f7f5ef;
-  --color-surface: #fffdf8;
+  --color-bg: #f3f3f2;
+  --color-surface: #fafafa;
   --color-surface-raised: #ffffff;
-  --color-text: #171512;
-  --color-text-muted: #6f6a60;
-  --color-border: #ded8cd;
+  --color-text: #111111;
+  --color-text-muted: #6b6b68;
+  --color-border: #d8d8d4;
 
-  --color-primary: #2563eb;
+  --color-primary: #111111;
   --color-primary-foreground: #ffffff;
-  --color-accent: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #dc2626;
+  --color-accent: #292927;
+  --color-warning: #555552;
+  --color-danger: #3b3b39;
 
-  --message-user-bg: #2563eb;
+  --message-user-bg: #111111;
   --message-user-text: #ffffff;
   --message-assistant-bg: #ffffff;
-  --message-assistant-text: #171512;
+  --message-assistant-text: #111111;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -79,7 +79,7 @@ Initial token groups:
   --radius-lg: 12px;
   --radius-pill: 999px;
 
-  --shadow-soft: 0 12px 30px rgb(23 21 18 / 10%);
+  --shadow-soft: 0 14px 36px rgb(0 0 0 / 9%);
 }
 ```
 
