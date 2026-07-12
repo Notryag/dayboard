@@ -70,8 +70,9 @@ Phase 1 has proved the natural-language scheduling loop. Continue public product
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
 deployment, and production password-auth switch are complete. The minimal
 today/tomorrow/open-task inspector is now connected to the structured query APIs. The
-Run execution now reconnects after a page reload or a transient SSE disconnect. Stable API errors
-remain the next reliability slice rather than reminder UI unless that priority changes.
+Run execution now reconnects after a page reload or a transient SSE disconnect. API HTTP and
+validation errors now share a request-ID-bearing envelope, with stable product codes for auth,
+thread, Run, command conflict, clarification conflict, and queue failure paths.
 
 ## Implemented Capabilities
 
@@ -80,7 +81,7 @@ remain the next reliability slice rather than reminder UI unless that priority c
   calendar/task read APIs support time or status filters and keyset pagination for inspectable UI.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
   idempotency, queued arq execution, cancellation, stale-run recovery, reconnectable SSE execution,
-  and health checks.
+  stable API errors, and health checks.
 - Conversations: durable threads and messages, resumable clarification state, bounded context, and
   persisted compaction summaries.
 - Agent runtime: North-backed execution, safe tool progress events, durable Run history, SSE,
@@ -113,7 +114,7 @@ Next implementation slice:
 
 1. harden open registration, login, command, and voice endpoints for a public release
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. add stable API errors; reminder UI and external notification providers remain explicitly deferred
+3. keep reminder UI and external notification providers explicitly deferred until their priority changes
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

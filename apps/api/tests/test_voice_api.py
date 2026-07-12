@@ -89,7 +89,7 @@ async def test_voice_provider_failure_is_recorded_without_exposing_details(
 
     row = await db_session.scalar(select(VoiceTranscriptRow))
     assert response.status_code == 502
-    assert response.json()["detail"] == "Speech transcription failed"
+    assert response.json()["error"]["message"] == "Speech transcription failed"
     assert row is not None
     assert row.status == "failed"
     assert row.error_message == "provider temporarily unavailable"

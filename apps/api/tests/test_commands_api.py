@@ -109,7 +109,8 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
 
     assert first.status_code == 202
     assert second.status_code == 409
-    assert second.json()["detail"] == "This conversation already has a command in progress"
+    assert second.json()["error"]["code"] == "COMMAND_ALREADY_IN_PROGRESS"
+    assert second.json()["error"]["request_id"].startswith("req_")
     assert third.status_code == 202
     assert [message["content"] for message in messages.json()] == [
         "创建明天的会议",
@@ -286,7 +287,7 @@ async def test_structured_clarification_rejects_stale_state_version(
         )
 
     assert response.status_code == 409
-    assert "changed" in response.json()["detail"]
+    assert "changed" in response.json()["error"]["message"]
 
 
 async def test_health_checks_database_redis_and_worker(api_app: FastAPI) -> None:
@@ -390,7 +391,8 @@ async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> Non
         run_response = await client.get(f"/api/runs/{dispatcher.run_id}")
 
     assert response.status_code == 503
-    assert response.json()["detail"]["run_id"] == str(dispatcher.run_id)
+    assert response.json()["error"]["code"] == "COMMAND_QUEUE_UNAVAILABLE"
+    assert response.json()["error"]["details"]["run_id"] == str(dispatcher.run_id)
     assert run_response.json()["status"] == "failed"
     assert run_response.json()["result_message"] == "redis unavailable"
 

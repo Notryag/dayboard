@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from dayboard.api.rate_limit import configure_rate_limiting
+from dayboard.api.errors import configure_error_handling
 from dayboard.api.auth import router as auth_router
 from dayboard.api.routes import router
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_middleware(RequestContextMiddleware)
+    configure_error_handling(app)
     configure_rate_limiting(app, settings)
     app.include_router(auth_router)
     app.include_router(router)

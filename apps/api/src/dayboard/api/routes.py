@@ -33,6 +33,7 @@ from dayboard.app.schedule_queries import (
     TaskItemView,
 )
 from dayboard.api.auth import get_tenant_context
+from dayboard.api.errors import ApiProblem
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import get_session
@@ -215,9 +216,17 @@ async def create_command_run(
             idempotency_key=idempotency_key,
         )
     except IdempotencyConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=status.HTTP_409_CONFLICT,
+            code="IDEMPOTENCY_CONFLICT",
+            message=str(exc),
+        ) from exc
     except ActiveThreadRunError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=status.HTTP_409_CONFLICT,
+            code="COMMAND_ALREADY_IN_PROGRESS",
+            message=str(exc),
+        ) from exc
     if not creation.created:
         return CommandRunResponse(
             run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
@@ -226,9 +235,11 @@ async def create_command_run(
         await dispatcher.enqueue(creation.run_id, tenant_context, request)
     except Exception as exc:
         await service.fail_command_run(tenant_context, creation.run_id, exc)
-        raise HTTPException(
+        raise ApiProblem(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"message": "Command queue unavailable", "run_id": str(creation.run_id)},
+            code="COMMAND_QUEUE_UNAVAILABLE",
+            message="Command queue unavailable",
+            details={"run_id": str(creation.run_id)},
         ) from exc
     return CommandRunResponse(
         run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
@@ -256,7 +267,11 @@ async def get_thread_messages(
     try:
         return await ConversationService(session).list_messages(tenant_context, thread_id)
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=404,
+            code="THREAD_NOT_FOUND",
+            message="Conversation thread not found",
+        ) from exc
 
 
 @router.get("/api/threads/{thread_id}/state", response_model=ConversationState | None)
@@ -268,7 +283,11 @@ async def get_thread_state(
     try:
         return await ConversationService(session).get_state(tenant_context, thread_id)
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=404,
+            code="THREAD_NOT_FOUND",
+            message="Conversation thread not found",
+        ) from exc
 
 
 @router.post(
@@ -344,17 +363,34 @@ async def create_thread_command_run(
             thread_id=thread_id,
         )
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=404,
+            code="THREAD_NOT_FOUND",
+            message="Conversation thread not found",
+        ) from exc
     except IdempotencyConflictError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=409,
+            code="IDEMPOTENCY_CONFLICT",
+            message=str(exc),
+        ) from exc
     except ActiveThreadRunError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=409,
+            code="COMMAND_ALREADY_IN_PROGRESS",
+            message=str(exc),
+        ) from exc
     if creation.created:
         try:
             await dispatcher.enqueue(creation.run_id, tenant_context, request)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
-            raise HTTPException(status_code=503, detail="Command queue unavailable") from exc
+            raise ApiProblem(
+                status_code=503,
+                code="COMMAND_QUEUE_UNAVAILABLE",
+                message="Command queue unavailable",
+                details={"run_id": str(creation.run_id)},
+            ) from exc
     return CommandRunResponse(
         run_id=str(creation.run_id),
         status=creation.status,
@@ -391,16 +427,29 @@ async def respond_to_clarification(
             conversation_message=choice.display_message,
         )
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=404,
+            code="THREAD_NOT_FOUND",
+            message="Conversation thread not found",
+        ) from exc
     except (ClarificationStateError, IdempotencyConflictError, ActiveThreadRunError) as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=409,
+            code="CLARIFICATION_CONFLICT",
+            message=str(exc),
+        ) from exc
 
     if creation.created:
         try:
             await dispatcher.enqueue(creation.run_id, tenant_context, request)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
-            raise HTTPException(status_code=503, detail="Command queue unavailable") from exc
+            raise ApiProblem(
+                status_code=503,
+                code="COMMAND_QUEUE_UNAVAILABLE",
+                message="Command queue unavailable",
+                details={"run_id": str(creation.run_id)},
+            ) from exc
     return CommandRunResponse(
         run_id=str(creation.run_id),
         status=creation.status,
@@ -416,7 +465,7 @@ async def get_run(
 ) -> AgentRun:
     run = await AgentRunService(session).get_run(tenant_context, run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return run
 
 
@@ -429,7 +478,11 @@ async def get_active_thread_run(
     try:
         await ConversationService(session).require_thread(tenant_context, thread_id)
     except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise ApiProblem(
+            status_code=404,
+            code="THREAD_NOT_FOUND",
+            message="Conversation thread not found",
+        ) from exc
     return await AgentRunService(session).get_active_thread_run(tenant_context, thread_id)
 
 
@@ -443,7 +496,7 @@ async def cancel_run(
     service = AgentRunService(session)
     run = await service.get_run_row(tenant_context, run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     transitioned = await service.mark_cancelled(tenant_context, run)
     if transitioned:
         await ConversationService(session).append_message(
@@ -461,7 +514,7 @@ async def cancel_run(
         pass
     cancelled = await service.get_run(tenant_context, run_id)
     if cancelled is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return cancelled
 
 
@@ -473,7 +526,7 @@ async def get_run_events(
 ) -> list[AgentRunEvent]:
     service = AgentRunService(session)
     if await service.get_run(tenant_context, run_id) is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return await service.list_events(tenant_context, run_id)
 
 
@@ -488,7 +541,7 @@ async def stream_run_events(
     service = AgentRunService(session)
     run = await service.get_run(tenant_context, run_id)
     if run is None:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
 
     async def event_stream() -> AsyncIterator[str]:
         cursor = max(after_seq, 0)

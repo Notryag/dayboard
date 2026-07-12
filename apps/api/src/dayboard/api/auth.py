@@ -5,7 +5,7 @@ from hashlib import sha256
 import secrets
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, Field, field_validator
 from pwdlib import PasswordHash
 from sqlalchemy import or_, select
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from dayboard.config import Settings, get_settings
+from dayboard.api.errors import ApiProblem
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.models import (
     TenantMembershipRow,
@@ -137,8 +138,10 @@ async def get_tenant_context(
         token = request.cookies.get(settings.auth_session_cookie_name)
         account = await _account_for_session(session, token) if token else None
         if account is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required"
+            raise ApiProblem(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                code="AUTHENTICATION_REQUIRED",
+                message="Authentication required",
             )
         user_session, user, membership, profile = account
         user_session.last_seen_at = datetime.now(timezone.utc)
@@ -184,8 +187,10 @@ async def register(
     except IntegrityError as exc:
         await session.rollback()
         logger.info("dayboard.auth.registration_rejected", reason="duplicate_identifier")
-        raise HTTPException(
-            status_code=409, detail="Username or email is already registered"
+        raise ApiProblem(
+            status_code=409,
+            code="IDENTIFIER_ALREADY_REGISTERED",
+            message="Username or email is already registered",
         ) from exc
     _set_session_cookie(response, raw_token, settings)
     logger.info("dayboard.auth.registered", user_id=str(user.id), tenant_id=str(tenant.id))
@@ -220,7 +225,11 @@ async def login(
     valid = password_hash.verify(body.password, candidate_hash)
     if account is None or not valid:
         logger.info("dayboard.auth.login_rejected", reason="invalid_credentials")
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise ApiProblem(
+            status_code=401,
+            code="INVALID_CREDENTIALS",
+            message="Invalid credentials",
+        )
     user, _, membership, profile = account
     raw_token = secrets.token_urlsafe(32)
     session.add(
@@ -267,6 +276,10 @@ async def me(
     token = request.cookies.get(settings.auth_session_cookie_name)
     account = await _account_for_session(session, token) if token else None
     if account is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
+        raise ApiProblem(
+            status_code=401,
+            code="AUTHENTICATION_REQUIRED",
+            message="Authentication required",
+        )
     _, user, membership, profile = account
     return _response(user, membership, profile)

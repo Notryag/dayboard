@@ -15,6 +15,7 @@ For a new session, read only:
 Backend implementation:
 
 - [architecture.md](./architecture.md)
+- [api-errors.md](./api-errors.md) for the HTTP error response contract
 - [engineering-guidelines.md](./engineering-guidelines.md)
 - [phase-2-plan.md](./phase-2-plan.md) for current milestone work
 - [phase-1-plan.md](./phase-1-plan.md) for the completed foundation plan
