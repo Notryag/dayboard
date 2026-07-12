@@ -30,6 +30,7 @@ const errorMessages: Record<string, string> = {
   IDEMPOTENCY_CONFLICT: "请求标识已被其他操作使用，请重新提交。",
   CLARIFICATION_CONFLICT: "这个选项已经失效，请重新选择。",
   COMMAND_QUEUE_UNAVAILABLE: "服务暂时繁忙，请稍后重试。",
+  RATE_LIMIT_EXCEEDED: "操作过于频繁，请稍后再试。",
   VALIDATION_ERROR: "提交的信息不完整或格式不正确。",
 };
 

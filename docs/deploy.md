@@ -78,6 +78,10 @@ Core API environment variables:
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 DAYBOARD_RATE_LIMIT_STORAGE_URL=redis://...
+DAYBOARD_RATE_LIMIT_REGISTRATION=5/hour
+DAYBOARD_RATE_LIMIT_LOGIN=10/minute
+DAYBOARD_RATE_LIMIT_COMMAND=20/minute
+DAYBOARD_RATE_LIMIT_VOICE=10/minute
 DAYBOARD_CORS_ORIGINS=https://your-vercel-domain
 APP_MODEL_NAME=openai:gpt-4o-mini
 OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1

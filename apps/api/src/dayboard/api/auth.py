@@ -15,6 +15,7 @@ import structlog
 
 from dayboard.config import Settings, get_settings
 from dayboard.api.errors import ApiProblem
+from dayboard.api.rate_limit import limiter
 from dayboard.context import TenantContext, get_dev_tenant_context
 from dayboard.db.models import (
     TenantMembershipRow,
@@ -159,12 +160,15 @@ async def get_tenant_context(
 
 
 @router.post("/register", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(lambda: get_settings().rate_limit_registration)
 async def register(
+    request: Request,
     body: RegisterRequest,
     response: Response,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> AccountResponse:
+    del request
     username = _normalized(body.username)
     email = _normalized(body.email) if body.email else None
     user = UserRow(username=username, email=email, display_name=body.display_name)
@@ -198,12 +202,15 @@ async def register(
 
 
 @router.post("/login", response_model=AccountResponse)
+@limiter.limit(lambda: get_settings().rate_limit_login)
 async def login(
+    request: Request,
     body: LoginRequest,
     response: Response,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> AccountResponse:
+    del request
     identifier = _normalized(body.identifier)
     statement = (
         select(UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow)

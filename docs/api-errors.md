@@ -33,6 +33,7 @@ Current product error codes:
 | `IDEMPOTENCY_CONFLICT` | 409 | An idempotency key was reused for different input. |
 | `CLARIFICATION_CONFLICT` | 409 | Clarification state is stale or no longer valid. |
 | `COMMAND_QUEUE_UNAVAILABLE` | 503 | The Run was persisted but could not be queued. |
+| `RATE_LIMIT_EXCEEDED` | 429 | The endpoint-specific request limit was exceeded. |
 | `VALIDATION_ERROR` | 422 | FastAPI/Pydantic request validation failed. |
 
 Other `HTTPException` responses use `HTTP_<status>` until they receive a product-specific code.

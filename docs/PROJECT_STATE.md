@@ -87,7 +87,8 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
 - Agent runtime: North-backed execution, safe tool progress events, durable Run history, SSE,
   provider budgets, normalized token accounting, and exactly-once usage settlement.
 - Identity: FastAPI password accounts, Argon2id credentials, server-side sessions, memberships,
-  profiles, reusable web login state, and two-user HTTP/SSE ownership acceptance.
+  profiles, reusable web login state, production fail-closed configuration, endpoint-specific abuse
+  limits, and two-user HTTP/SSE ownership acceptance.
 - Inspectable UI: a reusable schedule panel exposes today, tomorrow, and open tasks with account-
   timezone day boundaries, empty/error states, and cursor pagination.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
@@ -112,7 +113,7 @@ Implementation notes:
 
 Next implementation slice:
 
-1. harden open registration, login, command, and voice endpoints for a public release
+1. complete public-product ownership acceptance for calendar, task, transcript, reminder, and usage data
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 3. keep reminder UI and external notification providers explicitly deferred until their priority changes
 

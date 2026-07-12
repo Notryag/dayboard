@@ -49,8 +49,9 @@ Completed:
 Remaining:
 
 - complete public-product ownership acceptance for calendar entries, tasks, transcripts, and usage;
-- prevent a production process from starting in development-auth mode;
-- add separate registration, login, command, and voice abuse controls without disabling registration.
+
+Production startup rejects development auth or insecure cookies. Registration, login, command, and
+voice endpoints have separate Redis-backed abuse limits without disabling public registration.
 
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.

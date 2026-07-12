@@ -34,6 +34,7 @@ from dayboard.app.schedule_queries import (
 )
 from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
+from dayboard.api.rate_limit import limiter
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import get_session
@@ -197,8 +198,10 @@ async def list_task_items(
     response_model=CommandRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limiter.limit(lambda: get_settings().rate_limit_command)
 async def create_command_run(
-    request: CommandRequest,
+    request: Request,
+    body: CommandRequest,
     tenant_context: TenantContext = Depends(get_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
@@ -209,10 +212,11 @@ async def create_command_run(
         max_length=200,
     ),
 ) -> CommandRunResponse:
+    del request
     try:
         creation = await service.create_or_get_command_run(
             tenant_context,
-            request,
+            body,
             idempotency_key=idempotency_key,
         )
     except IdempotencyConflictError as exc:
@@ -232,7 +236,7 @@ async def create_command_run(
             run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
         )
     try:
-        await dispatcher.enqueue(creation.run_id, tenant_context, request)
+        await dispatcher.enqueue(creation.run_id, tenant_context, body)
     except Exception as exc:
         await service.fail_command_run(tenant_context, creation.run_id, exc)
         raise ApiProblem(
@@ -295,7 +299,9 @@ async def get_thread_state(
     response_model=VoiceTranscript,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit(lambda: get_settings().rate_limit_voice)
 async def create_voice_transcription(
+    request: Request,
     audio: UploadFile = File(...),
     language: str | None = Form(default="zh"),
     session: AsyncSession = Depends(get_session),
@@ -303,6 +309,7 @@ async def create_voice_transcription(
     provider: SpeechToTextProvider = Depends(get_speech_provider),
     settings: Settings = Depends(get_settings),
 ) -> VoiceTranscript:
+    del request
     content_type = (audio.content_type or "").lower()
     if content_type not in SUPPORTED_AUDIO_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported audio format")
@@ -347,18 +354,21 @@ async def get_voice_transcription(
     response_model=CommandRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limiter.limit(lambda: get_settings().rate_limit_command)
 async def create_thread_command_run(
+    request: Request,
     thread_id: UUID,
-    request: CommandRequest,
+    body: CommandRequest,
     tenant_context: TenantContext = Depends(get_tenant_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> CommandRunResponse:
+    del request
     try:
         creation = await service.create_or_get_command_run(
             tenant_context,
-            request,
+            body,
             idempotency_key=idempotency_key,
             thread_id=thread_id,
         )
@@ -382,7 +392,7 @@ async def create_thread_command_run(
         ) from exc
     if creation.created:
         try:
-            await dispatcher.enqueue(creation.run_id, tenant_context, request)
+            await dispatcher.enqueue(creation.run_id, tenant_context, body)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
             raise ApiProblem(
@@ -403,7 +413,9 @@ async def create_thread_command_run(
     response_model=CommandRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
+@limiter.limit(lambda: get_settings().rate_limit_command)
 async def respond_to_clarification(
+    request: Request,
     thread_id: UUID,
     body: ClarificationChoiceRequest,
     tenant_context: TenantContext = Depends(get_tenant_context),
@@ -411,6 +423,7 @@ async def respond_to_clarification(
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> CommandRunResponse:
+    del request
     try:
         choice = await service.conversations.resolve_clarification_choice(
             tenant_context,

@@ -119,6 +119,12 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
+    rate_limit_registration: str = Field(
+        default="5/hour", alias="DAYBOARD_RATE_LIMIT_REGISTRATION"
+    )
+    rate_limit_login: str = Field(default="10/minute", alias="DAYBOARD_RATE_LIMIT_LOGIN")
+    rate_limit_command: str = Field(default="20/minute", alias="DAYBOARD_RATE_LIMIT_COMMAND")
+    rate_limit_voice: str = Field(default="10/minute", alias="DAYBOARD_RATE_LIMIT_VOICE")
     rate_limit_storage_url: str | None = Field(
         default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL"
     )
