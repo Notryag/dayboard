@@ -182,7 +182,7 @@ function ChatHome() {
         withCredentials: true,
       });
       activeStreamRef.current = stream;
-      const progress: ProgressStep[] = [];
+      const progress: RunActivityStep[] = [];
 
       function finish(text: string) {
         stream.close();
