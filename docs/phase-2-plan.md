@@ -87,7 +87,8 @@ external provider adapter with retry and acknowledgement acceptance.
 
 ### P2.3 Minimal Usable Experience
 
-- show today, tomorrow, and open-task views;
+- expose tenant-scoped, cursor-paginated calendar and task query APIs (completed);
+- show today, tomorrow, and open-task views using those APIs;
 - render created/changed objects from structured results;
 - preserve structured clarification controls;
 - provide clear retry behavior for provider-unavailable failures;

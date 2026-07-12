@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
@@ -42,6 +42,43 @@ class CalendarEntryRepository:
                 CalendarEntryRow.deleted_at.is_(None),
             )
             .order_by(CalendarEntryRow.start_time.asc())
+        )
+        return list(result)
+
+    async def list_page(
+        self,
+        context: TenantContext,
+        *,
+        start_time: datetime | None,
+        end_time: datetime | None,
+        cursor_start_time: datetime | None,
+        cursor_id: UUID | None,
+        limit: int,
+    ) -> list[CalendarEntryRow]:
+        conditions = [
+            CalendarEntryRow.tenant_id == context.tenant_id,
+            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.deleted_at.is_(None),
+        ]
+        if start_time is not None:
+            conditions.append(CalendarEntryRow.start_time >= start_time)
+        if end_time is not None:
+            conditions.append(CalendarEntryRow.start_time < end_time)
+        if cursor_start_time is not None and cursor_id is not None:
+            conditions.append(
+                or_(
+                    CalendarEntryRow.start_time > cursor_start_time,
+                    and_(
+                        CalendarEntryRow.start_time == cursor_start_time,
+                        CalendarEntryRow.id > cursor_id,
+                    ),
+                )
+            )
+        result = await self.session.scalars(
+            select(CalendarEntryRow)
+            .where(*conditions)
+            .order_by(CalendarEntryRow.start_time.asc(), CalendarEntryRow.id.asc())
+            .limit(limit)
         )
         return list(result)
 
@@ -261,6 +298,57 @@ class TaskItemRepository:
                 TaskItemRow.deleted_at.is_(None),
             )
             .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
+        )
+        return list(result)
+
+    async def list_page(
+        self,
+        context: TenantContext,
+        *,
+        status: TaskStatus | None,
+        due_from: datetime | None,
+        due_to: datetime | None,
+        cursor_due_at: datetime | None,
+        cursor_created_at: datetime | None,
+        cursor_id: UUID | None,
+        cursor_has_due_at: bool | None,
+        limit: int,
+    ) -> list[TaskItemRow]:
+        conditions = [
+            TaskItemRow.tenant_id == context.tenant_id,
+            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.deleted_at.is_(None),
+        ]
+        if status is not None:
+            conditions.append(TaskItemRow.status == status.value)
+        if due_from is not None:
+            conditions.append(TaskItemRow.due_at >= due_from)
+        if due_to is not None:
+            conditions.append(TaskItemRow.due_at < due_to)
+        if cursor_created_at is not None and cursor_id is not None:
+            trailing_order = or_(
+                TaskItemRow.created_at < cursor_created_at,
+                and_(TaskItemRow.created_at == cursor_created_at, TaskItemRow.id < cursor_id),
+            )
+            if cursor_has_due_at and cursor_due_at is not None:
+                conditions.append(
+                    or_(
+                        TaskItemRow.due_at > cursor_due_at,
+                        and_(TaskItemRow.due_at == cursor_due_at, trailing_order),
+                        TaskItemRow.due_at.is_(None),
+                    )
+                )
+            else:
+                conditions.extend([TaskItemRow.due_at.is_(None), trailing_order])
+        result = await self.session.scalars(
+            select(TaskItemRow)
+            .where(*conditions)
+            .order_by(
+                TaskItemRow.due_at.asc().nulls_last(),
+                TaskItemRow.created_at.desc(),
+                TaskItemRow.id.desc(),
+            )
+            .limit(limit)
         )
         return list(result)
 

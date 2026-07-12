@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, Form, Header, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import StreamingResponse
@@ -22,6 +23,13 @@ from dayboard.app.commands import CommandService, IdempotencyConflictError, get_
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
+from dayboard.app.schedule_queries import (
+    CalendarEntryView,
+    InvalidScheduleCursor,
+    SchedulePage,
+    ScheduleQueryService,
+    TaskItemView,
+)
 from dayboard.api.auth import get_tenant_context
 from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
@@ -29,6 +37,7 @@ from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery
+from dayboard.domain.tasks import TaskStatus
 from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
@@ -62,6 +71,19 @@ TERMINAL_RUN_EVENTS = {
     "clarification_requested",
 }
 TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
+
+
+def _validate_aware_range(
+    start: datetime | None,
+    end: datetime | None,
+    start_name: str,
+    end_name: str,
+) -> None:
+    for value, name in ((start, start_name), (end, end_name)):
+        if value is not None and value.utcoffset() is None:
+            raise HTTPException(status_code=422, detail=f"{name} must include a timezone offset")
+    if start is not None and end is not None and start >= end:
+        raise HTTPException(status_code=422, detail=f"{start_name} must be before {end_name}")
 
 
 def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
@@ -104,6 +126,57 @@ async def list_reminders(
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[ReminderDelivery]:
     return await ReminderService(session).list_for_user(tenant_context)
+
+
+@router.get("/api/calendar-entries", response_model=SchedulePage[CalendarEntryView])
+async def list_calendar_entries(
+    from_time: datetime | None = Query(default=None, alias="from"),
+    to_time: datetime | None = Query(default=None, alias="to"),
+    cursor: str | None = Query(default=None, min_length=1, max_length=1000),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> SchedulePage[CalendarEntryView]:
+    _validate_aware_range(from_time, to_time, "from", "to")
+    try:
+        return await ScheduleQueryService(session).list_calendar_entries(
+            tenant_context,
+            start_time=from_time,
+            end_time=to_time,
+            cursor=cursor,
+            limit=limit,
+        )
+    except InvalidScheduleCursor as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/task-items", response_model=SchedulePage[TaskItemView])
+async def list_task_items(
+    task_status: str = Query(
+        default="open",
+        alias="status",
+        pattern="^(open|completed|cancelled|all)$",
+    ),
+    due_from: datetime | None = Query(default=None),
+    due_to: datetime | None = Query(default=None),
+    cursor: str | None = Query(default=None, min_length=1, max_length=1000),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> SchedulePage[TaskItemView]:
+    _validate_aware_range(due_from, due_to, "due_from", "due_to")
+    resolved_status = None if task_status == "all" else TaskStatus(task_status)
+    try:
+        return await ScheduleQueryService(session).list_task_items(
+            tenant_context,
+            status=resolved_status,
+            due_from=due_from,
+            due_to=due_to,
+            cursor=cursor,
+            limit=limit,
+        )
+    except InvalidScheduleCursor as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post(

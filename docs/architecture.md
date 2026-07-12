@@ -185,6 +185,11 @@ GET  /api/calendar-entries
 GET  /api/task-items
 ```
 
+The calendar and task collection endpoints are implemented as tenant-scoped, keyset-paginated
+read models. Calendar queries accept `from`, `to`, `limit`, and `cursor`; task queries accept
+`status`, `due_from`, `due_to`, `limit`, and `cursor`. Responses expose UI-relevant schedule fields
+and Run correlation without exposing tenant ids or internal idempotency operation keys.
+
 `agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before enqueueing an arq job. The Redis queue provides cross-process delivery, while each worker opens an independent database session. Jobs use the run id as their unique queue id and re-check PostgreSQL state before execution because arq uses at-least-once delivery.
 
 The worker periodically recovers abandoned active runs. A `running` run uses its last update time and a shorter execution timeout; a `queued` run uses its creation time and a longer queue-wait timeout. Recovery uses atomic, status-specific transitions (`queued -> failed` or `running -> failed`), so a job that starts while recovery is scanning cannot be mistaken for an abandoned queued job. A delayed Redis job that arrives after recovery exits immediately after observing the terminal PostgreSQL state.

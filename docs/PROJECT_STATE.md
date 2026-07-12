@@ -66,7 +66,8 @@ on the minimal inspectable experience rather than reminder UI unless that priori
 ## Implemented Capabilities
 
 - Scheduling: natural-language create, search, reschedule, complete, and cancel for calendar entries
-  and tasks, including multiple instructions per message and structured clarification.
+  and tasks, including multiple instructions per message and structured clarification; tenant-scoped
+  calendar/task read APIs support time or status filters and keyset pagination for inspectable UI.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
   idempotency, queued arq execution, cancellation, stale-run recovery, and health checks.
 - Conversations: durable threads and messages, resumable clarification state, bounded context, and
@@ -99,7 +100,7 @@ Next implementation slice:
 
 1. harden open registration, login, command, and voice endpoints for a public release
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. improve the minimal inspectable calendar/task experience; reminder UI and external notification
+3. connect the minimal inspectable calendar/task UI to the completed query APIs; reminder UI and external notification
    providers remain explicitly deferred
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
