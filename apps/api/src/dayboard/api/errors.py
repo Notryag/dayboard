@@ -7,6 +7,10 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import structlog
+
+
+logger = structlog.get_logger(__name__)
 
 
 class ApiErrorBody(BaseModel):
@@ -101,7 +105,22 @@ async def validation_exception_handler(
     )
 
 
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "dayboard.http.unhandled_exception",
+        error_type=type(exc).__name__,
+        exc_info=(type(exc), exc, exc.__traceback__),
+    )
+    return _response(
+        request,
+        status_code=500,
+        code="INTERNAL_SERVER_ERROR",
+        message="An unexpected error occurred",
+    )
+
+
 def configure_error_handling(app: FastAPI) -> None:
     app.add_exception_handler(ApiProblem, api_problem_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)

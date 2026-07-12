@@ -35,7 +35,12 @@ Current product error codes:
 | `COMMAND_QUEUE_UNAVAILABLE` | 503 | The Run was persisted but could not be queued. |
 | `RATE_LIMIT_EXCEEDED` | 429 | The endpoint-specific request limit was exceeded. |
 | `VALIDATION_ERROR` | 422 | FastAPI/Pydantic request validation failed. |
+| `INTERNAL_SERVER_ERROR` | 500 | An unexpected server error was safely contained. |
 
 Other `HTTPException` responses use `HTTP_<status>` until they receive a product-specific code.
 The web client must retain status-based handling where protocol behavior depends on it, such as
 session recovery on HTTP 401, and use `code` for user-facing messages.
+
+Unknown exceptions are logged server-side with their type, request context, and traceback. Their
+message and stack are never returned to the client. The handler does not add request bodies or raw
+command text to logs.

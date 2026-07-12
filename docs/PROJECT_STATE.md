@@ -114,7 +114,7 @@ Implementation notes:
 
 Next implementation slice:
 
-1. add a safe unknown-500 response with request-ID correlation and server-side exception logging
+1. add PostgreSQL backup automation and perform a documented restore rehearsal
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 3. keep reminder UI and external notification providers explicitly deferred until their priority changes
 

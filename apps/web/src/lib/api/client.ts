@@ -24,6 +24,7 @@ const errorMessages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: "登录状态已失效，请重新登录。",
   INVALID_CREDENTIALS: "账号或密码不正确。",
   IDENTIFIER_ALREADY_REGISTERED: "用户名或邮箱已被注册。",
+  INTERNAL_SERVER_ERROR: "服务出现异常，请稍后重试。",
   THREAD_NOT_FOUND: "当前对话已不存在，请重新开始。",
   RUN_NOT_FOUND: "该请求已不存在，请重新提交。",
   COMMAND_ALREADY_IN_PROGRESS: "上一条请求仍在处理中，请稍候。",
