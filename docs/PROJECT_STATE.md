@@ -4,9 +4,9 @@ This document is a current-status and planning summary. Canonical implementation
 
 ## Current Status
 
-Dayboard has completed its natural-language scheduling foundation and is now building the usable
-account beta. Password authentication and the Next.js web app are deployed on the same HTTPS site;
-the in-app reminder foundation is implemented but not yet rendered in the web UI.
+Dayboard has completed its natural-language scheduling foundation and is now becoming a publicly
+releasable product. Self-service password registration and the Next.js web app are deployed on the
+same HTTPS site; the in-app reminder foundation is implemented but not yet rendered in the web UI.
 
 The repository is initialized at `/root/dayboard`.
 
@@ -52,10 +52,13 @@ The bullets below summarize decisions that affect current work; they do not repl
 - Visual choices should use CSS variables or shadcn theme tokens rather than hard-coded component colors.
 - Real provider credentials must stay in `.env` or a secret store and must not be committed.
 - Application rate limiting belongs at the FastAPI boundary first, with provider-level budgets added before real LLM calls.
+- Public self-service registration is intentional. Protect it with dedicated rate limits, login
+  abuse controls, provider budgets, tenant isolation, and observability rather than disabling it or
+  requiring invitations by default.
 
 ## Next Milestone
 
-Phase 1 has proved the natural-language scheduling loop. Continue the usable account beta from
+Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
 deployment, and production password-auth switch are complete. The next product slice should focus
 on the minimal inspectable experience rather than reminder UI unless that priority changes.
@@ -94,7 +97,7 @@ Implementation notes:
 
 Next implementation slice:
 
-1. verify account registration and the normal scheduling flow with a real beta user
+1. harden open registration, login, command, and voice endpoints for a public release
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 3. improve the minimal inspectable calendar/task experience; reminder UI and external notification
    providers remain explicitly deferred
@@ -171,5 +174,5 @@ and production-incident changes use focused tests at the relevant key moment.
 - worker deployment sizing and stale-running recovery policy
 - exact first UI component install set: shadcn/ui components, icons, form tools, and state libraries
 - final brand palette and detailed visual identity
-- social login provider after password-auth beta (for example WeChat)
+- social login provider after the initial password-auth release (for example WeChat)
 - first external notification provider after the in-app reminder surface

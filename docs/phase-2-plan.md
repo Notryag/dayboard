@@ -1,13 +1,17 @@
-# Phase 2 Plan: Usable Account Beta
+# Phase 2 Plan: Public Product Readiness
 
 ## Product Goal
 
-Move Dayboard from a shared-user technical MVP to a private beta where each real user can
-safely manage their own schedules and receive useful reminders.
+Move Dayboard from a shared-user technical MVP to a releasable product where anyone can create an
+account and safely manage their own schedules and reminders.
 
 Phase 1 proved the Agent loop. Phase 2 is not primarily an Agent-capability phase. It closes
 the product boundaries required for real use: identity, ownership, personal settings, reminder
-delivery, and a minimal inspectable experience.
+delivery, abuse protection, and a minimal inspectable experience.
+
+Public self-service registration is an intentional product capability. It must remain available in
+production. Release protection should come from identity isolation, endpoint-specific rate limits,
+login abuse protection, provider budgets, and operational visibility rather than an invitation gate.
 
 ## Current Product Assessment
 
@@ -21,10 +25,11 @@ The natural-language scheduling backend is an MVP-quality closed loop:
 - protect writes with tenant scoping, idempotency, optimistic concurrency, and audit fields;
 - run API, worker, PostgreSQL, Redis, migrations, usage accounting, and budgets in production.
 
-The product is not ready for external users because the deployed API still resolves every
-request to one development tenant/user. Password authentication and an in-app reminder outbox are
-implemented but not deployed as one coordinated release. The web experience remains a prototype,
-the reminder inbox is not rendered, and browser voice capture is not connected.
+Password authentication, self-service registration, tenant ownership, and the same-site web/API
+deployment are running in production. The scheduling backend is ahead of the product surface: users
+still need an inspectable calendar/task view, reconnectable Run execution, stable error handling,
+and release-grade abuse controls. The reminder inbox is not rendered, and browser voice capture is
+not connected.
 
 ## Milestone Order
 
@@ -43,14 +48,16 @@ Completed:
 
 Remaining:
 
-- complete beta ownership acceptance for calendar entries, tasks, transcripts, and usage.
+- complete public-product ownership acceptance for calendar entries, tasks, transcripts, and usage;
+- prevent a production process from starting in development-auth mode;
+- add separate registration, login, command, and voice abuse controls without disabling registration.
 
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.
 
 Backend acceptance now covers password-session isolation for threads, Run status, durable Run
-events, SSE, and cancellation. Production enablement still requires a same-site web/API domain
-and one coordinated web, migration, and auth-mode release.
+events, SSE, and cancellation. The same-site web/API deployment and coordinated password-auth
+release are complete.
 
 ### P2.2 Reminder Delivery
 
@@ -102,9 +109,11 @@ redesign. It does not include brand polish or a large component-system migration
 
 ## Immediate Next Work
 
-1. Verify registration and the scheduling flow with the first real beta user.
-2. Build the minimal inspectable calendar/task experience.
-3. Keep reminder UI and external provider work deferred until it becomes a product priority.
+1. Add release protection: production auth fail-closed, endpoint-specific limits, login abuse
+   protection, and reproducible deployment checks while keeping registration open.
+2. Build the minimal inspectable calendar/task experience for registered users.
+3. Add Run reconnection and stable API errors so users can recover from network and provider faults.
+4. Keep reminder UI and external provider work deferred until it becomes a product priority.
 
 ## Operational Acceptance
 

@@ -4,6 +4,11 @@
 
 Dayboard is a planning and scheduling product.
 
+It is intended to be a publicly releasable, self-service product. Users can register directly;
+private-beta invitations are not part of the default product model. Public access does not weaken
+the ownership boundary: every user receives an isolated account and tenant context, and expensive
+operations remain protected by rate limits and provider budgets.
+
 Its first target use case is:
 
 > create schedules, reminders, and lightweight plans from natural language, then evolve toward voice-first capture.

@@ -402,7 +402,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.116.0,<1.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<1.0.0" },
     { name = "isodate", specifier = ">=0.7.0,<1.0.0" },
-    { name = "north", extras = ["postgres"], editable = "../../../deerflow-lite/packages/harness" },
+    { name = "north", extras = ["postgres"], git = "https://github.com/Notryag/deerflow-lite.git?subdirectory=packages%2Fharness&rev=2eec31f606cac184ddc98dafbb2f1d4574024141" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.0,<1.0.0" },
     { name = "pydantic-settings", specifier = ">=2.10.0,<3.0.0" },
     { name = "redis", specifier = ">=5.0.0,<7.0.0" },
@@ -1304,7 +1304,7 @@ wheels = [
 [[package]]
 name = "north"
 version = "0.1.0"
-source = { editable = "../../../deerflow-lite/packages/harness" }
+source = { git = "https://github.com/Notryag/deerflow-lite.git?subdirectory=packages%2Fharness&rev=2eec31f606cac184ddc98dafbb2f1d4574024141#2eec31f606cac184ddc98dafbb2f1d4574024141" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-openai" },
@@ -1316,17 +1316,6 @@ postgres = [
     { name = "langgraph-checkpoint-postgres" },
     { name = "psycopg", extra = ["binary", "pool"] },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "langchain", specifier = ">=1.0.0,<2.0.0" },
-    { name = "langchain-openai", specifier = ">=1.0.0,<2.0.0" },
-    { name = "langgraph-checkpoint-postgres", marker = "extra == 'postgres'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "langgraph-checkpoint-sqlite", marker = "extra == 'sqlite'", specifier = ">=3.0.0,<4.0.0" },
-    { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'postgres'", specifier = ">=3.2.0,<4.0.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0,<2.0.0" },
-]
-provides-extras = ["sqlite", "postgres"]
 
 [[package]]
 name = "openai"

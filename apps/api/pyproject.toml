@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-north = { path = "../../../deerflow-lite/packages/harness", editable = true }
+north = { git = "https://github.com/Notryag/deerflow-lite.git", rev = "2eec31f606cac184ddc98dafbb2f1d4574024141", subdirectory = "packages/harness" }
 
 [project.scripts]
 dayboard-api = "dayboard.main:main"

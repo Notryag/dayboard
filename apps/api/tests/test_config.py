@@ -42,3 +42,22 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
 def test_password_auth_requires_secure_cookie_in_production() -> None:
     with pytest.raises(ValidationError, match="AUTH_COOKIE_SECURE"):
         Settings(DAYBOARD_ENV="production", DAYBOARD_AUTH_MODE="password")
+
+
+def test_production_rejects_development_identity() -> None:
+    with pytest.raises(ValidationError, match="AUTH_MODE=password"):
+        Settings(
+            DAYBOARD_ENV="production",
+            DAYBOARD_AUTH_MODE="development",
+            DAYBOARD_AUTH_COOKIE_SECURE=True,
+        )
+
+
+def test_local_environment_allows_development_identity() -> None:
+    settings = Settings(
+        DAYBOARD_ENV="local",
+        DAYBOARD_AUTH_MODE="development",
+        DAYBOARD_AUTH_COOKIE_SECURE=False,
+    )
+
+    assert settings.auth_mode == "development"

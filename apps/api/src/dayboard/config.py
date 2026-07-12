@@ -141,12 +141,12 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def require_secure_production_auth_cookie(self) -> "Settings":
-        if (
-            self.environment.lower() == "production"
-            and self.auth_mode == "password"
-            and not self.auth_cookie_secure
-        ):
+    def require_secure_production_auth(self) -> "Settings":
+        if self.environment.lower() != "production":
+            return self
+        if self.auth_mode != "password":
+            raise ValueError("Production requires DAYBOARD_AUTH_MODE=password")
+        if not self.auth_cookie_secure:
             raise ValueError(
                 "Password auth in production requires DAYBOARD_AUTH_COOKIE_SECURE=true"
             )

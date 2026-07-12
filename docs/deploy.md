@@ -114,6 +114,10 @@ still uses the shared development identity.
 
 The checked-in deployment templates are:
 
+- `deploy/github-actions/ci.yml` (copy to `.github/workflows/ci.yml` using GitHub credentials with
+  workflow-write permission to enable it)
+- `deploy/systemd/dayboard-api.service`
+- `deploy/systemd/dayboard-worker.service`
 - `deploy/systemd/dayboard-web.service`
 - `deploy/nginx/dayboard-locations.conf`
 
@@ -146,15 +150,26 @@ validate Nginx with `nginx -t`, and reload it only after the web service is heal
 
 ### Prerequisites And Layout
 
-Install Docker with Compose, Node.js with npm, Python 3.11 or newer, and `uv`. The current API uses
-the local editable `north` package, so keep both repositories as siblings unless the uv source path
-is changed deliberately:
+Install Docker with Compose, Node.js with npm, Python 3.11 or newer, and `uv`. Normal installs fetch
+the pinned `north` commit from the `deerflow-lite` Git repository, so a clean Dayboard checkout is
+self-contained. When changing Dayboard and north together, the repositories may be kept as siblings
+and the pinned package can be temporarily replaced in the active virtual environment:
 
 ```text
 workspace/
   dayboard/
   deerflow-lite/
 ```
+
+```bash
+cd /path/to/dayboard/apps/api
+uv sync
+uv pip install --editable /path/to/deerflow-lite/packages/harness
+```
+
+Do not commit a local path override. Before committing a Dayboard change that requires new north
+behavior, push north first, update the pinned commit in `apps/api/pyproject.toml`, and regenerate
+`apps/api/uv.lock`.
 
 Create local configuration from the tracked template. The default values are intended for the
 Compose services bound to loopback:

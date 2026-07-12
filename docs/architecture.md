@@ -20,13 +20,16 @@ Supporting infrastructure:
 ```text
 Redis or Valkey
   -> job queue
-  -> run stream fanout
   -> short-lived locks and rate limits
 
 S3-compatible object storage
   -> voice audio
   -> future attachments
 ```
+
+The current SSE implementation reads durable Run events from PostgreSQL every 500 ms. Redis stream
+fanout is a future scale optimization, not part of the current request path. PostgreSQL remains the
+event source of truth before and after fanout is introduced.
 
 ## Responsibility Split
 
@@ -75,7 +78,8 @@ Real values belong in `.env`, which is ignored by git. `.env.example` should con
 - Frontend shared client state: Zustand or Jotai when local React state is insufficient
 - Icons: lucide-react
 - Backend: FastAPI, Pydantic, SQLAlchemy 2.x, Alembic
-- Agent runtime: local `north` package dependency
+- Agent runtime: `north` pinned to a `deerflow-lite` Git commit for reproducible installs, with an
+  editable sibling checkout used only while developing both repositories together
 - Database: PostgreSQL
 - Queue/cache/stream fanout: Redis or Valkey
 - Worker: `arq` with Redis
