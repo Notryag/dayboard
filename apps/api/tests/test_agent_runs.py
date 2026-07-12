@@ -272,3 +272,19 @@ async def test_expired_idempotency_keys_are_deleted(
 
     assert deleted == 1
     assert list(remaining) == ["new-key"]
+
+
+async def test_run_lookup_is_owner_scoped_within_a_tenant(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = AgentRunService(db_session)
+    run = await service.create_run(tenant_context, input_message="安排会议")
+    other_context = TenantContext(
+        tenant_id=tenant_context.tenant_id,
+        user_id=uuid4(),
+        timezone=tenant_context.timezone,
+        locale=tenant_context.locale,
+    )
+
+    assert await service.get_run(other_context, run.id) is None

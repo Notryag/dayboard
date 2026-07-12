@@ -78,6 +78,7 @@ class ProviderUsageRepository:
             row = await self.session.scalar(
                 select(ProviderUsageRecordRow).where(
                     ProviderUsageRecordRow.tenant_id == context.tenant_id,
+                    ProviderUsageRecordRow.owner_user_id == context.user_id,
                     ProviderUsageRecordRow.run_id == run_id,
                 )
             )
@@ -95,6 +96,7 @@ class ProviderUsageRepository:
             select(ProviderUsageRecordRow)
             .where(
                 ProviderUsageRecordRow.tenant_id == context.tenant_id,
+                ProviderUsageRecordRow.owner_user_id == context.user_id,
                 ProviderUsageRecordRow.run_id == run_id,
             )
             .order_by(ProviderUsageRecordRow.created_at.asc())

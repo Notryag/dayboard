@@ -48,10 +48,13 @@ Completed:
 
 Remaining:
 
-- complete public-product ownership acceptance for calendar entries, tasks, transcripts, and usage;
+- run the expanded same-tenant/different-owner acceptance set at the next release gate;
 
 Production startup rejects development auth or insecure cookies. Registration, login, command, and
 voice endpoints have separate Redis-backed abuse limits without disabling public registration.
+Repository access for conversations, Runs, calendar entries, tasks, transcripts, reminders, and
+provider usage is constrained by both tenant and owner. The Run and provider-usage boundaries were
+tightened after a repository audit.
 
 Completion means two users cannot read, mutate, stream, or infer each other's data, and a
 production deployment cannot start in development-auth mode by accident.

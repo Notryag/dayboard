@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage
 from north import RuntimeEvent
@@ -218,3 +219,29 @@ async def test_provider_usage_settlement_is_idempotent(
     assert first.created is True
     assert repeated.created is False
     assert records[0].total_tokens == 12
+
+
+async def test_provider_usage_is_owner_scoped_within_a_tenant(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    repository = ProviderUsageRepository(db_session)
+    run_id = uuid4()
+    await repository.create(
+        tenant_context,
+        run_id=run_id,
+        provider="openai",
+        model="openai:gpt-test",
+        input_tokens=10,
+        output_tokens=2,
+        total_tokens=12,
+    )
+    await db_session.commit()
+    other_context = TenantContext(
+        tenant_id=tenant_context.tenant_id,
+        user_id=uuid4(),
+        timezone=tenant_context.timezone,
+        locale=tenant_context.locale,
+    )
+
+    assert await repository.list_for_run(other_context, run_id) == []

@@ -72,6 +72,7 @@ class AgentRunRepository:
             select(AgentRunRow)
             .where(
                 AgentRunRow.tenant_id == context.tenant_id,
+                AgentRunRow.owner_user_id == context.user_id,
                 AgentRunRow.id == run_id,
                 AgentRunRow.deleted_at.is_(None),
             )
