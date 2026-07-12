@@ -186,7 +186,8 @@ GET  /api/task-items
 ```
 
 The calendar and task collection endpoints are implemented as tenant-scoped, keyset-paginated
-read models. Calendar queries accept `from`, `to`, `limit`, and `cursor`; task queries accept
+read models. Calendar queries accept account-timezone `period=today|tomorrow` or explicit `from`
+and `to`, plus `limit` and `cursor`; task queries accept
 `status`, `due_from`, `due_to`, `limit`, and `cursor`. Responses expose UI-relevant schedule fields
 and Run correlation without exposing tenant ids or internal idempotency operation keys.
 

@@ -17,6 +17,7 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
     tenant_context: TenantContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
+    today_at_noon = datetime.now(timezone).replace(hour=12, minute=0, second=0, microsecond=0)
     entries = [
         CalendarEntryRow(
             tenant_id=tenant_context.tenant_id,
@@ -32,6 +33,14 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
     db_session.add_all(
         entries
         + [
+            CalendarEntryRow(
+                tenant_id=tenant_context.tenant_id,
+                owner_user_id=tenant_context.user_id,
+                title="Today in account timezone",
+                start_time=today_at_noon,
+                timezone="Asia/Shanghai",
+                participants=[],
+            ),
             CalendarEntryRow(
                 tenant_id=uuid4(),
                 owner_user_id=uuid4(),
@@ -62,12 +71,14 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
                 "cursor": first.json()["next_cursor"],
             },
         )
+        today = await client.get("/api/calendar-entries", params={"period": "today"})
 
     assert first.status_code == 200
     assert [item["title"] for item in first.json()["items"]] == ["Morning"]
     assert first.json()["next_cursor"]
     assert [item["title"] for item in second.json()["items"]] == ["Afternoon"]
     assert second.json()["next_cursor"] is None
+    assert [item["title"] for item in today.json()["items"]] == ["Today in account timezone"]
     assert "tenant_id" not in first.json()["items"][0]
     assert "owner_user_id" not in first.json()["items"][0]
 

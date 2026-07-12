@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import Literal
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
 from fastapi import HTTPException
@@ -130,6 +132,7 @@ async def list_reminders(
 
 @router.get("/api/calendar-entries", response_model=SchedulePage[CalendarEntryView])
 async def list_calendar_entries(
+    period: Literal["today", "tomorrow"] | None = Query(default=None),
     from_time: datetime | None = Query(default=None, alias="from"),
     to_time: datetime | None = Query(default=None, alias="to"),
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
@@ -137,6 +140,15 @@ async def list_calendar_entries(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> SchedulePage[CalendarEntryView]:
+    if period is not None:
+        if from_time is not None or to_time is not None:
+            raise HTTPException(status_code=422, detail="period cannot be combined with from or to")
+        local_now = datetime.now(ZoneInfo(tenant_context.timezone))
+        day_offset = 0 if period == "today" else 1
+        from_time = (local_now + timedelta(days=day_offset)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        to_time = from_time + timedelta(days=1)
     _validate_aware_range(from_time, to_time, "from", "to")
     try:
         return await ScheduleQueryService(session).list_calendar_entries(

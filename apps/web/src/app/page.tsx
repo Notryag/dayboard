@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { LogOut, Mic, SendHorizontal, Square } from "lucide-react";
+import { CalendarDays, LogOut, Mic, SendHorizontal, Square } from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError, apiBaseUrl, apiFetch, userFacingApiError } from "@/lib/api/client";
@@ -18,6 +18,7 @@ import {
   RunActivityTicker,
   type RunActivityStep,
 } from "@/features/chat/RunActivityTicker";
+import { ScheduleInspector } from "@/features/schedule/ScheduleInspector";
 import styles from "./page.module.css";
 
 type ChatMessage = {
@@ -121,6 +122,7 @@ function ChatHome() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
 
@@ -350,6 +352,15 @@ function ChatHome() {
             <span className={styles.status}>在线</span>
             <button
               className={styles.headerButton}
+              onClick={() => setScheduleOpen(true)}
+              type="button"
+              aria-label="查看安排"
+              title="查看安排"
+            >
+              <CalendarDays size={18} />
+            </button>
+            <button
+              className={styles.headerButton}
               onClick={() => void logout()}
               type="button"
               aria-label="退出登录"
@@ -429,6 +440,9 @@ function ChatHome() {
             )}
           </form>
         </div>
+        {scheduleOpen ? (
+          <ScheduleInspector onClose={() => setScheduleOpen(false)} />
+        ) : null}
       </main>
     </div>
   );

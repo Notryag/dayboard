@@ -60,8 +60,10 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
-deployment, and production password-auth switch are complete. The next product slice should focus
-on the minimal inspectable experience rather than reminder UI unless that priority changes.
+deployment, and production password-auth switch are complete. The minimal
+today/tomorrow/open-task inspector is now connected to the structured query APIs. The
+next reliability slice should focus on reconnectable Run execution and stable API errors rather
+than reminder UI unless that priority changes.
 
 ## Implemented Capabilities
 
@@ -76,6 +78,8 @@ on the minimal inspectable experience rather than reminder UI unless that priori
   provider budgets, normalized token accounting, and exactly-once usage settlement.
 - Identity: FastAPI password accounts, Argon2id credentials, server-side sessions, memberships,
   profiles, reusable web login state, and two-user HTTP/SSE ownership acceptance.
+- Inspectable UI: a reusable schedule panel exposes today, tomorrow, and open tasks with account-
+  timezone day boundaries, empty/error states, and cursor pagination.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
@@ -100,8 +104,8 @@ Next implementation slice:
 
 1. harden open registration, login, command, and voice endpoints for a public release
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. connect the minimal inspectable calendar/task UI to the completed query APIs; reminder UI and external notification
-   providers remain explicitly deferred
+3. add Run reconnection and stable API errors; reminder UI and external notification providers
+   remain explicitly deferred
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 
