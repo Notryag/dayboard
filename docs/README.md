@@ -65,7 +65,7 @@ Architecture decisions:
 
 Deployment:
 
-- [deploy.md](./deploy.md)
+- [deploy.md](./deploy.md), starting with "Production Handoff" for any production operation
 
 ## Loading Guidance
 

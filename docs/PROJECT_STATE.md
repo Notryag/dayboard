@@ -8,7 +8,13 @@ Dayboard has completed its natural-language scheduling foundation and is now bec
 releasable product. Self-service password registration and the Next.js web app are deployed on the
 same HTTPS site; the in-app reminder foundation is implemented but not yet rendered in the web UI.
 
-The repository is initialized at `/root/dayboard`.
+The active production repository is `/home/zx/dayboard`. `/root/dayboard` is a legacy checkout from
+the previous systemd deployment and must not be used for production changes.
+
+Production runs PostgreSQL, Redis, FastAPI, arq Worker, and Next.js through the root
+`docker-compose.yml`. The old Dayboard systemd application units are disabled and inactive. Nginx
+continues to proxy the loopback-only API and Web ports. See [deploy.md](./deploy.md), section
+"Production Handoff", before operating the deployment.
 
 The Git history is the source of truth for the latest committed baseline; do not copy a
 commit hash into this document because it becomes stale on the next change.
@@ -27,6 +33,8 @@ The current direction is:
 - database: PostgreSQL
 - queue/cache/stream fanout: Redis or Valkey
 - worker: `arq` with Redis
+- production runtime: Docker Compose for PostgreSQL, Redis, API, Worker, and Web; application
+  containers run as non-root users and API/Worker have container health checks
 - object storage: S3-compatible storage for voice audio and future attachments
 
 ## Important Decisions
@@ -142,7 +150,9 @@ The `/health` response was:
 }
 ```
 
-PostgreSQL and Redis are running through Docker Compose after verification.
+PostgreSQL, Redis, API, Worker, and Web are running through Docker Compose after verification. API,
+Worker, PostgreSQL, and Redis report healthy; Web is verified through its `/dayboard` HTTP response.
+The legacy Dayboard systemd application units remain disabled and inactive.
 
 PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In Codex sandboxed command contexts, normal commands may not reach Docker or `localhost:5432`; if these tests hang or time out, rerun them from an execution context that can access Docker-exposed local ports after confirming `docker compose ps` reports healthy PostgreSQL and Redis containers.
 

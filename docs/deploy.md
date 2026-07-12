@@ -105,6 +105,67 @@ Current server-hosted web deployment:
 https://www.selfapi.art/dayboard
 ```
 
+## Production Handoff
+
+The active checkout and Compose project are:
+
+```text
+/home/zx/dayboard
+```
+
+Do not operate production from `/root/dayboard`. That path belongs to the previous systemd-based
+deployment. The installed `dayboard-api.service`, `dayboard-worker.service`, and
+`dayboard-web.service` units are disabled and inactive; do not re-enable them while Compose owns the
+application ports.
+
+Production ownership is:
+
+```text
+Nginx
+  -> 127.0.0.1:8000 -> Compose API
+  -> 127.0.0.1:3001 -> Compose Web
+Compose
+  -> API, Worker, Web, PostgreSQL, Redis
+```
+
+Start every production session by checking repository and runtime state:
+
+```bash
+cd /home/zx/dayboard
+git status --short --branch
+docker compose config --quiet
+docker compose ps
+systemctl is-enabled dayboard-api.service dayboard-worker.service dayboard-web.service
+systemctl is-active dayboard-api.service dayboard-worker.service dayboard-web.service
+```
+
+Expected service-manager state is `disabled` and `inactive` for all three old systemd units.
+Expected Compose state is running PostgreSQL, Redis, API, Worker, and Web containers; PostgreSQL,
+Redis, API, and Worker should report `healthy`.
+
+For an application deployment, build before recreating containers:
+
+```bash
+cd /home/zx/dayboard
+docker compose build api worker web
+docker compose up -d
+docker compose ps
+curl -fsS http://127.0.0.1:8000/health
+curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:3001/dayboard
+```
+
+The API health response must report `database`, `redis`, and `worker` as `ok`; the Web check must
+return HTTP 200. Inspect failures with:
+
+```bash
+docker compose logs --tail=100 api worker web
+```
+
+Compose uses restart policies for host reboots. Do not add a second process manager for the
+application containers. Never run `docker compose down -v`, remove the named volumes, or replace
+`.env` without confirming a backup and recovery plan. Real secrets stay only in `.env` or a secret
+store and must not be copied into images or committed.
+
 Nginx proxies `/dayboard-api/` to the loopback-only FastAPI container on port 8000. The API, Web, Worker, PostgreSQL, and Redis services run from the root `docker-compose.yml` file. The application containers bind only to loopback ports; Nginx remains the public entry point.
 
 The account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch were deployed as
@@ -119,19 +180,10 @@ The checked-in deployment templates are:
 - `docker-compose.yml` and the application Dockerfiles
 - `deploy/nginx/dayboard-locations.conf`
 
-Build the server-hosted frontend with the server values above:
-
-```bash
-cd /path/to/dayboard
-docker compose build api worker web
-docker compose up -d
-docker compose ps
-```
-
-The Compose build injects `/dayboard-api` and `/dayboard` into the Web bundle. After restarting,
-verify the page, one hashed static asset under `/dayboard/_next/static/`, and the API independently.
-A page `200` alone is insufficient because the prerendered loading screen can render without a
-working browser bundle or API URL.
+The Compose Web build injects `/dayboard-api` and `/dayboard` into the browser bundle. After a
+deployment, verify the page, one hashed static asset under `/dayboard/_next/static/`, and the API
+independently. A page `200` alone is insufficient because the prerendered loading screen can render
+without a working browser bundle or API URL.
 
 ```bash
 curl -I https://your-host/dayboard

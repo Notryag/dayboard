@@ -9,6 +9,20 @@ These notes are for coding agents working on Dayboard.
 - Before changing the frontend, also read the frontend sections routed by `docs/README.md`, including `docs/ui-design.md`.
 - Treat `docs/PROJECT_STATE.md` as a current-status summary, not the canonical source for engineering or UI rules.
 
+## Production Checkout And Runtime
+
+- The active production checkout is `/home/zx/dayboard`. Do not deploy from `/root/dayboard`; it is
+  a legacy checkout from the previous systemd deployment.
+- Docker Compose owns PostgreSQL, Redis, API, Worker, and Web in production. The old
+  `dayboard-api.service`, `dayboard-worker.service`, and `dayboard-web.service` units are disabled
+  and must not be re-enabled.
+- Read `docs/deploy.md`, especially "Production Handoff", before changing deployment files or
+  restarting services.
+- Never run `docker compose down -v` in production. The named PostgreSQL and Redis volumes contain
+  product data.
+- Build replacement images before recreating application containers so a build failure does not
+  cause avoidable downtime.
+
 ## Engineering Preferences
 
 - Prefer stable, mature dependencies over hand-rolled lightweight code when the dependency improves reliability, operability, or maintainability.
@@ -34,7 +48,7 @@ These notes are for coding agents working on Dayboard.
 Useful commands:
 
 ```bash
-cd /root/dayboard
+cd /home/zx/dayboard
 docker compose ps
 cd apps/api
 uv run pytest -q tests/test_agent_runs.py tests/test_scheduling_tools.py tests/test_commands_api.py
