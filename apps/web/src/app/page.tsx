@@ -196,7 +196,7 @@ function ChatHome() {
 
       const progressLabels: Record<string, string> = {
         run_created: "请求已进入队列",
-        run_started: "正在理解你的安排",
+        run_started: "任务开始处理",
         agent_model_started: "正在理解你的安排",
         agent_model_completed: "已完成分析，正在执行下一步",
         tool_call_started: "正在执行操作",
@@ -212,7 +212,11 @@ function ChatHome() {
       for (const [eventType, fallbackText] of Object.entries(progressLabels)) {
         stream.addEventListener(eventType, (event) => {
           const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-          const step = { eventType, text: runEvent.content ?? fallbackText };
+          const useEventContent = eventType !== "run_created" && eventType !== "run_started";
+          const step = {
+            eventType,
+            text: useEventContent ? (runEvent.content ?? fallbackText) : fallbackText,
+          };
           progress.push(step);
           setActiveProgress([...progress]);
         });
