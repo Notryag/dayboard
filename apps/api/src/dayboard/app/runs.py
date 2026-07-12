@@ -246,6 +246,14 @@ class AgentRunService:
     async def get_run_row(self, context: TenantContext, run_id: UUID) -> AgentRunRow | None:
         return await self.runs.get(context, run_id)
 
+    async def get_active_thread_run(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> AgentRun | None:
+        row = await self.runs.get_active_for_thread(context, thread_id)
+        return agent_run_from_row(row) if row else None
+
     async def list_events(
         self,
         context: TenantContext,

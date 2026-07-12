@@ -78,6 +78,27 @@ class AgentRunRepository:
             .execution_options(populate_existing=True)
         )
 
+    async def get_active_for_thread(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> AgentRunRow | None:
+        return await self.session.scalar(
+            select(AgentRunRow)
+            .where(
+                AgentRunRow.tenant_id == context.tenant_id,
+                AgentRunRow.owner_user_id == context.user_id,
+                AgentRunRow.thread_id == thread_id,
+                AgentRunRow.status.in_(
+                    (AgentRunStatus.queued.value, AgentRunStatus.running.value)
+                ),
+                AgentRunRow.deleted_at.is_(None),
+            )
+            .order_by(AgentRunRow.created_at.desc())
+            .limit(1)
+            .execution_options(populate_existing=True)
+        )
+
     async def list_stale_running(self, *, updated_before: datetime) -> list[AgentRunRow]:
         result = await self.session.scalars(
             select(AgentRunRow).where(

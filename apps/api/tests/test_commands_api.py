@@ -117,6 +117,60 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
     ]
 
 
+async def test_active_thread_run_can_be_resumed_until_it_finishes(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        thread = await client.post("/api/threads", json={})
+        thread_id = thread.json()["id"]
+        created = await client.post(
+            f"/api/threads/{thread_id}/command-runs",
+            json={"message": "创建明天的会议"},
+        )
+        active = await client.get(f"/api/threads/{thread_id}/active-run")
+
+        runs = AgentRunService(db_session)
+        run = await runs.get_run_row(tenant_context, UUID(created.json()["run_id"]))
+        assert run is not None
+        await runs.mark_running(tenant_context, run)
+        await runs.mark_completed(tenant_context, run, result_message="会议已创建")
+        await db_session.commit()
+
+        finished = await client.get(f"/api/threads/{thread_id}/active-run")
+
+    assert active.status_code == 200
+    assert active.json()["id"] == created.json()["run_id"]
+    assert active.json()["status"] == "queued"
+    assert finished.status_code == 200
+    assert finished.json() is None
+
+
+async def test_active_thread_run_is_owner_scoped(
+    api_app: FastAPI,
+    tenant_context: TenantContext,
+) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        thread = await client.post("/api/threads", json={})
+        thread_id = thread.json()["id"]
+        api_app.dependency_overrides[get_tenant_context] = lambda: TenantContext(
+            tenant_id=tenant_context.tenant_id,
+            user_id=uuid4(),
+            timezone=tenant_context.timezone,
+            locale=tenant_context.locale,
+        )
+        response = await client.get(f"/api/threads/{thread_id}/active-run")
+
+    assert response.status_code == 404
+
+
 async def test_thread_routes_are_tenant_and_owner_scoped(
     api_app: FastAPI,
     tenant_context: TenantContext,

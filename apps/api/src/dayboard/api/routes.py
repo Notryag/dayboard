@@ -420,6 +420,19 @@ async def get_run(
     return run
 
 
+@router.get("/api/threads/{thread_id}/active-run", response_model=AgentRun | None)
+async def get_active_thread_run(
+    thread_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> AgentRun | None:
+    try:
+        await ConversationService(session).require_thread(tenant_context, thread_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await AgentRunService(session).get_active_thread_run(tenant_context, thread_id)
+
+
 @router.post("/api/runs/{run_id}/cancel", response_model=AgentRun)
 async def cancel_run(
     run_id: UUID,

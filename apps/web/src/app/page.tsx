@@ -46,9 +46,23 @@ type ConversationMessage = {
 };
 
 type RunEvent = {
+  seq: number;
   event_type: string;
   content: string | null;
 };
+
+type AgentRun = {
+  id: string;
+  status: "queued" | "running" | "needs_clarification" | "completed" | "failed" | "cancelled";
+  result_message: string | null;
+};
+
+const terminalRunStatuses = new Set<AgentRun["status"]>([
+  "needs_clarification",
+  "completed",
+  "failed",
+  "cancelled",
+]);
 
 const initialMessages: ChatMessage[] = [
   {
@@ -168,6 +182,31 @@ function ChatHome() {
       setThreadId(resolvedThreadId);
       setConversationState(state);
       setMessages(history.length ? history.map(persistedMessage) : initialMessages);
+
+      const activeResponse = await apiFetch(
+        `/api/threads/${resolvedThreadId}/active-run`,
+      );
+      const activeRun = (await activeResponse.json()) as AgentRun | null;
+      if (activeRun) {
+        setIsSubmitting(true);
+        setActiveProgress([]);
+        setActiveRunId(activeRun.id);
+        try {
+          const result = await followRun(activeRun.id);
+          await refreshConversationState(resolvedThreadId);
+          setMessages((current) =>
+            current.some(
+              (message) => message.role === "assistant" && message.runId === activeRun.id,
+            )
+              ? current
+              : [...current, createMessage("assistant", result, activeRun.id)],
+          );
+        } finally {
+          setIsSubmitting(false);
+          setActiveProgress([]);
+          setActiveRunId(null);
+        }
+      }
     }
 
     void initializeThread().catch((error: unknown) => {
@@ -176,17 +215,20 @@ function ChatHome() {
         createMessage("assistant", userFacingApiError(error, "无法加载对话，请稍后重试。")),
       ]);
     });
+    // Session thread bootstrap must run once per authenticated mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function followRun(runId: string): Promise<string> {
     return new Promise((resolve, reject) => {
-      const stream = new EventSource(`${apiUrl}/api/runs/${runId}/events/stream`, {
-        withCredentials: true,
-      });
-      activeStreamRef.current = stream;
       const progress: RunActivityStep[] = [];
+      let cursor = 0;
+      let retries = 0;
+      let settled = false;
 
-      function finish(text: string) {
+      function finish(stream: EventSource, text: string) {
+        if (settled) return;
+        settled = true;
         stream.close();
         activeStreamRef.current = null;
         resolve(text);
@@ -207,39 +249,75 @@ function ChatHome() {
         task_item_created: "任务已创建",
       };
 
-      for (const [eventType, fallbackText] of Object.entries(progressLabels)) {
-        stream.addEventListener(eventType, (event) => {
+      function connect() {
+        const stream = new EventSource(
+          `${apiUrl}/api/runs/${runId}/events/stream?after_seq=${cursor}`,
+          { withCredentials: true },
+        );
+        activeStreamRef.current = stream;
+
+        function parseEvent(event: Event) {
           const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-          const useEventContent = eventType !== "run_created" && eventType !== "run_started";
-          const step = {
-            eventType,
-            text: useEventContent ? (runEvent.content ?? fallbackText) : fallbackText,
-          };
-          progress.push(step);
-          setActiveProgress([...progress]);
+          cursor = Math.max(cursor, runEvent.seq);
+          return runEvent;
+        }
+
+        for (const [eventType, fallbackText] of Object.entries(progressLabels)) {
+          stream.addEventListener(eventType, (event) => {
+            const runEvent = parseEvent(event);
+            const useEventContent = eventType !== "run_created" && eventType !== "run_started";
+            const step = {
+              eventType,
+              text: useEventContent ? (runEvent.content ?? fallbackText) : fallbackText,
+            };
+            progress.push(step);
+            setActiveProgress([...progress]);
+          });
+        }
+
+        for (const eventType of ["run_completed", "clarification_requested"] as const) {
+          stream.addEventListener(eventType, (event) => {
+            const runEvent = parseEvent(event);
+            finish(stream, runEvent.content ?? "已处理完成。");
+          });
+        }
+
+        stream.addEventListener("run_failed", (event) => {
+          const runEvent = parseEvent(event);
+          finish(stream, runEvent.content ?? "请求没有成功。请稍后再试。");
         });
+        stream.addEventListener("run_cancelled", (event) => {
+          const runEvent = parseEvent(event);
+          finish(stream, runEvent.content ?? "请求已取消。");
+        });
+
+        stream.onerror = () => {
+          stream.close();
+          if (settled) return;
+          activeStreamRef.current = null;
+          void apiFetch(`/api/runs/${runId}`)
+            .then((response) => response.json() as Promise<AgentRun>)
+            .then((run) => {
+              if (terminalRunStatuses.has(run.status)) {
+                finish(stream, run.result_message ?? "请求已结束。");
+                return;
+              }
+              retries += 1;
+              if (retries > 4) {
+                settled = true;
+                reject(new Error("Run event stream disconnected"));
+                return;
+              }
+              window.setTimeout(connect, Math.min(500 * 2 ** retries, 4000));
+            })
+            .catch((error: unknown) => {
+              settled = true;
+              reject(error);
+            });
+        };
       }
 
-      for (const eventType of ["run_completed", "clarification_requested"] as const) {
-        stream.addEventListener(eventType, (event) => {
-          const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-          finish(runEvent.content ?? "已处理完成。");
-        });
-      }
-
-      stream.addEventListener("run_failed", (event) => {
-        const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-        finish(runEvent.content ?? "请求没有成功。请稍后再试。");
-      });
-      stream.addEventListener("run_cancelled", (event) => {
-        const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-        finish(runEvent.content ?? "请求已取消。");
-      });
-      stream.onerror = () => {
-        stream.close();
-        activeStreamRef.current = null;
-        reject(new Error("Run event stream disconnected"));
-      };
+      connect();
     });
   }
 
