@@ -11,7 +11,7 @@ type TextComposerProps = {
   isSubmitting: boolean;
   onCancelRun: () => void;
   onChange: (value: string) => void;
-  onSubmit: () => void;
+  onSubmit: (value: string) => void;
   onSwitchToVoice: () => void;
   value: string;
 };
@@ -32,7 +32,7 @@ export function TextComposer({
       className={`${styles.composer} ${styles.textComposer}`}
       onSubmit={(event) => {
         event.preventDefault();
-        if (!isSubmitting) onSubmit();
+        if (!isSubmitting) onSubmit(value);
       }}
     >
       <button

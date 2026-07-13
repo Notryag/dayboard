@@ -102,13 +102,13 @@ are:
 ```text
 voice idle   -> wide hold-to-talk control, keyboard-mode icon
 requesting   -> hold control shows microphone permission progress
-recording    -> keep holding, live level/timer, slide up to cancel, release to transcribe
-transcribing -> upload/provider progress and cancel
+recording    -> keep holding, live level/timer, slide up to cancel, release to send
+transcribing -> upload/provider progress and cancel before command submission
 text         -> microphone-mode icon, editable text, send
-review       -> transcript inserted into text mode; user explicitly sends
 ```
 
-Never submit an ASR transcript automatically. Preserve an existing draft and append the transcript.
+Voice commands submit automatically after successful transcription; keyboard commands still require
+an explicit send action. Preserve an existing draft by prepending it to the recognized voice command.
 After a completed command, return to voice mode when voice is available. Release microphone tracks,
 audio contexts, timers, and local blobs after stop, cancel, or unmount.
 

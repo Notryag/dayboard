@@ -100,15 +100,6 @@ export function VoiceComposer({
     else pendingReleaseRef.current = "cancel";
   }
 
-  function cancelCurrent() {
-    if (status === "transcribing") {
-      onCancelTranscription();
-      return;
-    }
-    if (activeRef.current) finishRecording("cancel");
-    else onCancelRecording();
-  }
-
   const primaryLabel = unavailableReason ?? "按住说话";
 
   return (
@@ -118,7 +109,7 @@ export function VoiceComposer({
       }`}
     >
       <button
-        aria-label={status === "recording" ? "松开结束录音" : primaryLabel}
+        aria-label={status === "recording" ? "松开发送" : primaryLabel}
         aria-pressed={status === "requesting" || status === "recording"}
         className={`${styles.voiceHoldButton} ${
           status === "recording" ? styles.voiceHoldButtonActive : ""
@@ -182,7 +173,7 @@ export function VoiceComposer({
                 />
               ))}
             </span>
-            <span>{cancelIntent ? "松开取消" : "松开转写"}</span>
+            <span>{cancelIntent ? "松开取消" : "松开发送"}</span>
             <span className={styles.durationLimit}>
               {formatDuration(elapsedSeconds)} / {formatDuration(maxDurationSeconds)}
             </span>
@@ -210,15 +201,17 @@ export function VoiceComposer({
         >
           <Keyboard size={20} strokeWidth={2.1} />
         </button>
-      ) : (
+      ) : status === "transcribing" ? (
         <button
-          aria-label={status === "transcribing" ? "取消识别" : "取消录音"}
+          aria-label="取消识别"
           className={styles.iconButton}
-          onClick={cancelCurrent}
+          onClick={onCancelTranscription}
           type="button"
         >
           <X size={20} />
         </button>
+      ) : (
+        <span aria-hidden="true" className={styles.voiceActionSpacer} />
       )}
     </div>
   );

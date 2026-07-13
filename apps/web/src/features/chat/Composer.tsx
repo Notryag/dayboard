@@ -16,8 +16,7 @@ type ComposerProps = {
   isSubmitting: boolean;
   onCancelRun: () => void;
   onChange: (value: string) => void;
-  onSubmit: () => void;
-  onTranscript: (text: string) => void;
+  onSubmit: (value: string) => void;
   value: string;
 };
 
@@ -39,7 +38,6 @@ export function Composer({
   onCancelRun,
   onChange,
   onSubmit,
-  onTranscript,
   value,
 }: ComposerProps) {
   const [inputMode, setInputMode] = useState<InputMode>("voice");
@@ -91,8 +89,9 @@ export function Composer({
         const transcript = await transcribeVoice(recording, controller.signal);
         if (!mountedRef.current) return;
         if (!transcript.text?.trim()) throw new Error("Transcription returned no text");
-        onTranscript(transcript.text.trim());
-        showTextInput();
+        const recognizedText = transcript.text.trim();
+        const draft = value.trim();
+        onSubmit(draft ? `${draft} ${recognizedText}` : recognizedText);
       } catch (error) {
         if (
           mountedRef.current &&
@@ -105,7 +104,7 @@ export function Composer({
         if (mountedRef.current) setIsTranscribing(false);
       }
     },
-    [onTranscript, showTextInput],
+    [onSubmit, value],
   );
 
   const handleRecorderError = useCallback((error: unknown) => {

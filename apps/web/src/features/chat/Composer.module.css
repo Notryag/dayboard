@@ -30,15 +30,25 @@
 
 .iconButton,
 .sendButton,
-.stopButton {
+.stopButton,
+.voiceActionSpacer {
   width: 44px;
   height: 44px;
+}
+
+.iconButton,
+.sendButton,
+.stopButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
   border-radius: var(--radius-pill);
   cursor: pointer;
+}
+
+.voiceActionSpacer {
+  display: block;
 }
 
 .iconButton {

@@ -336,8 +336,8 @@ function ChatHome() {
     setConversationState(state);
   }
 
-  async function handleSubmit() {
-    const text = input.trim();
+  async function handleSubmit(submittedText: string) {
+    const text = submittedText.trim();
     if (!text || isSubmitting || !threadId) {
       return;
     }
@@ -426,10 +426,6 @@ function ChatHome() {
     await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
   }
 
-  function handleTranscript(text: string) {
-    setInput((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
-  }
-
   return (
     <div className={styles.page}>
       <main className={styles.phone}>
@@ -500,8 +496,7 @@ function ChatHome() {
             isSubmitting={isSubmitting}
             onCancelRun={() => void handleCancel()}
             onChange={setInput}
-            onSubmit={() => void handleSubmit()}
-            onTranscript={handleTranscript}
+            onSubmit={(text) => void handleSubmit(text)}
             value={input}
           />
         </div>

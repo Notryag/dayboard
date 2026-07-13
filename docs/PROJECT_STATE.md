@@ -30,7 +30,7 @@ The current direction is:
 - frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
   Vercel remains an optional preview deployment
 - first UI surface: mobile-first chat-style command screen
-- voice status: browser recording, upload limits, editable transcript confirmation, the
+- voice status: browser recording, upload limits, release-to-transcribe-and-submit interaction, the
   provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
   production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
   part of release verification
@@ -114,7 +114,7 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
   tenant-scoped status API, SKIP LOCKED worker claiming, and idempotent in-app delivery.
 - Voice: voice-first hold-to-talk composer with keyboard-mode fallback, slide-to-cancel, live
-  level/timer, automatic duration stop, editable transcript confirmation, server-side
+  level/timer, automatic duration stop, release-to-transcribe-and-submit commands, server-side
   format/size/duration validation, provider-neutral transcription API, and selectable Cloudflare
   Workers AI or Alibaba Cloud ASR adapters. Composer orchestration, voice gestures, text input, and
   MediaRecorder ownership have separate component/hook boundaries.
