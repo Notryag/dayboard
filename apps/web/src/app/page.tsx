@@ -140,12 +140,21 @@ function ChatHome() {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
+  const messagesRef = useRef<HTMLElement>(null);
 
   const apiUrl = useMemo(apiBaseUrl, []);
 
   useEffect(() => {
     return () => activeStreamRef.current?.close();
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const container = messagesRef.current;
+      if (container) container.scrollTop = container.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [conversationState, isSubmitting, messages]);
 
   useEffect(() => {
     if (initializingThreadRef.current) return;
@@ -452,7 +461,7 @@ function ChatHome() {
           </div>
         </header>
 
-        <section className={styles.messages} aria-label="对话记录">
+        <section className={styles.messages} aria-label="对话记录" ref={messagesRef}>
           {messages.map((message) => (
             <article
               className={`${styles.message} ${
