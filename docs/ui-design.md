@@ -96,6 +96,19 @@ These values are starting points, not brand law. Keep the names stable so later 
 - Keep touch targets at least 44px.
 - Avoid explanatory text in the product UI unless it is necessary for the current task.
 
+Voice uses the existing composer rather than a modal or separate page. Its stable states are:
+
+```text
+idle         -> microphone, editable text, send
+requesting   -> microphone permission progress
+recording    -> cancel, live level bars and timer, stop
+transcribing -> upload/provider progress and cancel
+review       -> transcript inserted into editable text; user explicitly sends
+```
+
+Never submit an ASR transcript automatically. Preserve an existing draft and append the transcript.
+Release microphone tracks, audio contexts, timers, and local blobs after stop, cancel, or unmount.
+
 ## Component Boundaries
 
 Recommended first split:

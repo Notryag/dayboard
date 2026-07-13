@@ -33,6 +33,15 @@ const errorMessages: Record<string, string> = {
   COMMAND_QUEUE_UNAVAILABLE: "服务暂时繁忙，请稍后重试。",
   RATE_LIMIT_EXCEEDED: "操作过于频繁，请稍后再试。",
   VALIDATION_ERROR: "提交的信息不完整或格式不正确。",
+  VOICE_EMPTY: "没有录到声音，请重新录制。",
+  VOICE_FORMAT_UNSUPPORTED: "当前录音格式不受支持。",
+  VOICE_INVALID_AUDIO: "录音文件无法读取，请重新录制。",
+  VOICE_TOO_LARGE: "录音文件过大，请缩短录音时间。",
+  VOICE_TOO_LONG: "录音时间过长，请分段录制。",
+  VOICE_TOO_SHORT: "录音时间太短，请重新录制。",
+  VOICE_TRANSCRIPTION_FAILED: "语音识别失败，请重新录制。",
+  VOICE_UNAVAILABLE: "语音识别暂不可用。",
+  VOICE_VALIDATION_UNAVAILABLE: "语音服务暂不可用，请稍后再试。",
 };
 
 export function apiBaseUrl() {

@@ -70,6 +70,8 @@ class VoiceTranscriptionService:
             await self.transcripts.fail(row, safe_message)
             await self.session.commit()
             raise
+        if result.duration_ms is None and audio.duration_ms is not None:
+            result = result.model_copy(update={"duration_ms": audio.duration_ms})
         await self.transcripts.complete(row, result)
         await self.session.commit()
         return voice_transcript_from_row(row)

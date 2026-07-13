@@ -34,6 +34,15 @@ Current product error codes:
 | `CLARIFICATION_CONFLICT` | 409 | Clarification state is stale or no longer valid. |
 | `COMMAND_QUEUE_UNAVAILABLE` | 503 | The Run was persisted but could not be queued. |
 | `RATE_LIMIT_EXCEEDED` | 429 | The endpoint-specific request limit was exceeded. |
+| `VOICE_UNAVAILABLE` | 503 | No speech recognition provider is configured. |
+| `VOICE_FORMAT_UNSUPPORTED` | 415 | The uploaded audio MIME type is unsupported. |
+| `VOICE_EMPTY` | 422 | The upload contains no audio bytes. |
+| `VOICE_INVALID_AUDIO` | 422 | Audio metadata could not be decoded. |
+| `VOICE_TOO_SHORT` | 422 | The recording is shorter than the accepted minimum. |
+| `VOICE_TOO_LONG` | 413 | The decoded duration exceeds the configured limit. |
+| `VOICE_TOO_LARGE` | 413 | The upload exceeds the configured byte limit. |
+| `VOICE_VALIDATION_UNAVAILABLE` | 503 | Server-side audio inspection is unavailable. |
+| `VOICE_TRANSCRIPTION_FAILED` | 502 | The ASR provider did not return a transcript. |
 | `VALIDATION_ERROR` | 422 | FastAPI/Pydantic request validation failed. |
 | `INTERNAL_SERVER_ERROR` | 500 | An unexpected server error was safely contained. |
 

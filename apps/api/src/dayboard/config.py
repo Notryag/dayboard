@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     default_locale: str = Field(default="zh-CN", alias="DAYBOARD_DEFAULT_LOCALE")
     asr_provider: str = Field(default="aliyun", alias="DAYBOARD_ASR_PROVIDER")
     asr_max_audio_seconds: int = Field(
-        default=120,
+        default=60,
         alias="DAYBOARD_ASR_MAX_AUDIO_SECONDS",
         ge=5,
         le=600,

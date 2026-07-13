@@ -4,7 +4,12 @@
 .next
 node_modules
 apps/api/.venv
+apps/web/.next
 apps/web/node_modules
+**/.next
+**/.venv
+**/node_modules
 __pycache__
+**/__pycache__
 *.py[cod]
 *.log

@@ -30,7 +30,9 @@ The current direction is:
 - frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
   Vercel remains an optional preview deployment
 - first UI surface: mobile-first chat-style command screen
-- voice status: the microphone is currently a visual placeholder; the provider-neutral upload API and Alibaba Cloud ASR adapter are implemented, while browser recording and live credential verification remain pending
+- voice status: browser recording, upload limits, editable transcript confirmation, the
+  provider-neutral API, and Alibaba Cloud ASR adapter are implemented; production credential and
+  sample-audio acceptance remain pending, so the microphone is disabled when ASR is unavailable
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`
@@ -103,8 +105,9 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
   tenant-scoped status API, SKIP LOCKED worker claiming, and idempotent in-app delivery.
-- Voice: provider-neutral transcription API and Alibaba Cloud ASR adapter; browser capture and live
-  credential acceptance remain pending.
+- Voice: browser MediaRecorder capture with cancel, live level/timer, automatic duration stop,
+  server-side format/size/duration validation, editable transcript confirmation, provider-neutral
+  transcription API, and Alibaba Cloud ASR adapter. Live credential acceptance remains pending.
 
 Git history is the detailed implementation chronology. ADRs record decisions that remain
 architecturally significant.
@@ -121,10 +124,12 @@ Implementation notes:
 
 Next implementation slice:
 
-1. expand the schedule inspector into a date-selectable day view with chronological calendar entries
+1. configure the production Alibaba Cloud ASR credential and complete live browser-to-transcript
+   acceptance with a non-sensitive Chinese sample recording
+2. expand the schedule inspector into a date-selectable day view with chronological calendar entries
    and a separate undated/open-task area; keep circular visualization deferred
-2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. add encrypted off-host backup replication when storage credentials and retention requirements are
+3. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
+4. add encrypted off-host backup replication when storage credentials and retention requirements are
    available; keep reminder UI and external notification providers deferred until priorities change
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.

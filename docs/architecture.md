@@ -160,15 +160,18 @@ user text
 Voice flow:
 
 ```text
-Client audio upload
-  -> object storage
-  -> transcription job
+Browser MediaRecorder
+  -> authenticated multipart upload
+  -> MIME, byte-size, and isolated PyAV duration validation
   -> ASR provider
   -> voice_transcripts row
-  -> command flow using transcript text
+  -> editable composer text
+  -> normal command flow after user confirmation
 ```
 
-Phase 1 can skip full voice execution, but the boundary should exist.
+Short command audio is processed synchronously and discarded after the provider call. Dayboard does
+not persist raw audio. Object storage and queued transcription remain options for future long-form
+audio, but are not part of the short scheduling-command path.
 
 Speech recognition is provider-neutral inside Dayboard. `SpeechToTextProvider` accepts validated audio plus optional language and vocabulary hints and returns a normalized `Transcript`. Deployment selects a provider through `DAYBOARD_ASR_PROVIDER`; the first adapter uses Alibaba Cloud Model Studio's `qwen3-asr-flash` in the China region because short audio can be submitted directly as Base64 without adding object storage. Provider credentials, request signatures, and raw response formats remain inside `dayboard.integrations.speech`. Adding Volcengine, Tencent Cloud, OpenAI, or an on-premise adapter must not change Dayboard's public upload API or transcript domain model.
 

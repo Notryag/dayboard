@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, LogOut, Mic, SendHorizontal, Square } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays, LogOut } from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError, apiBaseUrl, apiFetch, userFacingApiError } from "@/lib/api/client";
@@ -18,6 +18,7 @@ import {
   RunActivityTicker,
   type RunActivityStep,
 } from "@/features/chat/RunActivityTicker";
+import { Composer } from "@/features/chat/Composer";
 import { ScheduleInspector } from "@/features/schedule/ScheduleInspector";
 import styles from "./page.module.css";
 
@@ -326,9 +327,7 @@ function ChatHome() {
     setConversationState(state);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleSubmit() {
     const text = input.trim();
     if (!text || isSubmitting || !threadId) {
       return;
@@ -418,6 +417,10 @@ function ChatHome() {
     await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
   }
 
+  function handleTranscript(text: string) {
+    setInput((current) => current.trim() ? `${current.trimEnd()} ${text}` : text);
+  }
+
   return (
     <div className={styles.page}>
       <main className={styles.phone}>
@@ -482,41 +485,16 @@ function ChatHome() {
               }]}
             />
           ) : null}
-          <form className={styles.composer} onSubmit={handleSubmit}>
-            <button className={styles.iconButton} type="button" aria-label="语音输入">
-              <Mic size={20} strokeWidth={2.2} />
-            </button>
-            <label className={styles.inputWrap}>
-              <span className={styles.srOnly}>输入日程或任务</span>
-              <input
-                disabled={isSubmitting || !threadId}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder="输入或按住说出你的安排"
-                type="text"
-                value={input}
-              />
-            </label>
-            {isSubmitting ? (
-              <button
-                className={styles.stopButton}
-                disabled={!activeRunId}
-                onClick={handleCancel}
-                type="button"
-                aria-label="停止"
-              >
-                <Square size={17} fill="currentColor" strokeWidth={2.2} />
-              </button>
-            ) : (
-              <button
-                className={styles.sendButton}
-                disabled={!input.trim() || !threadId}
-                type="submit"
-                aria-label="发送"
-              >
-                <SendHorizontal size={20} strokeWidth={2.2} />
-              </button>
-            )}
-          </form>
+          <Composer
+            activeRunId={activeRunId}
+            disabled={!threadId}
+            isSubmitting={isSubmitting}
+            onCancelRun={() => void handleCancel()}
+            onChange={setInput}
+            onSubmit={() => void handleSubmit()}
+            onTranscript={handleTranscript}
+            value={input}
+          />
         </div>
         {scheduleOpen ? (
           <ScheduleInspector onClose={() => setScheduleOpen(false)} />

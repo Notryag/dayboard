@@ -11,6 +11,7 @@ class AudioInput:
     content: bytes
     content_type: str
     filename: str | None = None
+    duration_ms: int | None = None
 
 
 class Transcript(BaseModel):

@@ -27,11 +27,16 @@ async def lifespan(app: FastAPI):
         queue_name=settings.command_queue_name,
     )
     speech_registry = SpeechProviderRegistry()
-    if settings.aliyun_asr_api_key is not None:
+    aliyun_api_key = (
+        settings.aliyun_asr_api_key.get_secret_value()
+        if settings.aliyun_asr_api_key is not None
+        else ""
+    )
+    if aliyun_api_key:
         speech_registry.register(
             "aliyun",
             lambda: AliyunSpeechProvider(
-                api_key=settings.aliyun_asr_api_key.get_secret_value(),
+                api_key=aliyun_api_key,
                 model=settings.aliyun_asr_model,
                 base_url=settings.aliyun_asr_base_url,
             ),

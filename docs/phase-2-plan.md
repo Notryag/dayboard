@@ -97,7 +97,8 @@ external provider adapter with retry and acknowledgement acceptance.
 - preserve structured clarification controls;
 - provide clear retry behavior for provider-unavailable failures;
 - connect browser recording to transcription, editable text confirmation, and normal command
-  submission when ASR credentials and sample audio are available.
+  submission (implemented; live provider acceptance remains blocked on production ASR credentials
+  and a non-sensitive sample recording).
 
 This milestone should keep TypeScript API and feature logic reusable for the planned visual
 redesign. It does not include brand polish or a large component-system migration.

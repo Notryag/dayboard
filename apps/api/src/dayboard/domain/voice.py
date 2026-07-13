@@ -13,6 +13,13 @@ class VoiceTranscriptStatus(StrEnum):
     failed = "failed"
 
 
+class VoiceCapabilities(BaseModel):
+    available: bool
+    max_duration_seconds: int
+    max_upload_bytes: int
+    supported_content_types: list[str]
+
+
 class VoiceTranscript(BaseModel):
     id: UUID
     status: VoiceTranscriptStatus

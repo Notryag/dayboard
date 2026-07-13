@@ -16,13 +16,14 @@ RUN apt-get update \
     && useradd --system --create-home --home-dir /home/dayboard --gid dayboard --shell /usr/sbin/nologin dayboard
 
 COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
 
 COPY apps/api/src ./src
 COPY apps/api/alembic.ini ./alembic.ini
 COPY apps/api/alembic ./alembic
-RUN uv sync --frozen --no-dev
-RUN chown -R dayboard:dayboard /app /home/dayboard
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
 
 ENV HOME=/home/dayboard
 

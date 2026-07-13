@@ -39,10 +39,16 @@ from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
-from dayboard.domain.voice import VoiceTranscript
+from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery
 from dayboard.domain.tasks import TaskStatus
 from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
+from dayboard.integrations.audio_probe import (
+    AudioMetadataProbe,
+    AudioProbeUnavailableError,
+    InvalidAudioError,
+    PyavAudioMetadataProbe,
+)
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
     ConversationMessage,
@@ -57,11 +63,15 @@ router = APIRouter()
 SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg",
     "audio/mp3",
+    "audio/mp4",
+    "audio/x-m4a",
     "audio/wav",
     "audio/x-wav",
     "audio/webm",
     "audio/ogg",
 }
+MIN_AUDIO_DURATION_MS = 500
+AUDIO_METADATA_PROBE = PyavAudioMetadataProbe()
 
 
 class ThreadCreateRequest(BaseModel):
@@ -97,11 +107,16 @@ def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
 def get_speech_provider(request: Request) -> SpeechToTextProvider:
     provider = getattr(request.app.state, "speech_provider", None)
     if provider is None:
-        raise HTTPException(
+        raise ApiProblem(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Speech recognition provider is not configured",
+            code="VOICE_UNAVAILABLE",
+            message="Speech recognition is not configured",
         )
     return provider
+
+
+def get_audio_metadata_probe() -> AudioMetadataProbe:
+    return AUDIO_METADATA_PROBE
 
 
 @router.get("/health")
@@ -307,18 +322,60 @@ async def create_voice_transcription(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
     provider: SpeechToTextProvider = Depends(get_speech_provider),
+    audio_probe: AudioMetadataProbe = Depends(get_audio_metadata_probe),
     settings: Settings = Depends(get_settings),
 ) -> VoiceTranscript:
     del request
-    content_type = (audio.content_type or "").lower()
+    content_type = (audio.content_type or "").partition(";")[0].strip().lower()
     if content_type not in SUPPORTED_AUDIO_TYPES:
-        raise HTTPException(status_code=415, detail="Unsupported audio format")
+        raise ApiProblem(
+            status_code=415,
+            code="VOICE_FORMAT_UNSUPPORTED",
+            message="Unsupported audio format",
+        )
     content = await audio.read(settings.asr_max_upload_bytes + 1)
     await audio.close()
     if not content:
-        raise HTTPException(status_code=422, detail="Audio file is empty")
+        raise ApiProblem(
+            status_code=422,
+            code="VOICE_EMPTY",
+            message="Audio file is empty",
+        )
     if len(content) > settings.asr_max_upload_bytes:
-        raise HTTPException(status_code=413, detail="Audio file is too large")
+        raise ApiProblem(
+            status_code=413,
+            code="VOICE_TOO_LARGE",
+            message="Audio file is too large",
+            details={"max_upload_bytes": settings.asr_max_upload_bytes},
+        )
+    try:
+        metadata = await audio_probe.inspect(content, content_type=content_type)
+    except InvalidAudioError as exc:
+        raise ApiProblem(
+            status_code=422,
+            code="VOICE_INVALID_AUDIO",
+            message="Audio file could not be read",
+        ) from exc
+    except AudioProbeUnavailableError as exc:
+        raise ApiProblem(
+            status_code=503,
+            code="VOICE_VALIDATION_UNAVAILABLE",
+            message="Audio validation is temporarily unavailable",
+        ) from exc
+    if metadata.duration_ms < MIN_AUDIO_DURATION_MS:
+        raise ApiProblem(
+            status_code=422,
+            code="VOICE_TOO_SHORT",
+            message="Audio recording is too short",
+            details={"min_duration_ms": MIN_AUDIO_DURATION_MS},
+        )
+    if metadata.duration_ms > settings.asr_max_audio_seconds * 1000:
+        raise ApiProblem(
+            status_code=413,
+            code="VOICE_TOO_LONG",
+            message="Audio recording is too long",
+            details={"max_duration_seconds": settings.asr_max_audio_seconds},
+        )
     try:
         return await VoiceTranscriptionService(session).transcribe(
             tenant_context,
@@ -327,11 +384,31 @@ async def create_voice_transcription(
                 content=content,
                 content_type=content_type,
                 filename=audio.filename,
+                duration_ms=metadata.duration_ms,
             ),
             language=language,
         )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="Speech transcription failed") from exc
+        raise ApiProblem(
+            status_code=502,
+            code="VOICE_TRANSCRIPTION_FAILED",
+            message="Speech transcription failed",
+        ) from exc
+
+
+@router.get("/api/voice/capabilities", response_model=VoiceCapabilities)
+async def get_voice_capabilities(
+    request: Request,
+    tenant_context: TenantContext = Depends(get_tenant_context),
+    settings: Settings = Depends(get_settings),
+) -> VoiceCapabilities:
+    del tenant_context
+    return VoiceCapabilities(
+        available=getattr(request.app.state, "speech_provider", None) is not None,
+        max_duration_seconds=settings.asr_max_audio_seconds,
+        max_upload_bytes=settings.asr_max_upload_bytes,
+        supported_content_types=sorted(SUPPORTED_AUDIO_TYPES),
+    )
 
 
 @router.get(
