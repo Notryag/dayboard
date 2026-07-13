@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import {
   dateRangeAround,
   formatAccessibleDate,
@@ -11,32 +11,32 @@ import {
 import styles from "./schedule.module.css";
 
 type DateRailProps = {
+  centerDate: string;
+  onCenterDate: (date: string) => void;
   onSelectDate: (date: string) => void;
   selectedDate: string;
   today: string;
 };
 
-export function DateRail({ onSelectDate, selectedDate, today }: DateRailProps) {
-  const hasCenteredRef = useRef(false);
+export function DateRail({
+  centerDate,
+  onCenterDate,
+  onSelectDate,
+  selectedDate,
+  today,
+}: DateRailProps) {
+  const railRef = useRef<HTMLElement>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
-  const dates = useMemo(() => dateRangeAround(selectedDate), [selectedDate]);
+  const dates = useMemo(() => dateRangeAround(centerDate), [centerDate]);
   const selectedMonth = selectedDate.slice(0, 7);
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      selectedRef.current?.scrollIntoView({
-        behavior: reduceMotion || !hasCenteredRef.current ? "auto" : "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-      hasCenteredRef.current = true;
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedDate]);
+  useLayoutEffect(() => {
+    if (!railRef.current?.closest("dialog")?.open) return;
+    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [centerDate]);
 
   return (
-    <nav className={styles.dateRail} aria-label="浏览日期">
+    <nav className={styles.dateRail} aria-label="浏览日期" ref={railRef}>
       {dates.map((date) => {
         const isSelected = date === selectedDate;
         const isToday = date === today;
@@ -53,9 +53,18 @@ export function DateRail({ onSelectDate, selectedDate, today }: DateRailProps) {
             onKeyDown={(event) => {
               if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
               event.preventDefault();
-              onSelectDate(shiftDateKey(date, event.key === "ArrowLeft" ? -1 : 1));
+              const nextDate = shiftDateKey(date, event.key === "ArrowLeft" ? -1 : 1);
+              if (!dates.includes(nextDate)) onCenterDate(nextDate);
+              onSelectDate(nextDate);
+              window.requestAnimationFrame(() => {
+                railRef.current
+                  ?.querySelector<HTMLButtonElement>(`[data-date='${nextDate}']`)
+                  ?.focus({ preventScroll: true });
+              });
             }}
             ref={isSelected ? selectedRef : null}
+            data-date={date}
+            data-selected-date={isSelected ? "true" : undefined}
             type="button"
           >
             <span>{formatRailWeekday(date)}</span>

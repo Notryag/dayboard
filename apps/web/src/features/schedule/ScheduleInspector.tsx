@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { DateRail } from "./DateRail";
 import { DayAgendaSection } from "./DayAgendaSection";
 import { ScheduleHeader } from "./ScheduleHeader";
@@ -22,6 +22,7 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
   const dialogRef = useRef<HTMLDialogElement>(null);
   const today = dateKeyInTimezone(new Date(), timezone);
   const [selectedDate, setSelectedDate] = useState(today);
+  const [dateRailCenter, setDateRailCenter] = useState(today);
 
   const loadCalendarPage = useCallback(
     (cursor?: string, signal?: AbortSignal) =>
@@ -54,10 +55,18 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
     loadPage: loadUndatedTaskPage,
   });
 
-  useEffect(() => {
+  const jumpToDate = useCallback((date: string) => {
+    setSelectedDate(date);
+    setDateRailCenter(date);
+  }, []);
+
+  useLayoutEffect(() => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) {
       dialog.showModal();
+      dialog
+        .querySelector<HTMLElement>("[data-selected-date='true']")
+        ?.scrollIntoView({ block: "nearest", inline: "center" });
       dialog.focus({ preventScroll: true });
     }
   }, []);
@@ -77,10 +86,16 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
       <ScheduleHeader
         headingId={headingId}
         onClose={onClose}
-        onSelectDate={setSelectedDate}
+        onJumpToDate={jumpToDate}
         selectedDate={selectedDate}
       />
-      <DateRail onSelectDate={setSelectedDate} selectedDate={selectedDate} today={today} />
+      <DateRail
+        centerDate={dateRailCenter}
+        onCenterDate={setDateRailCenter}
+        onSelectDate={setSelectedDate}
+        selectedDate={selectedDate}
+        today={today}
+      />
 
       <div className={styles.content} aria-live="polite">
         <DayAgendaSection calendar={calendar} tasks={datedTasks} timezone={timezone} />

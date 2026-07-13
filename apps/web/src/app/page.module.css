@@ -1,5 +1,5 @@
 .page {
-  --chat-max-width: 480px;
+  --chat-max-width: var(--app-shell-max-width);
   --chat-header-min-height: 84px;
   --chat-status-min-height: 28px;
   --chat-message-max-width: 340px;

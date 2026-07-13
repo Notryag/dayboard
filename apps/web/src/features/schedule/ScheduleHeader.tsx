@@ -7,14 +7,14 @@ import styles from "./schedule.module.css";
 type ScheduleHeaderProps = {
   headingId: string;
   onClose: () => void;
-  onSelectDate: (date: string) => void;
+  onJumpToDate: (date: string) => void;
   selectedDate: string;
 };
 
 export function ScheduleHeader({
   headingId,
   onClose,
-  onSelectDate,
+  onJumpToDate,
   selectedDate,
 }: ScheduleHeaderProps) {
   return (
@@ -27,7 +27,7 @@ export function ScheduleHeader({
           <input
             aria-label="跳转日期"
             onChange={(event) => {
-              if (event.target.value) onSelectDate(event.target.value);
+              if (event.target.value) onJumpToDate(event.target.value);
             }}
             type="date"
             value={selectedDate}
