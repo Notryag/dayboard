@@ -113,9 +113,11 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
   tenant-scoped status API, SKIP LOCKED worker claiming, and idempotent in-app delivery.
-- Voice: browser MediaRecorder capture with cancel, live level/timer, automatic duration stop,
-  server-side format/size/duration validation, editable transcript confirmation, provider-neutral
-  transcription API, and selectable Cloudflare Workers AI or Alibaba Cloud ASR adapters.
+- Voice: voice-first hold-to-talk composer with keyboard-mode fallback, slide-to-cancel, live
+  level/timer, automatic duration stop, editable transcript confirmation, server-side
+  format/size/duration validation, provider-neutral transcription API, and selectable Cloudflare
+  Workers AI or Alibaba Cloud ASR adapters. Composer orchestration, voice gestures, text input, and
+  MediaRecorder ownership have separate component/hook boundaries.
 
 Git history is the detailed implementation chronology. ADRs record decisions that remain
 architecturally significant.

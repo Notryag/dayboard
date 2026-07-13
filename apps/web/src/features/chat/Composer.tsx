@@ -1,18 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AlertCircle,
-  LoaderCircle,
-  Mic,
-  SendHorizontal,
-  Square,
-  X,
-} from "lucide-react";
+import { AlertCircle, X } from "lucide-react";
 import { userFacingApiError } from "@/lib/api/client";
 import { getVoiceCapabilities, transcribeVoice } from "@/features/voice/api";
 import type { RecordedAudio, VoiceCapabilities } from "@/features/voice/types";
 import { useVoiceRecorder } from "@/features/voice/useVoiceRecorder";
+import { TextComposer } from "./TextComposer";
+import { VoiceComposer, type VoiceComposerStatus } from "./VoiceComposer";
 import styles from "./Composer.module.css";
 
 type ComposerProps = {
@@ -26,6 +21,8 @@ type ComposerProps = {
   value: string;
 };
 
+type InputMode = "voice" | "text";
+
 function recordingErrorMessage(error: unknown) {
   if (error instanceof DOMException) {
     if (error.name === "NotAllowedError") return "没有麦克风权限，请在浏览器设置中允许。";
@@ -33,12 +30,6 @@ function recordingErrorMessage(error: unknown) {
     if (error.name === "NotReadableError") return "麦克风暂时无法使用，请检查其他应用。";
   }
   return "无法开始录音，请稍后重试。";
-}
-
-function formatDuration(seconds: number) {
-  const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const remainder = (seconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${remainder}`;
 }
 
 export function Composer({
@@ -51,11 +42,14 @@ export function Composer({
   onTranscript,
   value,
 }: ComposerProps) {
+  const [inputMode, setInputMode] = useState<InputMode>("voice");
   const [capabilities, setCapabilities] = useState<VoiceCapabilities | null>(null);
+  const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
+  const wasSubmittingRef = useRef(isSubmitting);
   const uploadControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -70,12 +64,21 @@ export function Composer({
     const controller = new AbortController();
     void getVoiceCapabilities(controller.signal)
       .then((result) => {
-        if (mountedRef.current) setCapabilities(result);
+        if (!mountedRef.current) return;
+        setCapabilities(result);
+        setCapabilitiesResolved(true);
       })
       .catch(() => {
-        if (mountedRef.current) setCapabilities(null);
+        if (!mountedRef.current) return;
+        setCapabilities(null);
+        setCapabilitiesResolved(true);
       });
     return () => controller.abort();
+  }, []);
+
+  const showTextInput = useCallback(() => {
+    setInputMode("text");
+    window.requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
   const handleRecorded = useCallback(
@@ -89,7 +92,7 @@ export function Composer({
         if (!mountedRef.current) return;
         if (!transcript.text?.trim()) throw new Error("Transcription returned no text");
         onTranscript(transcript.text.trim());
-        window.setTimeout(() => inputRef.current?.focus(), 0);
+        showTextInput();
       } catch (error) {
         if (
           mountedRef.current &&
@@ -102,7 +105,7 @@ export function Composer({
         if (mountedRef.current) setIsTranscribing(false);
       }
     },
-    [onTranscript],
+    [onTranscript, showTextInput],
   );
 
   const handleRecorderError = useCallback((error: unknown) => {
@@ -116,16 +119,25 @@ export function Composer({
     supportedContentTypes: capabilities?.supported_content_types ?? [],
   });
 
-  const recording = recorder.status === "recording";
-  const requesting = recorder.status === "requesting";
-  const voiceBusy = recording || requesting || isTranscribing;
   const voiceAvailable = Boolean(capabilities?.available && recorder.isSupported);
-  const microphoneTitle = !recorder.isSupported
-    ? "当前浏览器不支持录音"
-    : capabilities && !capabilities.available
-      ? "语音识别暂未配置"
-      : "开始语音输入";
-  const levels = [0.48, 0.76, 1, 0.68, 0.42];
+
+  useEffect(() => {
+    if (wasSubmittingRef.current && !isSubmitting && voiceAvailable) {
+      setInputMode("voice");
+    }
+    wasSubmittingRef.current = isSubmitting;
+  }, [isSubmitting, voiceAvailable]);
+
+  const voiceStatus: VoiceComposerStatus = isTranscribing
+    ? "transcribing"
+    : recorder.status;
+  const unavailableReason = !recorder.isSupported
+    ? "当前浏览器不支持语音输入"
+    : !capabilitiesResolved
+      ? "正在准备语音输入"
+      : !capabilities?.available
+        ? "语音输入暂不可用"
+        : null;
 
   function cancelTranscription() {
     uploadControllerRef.current?.abort();
@@ -150,117 +162,36 @@ export function Composer({
         </div>
       ) : null}
 
-      <form
-        className={`${styles.composer} ${recording ? styles.recordingComposer : ""}`}
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!voiceBusy) onSubmit();
-        }}
-      >
-        {recording ? (
-          <button
-            aria-label="取消录音"
-            className={styles.iconButton}
-            onClick={recorder.cancelRecording}
-            type="button"
-          >
-            <X size={20} />
-          </button>
-        ) : requesting || isTranscribing ? (
-          <span className={styles.activityIcon} aria-hidden="true">
-            <LoaderCircle className={styles.spinner} size={20} />
-          </span>
-        ) : (
-          <button
-            aria-label="语音输入"
-            className={styles.iconButton}
-            disabled={disabled || isSubmitting || !voiceAvailable}
-            onClick={() => {
-              setVoiceError(null);
-              void recorder.startRecording();
-            }}
-            title={microphoneTitle}
-            type="button"
-          >
-            <Mic size={20} strokeWidth={2.2} />
-          </button>
-        )}
-
-        {recording ? (
-          <div className={styles.recordingStatus} aria-live="polite">
-            <span className={styles.recordingDot} aria-hidden="true" />
-            <span className={styles.levelBars} aria-hidden="true">
-              {levels.map((weight, index) => (
-                <span
-                  key={index}
-                  style={{ transform: `scaleY(${Math.max(0.2, recorder.level * weight)})` }}
-                />
-              ))}
-            </span>
-            <span>{formatDuration(recorder.elapsedSeconds)}</span>
-            <span className={styles.durationLimit}>
-              / {formatDuration(capabilities?.max_duration_seconds ?? 60)}
-            </span>
-          </div>
-        ) : requesting || isTranscribing ? (
-          <div className={styles.processingStatus} aria-live="polite">
-            {requesting ? "正在连接麦克风" : "正在识别语音"}
-          </div>
-        ) : (
-          <label className={styles.inputWrap}>
-            <span className={styles.srOnly}>输入日程或任务</span>
-            <input
-              disabled={disabled || isSubmitting}
-              onChange={(event) => onChange(event.target.value)}
-              placeholder="输入日程或任务"
-              ref={inputRef}
-              type="text"
-              value={value}
-            />
-          </label>
-        )}
-
-        {recording ? (
-          <button
-            aria-label="停止录音"
-            className={styles.recordingStopButton}
-            onClick={recorder.stopRecording}
-            type="button"
-          >
-            <Square fill="currentColor" size={16} strokeWidth={2.2} />
-          </button>
-        ) : isTranscribing ? (
-          <button
-            aria-label="取消识别"
-            className={styles.iconButton}
-            onClick={cancelTranscription}
-            type="button"
-          >
-            <X size={20} />
-          </button>
-        ) : requesting ? (
-          <span className={styles.activityIcon} />
-        ) : isSubmitting ? (
-          <button
-            aria-label="停止"
-            className={styles.stopButton}
-            disabled={!activeRunId}
-            onClick={onCancelRun}
-            type="button"
-          >
-            <Square fill="currentColor" size={17} strokeWidth={2.2} />
-          </button>
-        ) : (
-          <button
-            aria-label="发送"
-            className={styles.sendButton}
-            disabled={!value.trim() || disabled}
-            type="submit"
-          >
-            <SendHorizontal size={20} strokeWidth={2.2} />
-          </button>
-        )}
-      </form>
+      {inputMode === "voice" && !isSubmitting ? (
+        <VoiceComposer
+          disabled={disabled || !voiceAvailable}
+          elapsedSeconds={recorder.elapsedSeconds}
+          level={recorder.level}
+          maxDurationSeconds={capabilities?.max_duration_seconds ?? 60}
+          onCancelRecording={recorder.cancelRecording}
+          onCancelTranscription={cancelTranscription}
+          onStartRecording={async () => {
+            setVoiceError(null);
+            await recorder.startRecording();
+          }}
+          onStopRecording={recorder.stopRecording}
+          onSwitchToText={showTextInput}
+          status={voiceStatus}
+          unavailableReason={unavailableReason}
+        />
+      ) : (
+        <TextComposer
+          activeRunId={activeRunId}
+          disabled={disabled}
+          inputRef={inputRef}
+          isSubmitting={isSubmitting}
+          onCancelRun={onCancelRun}
+          onChange={onChange}
+          onSubmit={onSubmit}
+          onSwitchToVoice={() => setInputMode("voice")}
+          value={value}
+        />
+      )}
     </div>
   );
 }

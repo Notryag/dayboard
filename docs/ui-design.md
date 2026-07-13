@@ -96,18 +96,21 @@ These values are starting points, not brand law. Keep the names stable so later 
 - Keep touch targets at least 44px.
 - Avoid explanatory text in the product UI unless it is necessary for the current task.
 
-Voice uses the existing composer rather than a modal or separate page. Its stable states are:
+Voice is the composer's default input mode rather than a modal or separate page. Its stable states
+are:
 
 ```text
-idle         -> microphone, editable text, send
-requesting   -> microphone permission progress
-recording    -> cancel, live level bars and timer, stop
+voice idle   -> wide hold-to-talk control, keyboard-mode icon
+requesting   -> hold control shows microphone permission progress
+recording    -> keep holding, live level/timer, slide up to cancel, release to transcribe
 transcribing -> upload/provider progress and cancel
-review       -> transcript inserted into editable text; user explicitly sends
+text         -> microphone-mode icon, editable text, send
+review       -> transcript inserted into text mode; user explicitly sends
 ```
 
 Never submit an ASR transcript automatically. Preserve an existing draft and append the transcript.
-Release microphone tracks, audio contexts, timers, and local blobs after stop, cancel, or unmount.
+After a completed command, return to voice mode when voice is available. Release microphone tracks,
+audio contexts, timers, and local blobs after stop, cancel, or unmount.
 
 ## Component Boundaries
 
@@ -118,10 +121,17 @@ features/chat/
   ChatShell.tsx
   MessageList.tsx
   MessageBubble.tsx
-  Composer.tsx
+  Composer.tsx          # mode, capabilities, transcription, and errors
+  VoiceComposer.tsx     # hold/release/cancel gestures and recording feedback
+  TextComposer.tsx      # keyboard input, send, and mode switch
+
+features/voice/
+  useVoiceRecorder.ts   # MediaRecorder and browser media resource ownership
+  api.ts                # transcription HTTP boundary
 ```
 
-Keep API calls out of visual components. When the backend command endpoint exists, route calls through `lib/api` or a feature hook.
+Keep API calls out of visual components. `VoiceComposer` and `TextComposer` receive state and
+callbacks only; provider calls stay in the composer coordinator through `features/voice/api`.
 
 ## State
 

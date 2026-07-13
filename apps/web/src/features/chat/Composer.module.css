@@ -5,8 +5,6 @@
 
 .composer {
   min-height: 56px;
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: var(--space-2);
   border: 1px solid var(--color-border);
@@ -16,15 +14,23 @@
   box-shadow: var(--shadow-soft);
 }
 
+.textComposer {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+}
+
+.voiceComposer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+}
+
 .recordingComposer {
   border-color: color-mix(in srgb, var(--color-danger), transparent 55%);
 }
 
 .iconButton,
 .sendButton,
-.stopButton,
-.recordingStopButton,
-.activityIcon {
+.stopButton {
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -32,18 +38,17 @@
   justify-content: center;
   border: 0;
   border-radius: var(--radius-pill);
-}
-
-.iconButton,
-.sendButton,
-.stopButton,
-.recordingStopButton {
   cursor: pointer;
 }
 
 .iconButton {
   color: var(--color-text-muted);
   background: transparent;
+}
+
+.iconButton:hover:not(:disabled) {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-border), transparent 55%);
 }
 
 .sendButton {
@@ -54,11 +59,6 @@
 .stopButton {
   color: var(--color-danger);
   background: var(--color-danger-surface);
-}
-
-.recordingStopButton {
-  color: var(--color-danger-foreground);
-  background: var(--color-danger);
 }
 
 .sendButton:disabled,
@@ -89,24 +89,48 @@
   cursor: not-allowed;
 }
 
-.recordingStatus,
-.processingStatus {
+.voiceHoldButton {
+  width: 100%;
+  height: 46px;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-border), transparent 62%);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 650;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.voiceHoldButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-border), transparent 42%);
+}
+
+.voiceHoldButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.voiceHoldButtonActive {
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
+}
+
+.voiceHoldButtonCancel {
+  color: var(--color-danger-foreground);
+  background: var(--color-danger);
+}
+
+.voiceButtonContent {
   min-width: 0;
   display: flex;
   align-items: center;
-  color: var(--color-text);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 650;
-}
-
-.recordingStatus {
-  gap: var(--space-2);
-}
-
-.processingStatus {
   justify-content: center;
-  color: var(--color-text-muted);
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 
 .recordingDot {
@@ -114,12 +138,19 @@
   height: 8px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--color-danger);
+  background: currentColor;
 }
 
 .durationLimit {
   color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
+}
+
+.voiceHoldButtonCancel .durationLimit {
+  color: currentColor;
+  opacity: 0.78;
 }
 
 .levelBars {
@@ -133,7 +164,7 @@
   width: 3px;
   height: 20px;
   border-radius: var(--radius-pill);
-  background: var(--color-danger);
+  background: currentColor;
   transform-origin: center;
   transition: transform 80ms linear;
 }
@@ -180,6 +211,12 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 380px) {
+  .durationLimit {
+    display: none;
   }
 }
 
