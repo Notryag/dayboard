@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -18,13 +18,16 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     today_at_noon = datetime.now(timezone).replace(hour=12, minute=0, second=0, microsecond=0)
+    scheduled_day = today_at_noon + timedelta(days=30)
+    range_start = scheduled_day.replace(hour=0)
+    range_end = range_start + timedelta(days=1)
     entries = [
         CalendarEntryRow(
             tenant_id=tenant_context.tenant_id,
             owner_user_id=tenant_context.user_id,
             title=title,
-            start_time=datetime(2026, 7, 13, hour, 0, tzinfo=timezone),
-            end_time=datetime(2026, 7, 13, hour + 1, 0, tzinfo=timezone),
+            start_time=scheduled_day.replace(hour=hour),
+            end_time=scheduled_day.replace(hour=hour + 1),
             timezone="Asia/Shanghai",
             participants=[],
         )
@@ -45,7 +48,7 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
                 tenant_id=uuid4(),
                 owner_user_id=uuid4(),
                 title="Another user",
-                start_time=datetime(2026, 7, 13, 9, 0, tzinfo=timezone),
+                start_time=scheduled_day.replace(hour=9),
                 timezone="Asia/Shanghai",
                 participants=[],
             )
@@ -57,16 +60,16 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
         first = await client.get(
             "/api/calendar-entries",
             params={
-                "from": "2026-07-13T00:00:00+08:00",
-                "to": "2026-07-14T00:00:00+08:00",
+                "from": range_start.isoformat(),
+                "to": range_end.isoformat(),
                 "limit": 1,
             },
         )
         second = await client.get(
             "/api/calendar-entries",
             params={
-                "from": "2026-07-13T00:00:00+08:00",
-                "to": "2026-07-14T00:00:00+08:00",
+                "from": range_start.isoformat(),
+                "to": range_end.isoformat(),
                 "limit": 1,
                 "cursor": first.json()["next_cursor"],
             },

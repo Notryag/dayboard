@@ -50,6 +50,7 @@ Database:
 
 - [architecture.md](./architecture.md), sections "Database Model", "Tenant Extensibility", and "Concurrency And Reliability"
 - [engineering-guidelines.md](./engineering-guidelines.md), section "Database Rules"
+- [postgres-backup.md](./postgres-backup.md) for production backup, restore rehearsal, and recovery
 
 Product scope:
 
@@ -67,6 +68,7 @@ Architecture decisions:
 Deployment:
 
 - [deploy.md](./deploy.md), starting with "Production Handoff" for any production operation
+- [postgres-backup.md](./postgres-backup.md) before changing production PostgreSQL data or volumes
 
 ## Loading Guidance
 

@@ -1,0 +1,23 @@
+[Unit]
+Description=Back up the Dayboard PostgreSQL database
+Requires=docker.service
+After=docker.service
+ConditionPathExists=/home/zx/dayboard/docker-compose.yml
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/home/zx/dayboard
+Environment=DAYBOARD_BACKUP_DIR=/var/backups/dayboard/postgres
+Environment=DAYBOARD_BACKUP_RETENTION_DAYS=14
+ExecStart=/home/zx/dayboard/deploy/scripts/postgres-backup.sh
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=full
+TimeoutStartSec=1h

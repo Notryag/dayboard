@@ -16,6 +16,11 @@ Production runs PostgreSQL, Redis, FastAPI, arq Worker, and Next.js through the 
 continues to proxy the loopback-only API and Web ports. See [deploy.md](./deploy.md), section
 "Production Handoff", before operating the deployment.
 
+The production host also runs the `dayboard-postgres-backup.timer` systemd timer. It creates daily
+custom-format PostgreSQL dumps under `/var/backups/dayboard/postgres` with SHA-256 checksums and a
+14-day retention period. A restore rehearsal into a temporary database has passed. These backups
+are currently host-local; encrypted off-host replication remains pending.
+
 The Git history is the source of truth for the latest committed baseline; do not copy a
 commit hash into this document because it becomes stale on the next change.
 
@@ -35,6 +40,8 @@ The current direction is:
 - worker: `arq` with Redis
 - production runtime: Docker Compose for PostgreSQL, Redis, API, Worker, and Web; application
   containers run as non-root users and API/Worker have container health checks
+- database recovery: daily host-level PostgreSQL dumps scheduled by systemd, checksum validation,
+  restore-to-new-database safety, and a documented temporary-database rehearsal
 - object storage: S3-compatible storage for voice audio and future attachments
 
 ## Important Decisions
@@ -81,7 +88,7 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   calendar/task read APIs support time or status filters and keyset pagination for inspectable UI.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
   idempotency, queued arq execution, cancellation, stale-run recovery, reconnectable SSE execution,
-  stable API errors, and health checks.
+  stable API errors, health checks, daily database backups, and rehearsed restore tooling.
 - Conversations: durable threads and messages, resumable clarification state, bounded context, and
   persisted compaction summaries.
 - Agent runtime: North-backed execution, safe tool progress events, durable Run history, SSE,
@@ -114,9 +121,11 @@ Implementation notes:
 
 Next implementation slice:
 
-1. add PostgreSQL backup automation and perform a documented restore rehearsal
+1. expand the schedule inspector into a date-selectable day view with chronological calendar entries
+   and a separate undated/open-task area; keep circular visualization deferred
 2. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
-3. keep reminder UI and external notification providers explicitly deferred until their priority changes
+3. add encrypted off-host backup replication when storage credentials and retention requirements are
+   available; keep reminder UI and external notification providers deferred until priorities change
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

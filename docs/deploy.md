@@ -170,6 +170,25 @@ application containers. Never run `docker compose down -v`, remove the named vol
 `.env` without confirming a backup and recovery plan. Real secrets stay only in `.env` or a secret
 store and must not be copied into images or committed.
 
+PostgreSQL backups are created by a systemd timer that invokes the Compose-aware backup script. The
+timer is only an operational scheduler; Docker Compose remains the application process manager.
+Install it and create the first verified backup before any destructive database operation:
+
+```bash
+cd /home/zx/dayboard
+sudo install -d -m 0700 /var/backups/dayboard/postgres
+sudo install -m 0644 deploy/systemd/dayboard-postgres-backup.service /etc/systemd/system/
+sudo install -m 0644 deploy/systemd/dayboard-postgres-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now dayboard-postgres-backup.timer
+sudo systemctl start dayboard-postgres-backup.service
+sudo deploy/scripts/postgres-restore-rehearsal.sh
+```
+
+The complete installation, verification, restore, rollback, and troubleshooting runbook is in
+[postgres-backup.md](./postgres-backup.md). The restore script intentionally refuses to overwrite
+the active database and restores into a new database for an explicit application cutover.
+
 Nginx proxies `/dayboard-api/` to the loopback-only FastAPI container on port 8000. The API, Web, Worker, PostgreSQL, and Redis services run from the root `docker-compose.yml` file. The application containers bind only to loopback ports; Nginx remains the public entry point.
 
 The account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch were deployed as
@@ -183,6 +202,7 @@ The checked-in deployment templates are:
   workflow-write permission to enable it)
 - `docker-compose.yml` and the application Dockerfiles
 - `deploy/nginx/dayboard-locations.conf`
+- `deploy/scripts/postgres-*.sh` and `deploy/systemd/dayboard-postgres-backup.*`
 
 The Compose Web build injects `/dayboard-api` and `/dayboard` into the browser bundle. After a
 deployment, verify the page, one hashed static asset under `/dayboard/_next/static/`, and the API
