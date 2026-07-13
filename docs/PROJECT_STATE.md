@@ -58,6 +58,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 - Redis or Valkey is infrastructure, not a source of truth.
 - All product boundaries carry `TenantContext`; full tenant administration and dedicated tenant
   databases remain deferred.
+- Scheduling currently uses server-configured Beijing time (`Asia/Shanghai`). Agent tools and
+  per-command browser requests cannot supply timezone or numeric UTC offsets; `TenantContext.timezone`
+  remains the future extension point for a trusted tenant setting.
 - Agent tools should be narrow and explicit, such as `create_calendar_entry` and `create_task_item`.
 - Voice recognition is a Dayboard input-layer integration. It should produce transcript text that enters the normal command flow.
 - Next.js is the first UI. React Native can be revisited later.
@@ -78,7 +81,7 @@ The bullets below summarize decisions that affect current work; they do not repl
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
 deployment, and production password-auth switch are complete. The schedule inspector is now a
-date-selectable day view with an account-timezone calendar timeline and a separate undated-task
+date-selectable day view with a trusted-product-timezone calendar timeline and a separate undated-task
 area. Run execution now reconnects after a page reload or a transient SSE disconnect. API HTTP and
 validation errors now share a request-ID-bearing envelope, with stable product codes for auth,
 thread, Run, command conflict, clarification conflict, and queue failure paths.
@@ -87,7 +90,7 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
 
 - Scheduling: natural-language create, search, reschedule, complete, and cancel for calendar entries
   and tasks, including multiple instructions per message and structured clarification; tenant-scoped
-  calendar/task read APIs support account-local calendar dates, time/status/due-kind filters, and
+  calendar/task read APIs support product-local calendar dates, time/status/due-kind filters, and
   keyset pagination for inspectable UI. Calendar rescheduling can change date, start, and/or end
   time; omitted start/end semantics are deterministic and exact no-op updates are rejected.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
@@ -103,7 +106,7 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   transcripts, reminders, and provider usage.
 - Inspectable UI: a reusable day-view panel supports direct date selection, previous/next/today
   navigation, a chronological event timeline, and a separate undated/open-task list. The server
-  owns account-timezone day boundaries; both sections have independent loading, empty, retry, and
+  owns trusted-timezone day boundaries; both sections have independent loading, empty, retry, and
   cursor-pagination states.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
   correlation without logging credentials or full command text.
@@ -124,8 +127,11 @@ Implementation notes:
 - Provider budget admission reserves a cheap prompt-size estimate. The first immutable usage settlement charges any positive difference between actual and estimated tokens; lower provider-reported usage does not trigger an unsafe cross-window refund.
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
 - A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
-- The current release defaults each entry's timezone to the trusted user timezone. Explicit natural-language event timezones such as "9 AM New York time" are not supported yet and must not be inferred as the user's default timezone.
-- Relative date references are rendered as exact account-local dates in every agent system prompt.
+- The current release resolves Agent-provided local calendar/task times with server-configured
+  `Asia/Shanghai`. Agent schemas reject `Z` and numeric offsets, browser registration no longer
+  supplies scheduling timezone, and stored objects retain aware timestamps plus the IANA name.
+  Explicit natural-language timezones such as "9 AM New York time" are not supported.
+- Relative date references are rendered as exact trusted-product-local dates in every agent system prompt.
   Agent-created calendar entries deterministically default to an at-start `PT0M` reminder; explicit
   advance offsets override it and an explicit no-reminder request can pass `null`. Final
   confirmations are instructed to use returned object values. Relative-date and confirmation model

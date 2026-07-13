@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import secrets
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 from pwdlib import PasswordHash
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -16,7 +15,7 @@ import structlog
 from dayboard.config import Settings, get_settings
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
-from dayboard.context import TenantContext, get_dev_tenant_context
+from dayboard.context import TenantContext
 from dayboard.db.models import (
     TenantMembershipRow,
     TenantRow,
@@ -38,17 +37,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=10, max_length=128)
     email: str | None = Field(default=None, max_length=320)
     display_name: str | None = Field(default=None, min_length=1, max_length=160)
-    timezone: str = Field(default="Asia/Shanghai", max_length=64)
     locale: str = Field(default="zh-CN", max_length=32)
-
-    @field_validator("timezone")
-    @classmethod
-    def validate_timezone(cls, value: str) -> str:
-        try:
-            ZoneInfo(value)
-        except ZoneInfoNotFoundError as exc:
-            raise ValueError("timezone must be a valid IANA timezone") from exc
-        return value
 
 
 class LoginRequest(BaseModel):
@@ -103,7 +92,11 @@ async def _account_for_session(
 
 
 def _response(
-    user: UserRow, membership: TenantMembershipRow, profile: UserProfileRow
+    user: UserRow,
+    membership: TenantMembershipRow,
+    profile: UserProfileRow,
+    *,
+    timezone: str,
 ) -> AccountResponse:
     return AccountResponse(
         user_id=str(user.id),
@@ -111,7 +104,7 @@ def _response(
         username=user.username,
         email=user.email,
         display_name=user.display_name,
-        timezone=profile.timezone,
+        timezone=timezone,
         locale=profile.locale,
     )
 
@@ -134,7 +127,12 @@ async def get_tenant_context(
     settings: Settings = Depends(get_settings),
 ) -> TenantContext:
     if settings.auth_mode == "development":
-        context = get_dev_tenant_context()
+        context = TenantContext(
+            tenant_id=settings.default_tenant_id,
+            user_id=settings.default_user_id,
+            timezone=settings.default_timezone,
+            locale=settings.default_locale,
+        )
     else:
         token = request.cookies.get(settings.auth_session_cookie_name)
         account = await _account_for_session(session, token) if token else None
@@ -150,7 +148,7 @@ async def get_tenant_context(
         context = TenantContext(
             tenant_id=membership.tenant_id,
             user_id=user.id,
-            timezone=profile.timezone,
+            timezone=settings.default_timezone,
             locale=profile.locale,
         )
     structlog.contextvars.bind_contextvars(
@@ -175,7 +173,11 @@ async def register(
     tenant = TenantRow(name=body.display_name or username)
     session.add_all([user, tenant])
     await session.flush()
-    profile = UserProfileRow(user_id=user.id, timezone=body.timezone, locale=body.locale)
+    profile = UserProfileRow(
+        user_id=user.id,
+        timezone=settings.default_timezone,
+        locale=body.locale,
+    )
     membership = TenantMembershipRow(tenant_id=tenant.id, user_id=user.id, role="owner")
     credential = UserCredentialRow(user_id=user.id, password_hash=password_hash.hash(body.password))
     raw_token = secrets.token_urlsafe(32)
@@ -198,7 +200,7 @@ async def register(
         ) from exc
     _set_session_cookie(response, raw_token, settings)
     logger.info("dayboard.auth.registered", user_id=str(user.id), tenant_id=str(tenant.id))
-    return _response(user, membership, profile)
+    return _response(user, membership, profile, timezone=settings.default_timezone)
 
 
 @router.post("/login", response_model=AccountResponse)
@@ -252,7 +254,7 @@ async def login(
     logger.info(
         "dayboard.auth.login_succeeded", user_id=str(user.id), tenant_id=str(membership.tenant_id)
     )
-    return _response(user, membership, profile)
+    return _response(user, membership, profile, timezone=settings.default_timezone)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -289,4 +291,4 @@ async def me(
             message="Authentication required",
         )
     _, user, membership, profile = account
-    return _response(user, membership, profile)
+    return _response(user, membership, profile, timezone=settings.default_timezone)

@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import date
 import asyncio
 from hashlib import sha256
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from langchain_core.tools import StructuredTool
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, NaiveDatetime, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
+from dayboard.timezones import resolve_local_date_window, resolve_local_datetime
 from dayboard.tools import (
     CancelCalendarEntryInput,
     CreateCalendarEntryInput,
@@ -43,19 +45,23 @@ class ListTaskItemsInput(BaseModel):
 
 
 class CheckCalendarConflictsInput(BaseModel):
-    start_time: AwareDatetime = Field(description="ISO 8601 datetime with timezone offset.")
-    end_time: AwareDatetime | None = Field(
+    local_start: NaiveDatetime = Field(
+        description="Local ISO 8601 datetime without Z or a timezone offset."
+    )
+    local_end: NaiveDatetime | None = Field(
         default=None,
-        description="Optional ISO 8601 datetime with timezone offset.",
+        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
     )
 
 
 class AgentCreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    start_time: AwareDatetime = Field(description="ISO 8601 datetime with timezone offset.")
-    end_time: AwareDatetime | None = Field(
+    local_start: NaiveDatetime = Field(
+        description="Local ISO 8601 datetime without Z or a timezone offset."
+    )
+    local_end: NaiveDatetime | None = Field(
         default=None,
-        description="Optional ISO 8601 datetime with timezone offset.",
+        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
     )
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = Field(
@@ -69,12 +75,59 @@ class AgentCreateCalendarEntryInput(BaseModel):
 
 class AgentCreateTaskItemInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    due_at: AwareDatetime | None = Field(
+    due_local: NaiveDatetime | None = Field(
         default=None,
-        description="Optional ISO 8601 datetime with timezone offset.",
+        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
     )
     reminder: Reminder | None = None
     status: TaskStatus = TaskStatus.open
+
+
+class AgentSearchCalendarEntriesInput(BaseModel):
+    start_date: date
+    end_date: date
+    title_query: str | None = Field(default=None, min_length=1, max_length=240)
+    purpose: Literal["view", "reschedule", "cancel"] = "view"
+
+    @model_validator(mode="after")
+    def validate_date_window(self) -> AgentSearchCalendarEntriesInput:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        return self
+
+
+class AgentRescheduleCalendarEntryInput(BaseModel):
+    calendar_entry_id: UUID
+    new_date: date | None = None
+    new_local_start: NaiveDatetime | None = None
+    new_local_end: NaiveDatetime | None = None
+    expected_updated_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_target(self) -> AgentRescheduleCalendarEntryInput:
+        if self.new_date is not None and self.new_local_start is not None:
+            raise ValueError("new_date and new_local_start cannot be combined")
+        if (
+            self.new_date is None
+            and self.new_local_start is None
+            and self.new_local_end is None
+        ):
+            raise ValueError("provide at least one calendar time change")
+        return self
+
+
+class AgentUpdateTaskItemInput(BaseModel):
+    task_item_id: UUID
+    expected_updated_at: AwareDatetime
+    new_title: str | None = Field(default=None, min_length=1, max_length=240)
+    new_due_local: NaiveDatetime | None = None
+    new_status: TaskStatus | None = None
+
+    @model_validator(mode="after")
+    def validate_change(self) -> AgentUpdateTaskItemInput:
+        if self.new_title is None and self.new_due_local is None and self.new_status is None:
+            raise ValueError("provide at least one task change")
+        return self
 
 
 def _calendar_entry_view(entry) -> dict[str, Any]:
@@ -127,8 +180,17 @@ def build_scheduling_tools(
 
     async def agent_create_calendar_entry(**kwargs):
         input_data = AgentCreateCalendarEntryInput.model_validate(kwargs)
-        data = CreateCalendarEntryInput.model_validate(
-            {**input_data.model_dump(), "timezone": context.timezone}
+        data = CreateCalendarEntryInput(
+            title=input_data.title,
+            start_time=resolve_local_datetime(input_data.local_start, context.timezone),
+            end_time=(
+                resolve_local_datetime(input_data.local_end, context.timezone)
+                if input_data.local_end
+                else None
+            ),
+            timezone=context.timezone,
+            participants=input_data.participants,
+            reminder=input_data.reminder,
         )
         result = await create_calendar_entry(
             session,
@@ -155,8 +217,12 @@ def build_scheduling_tools(
         result = await check_calendar_conflicts(
             session,
             context,
-            start_time=input_data.start_time,
-            end_time=input_data.end_time,
+            start_time=resolve_local_datetime(input_data.local_start, context.timezone),
+            end_time=(
+                resolve_local_datetime(input_data.local_end, context.timezone)
+                if input_data.local_end
+                else None
+            ),
         )
         if progress:
             await progress(
@@ -176,18 +242,47 @@ def build_scheduling_tools(
         return [_calendar_entry_view(entry) for entry in entries]
 
     async def agent_search_calendar_entries(**kwargs):
-        input_data = SearchCalendarEntriesInput.model_validate(kwargs)
-        entries = await search_calendar_entries(session, context, input_data)
+        input_data = AgentSearchCalendarEntriesInput.model_validate(kwargs)
+        start_time, end_time = resolve_local_date_window(
+            input_data.start_date,
+            input_data.end_date,
+            context.timezone,
+        )
+        entries = await search_calendar_entries(
+            session,
+            context,
+            SearchCalendarEntriesInput(
+                start_time=start_time,
+                end_time=end_time,
+                title_query=input_data.title_query,
+                purpose=input_data.purpose,
+            ),
+        )
         return [_calendar_entry_view(entry) for entry in entries]
 
     async def agent_reschedule_calendar_entry(**kwargs):
         if run_id is None:
             raise RuntimeError("Rescheduling requires a run id")
-        input_data = RescheduleCalendarEntryInput.model_validate(kwargs)
+        input_data = AgentRescheduleCalendarEntryInput.model_validate(kwargs)
+        data = RescheduleCalendarEntryInput(
+            calendar_entry_id=input_data.calendar_entry_id,
+            new_date=input_data.new_date,
+            new_start_time=(
+                resolve_local_datetime(input_data.new_local_start, context.timezone)
+                if input_data.new_local_start
+                else None
+            ),
+            new_end_time=(
+                resolve_local_datetime(input_data.new_local_end, context.timezone)
+                if input_data.new_local_end
+                else None
+            ),
+            expected_updated_at=input_data.expected_updated_at,
+        )
         result = await reschedule_calendar_entry(
             session,
             context,
-            input_data,
+            data,
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry_reschedule", input_data),
         )
@@ -221,8 +316,16 @@ def build_scheduling_tools(
 
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
-        data = CreateTaskItemInput.model_validate(
-            {**input_data.model_dump(), "timezone": context.timezone}
+        data = CreateTaskItemInput(
+            title=input_data.title,
+            due_at=(
+                resolve_local_datetime(input_data.due_local, context.timezone)
+                if input_data.due_local
+                else None
+            ),
+            timezone=context.timezone,
+            reminder=input_data.reminder,
+            status=input_data.status,
         )
         result = await create_task_item(
             session,
@@ -249,11 +352,22 @@ def build_scheduling_tools(
     async def agent_update_task_item(**kwargs):
         if run_id is None:
             raise RuntimeError("Updating a task requires a run id")
-        input_data = UpdateTaskItemInput.model_validate(kwargs)
+        input_data = AgentUpdateTaskItemInput.model_validate(kwargs)
+        data = UpdateTaskItemInput(
+            task_item_id=input_data.task_item_id,
+            expected_updated_at=input_data.expected_updated_at,
+            new_title=input_data.new_title,
+            new_due_at=(
+                resolve_local_datetime(input_data.new_due_local, context.timezone)
+                if input_data.new_due_local
+                else None
+            ),
+            new_status=input_data.new_status,
+        )
         result = await update_task_item(
             session,
             context,
-            input_data,
+            data,
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("task_item_update", input_data),
         )
@@ -268,8 +382,8 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_check_calendar_conflicts),
             name="check_calendar_conflicts",
             description=(
-                "Check whether a proposed calendar time overlaps existing entries. "
-                "The end defaults to one hour after the start."
+                "Check whether a proposed local calendar time overlaps existing entries. "
+                "Do not include a timezone offset; the end defaults to one hour after the start."
             ),
             args_schema=CheckCalendarConflictsInput,
         ),
@@ -277,9 +391,9 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description=(
-                "Create a Dayboard calendar entry when title and start time are known. Entries "
-                "default to a PT0M reminder at their start; explicit advance offsets override it, "
-                "and an explicit no-reminder request must pass null."
+                "Create a Dayboard calendar entry from local date/time without a timezone offset. "
+                "Entries default to a PT0M reminder at their start; explicit advance offsets "
+                "override it, and an explicit no-reminder request must pass null."
             ),
             args_schema=AgentCreateCalendarEntryInput,
         ),
@@ -293,21 +407,22 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_search_calendar_entries),
             name="search_calendar_entries",
             description=(
-                "Search the current user's calendar entries in a start-time range, "
-                "optionally filtering by title. Use this to identify an entry before moving it."
+                "Search the current user's calendar entries across an inclusive local-date range, "
+                "optionally filtering by title. Use this to identify an entry before changing it."
             ),
-            args_schema=SearchCalendarEntriesInput,
+            args_schema=AgentSearchCalendarEntriesInput,
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_reschedule_calendar_entry),
             name="reschedule_calendar_entry",
             description=(
-                "Change one identified calendar entry's date, start time, and/or end time. "
+                "Change one identified calendar entry's local date, start, and/or end time. "
+                "Local datetimes must not include a timezone offset. "
                 "An omitted start stays unchanged; changing only the date or start preserves "
-                "the original duration unless new_end_time is supplied. "
+                "the original duration unless new_local_end is supplied. "
                 "Title, participants, reminder, and original timezone are always preserved."
             ),
-            args_schema=RescheduleCalendarEntryInput,
+            args_schema=AgentRescheduleCalendarEntryInput,
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_cancel_calendar_entry),
@@ -321,7 +436,10 @@ def build_scheduling_tools(
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
-            description="Create a Dayboard task item when the user asks to track work without a scheduled start time.",
+            description=(
+                "Create a Dayboard task item. Any due_local value is local date/time without a "
+                "timezone offset."
+            ),
             args_schema=AgentCreateTaskItemInput,
         ),
         StructuredTool.from_function(
@@ -343,9 +461,10 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_update_task_item),
             name="update_task_item",
             description=(
-                "Update one identified task's title, due time, or status. Use status "
-                "completed when work is done and cancelled when the user drops it."
+                "Update one identified task's title, local due time, or status. Local datetimes "
+                "must not include a timezone offset. Use status completed when work is done and "
+                "cancelled when the user drops it."
             ),
-            args_schema=UpdateTaskItemInput,
+            args_schema=AgentUpdateTaskItemInput,
         ),
     ]

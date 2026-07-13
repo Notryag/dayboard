@@ -26,7 +26,6 @@ function AuthContent({ children }: { children: React.ReactNode }) {
           password: String(form.get("password")),
           email: String(form.get("email") ?? "") || undefined,
           display_name: String(form.get("displayName") ?? "") || undefined,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Shanghai",
           locale: navigator.language || "zh-CN",
         });
       }

@@ -61,3 +61,8 @@ def test_local_environment_allows_development_identity() -> None:
     )
 
     assert settings.auth_mode == "development"
+
+
+def test_default_timezone_must_be_valid_iana_name() -> None:
+    with pytest.raises(ValidationError, match="DEFAULT_TIMEZONE"):
+        Settings(DAYBOARD_DEFAULT_TIMEZONE="Beijing")

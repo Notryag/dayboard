@@ -148,9 +148,10 @@ day-view dialog / mobile bottom sheet
   -> separate undated open-task list
 ```
 
-The API must interpret a selected `YYYY-MM-DD` using the trusted account timezone. The browser must
+The API must interpret a selected `YYYY-MM-DD` using the trusted scheduling timezone. The browser must
 not invent UTC offsets for arbitrary IANA timezones. Date-only navigation can use calendar-day
-arithmetic; event instants are formatted in the account timezone.
+arithmetic; event instants are formatted in the timezone returned by the account API. This is
+currently server-configured `Asia/Shanghai`; a trusted tenant setting may replace it later.
 
 Keep timeline rows and task rows unframed, wrap long titles, preserve 44px controls, and give each
 section independent loading, empty, retry, and pagination states. Circular visualization, month/week

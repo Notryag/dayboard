@@ -107,14 +107,14 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
     if not isinstance(content, dict):
         return {}
     allowed_fields = {
-        "create_calendar_entry": ("title", "start_time", "end_time"),
-        "check_calendar_conflicts": ("start_time", "end_time"),
-        "search_calendar_entries": ("start_time", "end_time", "title_query", "purpose"),
+        "create_calendar_entry": ("title", "local_start", "local_end"),
+        "check_calendar_conflicts": ("local_start", "local_end"),
+        "search_calendar_entries": ("start_date", "end_date", "title_query", "purpose"),
         "reschedule_calendar_entry": (
             "calendar_entry_id",
             "new_date",
-            "new_start_time",
-            "new_end_time",
+            "new_local_start",
+            "new_local_end",
             "expected_updated_at",
         ),
         "cancel_calendar_entry": (
@@ -122,11 +122,11 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
             "expected_updated_at",
             "reason",
         ),
-        "create_task_item": ("title", "due_at", "status"),
+        "create_task_item": ("title", "due_local", "status"),
         "search_task_items": ("title_query", "status", "purpose"),
         "update_task_item": (
             "new_title",
-            "new_due_at",
+            "new_due_local",
             "new_status",
             "expected_updated_at",
         ),
@@ -140,28 +140,30 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
         return (
             "正在创建日程"
             + (f"“{title}”" if title else "")
-            + _time_suffix(inputs.get("start_time"), inputs.get("end_time"))
+            + _time_suffix(inputs.get("local_start"), inputs.get("local_end"))
         )
     if tool_name == "create_task_item":
-        due_at = inputs.get("due_at")
+        due_at = inputs.get("due_local")
         return (
             "正在创建任务"
             + (f"“{title}”" if title else "")
             + (f"，截止 {due_at}" if due_at else "")
         )
     if tool_name == "check_calendar_conflicts":
-        return "正在查询日程冲突" + _time_suffix(inputs.get("start_time"), inputs.get("end_time"))
+        return "正在查询日程冲突" + _time_suffix(
+            inputs.get("local_start"), inputs.get("local_end")
+        )
     if tool_name == "search_calendar_entries":
         action = {
             "cancel": "取消",
             "reschedule": "修改",
         }.get(inputs.get("purpose"), "查看")
         return f"正在查找要{action}的日程" + _time_suffix(
-            inputs.get("start_time"), inputs.get("end_time")
+            inputs.get("start_date"), inputs.get("end_date")
         )
     if tool_name == "reschedule_calendar_entry":
-        start = inputs.get("new_start_time") or inputs.get("new_date")
-        end = inputs.get("new_end_time")
+        start = inputs.get("new_local_start") or inputs.get("new_date")
+        end = inputs.get("new_local_end")
         if start and end:
             return f"正在修改日程时间为 {start} 至 {end}"
         if end:

@@ -24,5 +24,7 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "day after tomorrow: 2026-07-15" in prompt
     assert "Every calendar entry defaults to a reminder at its start (PT0M)" in prompt
     assert "pass reminder=null only when the user explicitly requests no reminder" in prompt
-    assert "new_end_time when the user changes the ending time or duration" in prompt
+    assert "Never append Z, +08:00, or any timezone offset" in prompt
+    assert "Explicit foreign timezones are not supported" in prompt
+    assert "new_local_end when the user changes the ending time or duration" in prompt
     assert "Never state a date, start time, end time, or status" in prompt

@@ -189,9 +189,12 @@ updated_by_run_id
 
 Time rules:
 
-- Use timezone-aware datetimes in code.
+- Agent-facing scheduling tools accept local date/time values without `Z` or a numeric offset.
+- Resolve local values at the Dayboard boundary using the trusted `TenantContext.timezone`; never
+  accept timezone ownership from model or per-command browser input.
+- Use timezone-aware datetimes after that boundary.
 - Store canonical timestamps in PostgreSQL as timezone-aware values.
-- Store the user's intended IANA timezone separately, such as `Asia/Shanghai`.
+- Store the trusted product/tenant IANA timezone separately, such as `Asia/Shanghai`.
 - Natural-language time parsing must use an explicit reference time and timezone.
 
 ## API Rules

@@ -189,7 +189,7 @@ GET  /api/task-items
 ```
 
 The calendar and task collection endpoints are implemented as tenant-scoped, keyset-paginated
-read models. Calendar queries accept account-timezone `period=today|tomorrow` or explicit `from`
+read models. Calendar queries accept trusted-product-timezone `period=today|tomorrow` or explicit `from`
 and `to`, plus `limit` and `cursor`; task queries accept
 `status`, `due_from`, `due_to`, `limit`, and `cursor`. Responses expose UI-relevant schedule fields
 and Run correlation without exposing tenant ids or internal idempotency operation keys.
@@ -345,10 +345,11 @@ fields are injected by server closures and must not be exposed to the model:
 
 ```text
 model-visible fields:
-  title, start_time, end_time, timezone, participants, reminder, due_at, status
+  title, local_start, local_end, start_date, end_date, participants, reminder,
+  due_local, status, expected_updated_at
 
 server-injected fields:
-  session, tenant_id, user_id, run_id, request_id, permissions
+  session, tenant_id, user_id, timezone, run_id, request_id, permissions
 ```
 
 Dayboard should keep the command application service as the product boundary:
@@ -380,6 +381,12 @@ The model must not generate trusted context fields. The server injects them:
 - `run_id`
 - `thread_id`
 - `request_id`
+
+Model-visible scheduling datetimes are local values without `Z` or numeric offsets. Dayboard
+resolves them with `TenantContext.timezone` before calling domain services. The current product
+configuration is `Asia/Shanghai`; retaining the context field allows a future trusted tenant setting
+without changing Agent tool contracts. Browser-detected registration timezones are not trusted for
+scheduling.
 
 ## Product Tools
 
@@ -427,8 +434,7 @@ Input: Next Wednesday at 3pm, schedule a product review with Alice and remind me
 Tool call:
   create_calendar_entry(
     title="product review",
-    start_time="...",
-    timezone="Asia/Shanghai",
+    local_start="2026-07-15T15:00:00",
     participants=["Alice"],
     reminder={"offset": "P1D", "anchor": "start_time"}
   )

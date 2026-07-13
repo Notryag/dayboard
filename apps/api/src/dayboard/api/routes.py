@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -49,6 +49,7 @@ from dayboard.integrations.audio_probe import (
     InvalidAudioError,
     PyavAudioMetadataProbe,
 )
+from dayboard.timezones import resolve_local_date_window
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
     ConversationMessage,
@@ -98,15 +99,6 @@ def _validate_aware_range(
             raise HTTPException(status_code=422, detail=f"{name} must include a timezone offset")
     if start is not None and end is not None and start >= end:
         raise HTTPException(status_code=422, detail=f"{start_name} must be before {end_name}")
-
-
-def _local_day_range(day: date, timezone: str) -> tuple[datetime, datetime]:
-    zone = ZoneInfo(timezone)
-    next_day = day + timedelta(days=1)
-    return (
-        datetime.combine(day, time.min, tzinfo=zone),
-        datetime.combine(next_day, time.min, tzinfo=zone),
-    )
 
 
 def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
@@ -181,7 +173,11 @@ async def list_calendar_entries(
         local_today = datetime.now(ZoneInfo(tenant_context.timezone)).date()
         selected_date = local_today + timedelta(days=0 if period == "today" else 1)
     if selected_date is not None:
-        from_time, to_time = _local_day_range(selected_date, tenant_context.timezone)
+        from_time, to_time = resolve_local_date_window(
+            selected_date,
+            selected_date,
+            tenant_context.timezone,
+        )
     _validate_aware_range(from_time, to_time, "from", "to")
     try:
         return await ScheduleQueryService(session).list_calendar_entries(

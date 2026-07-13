@@ -10,7 +10,7 @@ def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
             category="tool",
             content={
                 "title": "提交周报",
-                "due_at": "2026-07-10T18:00:00+08:00",
+                "due_local": "2026-07-10T18:00:00",
                 "password": "must-not-leak",
                 "tenant_id": "must-not-leak",
             },
@@ -20,10 +20,10 @@ def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
 
     assert projected is not None
     assert projected.event_type == "tool_call_started"
-    assert projected.content == "正在创建任务“提交周报”，截止 2026-07-10T18:00:00+08:00"
+    assert projected.content == "正在创建任务“提交周报”，截止 2026-07-10T18:00:00"
     assert projected.metadata["inputs"] == {
         "title": "提交周报",
-        "due_at": "2026-07-10T18:00:00+08:00",
+        "due_local": "2026-07-10T18:00:00",
     }
     assert "must-not-leak" not in str(projected)
 
@@ -96,8 +96,8 @@ def test_cancel_search_and_tool_have_product_specific_progress() -> None:
             event_type="tool.started",
             category="tool",
             content={
-                "start_time": "2026-07-11T00:00:00+08:00",
-                "end_time": "2026-07-12T00:00:00+08:00",
+                "start_date": "2026-07-11",
+                "end_date": "2026-07-11",
                 "purpose": "cancel",
             },
             metadata={"call_id": "call-2", "tool_name": "search_calendar_entries"},
@@ -130,7 +130,7 @@ def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
             category="tool",
             content={
                 "calendar_entry_id": "00000000-0000-0000-0000-000000000001",
-                "new_end_time": "2026-07-14T17:00:00+08:00",
+                "new_local_end": "2026-07-14T17:00:00",
                 "expected_updated_at": "2026-07-13T08:00:00+00:00",
                 "secret": "must-not-leak",
             },
@@ -139,6 +139,6 @@ def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
     )
 
     assert projected is not None
-    assert projected.content == "正在修改日程结束时间为 2026-07-14T17:00:00+08:00"
-    assert projected.metadata["inputs"]["new_end_time"] == "2026-07-14T17:00:00+08:00"
+    assert projected.content == "正在修改日程结束时间为 2026-07-14T17:00:00"
+    assert projected.metadata["inputs"]["new_local_end"] == "2026-07-14T17:00:00"
     assert "must-not-leak" not in str(projected)

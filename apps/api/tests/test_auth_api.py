@@ -11,7 +11,7 @@ from dayboard.config import Settings, get_settings
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.context import TenantContext
-from dayboard.db.models import UserCredentialRow, UserSessionRow
+from dayboard.db.models import UserCredentialRow, UserProfileRow, UserSessionRow
 from dayboard.db.session import get_session
 from dayboard.main import app
 
@@ -52,24 +52,29 @@ async def test_register_login_logout_and_resolve_tenant_context(
                     "username": "Alice.Test",
                     "password": "correct-horse-battery-staple",
                     "email": "ALICE@example.com",
-                    "timezone": "Asia/Shanghai",
+                    "timezone": "America/New_York",
                 },
             )
             assert registered.status_code == 201
             assert registered.json()["username"] == "alice.test"
             assert registered.json()["email"] == "alice@example.com"
+            assert registered.json()["timezone"] == "Asia/Shanghai"
             assert "HttpOnly" in registered.headers["set-cookie"]
 
             credential = await db_session.scalar(select(UserCredentialRow))
             stored_session = await db_session.scalar(select(UserSessionRow))
+            profile = await db_session.scalar(select(UserProfileRow))
             assert credential is not None
             assert credential.password_hash != "correct-horse-battery-staple"
             assert stored_session is not None
             assert "dayboard_session" not in stored_session.token_hash
             assert len(stored_session.token_hash) == 64
+            assert profile is not None
+            assert profile.timezone == "Asia/Shanghai"
 
             me = await client.get("/api/auth/me")
             assert me.status_code == 200
+            assert me.json()["timezone"] == "Asia/Shanghai"
             owned_thread = await client.post("/api/threads", json={"title": "Private"})
             assert owned_thread.status_code == 201
 

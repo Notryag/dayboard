@@ -63,8 +63,10 @@ Defaults and clarification:
 
 - Missing `title` should trigger clarification unless it can be safely inferred from the input.
 - Missing `start_time` should trigger clarification.
-- Missing `timezone` should default to the user's configured timezone.
-- Missing `end_time` is allowed in Phase 1. The app may either store it as empty or apply a product default later.
+- Agent input omits `timezone`; the server resolves local values with the trusted product/tenant
+  timezone, currently `Asia/Shanghai`.
+- Missing `end_time` defaults to one hour after `start_time`.
+- Agent-created calendar entries default to an at-start `PT0M` reminder unless explicitly disabled.
 - `reminder` was stored as intent only in Phase 1. Phase 2 resolves it into a durable delivery
   outbox; `in_app` delivery is implemented, while external push/SMS/WeChat delivery remains pending.
 
@@ -88,7 +90,8 @@ Defaults and clarification:
 
 - Missing `title` should trigger clarification unless it can be safely inferred from the input.
 - Missing `status` defaults to `open`.
-- Missing `timezone` should default to the user's configured timezone when time data exists.
+- Agent input omits `timezone`; the server resolves local due times with the trusted product/tenant
+  timezone.
 - A task without `due_at` is allowed.
 - A task reminder requires `due_at` and is anchored to it.
 

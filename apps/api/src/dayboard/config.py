@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from uuid import UUID
 from typing import Literal
 
 from pydantic import AliasChoices
 from pydantic import Field
 from pydantic import SecretStr
+from pydantic import field_validator
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -145,6 +147,15 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://127.0.0.1:3000",
         validation_alias=AliasChoices("DAYBOARD_CORS_ORIGINS", "CORS_ORIGINS"),
     )
+
+    @field_validator("default_timezone")
+    @classmethod
+    def validate_default_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("DAYBOARD_DEFAULT_TIMEZONE must be a valid IANA timezone") from exc
+        return value
 
     @model_validator(mode="after")
     def require_secure_production_auth(self) -> "Settings":

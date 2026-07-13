@@ -47,9 +47,13 @@ that resolver constructs `TenantContext`:
 verified password session or external identity
   -> Dayboard user
   -> active tenant membership
-  -> user timezone and locale
+  -> trusted scheduling timezone and user locale
   -> TenantContext
 ```
+
+The scheduling timezone is currently server-configured as `Asia/Shanghai`. Browser-provided and
+model-provided timezone values are not trusted. `TenantContext.timezone` remains the boundary for a
+future tenant-owned setting.
 
 Provider tokens, organization claims, request headers, and model output never directly provide
 Dayboard `tenant_id`, `user_id`, timezone, roles, or permissions.

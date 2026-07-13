@@ -15,7 +15,6 @@ export type Registration = {
   password: string;
   email?: string;
   display_name?: string;
-  timezone: string;
   locale: string;
 };
 
