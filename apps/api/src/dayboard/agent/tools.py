@@ -59,10 +59,10 @@ class AgentCreateCalendarEntryInput(BaseModel):
     )
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = Field(
-        default=None,
+        default_factory=lambda: Reminder(offset="PT0M", anchor="start_time"),
         description=(
-            "Required when the user says remind/reminder/提醒. Use offset PT0M at the event "
-            "time unless the user explicitly requests an earlier offset; anchor must be start_time."
+            "Defaults to PT0M at the event start. Use the user's explicit advance offset when "
+            "provided, or null only when the user explicitly requests no reminder."
         ),
     )
 
@@ -277,9 +277,9 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description=(
-                "Create a Dayboard calendar entry when title and start time are known. When the "
-                "request says remind/reminder/提醒, always include reminder with PT0M or the "
-                "explicit advance offset."
+                "Create a Dayboard calendar entry when title and start time are known. Entries "
+                "default to a PT0M reminder at their start; explicit advance offsets override it, "
+                "and an explicit no-reminder request must pass null."
             ),
             args_schema=AgentCreateCalendarEntryInput,
         ),

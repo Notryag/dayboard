@@ -126,9 +126,11 @@ Implementation notes:
 - A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
 - The current release defaults each entry's timezone to the trusted user timezone. Explicit natural-language event timezones such as "9 AM New York time" are not supported yet and must not be inferred as the user's default timezone.
 - Relative date references are rendered as exact account-local dates in every agent system prompt.
-  Reminder intent is also explicit in the create-calendar tool schema, and final confirmations are
-  instructed to use returned object values. These prompt-level model behaviors still require live
-  acceptance; the server-enforced end-time update and no-op rejection paths have focused coverage.
+  Agent-created calendar entries deterministically default to an at-start `PT0M` reminder; explicit
+  advance offsets override it and an explicit no-reminder request can pass `null`. Final
+  confirmations are instructed to use returned object values. Relative-date and confirmation model
+  behavior still requires live acceptance; reminder defaults, end-time updates, and no-op rejection
+  are server-enforced with focused coverage.
 - When an assistant confirmation disagrees with stored scheduling data, correlate `agent_runs`,
   `agent_run_events`, and the calendar/task row. HTTP and worker logs intentionally omit command
   text; persisted `tool_call_started` events retain only allowlisted product inputs and are the

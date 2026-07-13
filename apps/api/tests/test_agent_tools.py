@@ -33,7 +33,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert "user_id" not in fields
     assert "owner_user_id" not in fields
     assert "created_by_run_id" not in fields
-    assert "PT0M" in schema["properties"]["reminder"]["description"]
+    assert "Defaults to PT0M" in schema["properties"]["reminder"]["description"]
     assert set(check_conflicts.args_schema.model_json_schema()["properties"]) == {
         "start_time",
         "end_time",
@@ -100,7 +100,11 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     }
     entry_result = await create_entry.ainvoke(entry_input)
     second_entry_result = await create_entry.ainvoke(
-        {"title": "客户会议", "start_time": "2026-07-10T11:00:00+08:00"}
+        {
+            "title": "客户会议",
+            "start_time": "2026-07-10T11:00:00+08:00",
+            "reminder": None,
+        }
     )
     repeated_entry_result = await create_entry.ainvoke(entry_input)
     task_result = await create_task.ainvoke(task_input)
@@ -143,6 +147,10 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert entries[0].owner_user_id == tenant_context.user_id
     assert entries[0].created_by_run_id == run_id
     assert entries[0].timezone == tenant_context.timezone
+    assert entries[0].reminder is not None
+    assert entries[0].reminder.offset == "PT0M"
+    assert entries[0].reminder.anchor == "start_time"
+    assert entries[1].reminder is None
     assert tasks[0].tenant_id == tenant_context.tenant_id
     assert tasks[0].owner_user_id == tenant_context.user_id
     assert tasks[0].created_by_run_id == run_id
