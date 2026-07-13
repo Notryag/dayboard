@@ -199,6 +199,7 @@ async def list_task_items(
         pattern="^(open|completed|cancelled|all)$",
     ),
     due_kind: Literal["all", "dated", "undated"] = Query(default="all"),
+    selected_date: date | None = Query(default=None, alias="date"),
     due_from: datetime | None = Query(default=None),
     due_to: datetime | None = Query(default=None),
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
@@ -206,11 +207,28 @@ async def list_task_items(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> SchedulePage[TaskItemView]:
+    if selected_date is not None and (due_from is not None or due_to is not None):
+        raise HTTPException(
+            status_code=422,
+            detail="date cannot be combined with due_from or due_to",
+        )
+    if selected_date is not None and due_kind == "undated":
+        raise HTTPException(
+            status_code=422,
+            detail="date cannot be combined with due_kind=undated",
+        )
     if due_kind == "undated" and (due_from is not None or due_to is not None):
         raise HTTPException(
             status_code=422,
             detail="due_kind=undated cannot be combined with due_from or due_to",
         )
+    if selected_date is not None:
+        due_from, due_to = resolve_local_date_window(
+            selected_date,
+            selected_date,
+            tenant_context.timezone,
+        )
+        due_kind = "dated"
     _validate_aware_range(due_from, due_to, "due_from", "due_to")
     resolved_status = None if task_status == "all" else TaskStatus(task_status)
     try:

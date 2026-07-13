@@ -196,10 +196,11 @@ GET  /api/task-items
 ```
 
 The calendar and task collection endpoints are implemented as tenant-scoped, keyset-paginated
-read models. Calendar queries accept trusted-product-timezone `period=today|tomorrow` or explicit `from`
-and `to`, plus `limit` and `cursor`; task queries accept
-`status`, `due_from`, `due_to`, `limit`, and `cursor`. Responses expose UI-relevant schedule fields
-and Run correlation without exposing tenant ids or internal idempotency operation keys.
+read models. Calendar queries accept trusted-product-timezone `period=today|tomorrow`, product-local
+`date`, or explicit `from` and `to`, plus `limit` and `cursor`; task queries accept product-local
+`date`, `status`, `due_kind`, `due_from`, `due_to`, `limit`, and `cursor`. The server resolves local
+dates with the authenticated account timezone. Responses expose UI-relevant schedule fields and Run
+correlation without exposing tenant ids or internal idempotency operation keys.
 
 `agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before enqueueing an arq job. The Redis queue provides cross-process delivery, while each worker opens an independent database session. Jobs use the run id as their unique queue id and re-check PostgreSQL state before execution because arq uses at-least-once delivery.
 

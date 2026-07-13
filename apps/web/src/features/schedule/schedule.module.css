@@ -239,6 +239,21 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.taskBody {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.taskBody time {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .taskList li:last-child {
   border-bottom: 0;
 }

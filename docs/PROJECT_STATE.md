@@ -82,10 +82,11 @@ The bullets below summarize decisions that affect current work; they do not repl
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
 deployment, and production password-auth switch are complete. The schedule inspector is now a
-date-selectable day view with a trusted-product-timezone calendar timeline and a separate undated-task
-area. Run execution now reconnects after a page reload or a transient SSE disconnect. API HTTP and
-validation errors now share a request-ID-bearing envelope, with stable product codes for auth,
-thread, Run, command conflict, clarification conflict, and queue failure paths.
+date-selectable day view with a trusted-product-timezone calendar timeline, selected-day tasks, and
+a separate undated-task area. Run execution now reconnects after a page reload or a transient SSE
+disconnect. API HTTP and validation errors now share a request-ID-bearing envelope, with stable
+product codes for auth, thread, Run, command conflict, clarification conflict, and queue failure
+paths.
 
 ## Implemented Capabilities
 
@@ -106,9 +107,9 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   limits, and tenant-plus-owner repository boundaries for conversations, Runs, schedules, tasks,
   transcripts, reminders, and provider usage.
 - Inspectable UI: a reusable day-view panel supports direct date selection, previous/next/today
-  navigation, a chronological event timeline, and a separate undated/open-task list. The server
-  owns trusted-timezone day boundaries; both sections have independent loading, empty, retry, and
-  cursor-pagination states.
+  navigation, a chronological event timeline, selected-day dated tasks, and a separate
+  undated/open-task list. The server owns trusted-timezone day boundaries; each section has
+  independent loading, empty, retry, and cursor-pagination states.
 - Calendar/task intent: the Agent treats concrete time blocks as calendar entries and
   completion-oriented actions as tasks. Vague timing such as "later" or "when free" remains an
   undated task, and independent actions in an unpunctuated voice transcript are split into tasks.

@@ -6,14 +6,13 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Circle,
-  ListTodo,
   LoaderCircle,
   RotateCw,
   X,
 } from "lucide-react";
 import { userFacingApiError } from "@/lib/api/client";
-import { getCalendarEntryPage, getUndatedTaskPage } from "./api";
+import { getCalendarEntryPage, getDatedTaskPage, getUndatedTaskPage } from "./api";
+import { TaskListSection } from "./TaskListSection";
 import type { CalendarEntry, TaskItem } from "./types";
 import styles from "./schedule.module.css";
 
@@ -66,25 +65,35 @@ function formatTime(value: string, timezone: string) {
 export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const entryRequestRef = useRef<AbortController | null>(null);
-  const taskRequestRef = useRef<AbortController | null>(null);
+  const datedTaskRequestRef = useRef<AbortController | null>(null);
+  const undatedTaskRequestRef = useRef<AbortController | null>(null);
   const today = dateKeyInTimezone(new Date(), timezone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [entryCursor, setEntryCursor] = useState<string | null>(null);
   const [entriesLoading, setEntriesLoading] = useState(true);
   const [entriesError, setEntriesError] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
-  const [taskCursor, setTaskCursor] = useState<string | null>(null);
-  const [tasksLoading, setTasksLoading] = useState(true);
-  const [tasksError, setTasksError] = useState<string | null>(null);
+  const [datedTasks, setDatedTasks] = useState<TaskItem[]>([]);
+  const [datedTaskCursor, setDatedTaskCursor] = useState<string | null>(null);
+  const [datedTasksLoading, setDatedTasksLoading] = useState(true);
+  const [datedTasksError, setDatedTasksError] = useState<string | null>(null);
+  const [undatedTasks, setUndatedTasks] = useState<TaskItem[]>([]);
+  const [undatedTaskCursor, setUndatedTaskCursor] = useState<string | null>(null);
+  const [undatedTasksLoading, setUndatedTasksLoading] = useState(true);
+  const [undatedTasksError, setUndatedTasksError] = useState<string | null>(null);
 
   function selectDate(date: string) {
     if (date === selectedDate) return;
     entryRequestRef.current?.abort();
+    datedTaskRequestRef.current?.abort();
     setEntries([]);
     setEntryCursor(null);
     setEntriesError(null);
     setEntriesLoading(true);
+    setDatedTasks([]);
+    setDatedTaskCursor(null);
+    setDatedTasksError(null);
+    setDatedTasksLoading(true);
     setSelectedDate(date);
   }
 
@@ -120,31 +129,63 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
     [],
   );
 
-  const loadTasks = useCallback(async (cursor?: string) => {
+  const loadDatedTasks = useCallback(async (date: string, cursor?: string) => {
     const append = Boolean(cursor);
-    taskRequestRef.current?.abort();
+    datedTaskRequestRef.current?.abort();
     const controller = new AbortController();
-    taskRequestRef.current = controller;
-    setTasksLoading(true);
-    setTasksError(null);
+    datedTaskRequestRef.current = controller;
+    setDatedTasksLoading(true);
+    setDatedTasksError(null);
     if (!append) {
-      setTasks([]);
-      setTaskCursor(null);
+      setDatedTasks([]);
+      setDatedTaskCursor(null);
+    }
+    try {
+      const page = await getDatedTaskPage(date, cursor, controller.signal);
+      setDatedTasks((current) => (append ? [...current, ...page.items] : page.items));
+      setDatedTaskCursor(page.next_cursor);
+    } catch (caught: unknown) {
+      if (!controller.signal.aborted) {
+        setDatedTasksError(
+          userFacingApiError(
+            caught,
+            append ? "暂时无法加载更多当天待办" : "暂时无法加载当天待办",
+          ),
+        );
+      }
+    } finally {
+      if (datedTaskRequestRef.current === controller) {
+        datedTaskRequestRef.current = null;
+        setDatedTasksLoading(false);
+      }
+    }
+  }, []);
+
+  const loadUndatedTasks = useCallback(async (cursor?: string) => {
+    const append = Boolean(cursor);
+    undatedTaskRequestRef.current?.abort();
+    const controller = new AbortController();
+    undatedTaskRequestRef.current = controller;
+    setUndatedTasksLoading(true);
+    setUndatedTasksError(null);
+    if (!append) {
+      setUndatedTasks([]);
+      setUndatedTaskCursor(null);
     }
     try {
       const page = await getUndatedTaskPage(cursor, controller.signal);
-      setTasks((current) => (append ? [...current, ...page.items] : page.items));
-      setTaskCursor(page.next_cursor);
+      setUndatedTasks((current) => (append ? [...current, ...page.items] : page.items));
+      setUndatedTaskCursor(page.next_cursor);
     } catch (caught: unknown) {
       if (!controller.signal.aborted) {
-        setTasksError(
+        setUndatedTasksError(
           userFacingApiError(caught, append ? "暂时无法加载更多待办" : "暂时无法加载待办"),
         );
       }
     } finally {
-      if (taskRequestRef.current === controller) {
-        taskRequestRef.current = null;
-        setTasksLoading(false);
+      if (undatedTaskRequestRef.current === controller) {
+        undatedTaskRequestRef.current = null;
+        setUndatedTasksLoading(false);
       }
     }
   }, []);
@@ -178,21 +219,43 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
 
   useEffect(() => {
     const controller = new AbortController();
-    taskRequestRef.current = controller;
-    void getUndatedTaskPage(undefined, controller.signal)
+    datedTaskRequestRef.current = controller;
+    void getDatedTaskPage(selectedDate, undefined, controller.signal)
       .then((page) => {
-        setTasks(page.items);
-        setTaskCursor(page.next_cursor);
+        setDatedTasks(page.items);
+        setDatedTaskCursor(page.next_cursor);
       })
       .catch((caught: unknown) => {
         if (!controller.signal.aborted) {
-          setTasksError(userFacingApiError(caught, "暂时无法加载待办"));
+          setDatedTasksError(userFacingApiError(caught, "暂时无法加载当天待办"));
         }
       })
       .finally(() => {
-        if (taskRequestRef.current === controller) {
-          taskRequestRef.current = null;
-          setTasksLoading(false);
+        if (datedTaskRequestRef.current === controller) {
+          datedTaskRequestRef.current = null;
+          setDatedTasksLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    undatedTaskRequestRef.current = controller;
+    void getUndatedTaskPage(undefined, controller.signal)
+      .then((page) => {
+        setUndatedTasks(page.items);
+        setUndatedTaskCursor(page.next_cursor);
+      })
+      .catch((caught: unknown) => {
+        if (!controller.signal.aborted) {
+          setUndatedTasksError(userFacingApiError(caught, "暂时无法加载待办"));
+        }
+      })
+      .finally(() => {
+        if (undatedTaskRequestRef.current === controller) {
+          undatedTaskRequestRef.current = null;
+          setUndatedTasksLoading(false);
         }
       });
     return () => controller.abort();
@@ -201,7 +264,8 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
   useEffect(
     () => () => {
       entryRequestRef.current?.abort();
-      taskRequestRef.current?.abort();
+      datedTaskRequestRef.current?.abort();
+      undatedTaskRequestRef.current?.abort();
     },
     [],
   );
@@ -331,58 +395,32 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
           ) : null}
         </section>
 
-        <section className={styles.section} aria-labelledby="task-section-heading">
-          <div className={styles.sectionHeader}>
-            <div className={`${styles.sectionTitle} ${styles.taskSectionTitle}`}>
-              <ListTodo size={18} aria-hidden="true" />
-              <h3 id="task-section-heading">未排时间</h3>
-            </div>
-            {!tasksLoading && !tasksError ? (
-              <span>{`${tasks.length}${taskCursor ? "+" : ""} 项`}</span>
-            ) : null}
-          </div>
+        <TaskListSection
+          cursor={datedTaskCursor}
+          emptyText="这一天还没有待办"
+          error={datedTasksError}
+          id="dated-task-section"
+          loading={datedTasksLoading}
+          onLoadMore={() => void loadDatedTasks(selectedDate, datedTaskCursor ?? undefined)}
+          onRetry={() => void loadDatedTasks(selectedDate)}
+          showDueTime
+          tasks={datedTasks}
+          timezone={timezone}
+          title="当天待办"
+        />
 
-          {tasksError && !tasks.length ? (
-            <div className={styles.notice} role="status">
-              <p>{tasksError}</p>
-              <button type="button" onClick={() => void loadTasks()}>
-                <RotateCw size={16} />
-                重试
-              </button>
-            </div>
-          ) : null}
-          {tasksLoading && !tasks.length ? (
-            <div className={styles.notice} role="status">
-              <LoaderCircle className={styles.spinner} size={20} />
-              <p>正在加载待办</p>
-            </div>
-          ) : null}
-          {!tasksLoading && !tasksError && !tasks.length ? (
-            <p className={styles.empty}>没有未安排时间的待办</p>
-          ) : null}
-          {tasks.length ? (
-            <ul className={styles.taskList}>
-              {tasks.map((task) => (
-                <li key={task.id}>
-                  <Circle size={17} aria-hidden="true" />
-                  <strong>{task.title}</strong>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-          {tasksError && tasks.length ? <p className={styles.inlineError}>{tasksError}</p> : null}
-          {taskCursor ? (
-            <button
-              className={styles.moreButton}
-              disabled={tasksLoading}
-              onClick={() => void loadTasks(taskCursor)}
-              type="button"
-            >
-              {tasksLoading ? <LoaderCircle className={styles.spinner} size={16} /> : <ChevronDown size={16} />}
-              {tasksLoading ? "正在加载" : "更多待办"}
-            </button>
-          ) : null}
-        </section>
+        <TaskListSection
+          cursor={undatedTaskCursor}
+          emptyText="没有未安排时间的待办"
+          error={undatedTasksError}
+          id="undated-task-section"
+          loading={undatedTasksLoading}
+          onLoadMore={() => void loadUndatedTasks(undatedTaskCursor ?? undefined)}
+          onRetry={() => void loadUndatedTasks()}
+          tasks={undatedTasks}
+          timezone={timezone}
+          title="未排时间"
+        />
       </div>
     </dialog>
   );

@@ -155,6 +155,7 @@ day-view dialog / mobile bottom sheet
   -> selected date heading
   -> previous day / date input / today / next day controls
   -> chronological calendar-entry timeline
+  -> dated open tasks for the selected day
   -> separate undated open-task list
 ```
 
@@ -163,6 +164,7 @@ not invent UTC offsets for arbitrary IANA timezones. Date-only navigation can us
 arithmetic; event instants are formatted in the timezone returned by the account API. This is
 currently server-configured `Asia/Shanghai`; a trusted tenant setting may replace it later.
 
-Keep timeline rows and task rows unframed, wrap long titles, preserve 44px controls, and give each
-section independent loading, empty, retry, and pagination states. Circular visualization, month/week
-layouts, direct editing, and reminder delivery UI are later product slices.
+Keep timeline rows and task rows unframed, show the due time on dated tasks, wrap long titles,
+preserve 44px controls, and give each section independent loading, empty, retry, and pagination
+states. Circular visualization, month/week layouts, direct editing, and reminder delivery UI are
+later product slices.

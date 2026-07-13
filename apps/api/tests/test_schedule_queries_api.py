@@ -143,11 +143,16 @@ async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
             "/api/task-items",
             params={"status": "open", "due_kind": "undated"},
         )
+        selected_date = await client.get(
+            "/api/task-items",
+            params={"status": "open", "date": "2026-07-13"},
+        )
 
     assert [item["title"] for item in first.json()["items"]] == ["Due task"]
     assert [item["title"] for item in second.json()["items"]] == ["No due task"]
     assert [item["title"] for item in completed.json()["items"]] == ["Completed task"]
     assert [item["title"] for item in undated.json()["items"]] == ["No due task"]
+    assert [item["title"] for item in selected_date.json()["items"]] == ["Due task"]
 
 
 async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> None:
@@ -169,9 +174,19 @@ async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> No
             "/api/task-items",
             params={"due_kind": "undated", "due_from": "2026-07-13T00:00:00+08:00"},
         )
+        mixed_task_date_range = await client.get(
+            "/api/task-items",
+            params={"date": "2026-07-13", "due_from": "2026-07-13T00:00:00+08:00"},
+        )
+        mixed_task_date_undated = await client.get(
+            "/api/task-items",
+            params={"date": "2026-07-13", "due_kind": "undated"},
+        )
 
     assert naive.status_code == 422
     assert reversed_range.status_code == 422
     assert invalid_cursor.status_code == 422
     assert mixed_date_range.status_code == 422
     assert mixed_undated_range.status_code == 422
+    assert mixed_task_date_range.status_code == 422
+    assert mixed_task_date_undated.status_code == 422
