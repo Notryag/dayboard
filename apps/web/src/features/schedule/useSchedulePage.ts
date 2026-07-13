@@ -10,6 +10,7 @@ type UseSchedulePageOptions<T> = {
   loadErrorMessage: string;
   loadMoreErrorMessage: string;
   loadPage: PageLoader<T>;
+  reloadKey?: string | number;
 };
 
 export type SchedulePageResource<T> = {
@@ -25,6 +26,7 @@ export function useSchedulePage<T>({
   loadErrorMessage,
   loadMoreErrorMessage,
   loadPage,
+  reloadKey = 0,
 }: UseSchedulePageOptions<T>): SchedulePageResource<T> {
   const requestRef = useRef<AbortController | null>(null);
   const [items, setItems] = useState<T[]>([]);
@@ -74,7 +76,7 @@ export function useSchedulePage<T>({
       controller?.abort();
       if (requestRef.current === controller) requestRef.current = null;
     };
-  }, [load]);
+  }, [load, reloadKey]);
 
   const retry = useCallback(() => void load(), [load]);
   const loadMore = useCallback(() => {

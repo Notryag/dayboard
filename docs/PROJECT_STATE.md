@@ -29,12 +29,14 @@ The current direction is:
 - product name: Dayboard
 - frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
   Vercel remains an optional preview deployment
-- first UI surface: mobile-first chat-style command screen
+- primary UI surfaces: a voice-first conversation pane and a date-selectable day-view pane; mobile
+  switches them through first-level tabs and desktop keeps both visible in a two-pane workspace
 - voice status: browser recording, upload limits, release-to-transcribe-and-submit interaction, the
   provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
   production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
   part of release verification
-- first UI design approach: CSS variables/design tokens before detailed UI expansion
+- UI design approach: semantic CSS variables with a neutral canvas, teal brand/primary actions,
+  fuchsia AI/voice activity, blue calendar state, amber task state, and mint completion state
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`
 - model gateway config: OpenAI-compatible environment variables in `.env`
@@ -69,7 +71,8 @@ The bullets below summarize decisions that affect current work; they do not repl
 - shadcn/ui is the preferred first UI component-system candidate; use its CLI when selected.
 - TanStack Query is the preferred first candidate for server state once API calls become non-trivial.
 - Zustand or Jotai are acceptable candidates for shared client state when plain React state is no longer enough.
-- The first UI should focus on the conversation surface only: message history, text input, voice action, and send action.
+- Conversation and the day view are equal first-level product surfaces. Keep them separate on mobile
+  and visible together on desktop; do not return the day view to a hidden header dialog.
 - Visual choices should use CSS variables or shadcn theme tokens rather than hard-coded component colors.
 - Real provider credentials must stay in `.env` or a secret store and must not be committed.
 - Application rate limiting belongs at the FastAPI boundary first, with provider-level budgets added before real LLM calls.
@@ -81,9 +84,10 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
-deployment, and production password-auth switch are complete. The schedule inspector is now a
-date-selectable day view with a swipeable date rail, a chronological calendar/task agenda, and a
-separate undated-task area. Run execution now reconnects after a page reload or a transient SSE
+deployment, and production password-auth switch are complete. The application shell now uses mobile
+Conversation/Schedule tabs and a desktop conversation/day-view workspace. The schedule panel has a
+swipeable date rail, a chronological calendar/task agenda, and a separate undated-task area. Run
+execution now reconnects after a page reload or a transient SSE
 disconnect. API HTTP and validation errors now share a request-ID-bearing envelope, with stable
 product codes for auth, thread, Run, command conflict, clarification conflict, and queue failure
 paths.
@@ -106,7 +110,8 @@ paths.
   profiles, reusable web login state, production fail-closed configuration, endpoint-specific abuse
   limits, and tenant-plus-owner repository boundaries for conversations, Runs, schedules, tasks,
   transcripts, reminders, and provider usage.
-- Inspectable UI: a reusable day-view panel supports a native distant-date picker, a swipeable
+- Inspectable UI: the responsive shell presents conversation and schedule as first-level views. A
+  reusable day-view panel supports a native distant-date picker, a swipeable
   31-day rail, a chronological agenda merging calendar entries with dated tasks, and a separate
   undated/open-task list. The server owns trusted-timezone day boundaries; each source has
   independent loading, error, retry, stale-request cancellation, and cursor-pagination states.

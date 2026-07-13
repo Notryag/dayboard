@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { DateRail } from "./DateRail";
 import { DayAgendaSection } from "./DayAgendaSection";
 import { ScheduleHeader } from "./ScheduleHeader";
@@ -11,15 +11,15 @@ import type { CalendarEntry, TaskItem } from "./types";
 import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
-type ScheduleInspectorProps = {
-  onClose: () => void;
+type SchedulePanelProps = {
+  active: boolean;
+  refreshKey: number;
   timezone: string;
 };
 
 const headingId = "schedule-heading";
 
-export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
+export function SchedulePanel({ active, refreshKey, timezone }: SchedulePanelProps) {
   const today = dateKeyInTimezone(new Date(), timezone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [dateRailCenter, setDateRailCenter] = useState(today);
@@ -43,16 +43,19 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
     loadErrorMessage: "暂时无法加载日程",
     loadMoreErrorMessage: "暂时无法加载更多日程",
     loadPage: loadCalendarPage,
+    reloadKey: refreshKey,
   });
   const datedTasks = useSchedulePage<TaskItem>({
     loadErrorMessage: "暂时无法加载当天待办",
     loadMoreErrorMessage: "暂时无法加载更多当天待办",
     loadPage: loadDatedTaskPage,
+    reloadKey: refreshKey,
   });
   const undatedTasks = useSchedulePage<TaskItem>({
     loadErrorMessage: "暂时无法加载待办",
     loadMoreErrorMessage: "暂时无法加载更多待办",
     loadPage: loadUndatedTaskPage,
+    reloadKey: refreshKey,
   });
 
   const jumpToDate = useCallback((date: string) => {
@@ -60,36 +63,15 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
     setDateRailCenter(date);
   }, []);
 
-  useLayoutEffect(() => {
-    const dialog = dialogRef.current;
-    if (dialog && !dialog.open) {
-      dialog.showModal();
-      dialog
-        .querySelector<HTMLElement>("[data-selected-date='true']")
-        ?.scrollIntoView({ block: "nearest", inline: "center" });
-      dialog.focus({ preventScroll: true });
-    }
-  }, []);
-
   return (
-    <dialog
-      aria-labelledby={headingId}
-      className={styles.dialog}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClose={onClose}
-      ref={dialogRef}
-      tabIndex={-1}
-    >
+    <section aria-labelledby={headingId} className={styles.panel}>
       <ScheduleHeader
         headingId={headingId}
-        onClose={onClose}
         onJumpToDate={jumpToDate}
         selectedDate={selectedDate}
       />
       <DateRail
+        active={active}
         centerDate={dateRailCenter}
         onCenterDate={setDateRailCenter}
         onSelectDate={setSelectedDate}
@@ -106,6 +88,6 @@ export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps)
           title="未排时间"
         />
       </div>
-    </dialog>
+    </section>
   );
 }

@@ -11,6 +11,7 @@ import {
 import styles from "./schedule.module.css";
 
 type DateRailProps = {
+  active: boolean;
   centerDate: string;
   onCenterDate: (date: string) => void;
   onSelectDate: (date: string) => void;
@@ -19,6 +20,7 @@ type DateRailProps = {
 };
 
 export function DateRail({
+  active,
   centerDate,
   onCenterDate,
   onSelectDate,
@@ -31,9 +33,9 @@ export function DateRail({
   const selectedMonth = selectedDate.slice(0, 7);
 
   useLayoutEffect(() => {
-    if (!railRef.current?.closest("dialog")?.open) return;
+    if (!railRef.current?.offsetWidth) return;
     selectedRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
-  }, [centerDate]);
+  }, [active, centerDate]);
 
   return (
     <nav className={styles.dateRail} aria-label="浏览日期" ref={railRef}>

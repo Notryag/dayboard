@@ -2,36 +2,45 @@
 
 ## Goal
 
-Dayboard should start with the smallest useful interface: a mobile-first conversation screen.
+Dayboard is a voice-first scheduling workspace with two equal product surfaces: conversation and the
+day view. It must remain efficient on a phone while using desktop space as a real work area rather
+than rendering a phone-shaped demo in the center of the viewport.
 
-The UI will likely change significantly later, so the first implementation should avoid hard-coded visual decisions scattered through components. Put colors, spacing, radius, shadows, and typography into CSS variables or theme tokens from the start.
+Visual decisions must not be scattered through components. Colors, spacing, radius, shadows,
+typography, control sizes, and motion belong in global semantic tokens. Geometry owned by one
+component belongs in custom properties on that component root.
 
-## First Screen
+## Responsive App Shell
 
-Phase 1 should render:
+The current application shell is:
 
 ```text
-mobile viewport
-  -> top safe area / app title
-  -> conversation history
-  -> assistant and user message bubbles
-  -> bottom input dock
-  -> text input
-  -> voice button
-  -> send button
+mobile (< 900px)
+  -> compact brand/date header
+  -> first-level Conversation / Schedule tabs
+  -> one active full-width view
+  -> conversation keeps the voice composer at the bottom
+
+desktop (>= 900px)
+  -> centered work surface, maximum width 1120px
+  -> compact shared brand/account header
+  -> conversation pane on the left
+  -> persistent day-view pane on the right
 ```
 
-Do not build calendar boards, dashboards, sidebars, or task panels until the command loop works.
+The desktop layout is a two-pane operational tool, not a dashboard of cards. The mobile tabs are the
+primary navigation and replace the old hidden calendar dialog entry point.
 
 ## Design Direction
 
 Dayboard should feel:
 
-- calm
+- calm but recognizable
 - precise
-- lightweight
+- modern
 - personal
 - work-focused
+- voice-first
 
 Avoid:
 
@@ -40,6 +49,37 @@ Avoid:
 - large dashboards before the core conversation works
 - one-hue palettes where everything is blue, purple, beige, or dark slate
 - hard-coded colors inside feature components
+
+### 2026 Color Direction
+
+The visual direction combines a Cloud Dancer-inspired neutral canvas with vivid semantic signals.
+The implementation colors are screen-oriented product colors, not claimed digital equivalents of
+proprietary forecast swatches.
+
+| Semantic role | Light token value | Product use |
+| --- | --- | --- |
+| canvas | `#eef2ef` | viewport around the work surface |
+| surface | `#f8f9f6` | primary application surface |
+| brand / primary | `#087a72` | selected dates, voice idle, send, focus |
+| AI / voice activity | `#d92d7a` | assistant mark, recording state, active progress |
+| calendar | `#4967e8` | calendar entries and agenda markers |
+| task | `#9a6700` | tasks and due-state markers |
+| success | `#16845b` | completed and successful states |
+| text | `#171b18` | primary readable content |
+
+Strong colors should occupy a minority of the interface. Use them for state and hierarchy, not as
+large decorative bands. Do not add gradients, decorative blobs, or arbitrary rainbow accents.
+
+Color ownership is stable:
+
+```text
+teal     -> brand, selection, primary action, voice idle
+fuchsia  -> AI identity and active voice processing
+blue     -> calendar entries
+amber    -> tasks and deadlines
+mint     -> completion and success
+red      -> errors and destructive/cancel states only
+```
 
 ## Tokens
 
@@ -50,24 +90,26 @@ opacity, shadows, and motion:
 
 ```css
 :root {
-  --color-bg: #f3f3f2;
-  --color-surface: #fafafa;
+  --color-bg: #eef2ef;
+  --color-surface: #f8f9f6;
   --color-surface-raised: #ffffff;
-  --color-surface-muted: #efefed;
-  --color-text: #111111;
-  --color-text-muted: #6b6b68;
-  --color-border: #d8d8d4;
+  --color-surface-muted: #edf2ee;
+  --color-text: #171b18;
+  --color-text-muted: #66716b;
+  --color-border: #d8e1dc;
 
-  --color-primary: #111111;
+  --color-primary: #087a72;
   --color-primary-foreground: #ffffff;
-  --color-accent: #292927;
-  --color-warning: #555552;
-  --color-danger: #3b3b39;
+  --color-primary-surface: #e2f3ef;
+  --color-accent: #d92d7a;
+  --color-calendar: #4967e8;
+  --color-task: #9a6700;
+  --color-success: #16845b;
 
-  --message-user-bg: #111111;
+  --message-user-bg: var(--color-primary);
   --message-user-text: #ffffff;
   --message-assistant-bg: #ffffff;
-  --message-assistant-text: #111111;
+  --message-assistant-text: var(--color-text);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -88,7 +130,7 @@ opacity, shadows, and motion:
   --radius-lg: 12px;
   --radius-pill: 999px;
 
-  --shadow-soft: 0 14px 36px rgb(0 0 0 / 9%);
+  --shadow-soft: 0 24px 70px rgb(26 57 45 / 11%);
 }
 ```
 
@@ -103,12 +145,18 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 
 - Design mobile first, then expand carefully for desktop.
 - The conversation screen should be usable at 360px width.
+- Switch to the persistent two-pane workspace at 900px; do not squeeze two panes onto tablets.
+- Keep the desktop work surface at or below 1120px and give both panes independent scrolling.
 - Keep the input dock fixed or sticky at the bottom.
 - Respect mobile safe-area insets.
 - Message bubbles should have stable max widths and must not shift layout while loading.
 - Use icons for microphone and send actions, with accessible labels.
 - Keep touch targets at least 44px.
 - Avoid explanatory text in the product UI unless it is necessary for the current task.
+- Do not wrap page sections in decorative cards. Borders divide work regions; shadows are reserved
+  for the application shell, messages, dialogs, and primary controls.
+- Use transitions only for color, opacity, and small transforms. Date selection and resource loading
+  must not move fixed-format navigation controls.
 
 Voice is the composer's default input mode rather than a modal or separate page. Its stable states
 are:
@@ -128,13 +176,13 @@ audio contexts, timers, and local blobs after stop, cancel, or unmount.
 
 ## Component Boundaries
 
-Recommended first split:
+Current split:
 
 ```text
+app/page.tsx             # conversation command state and responsive view selection
+
 features/chat/
-  ChatShell.tsx
-  MessageList.tsx
-  MessageBubble.tsx
+  ChatMessageList.tsx   # message rendering and clarification placement
   Composer.tsx          # mode, capabilities, transcription, and errors
   VoiceComposer.tsx     # hold/release/cancel gestures and recording feedback
   TextComposer.tsx      # keyboard input, send, and mode switch
@@ -161,12 +209,12 @@ Agent run records, calendar entries, tasks, and transcripts should remain server
 
 ## Day View
 
-The first inspectable calendar surface is a focused day view opened from the conversation header.
-It is not a month board or a dashboard. Keep these stable regions:
+The focused day view is now a first-level product surface: persistent on desktop and selected through
+the mobile Schedule tab. It is not a month board or a dashboard. Keep these stable regions:
 
 ```text
-day-view dialog / mobile bottom sheet
-  -> selected weekday / native month-year date picker / close
+day-view panel
+  -> selected weekday / native month-year date picker
   -> horizontally scrollable date rail centered on the selected date
   -> chronological agenda merging calendar entries and dated tasks
   -> separate undated open-task list
@@ -189,8 +237,8 @@ carousel or date-picker dependency for this interaction.
 Component ownership:
 
 ```text
-ScheduleInspector.tsx  # selected date and resource composition
-ScheduleHeader.tsx     # weekday, native date picker, close
+SchedulePanel.tsx      # selected date and resource composition
+ScheduleHeader.tsx     # weekday and native date picker
 DateRail.tsx           # date window, selection, horizontal navigation
 DayAgendaSection.tsx   # merged chronological calendar/task display
 TaskListSection.tsx    # undated task display
@@ -200,3 +248,18 @@ date.ts                # cached display formatters and date-key arithmetic
 
 Circular visualization, month/week layouts, direct editing, and reminder delivery UI are later
 product slices.
+
+## Interaction And Performance Acceptance
+
+- Do not add a carousel, date-picker, animation, or state-management dependency for the current
+  interactions. Native horizontal scrolling, native date input, CSS Grid, and local state are enough.
+- Keep the 31-day rail window stable when a date is tapped. Recenter only after an explicit distant
+  date jump or keyboard navigation beyond the current window.
+- Cache date/time formatters and use tabular numerals for times and date cells.
+- Keep message, date-cell, toolbar, and composer dimensions stable across loading and active states.
+- Refresh the persistent day-view resources after a command completes and when mobile navigation
+  returns to Schedule; replacing the old remounting dialog must not leave stale schedule data.
+- Honor `prefers-reduced-motion`; no essential state may depend on animation.
+- Validate at 390x844 and 1280x800. There must be no horizontal overflow, overlapping controls,
+  blank panels, or page-level scrolling in place of pane scrolling.
+- Verify text and icon contrast in both light and dark color schemes before release.

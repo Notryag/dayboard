@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, LogOut } from "lucide-react";
+import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  CalendarDays,
+  CalendarRange,
+  LogOut,
+  MessageCircle,
+  Sparkles,
+} from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { ApiError, apiBaseUrl, apiFetch, userFacingApiError } from "@/lib/api/client";
-import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import {
   getConversationState,
   submitClarificationChoice,
@@ -18,17 +23,13 @@ import {
   RunActivityTicker,
   type RunActivityStep,
 } from "@/features/chat/RunActivityTicker";
+import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageList";
 import { Composer } from "@/features/chat/Composer";
-import { ScheduleInspector } from "@/features/schedule/ScheduleInspector";
+import { SchedulePanel } from "@/features/schedule/SchedulePanel";
+import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
 import styles from "./page.module.css";
 
-type ChatMessage = {
-  id: string;
-  role: "assistant" | "user";
-  text: string;
-  time: string;
-  runId?: string;
-};
+type PrimaryView = "chat" | "schedule";
 
 type CommandRunResponse = {
   run_id: string;
@@ -137,12 +138,18 @@ function ChatHome() {
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [activeView, setActiveView] = useState<PrimaryView>("chat");
+  const [scheduleRevision, setScheduleRevision] = useState(0);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
   const messagesRef = useRef<HTMLElement>(null);
 
   const apiUrl = useMemo(apiBaseUrl, []);
+  const timezone = account?.timezone ?? "Asia/Shanghai";
+  const todayLabel = useMemo(
+    () => formatAccessibleDate(dateKeyInTimezone(new Date(), timezone)),
+    [timezone],
+  );
 
   useEffect(() => {
     return () => activeStreamRef.current?.close();
@@ -204,6 +211,7 @@ function ChatHome() {
         try {
           const result = await followRun(activeRun.id);
           await refreshConversationState(resolvedThreadId);
+          setScheduleRevision((current) => current + 1);
           setMessages((current) =>
             current.some(
               (message) => message.role === "assistant" && message.runId === activeRun.id,
@@ -362,6 +370,7 @@ function ChatHome() {
       const result = await followRun(command.run_id);
 
       await refreshConversationState(threadId);
+      setScheduleRevision((current) => current + 1);
 
       setMessages((current) => [
         ...current,
@@ -402,6 +411,7 @@ function ChatHome() {
       setActiveRunId(command.run_id);
       const result = await followRun(command.run_id);
       await refreshConversationState(threadId);
+      setScheduleRevision((current) => current + 1);
       setMessages((current) => [
         ...current,
         createMessage("assistant", result, command.run_id),
@@ -426,25 +436,37 @@ function ChatHome() {
     await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
   }
 
+  function selectView(view: PrimaryView) {
+    setActiveView(view);
+    if (view === "schedule") setScheduleRevision((current) => current + 1);
+  }
+
+  function handleViewTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const nextView: PrimaryView =
+      event.key === "ArrowLeft" || event.key === "Home" ? "chat" : "schedule";
+    selectView(nextView);
+    window.requestAnimationFrame(() => document.getElementById(`${nextView}-tab`)?.focus());
+  }
+
   return (
     <div className={styles.page}>
-      <main className={styles.phone}>
-        <header className={styles.header}>
-          <div>
-            <p className={styles.kicker}>Dayboard</p>
-            <h1>日程助手</h1>
+      <main className={styles.appShell}>
+        <header className={styles.appHeader}>
+          <div className={styles.brand}>
+            <span aria-hidden="true" className={styles.brandMark}>
+              <CalendarRange size={21} strokeWidth={2.2} />
+            </span>
+            <div className={styles.brandText}>
+              <h1>Dayboard</h1>
+              <p className={styles.brandDate}>{todayLabel}</p>
+            </div>
           </div>
           <div className={styles.headerActions}>
-            <span className={styles.status}>在线</span>
-            <button
-              className={styles.headerButton}
-              onClick={() => setScheduleOpen(true)}
-              type="button"
-              aria-label="查看安排"
-              title="查看安排"
-            >
-              <CalendarDays size={18} />
-            </button>
+            <span className={styles.accountName}>
+              {account?.display_name || account?.username}
+            </span>
             <button
               className={styles.headerButton}
               onClick={() => void logout()}
@@ -457,55 +479,111 @@ function ChatHome() {
           </div>
         </header>
 
-        <section className={styles.messages} aria-label="对话记录" ref={messagesRef}>
-          {messages.map((message) => (
-            <article
-              className={`${styles.message} ${
-                message.role === "user" ? styles.userMessage : styles.assistantMessage
-              }`}
-              key={message.id}
-            >
-              <p>{message.text}</p>
-              {conversationState &&
-              message.role === "assistant" &&
-              message.runId === conversationState.state_data.source_run_id &&
-              conversationState.state_data.interaction ? (
-                <ClarificationInteraction
-                  disabled={isSubmitting}
-                  interaction={conversationState.state_data.interaction}
-                  onSelect={handleClarificationChoice}
+        <nav
+          aria-label="主要视图"
+          aria-orientation="horizontal"
+          className={styles.viewTabs}
+          role="tablist"
+        >
+          <button
+            aria-controls="chat-panel"
+            aria-selected={activeView === "chat"}
+            className={styles.viewTab}
+            id="chat-tab"
+            onClick={() => selectView("chat")}
+            onKeyDown={handleViewTabKeyDown}
+            role="tab"
+            tabIndex={activeView === "chat" ? 0 : -1}
+            type="button"
+          >
+            <MessageCircle aria-hidden="true" size={17} />
+            对话
+          </button>
+          <button
+            aria-controls="schedule-panel"
+            aria-selected={activeView === "schedule"}
+            className={styles.viewTab}
+            id="schedule-tab"
+            onClick={() => selectView("schedule")}
+            onKeyDown={handleViewTabKeyDown}
+            role="tab"
+            tabIndex={activeView === "schedule" ? 0 : -1}
+            type="button"
+          >
+            <CalendarDays aria-hidden="true" size={17} />
+            日程
+          </button>
+        </nav>
+
+        <div className={styles.workspace}>
+          <section
+            aria-labelledby="chat-tab"
+            className={`${styles.chatPane} ${
+              activeView === "chat" ? styles.paneActive : ""
+            }`}
+            id="chat-panel"
+            role="tabpanel"
+          >
+            <header className={styles.paneHeader}>
+              <div className={styles.paneTitle}>
+                <MessageCircle aria-hidden="true" size={18} />
+                <h2>对话</h2>
+              </div>
+              <span
+                aria-label="AI 可用"
+                className={styles.aiSignal}
+                role="img"
+                title="AI 可用"
+              >
+                <Sparkles size={17} strokeWidth={2.2} />
+              </span>
+            </header>
+
+            <ChatMessageList
+              conversationState={conversationState}
+              isSubmitting={isSubmitting}
+              messages={messages}
+              onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
+              scrollRef={messagesRef}
+            />
+
+            <div className={styles.composerDock}>
+              {isSubmitting ? (
+                <RunActivityTicker
+                  steps={
+                    activeProgress.length
+                      ? activeProgress
+                      : [{ eventType: "submitting", text: "正在提交请求" }]
+                  }
                 />
               ) : null}
-              <time>{message.time}</time>
-            </article>
-          ))}
-        </section>
+              <Composer
+                activeRunId={activeRunId}
+                disabled={!threadId}
+                isSubmitting={isSubmitting}
+                onCancelRun={() => void handleCancel()}
+                onChange={setInput}
+                onSubmit={(text) => void handleSubmit(text)}
+                value={input}
+              />
+            </div>
+          </section>
 
-        <div className={styles.composerDock}>
-          {isSubmitting ? (
-            <RunActivityTicker
-              steps={activeProgress.length ? activeProgress : [{
-                eventType: "submitting",
-                text: "正在提交请求",
-              }]}
+          <div
+            aria-labelledby="schedule-tab"
+            className={`${styles.schedulePane} ${
+              activeView === "schedule" ? styles.paneActive : ""
+            }`}
+            id="schedule-panel"
+            role="tabpanel"
+          >
+            <SchedulePanel
+              active={activeView === "schedule"}
+              refreshKey={scheduleRevision}
+              timezone={timezone}
             />
-          ) : null}
-          <Composer
-            activeRunId={activeRunId}
-            disabled={!threadId}
-            isSubmitting={isSubmitting}
-            onCancelRun={() => void handleCancel()}
-            onChange={setInput}
-            onSubmit={(text) => void handleSubmit(text)}
-            value={input}
-          />
+          </div>
         </div>
-        {scheduleOpen ? (
-          <ScheduleInspector
-            onClose={() => setScheduleOpen(false)}
-            timezone={account?.timezone ?? "Asia/Shanghai"}
-          />
-        ) : null}
       </main>
     </div>
   );

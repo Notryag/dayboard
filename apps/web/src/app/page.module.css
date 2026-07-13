@@ -1,75 +1,106 @@
 .page {
-  --chat-max-width: var(--app-shell-max-width);
-  --chat-header-min-height: 84px;
-  --chat-status-min-height: 28px;
-  --chat-message-max-width: 340px;
-  --chat-desktop-height: 860px;
-  --chat-desktop-viewport-gap: 48px;
+  --app-header-min-height: 76px;
+  --app-mobile-tabs-height: 52px;
+  --app-desktop-height: 900px;
+  --app-desktop-viewport-gap: 32px;
+  --app-brand-mark-size: 38px;
+  --app-pane-header-height: 56px;
+  --app-account-name-max-width: 160px;
+  --app-composer-backdrop-blur: 12px;
 
+  width: 100%;
   height: 100dvh;
   min-height: 0;
   display: flex;
   justify-content: center;
   overflow: hidden;
-  background: var(--color-bg);
   color: var(--color-text);
+  background: var(--color-bg);
 }
 
-.phone {
+.appShell {
   width: 100%;
-  max-width: var(--chat-max-width);
+  max-width: var(--app-shell-max-width);
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
   background: var(--color-surface);
 }
 
-.header {
-  min-height: var(--chat-header-min-height);
+.appHeader {
+  min-height: var(--app-header-min-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(env(safe-area-inset-top) + var(--space-5)) var(--space-5) var(--space-4);
+  gap: var(--space-4);
+  padding: calc(env(safe-area-inset-top) + var(--space-3)) var(--space-4) var(--space-3);
   border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-raised);
 }
 
-.kicker {
-  margin-bottom: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
+.brand {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.header h1 {
-  font-size: var(--font-size-heading);
-  line-height: var(--line-height-heading);
-  font-weight: var(--font-weight-bold);
-}
-
-.status {
-  min-height: var(--chat-status-min-height);
+.brandMark {
+  width: var(--app-brand-mark-size);
+  height: var(--app-brand-mark-size);
+  flex: 0 0 var(--app-brand-mark-size);
   display: inline-flex;
   align-items: center;
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-3);
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--color-primary-foreground);
+  background: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.brandText {
+  min-width: 0;
+}
+
+.brand h1 {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+}
+
+.brandDate {
+  overflow: hidden;
+  margin-top: var(--space-1);
   color: var(--color-text-muted);
-  background: var(--color-surface-raised);
-  font-size: var(--font-size-label);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .headerActions {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
+.accountName {
+  max-width: var(--app-account-name-max-width);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .headerButton {
   width: var(--control-size-compact);
   height: var(--control-size-compact);
+  flex: 0 0 var(--control-size-compact);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -78,57 +109,122 @@
   color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 .headerButton:hover {
-  background: color-mix(in srgb, var(--color-border), transparent 55%);
+  color: var(--color-text);
+  background: var(--color-surface-muted);
 }
 
-.messages {
+.headerButton:focus-visible,
+.viewTab:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.viewTabs {
+  height: var(--app-mobile-tabs-height);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.viewTab {
+  position: relative;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+}
+
+.viewTab::after {
+  position: absolute;
+  right: var(--space-5);
+  bottom: 0;
+  left: var(--space-5);
+  height: var(--border-width-accent);
+  border-radius: var(--radius-pill) var(--radius-pill) 0 0;
+  background: transparent;
+  content: "";
+}
+
+.viewTab[aria-selected="true"] {
+  color: var(--color-primary);
+}
+
+.viewTab[aria-selected="true"]::after {
+  background: var(--color-primary);
+}
+
+.workspace {
+  min-width: 0;
   min-height: 0;
+  overflow: hidden;
+}
+
+.chatPane,
+.schedulePane {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: none;
+}
+
+.chatPane {
+  --chat-message-max-width: 340px;
+
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--color-surface);
+}
+
+.paneActive {
+  display: grid;
+}
+
+.paneHeader {
+  height: var(--app-pane-header-height);
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  padding: var(--space-5) var(--space-4) var(--space-6);
+  padding: 0 var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
 }
 
-.message {
-  width: fit-content;
-  max-width: min(82%, var(--chat-message-max-width));
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-message);
-  padding: var(--space-3) var(--space-4) var(--space-2);
-  box-shadow: var(--shadow-message);
+.paneTitle {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-primary);
 }
 
-.message p {
+.paneTitle h2 {
+  color: var(--color-text);
   font-size: var(--font-size-body);
-  line-height: var(--line-height-relaxed);
+  font-weight: var(--font-weight-semibold);
 }
 
-.message time {
-  display: block;
-  margin-top: var(--space-2);
-  font-size: var(--font-size-micro);
-  line-height: var(--line-height-none);
-  opacity: var(--opacity-subtle);
-}
-
-.assistantMessage {
-  align-self: flex-start;
-  border-bottom-left-radius: var(--radius-md);
-  background: var(--message-assistant-bg);
-  color: var(--message-assistant-text);
-}
-
-.userMessage {
-  align-self: flex-end;
-  border-color: transparent;
-  border-bottom-right-radius: var(--radius-md);
-  background: var(--message-user-bg);
-  color: var(--message-user-text);
+.aiSignal {
+  width: var(--control-size-compact);
+  height: var(--control-size-compact);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
 }
 
 .composerDock {
@@ -136,19 +232,69 @@
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-4));
   border-top: var(--border-width) solid var(--color-border);
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface-raised), transparent 4%);
+  backdrop-filter: blur(var(--app-composer-backdrop-blur));
 }
 
-@media (min-width: 640px) {
+@media (max-width: 520px) {
+  .accountName {
+    display: none;
+  }
+}
+
+@media (min-width: 900px) {
   .page {
     align-items: center;
-    padding: var(--space-6);
+    padding: calc(var(--app-desktop-viewport-gap) / 2);
   }
 
-  .phone {
-    height: min(var(--chat-desktop-height), calc(100dvh - var(--chat-desktop-viewport-gap)));
+  .appShell {
+    height: min(
+      var(--app-desktop-height),
+      calc(100dvh - var(--app-desktop-viewport-gap))
+    );
+    grid-template-rows: auto minmax(0, 1fr);
     border: var(--border-width) solid var(--color-border);
     border-radius: var(--radius-shell);
     box-shadow: var(--shadow-soft);
+  }
+
+  .appHeader {
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .viewTabs {
+    display: none;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.22fr) minmax(400px, 0.88fr);
+  }
+
+  .chatPane,
+  .schedulePane,
+  .paneActive {
+    display: grid;
+  }
+
+  .chatPane {
+    --chat-message-max-width: 430px;
+  }
+
+  .schedulePane {
+    border-left: var(--border-width) solid var(--color-border);
+  }
+
+  .paneHeader,
+  .composerDock {
+    padding-right: var(--space-5);
+    padding-left: var(--space-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .headerButton {
+    transition: none;
   }
 }

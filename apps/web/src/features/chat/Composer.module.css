@@ -19,10 +19,10 @@
   align-items: center;
   gap: var(--space-2);
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-lg);
   padding: var(--space-1);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-soft);
+  box-shadow: var(--shadow-message);
 }
 
 .textComposer {
@@ -33,10 +33,13 @@
 .voiceComposer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-size);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .recordingComposer {
-  border-color: color-mix(in srgb, var(--color-danger), transparent 55%);
+  border-color: transparent;
 }
 
 .iconButton,
@@ -54,8 +57,12 @@
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
   cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
 }
 
 .voiceActionSpacer {
@@ -64,17 +71,23 @@
 
 .iconButton {
   color: var(--color-text-muted);
-  background: transparent;
+  background: var(--color-surface-muted);
 }
 
 .iconButton:hover:not(:disabled) {
   color: var(--color-text);
-  background: color-mix(in srgb, var(--color-border), transparent 55%);
+  background: var(--color-surface-hover);
 }
 
 .sendButton {
   color: var(--color-primary-foreground);
   background: var(--color-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.sendButton:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
 }
 
 .stopButton {
@@ -115,19 +128,25 @@
   height: var(--field-size);
   min-width: 0;
   border: 0;
-  border-radius: var(--radius-pill);
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-border), transparent 62%);
+  border-radius: var(--radius-lg);
+  color: var(--color-primary-foreground);
+  background: var(--color-primary);
+  box-shadow: var(--shadow-primary);
   cursor: pointer;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition:
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
 }
 
 .voiceHoldButton:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-border), transparent 42%);
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
 }
 
 .voiceHoldButton:disabled {
@@ -136,13 +155,15 @@
 }
 
 .voiceHoldButtonActive {
-  color: var(--color-danger);
-  background: var(--color-danger-surface);
+  color: var(--color-accent-foreground);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-accent);
 }
 
 .voiceHoldButtonCancel {
   color: var(--color-danger-foreground);
   background: var(--color-danger);
+  box-shadow: var(--shadow-danger);
 }
 
 .voiceButtonContent {
@@ -163,15 +184,25 @@
 }
 
 .durationLimit {
-  color: var(--color-text-muted);
+  color: currentColor;
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-medium);
+  opacity: 0.78;
 }
 
 .voiceHoldButtonCancel .durationLimit {
   color: currentColor;
   opacity: 0.78;
+}
+
+.voiceHoldButton:focus-visible,
+.iconButton:focus-visible,
+.sendButton:focus-visible,
+.stopButton:focus-visible,
+.dismissButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .levelBars {
@@ -245,6 +276,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .voiceHoldButton,
+  .iconButton,
+  .sendButton,
+  .stopButton {
+    transition: none;
+  }
+
   .spinner {
     animation-duration: var(--motion-spinner-reduced);
   }

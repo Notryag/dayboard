@@ -1,6 +1,7 @@
 .page,
 .loading {
-  --auth-panel-width: 380px;
+  --auth-panel-width: 400px;
+  --auth-panel-padding: 24px;
   --auth-tab-indicator-width: var(--border-width-strong);
 
   min-height: 100dvh;
@@ -17,6 +18,11 @@
 
 .authPanel {
   width: min(100%, var(--auth-panel-width));
+  padding: var(--auth-panel-padding);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-soft);
 }
 
 .brand {
@@ -26,6 +32,15 @@
   margin-bottom: var(--space-6);
   font-size: var(--font-size-subtitle);
   font-weight: var(--font-weight-bold);
+}
+
+.brand svg {
+  width: var(--control-size-compact);
+  height: var(--control-size-compact);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
 }
 
 .authPanel h1 {
@@ -81,6 +96,7 @@
 
 .form input:focus {
   border-color: var(--color-primary);
+  box-shadow: var(--shadow-focus);
 }
 
 .error {
@@ -96,6 +112,11 @@
   background: var(--color-primary);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
+  transition: background var(--motion-fast) ease;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--color-primary-hover);
 }
 
 .submit:disabled {

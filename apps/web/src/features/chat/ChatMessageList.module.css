@@ -1,0 +1,87 @@
+.messages {
+  --chat-assistant-mark-size: 28px;
+
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+  scrollbar-color: var(--color-border) transparent;
+  scrollbar-width: thin;
+}
+
+.messageRow {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.assistantRow {
+  justify-content: flex-start;
+}
+
+.userRow {
+  justify-content: flex-end;
+}
+
+.assistantMark {
+  width: var(--chat-assistant-mark-size);
+  height: var(--chat-assistant-mark-size);
+  flex: 0 0 var(--chat-assistant-mark-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-1);
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+  background: var(--color-accent-surface);
+}
+
+.message {
+  width: fit-content;
+  max-width: min(82%, var(--chat-message-max-width));
+  padding: var(--space-3) var(--space-4) var(--space-2);
+  border-radius: var(--radius-message);
+}
+
+.message p {
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-relaxed);
+}
+
+.message time {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-micro);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-height-none);
+  opacity: var(--opacity-subtle);
+}
+
+.assistantMessage {
+  border: var(--border-width) solid var(--color-border);
+  border-bottom-left-radius: var(--radius-sm);
+  color: var(--message-assistant-text);
+  background: var(--message-assistant-bg);
+  box-shadow: var(--shadow-message);
+}
+
+.userMessage {
+  border: var(--border-width) solid transparent;
+  border-bottom-right-radius: var(--radius-sm);
+  color: var(--message-user-text);
+  background: var(--message-user-bg);
+  box-shadow: var(--shadow-primary);
+}
+
+@media (min-width: 900px) {
+  .messages {
+    padding-right: var(--space-5);
+    padding-left: var(--space-5);
+  }
+}
