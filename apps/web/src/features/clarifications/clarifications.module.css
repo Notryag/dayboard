@@ -1,18 +1,20 @@
 .options {
+  --clarification-option-min-height: 52px;
+
   display: grid;
   gap: var(--space-2);
   margin-top: var(--space-3);
   padding-top: var(--space-3);
-  border-top: 1px solid color-mix(in srgb, var(--color-border), transparent 24%);
+  border-top: var(--border-width) solid color-mix(in srgb, var(--color-border), transparent 24%);
 }
 
 .option {
-  min-height: 52px;
+  min-height: var(--clarification-option-min-height);
   display: grid;
   gap: var(--space-1);
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text);
   background: var(--color-surface-raised);
@@ -25,21 +27,21 @@
 }
 
 .option:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .option:disabled {
   cursor: not-allowed;
-  opacity: 0.52;
+  opacity: var(--opacity-disabled);
 }
 
 .optionTitle {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
 }
 
 .optionTime {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
 }

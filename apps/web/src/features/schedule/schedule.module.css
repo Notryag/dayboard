@@ -1,16 +1,34 @@
 .dialog {
-  width: min(560px, calc(100% - 24px));
-  height: min(760px, calc(100dvh - 32px));
-  max-height: calc(100dvh - 32px);
+  --schedule-panel-width: 560px;
+  --schedule-panel-height: 760px;
+  --schedule-viewport-gap: 32px;
+  --schedule-date-cell-width: 50px;
+  --schedule-date-cell-height: 62px;
+  --schedule-date-gap: 6px;
+  --schedule-time-column-width: 52px;
+  --schedule-marker-column-width: 28px;
+  --schedule-agenda-row-min-height: 64px;
+  --schedule-task-row-min-height: 52px;
+  --schedule-empty-min-height: 76px;
+  --schedule-inline-action-size: 32px;
+  --schedule-backdrop-blur: 2px;
+  --schedule-outside-month-opacity: 0.46;
+
+  width: min(var(--schedule-panel-width), calc(100% - var(--schedule-viewport-gap)));
+  height: min(
+    var(--schedule-panel-height),
+    calc(100dvh - var(--schedule-viewport-gap))
+  );
+  max-height: calc(100dvh - var(--schedule-viewport-gap));
   grid-template-rows: auto auto minmax(0, 1fr);
   margin: auto;
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0;
   overflow: hidden;
   color: var(--color-text);
   background: var(--color-surface);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
+  box-shadow: var(--shadow-dialog);
 }
 
 .dialog[open] {
@@ -18,8 +36,8 @@
 }
 
 .dialog::backdrop {
-  background: rgb(0 0 0 / 48%);
-  backdrop-filter: blur(2px);
+  background: var(--color-backdrop);
+  backdrop-filter: blur(var(--schedule-backdrop-blur));
 }
 
 .header {
@@ -28,30 +46,30 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-5) var(--space-5) var(--space-3);
-}
-
-.header > div {
-  min-width: 0;
-}
-
-.header p {
-  margin-bottom: var(--space-1);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 650;
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  background: var(--color-surface);
 }
 
 .header h2 {
+  min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 19px;
-  line-height: 1.3;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.headerActions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
 }
 
 .iconButton {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: var(--control-size);
+  height: var(--control-size);
+  flex: 0 0 var(--control-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -60,50 +78,136 @@
   color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
 }
 
 .iconButton:hover {
   color: var(--color-text);
-  background: var(--color-surface-raised);
+  background: var(--color-surface-muted);
 }
 
-.dateNavigation {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 52px 44px;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-5) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.dateInput,
-.todayButton {
-  height: 44px;
+.monthPicker {
+  position: relative;
   min-width: 0;
-  border: 1px solid var(--color-border);
+  height: var(--control-size);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--color-text);
-  background: var(--color-surface-raised);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  transition: background var(--motion-fast) ease;
 }
 
-.dateInput {
+.monthPicker:hover {
+  background: var(--color-surface-muted);
+}
+
+.monthPicker input {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  padding: 0 var(--space-3);
-  font-size: 14px;
-}
-
-.todayButton {
-  padding: 0 var(--space-2);
-  font-size: 13px;
-  font-weight: 650;
+  height: 100%;
+  border: 0;
+  opacity: 0;
   cursor: pointer;
 }
 
-.todayButton:disabled {
+.monthPicker:has(input:focus-visible) {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.dateRail {
+  min-width: 0;
+  display: flex;
+  gap: var(--schedule-date-gap);
+  overflow-x: auto;
+  padding: var(--space-2) var(--space-5) var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+  background: var(--color-surface-muted);
+  scroll-padding-inline: var(--space-5);
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  overscroll-behavior-inline: contain;
+  touch-action: pan-x;
+}
+
+.dateRail::-webkit-scrollbar {
+  display: none;
+}
+
+.dateCell {
+  width: var(--schedule-date-cell-width);
+  height: var(--schedule-date-cell-height);
+  flex: 0 0 var(--schedule-date-cell-width);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   background: transparent;
-  cursor: default;
-  opacity: 0.65;
+  cursor: pointer;
+  scroll-snap-align: center;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.dateCell:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+
+.dateCell > span {
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+}
+
+.dateCell > strong {
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.dateCellToday {
+  color: var(--color-text);
+  background: var(--color-today-surface);
+}
+
+.dateCellSelected,
+.dateCellSelected:hover {
+  color: var(--color-selection-foreground);
+  background: var(--color-selection);
+}
+
+.dateCellOutsideMonth {
+  opacity: var(--schedule-outside-month-opacity);
+}
+
+.dateCellSelected.dateCellOutsideMonth {
+  opacity: 1;
+}
+
+.dateCell:focus-visible,
+.iconButton:focus-visible,
+.moreButton:focus-visible,
+.sourceError button:focus-visible,
+.notice button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .content {
@@ -118,11 +222,11 @@
 }
 
 .section + .section {
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-width) solid var(--color-border);
 }
 
 .sectionHeader {
-  min-height: 28px;
+  min-height: var(--schedule-marker-column-width);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -133,7 +237,7 @@
 .sectionHeader > span {
   flex: 0 0 auto;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
 }
 
 .sectionTitle {
@@ -141,117 +245,96 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--color-calendar);
 }
 
 .sectionTitle h3 {
   color: var(--color-text);
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+}
+
+.agendaSectionTitle {
+  color: var(--color-accent);
 }
 
 .taskSectionTitle {
   color: var(--color-task);
 }
 
-.timeline,
+.agendaList,
 .taskList {
   list-style: none;
 }
 
-.timeline > li {
-  min-height: 72px;
+.agendaList > li {
+  min-height: var(--schedule-agenda-row-min-height);
   display: grid;
-  grid-template-columns: 50px 14px minmax(0, 1fr);
-  align-items: stretch;
+  grid-template-columns:
+    var(--schedule-time-column-width)
+    var(--schedule-marker-column-width)
+    minmax(0, 1fr);
+  align-items: center;
   gap: var(--space-2);
 }
 
-.timeline time {
-  padding-top: 3px;
+.agendaList > li > time {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
-  line-height: 20px;
 }
 
-.timelineTrack {
-  position: relative;
-  display: block;
+.agendaMarker {
+  width: var(--schedule-marker-column-width);
+  height: var(--schedule-marker-column-width);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.timelineTrack > span {
-  position: absolute;
-  top: 7px;
-  left: 3px;
-  z-index: 1;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--color-surface);
-  border-radius: 50%;
-  background: var(--color-calendar);
-  box-shadow: 0 0 0 1px var(--color-calendar);
+.calendarMarker {
+  color: var(--color-calendar);
 }
 
-.timeline > li:not(:last-child) .timelineTrack::after {
-  position: absolute;
-  top: 15px;
-  bottom: -1px;
-  left: 6px;
-  width: 1px;
-  background: var(--color-border);
-  content: "";
+.taskMarker {
+  color: var(--color-task);
 }
 
-.eventBody {
+.agendaBody {
   min-width: 0;
   display: grid;
-  align-content: start;
+  align-content: center;
   gap: var(--space-1);
-  padding: 2px 0 var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  align-self: stretch;
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 
-.timeline > li:last-child .eventBody {
+.agendaList > li:last-child .agendaBody {
   border-bottom: 0;
 }
 
-.eventBody strong,
+.agendaBody strong,
 .taskList strong {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 1.45;
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-body);
 }
 
-.eventBody p {
+.agendaBody p {
   color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
 }
 
 .taskList li {
-  min-height: 54px;
+  min-height: var(--schedule-task-row-min-height);
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: var(--schedule-marker-column-width) minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
-}
-
-.taskBody {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.taskBody time {
-  flex: 0 0 auto;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 
 .taskList li:last-child {
@@ -264,9 +347,9 @@
 
 .notice,
 .empty {
-  min-height: 112px;
+  min-height: var(--schedule-empty-min-height);
   color: var(--color-text-muted);
-  font-size: 13px;
+  font-size: var(--font-size-label);
 }
 
 .notice {
@@ -280,12 +363,12 @@
 
 .notice button,
 .moreButton {
-  min-height: 44px;
+  min-height: var(--control-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text);
   background: var(--color-surface-raised);
@@ -302,26 +385,56 @@
   text-align: center;
 }
 
+.sourceError {
+  min-height: var(--control-size);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--color-danger);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
+}
+
+.sourceError button {
+  width: var(--schedule-inline-action-size);
+  height: var(--schedule-inline-action-size);
+  flex: 0 0 var(--schedule-inline-action-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: currentColor;
+  background: transparent;
+  cursor: pointer;
+}
+
 .inlineError {
   margin-top: var(--space-2);
   color: var(--color-danger);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-body);
 }
 
 .moreButton {
   width: 100%;
   margin-top: var(--space-3);
-  font-size: 13px;
+  font-size: var(--font-size-label);
+}
+
+.moreButton + .moreButton {
+  margin-top: var(--space-2);
 }
 
 .moreButton:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: var(--opacity-disabled);
 }
 
 .spinner {
-  animation: spin 900ms linear infinite;
+  animation: spin var(--motion-spinner) linear infinite;
 }
 
 @keyframes spin {
@@ -332,10 +445,11 @@
 
 @media (max-width: 520px) {
   .dialog {
+    --schedule-panel-height: 720px;
+
     width: 100%;
-    height: min(720px, 88dvh);
-    max-width: none;
-    max-height: 88dvh;
+    height: min(var(--schedule-panel-height), 88dvh);
+    max-height: 92dvh;
     margin: auto 0 0;
     border-right: 0;
     border-bottom: 0;
@@ -344,11 +458,13 @@
   }
 
   .header {
-    padding: var(--space-4) var(--space-4) var(--space-2);
+    padding: var(--space-3) var(--space-4) var(--space-2);
   }
 
-  .dateNavigation {
-    padding: 0 var(--space-4) var(--space-3);
+  .dateRail {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+    scroll-padding-inline: var(--space-4);
   }
 
   .content {
@@ -358,7 +474,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dateCell,
+  .iconButton,
+  .monthPicker {
+    transition: none;
+  }
+
   .spinner {
-    animation: none;
+    animation-duration: var(--motion-spinner-reduced);
   }
 }

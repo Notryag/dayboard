@@ -1,4 +1,11 @@
 .page {
+  --chat-max-width: 480px;
+  --chat-header-min-height: 84px;
+  --chat-status-min-height: 28px;
+  --chat-message-max-width: 340px;
+  --chat-desktop-height: 860px;
+  --chat-desktop-viewport-gap: 48px;
+
   height: 100dvh;
   min-height: 0;
   display: flex;
@@ -10,7 +17,7 @@
 
 .phone {
   width: 100%;
-  max-width: 480px;
+  max-width: var(--chat-max-width);
   height: 100%;
   min-height: 0;
   display: grid;
@@ -20,38 +27,38 @@
 }
 
 .header {
-  min-height: 84px;
+  min-height: var(--chat-header-min-height);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: calc(env(safe-area-inset-top) + var(--space-5)) var(--space-5) var(--space-4);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 
 .kicker {
   margin-bottom: var(--space-1);
   color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
 }
 
 .header h1 {
-  font-size: 22px;
-  line-height: 1.2;
-  font-weight: 700;
+  font-size: var(--font-size-heading);
+  line-height: var(--line-height-heading);
+  font-weight: var(--font-weight-bold);
 }
 
 .status {
-  min-height: 28px;
+  min-height: var(--chat-status-min-height);
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-pill);
   padding: 0 var(--space-3);
   color: var(--color-text-muted);
   background: var(--color-surface-raised);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
 }
 
 .headerActions {
@@ -61,8 +68,8 @@
 }
 
 .headerButton {
-  width: 40px;
-  height: 40px;
+  width: var(--control-size-compact);
+  height: var(--control-size-compact);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -89,24 +96,24 @@
 
 .message {
   width: fit-content;
-  max-width: min(82%, 340px);
-  border: 1px solid var(--color-border);
-  border-radius: 18px;
+  max-width: min(82%, var(--chat-message-max-width));
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-message);
   padding: var(--space-3) var(--space-4) var(--space-2);
-  box-shadow: 0 8px 20px rgb(0 0 0 / 5%);
+  box-shadow: var(--shadow-message);
 }
 
 .message p {
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-relaxed);
 }
 
 .message time {
   display: block;
   margin-top: var(--space-2);
-  font-size: 11px;
-  line-height: 1;
-  opacity: 0.62;
+  font-size: var(--font-size-micro);
+  line-height: var(--line-height-none);
+  opacity: var(--opacity-subtle);
 }
 
 .assistantMessage {
@@ -128,7 +135,7 @@
   display: grid;
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4) calc(env(safe-area-inset-bottom) + var(--space-4));
-  border-top: 1px solid var(--color-border);
+  border-top: var(--border-width) solid var(--color-border);
   background: var(--color-surface);
 }
 
@@ -139,9 +146,9 @@
   }
 
   .phone {
-    height: min(860px, calc(100dvh - 48px));
-    border: 1px solid var(--color-border);
-    border-radius: 28px;
+    height: min(var(--chat-desktop-height), calc(100dvh - var(--chat-desktop-viewport-gap)));
+    border: var(--border-width) solid var(--color-border);
+    border-radius: var(--radius-shell);
     box-shadow: var(--shadow-soft);
   }
 }

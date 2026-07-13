@@ -1,5 +1,8 @@
 .page,
 .loading {
+  --auth-panel-width: 380px;
+  --auth-tab-indicator-width: var(--border-width-strong);
+
   min-height: 100dvh;
   display: grid;
   place-items: center;
@@ -13,7 +16,7 @@
 }
 
 .authPanel {
-  width: min(100%, 380px);
+  width: min(100%, var(--auth-panel-width));
 }
 
 .brand {
@@ -21,26 +24,26 @@
   align-items: center;
   gap: var(--space-2);
   margin-bottom: var(--space-6);
-  font-size: 18px;
-  font-weight: 700;
+  font-size: var(--font-size-subtitle);
+  font-weight: var(--font-weight-bold);
 }
 
 .authPanel h1 {
   margin-bottom: var(--space-4);
-  font-size: 28px;
+  font-size: var(--font-size-display);
 }
 
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
   margin-bottom: var(--space-5);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 
 .tabs button {
-  min-height: 44px;
+  min-height: var(--control-size);
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: var(--auth-tab-indicator-width) solid transparent;
   color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
@@ -49,7 +52,7 @@
 .tabs button[aria-pressed="true"] {
   border-bottom-color: var(--color-primary);
   color: var(--color-text);
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .form {
@@ -61,14 +64,14 @@
   display: grid;
   gap: var(--space-2);
   color: var(--color-text-muted);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
 }
 
 .form input {
   width: 100%;
-  min-height: 46px;
-  border: 1px solid var(--color-border);
+  min-height: var(--field-size);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 0 var(--space-3);
   color: var(--color-text);
@@ -82,20 +85,20 @@
 
 .error {
   color: var(--color-danger);
-  font-size: 13px;
+  font-size: var(--font-size-label);
 }
 
 .submit {
-  min-height: 46px;
+  min-height: var(--field-size);
   border: 0;
   border-radius: var(--radius-md);
   color: var(--color-primary-foreground);
   background: var(--color-primary);
   cursor: pointer;
-  font-weight: 650;
+  font-weight: var(--font-weight-semibold);
 }
 
 .submit:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: var(--opacity-disabled);
 }

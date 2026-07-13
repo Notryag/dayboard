@@ -1,0 +1,151 @@
+"use client";
+
+import { useMemo } from "react";
+import { CalendarClock, ChevronDown, Circle, Clock3, LoaderCircle, RotateCw } from "lucide-react";
+import { formatScheduleTime } from "./date";
+import type { CalendarEntry, TaskItem } from "./types";
+import type { SchedulePageResource } from "./useSchedulePage";
+import styles from "./schedule.module.css";
+
+type DayAgendaSectionProps = {
+  calendar: SchedulePageResource<CalendarEntry>;
+  tasks: SchedulePageResource<TaskItem>;
+  timezone: string;
+};
+
+type AgendaItem =
+  | { entry: CalendarEntry; id: string; kind: "calendar"; timestamp: string }
+  | { id: string; kind: "task"; task: TaskItem; timestamp: string };
+
+function RetryNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className={styles.sourceError} role="status">
+      <span>{message}</span>
+      <button aria-label="重试" onClick={onRetry} title="重试" type="button">
+        <RotateCw size={15} />
+      </button>
+    </div>
+  );
+}
+
+export function DayAgendaSection({ calendar, tasks, timezone }: DayAgendaSectionProps) {
+  const items = useMemo<AgendaItem[]>(() => {
+    const calendarItems: AgendaItem[] = calendar.items.map((entry) => ({
+      entry,
+      id: `calendar-${entry.id}`,
+      kind: "calendar",
+      timestamp: entry.start_time,
+    }));
+    const taskItems: AgendaItem[] = tasks.items.flatMap((task) =>
+      task.due_at
+        ? [{ id: `task-${task.id}`, kind: "task" as const, task, timestamp: task.due_at }]
+        : [],
+    );
+    return [...calendarItems, ...taskItems].sort((left, right) => {
+      const timeDifference = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+      if (timeDifference !== 0) return timeDifference;
+      return left.kind.localeCompare(right.kind);
+    });
+  }, [calendar.items, tasks.items]);
+
+  const loadingWithoutItems = !items.length && (calendar.loading || tasks.loading);
+  const hasErrors = Boolean(calendar.error || tasks.error);
+  const hasMore = Boolean(calendar.cursor || tasks.cursor);
+
+  return (
+    <section
+      aria-busy={calendar.loading || tasks.loading}
+      aria-labelledby="day-agenda-heading"
+      className={styles.section}
+    >
+      <div className={styles.sectionHeader}>
+        <div className={`${styles.sectionTitle} ${styles.agendaSectionTitle}`}>
+          <Clock3 aria-hidden="true" size={18} />
+          <h3 id="day-agenda-heading">当天安排</h3>
+        </div>
+        {!loadingWithoutItems && !hasErrors ? (
+          <span>{`${items.length}${hasMore ? "+" : ""} 项`}</span>
+        ) : null}
+      </div>
+
+      {loadingWithoutItems ? (
+        <div className={styles.notice} role="status">
+          <LoaderCircle className={styles.spinner} size={20} />
+          <p>正在加载当天安排</p>
+        </div>
+      ) : null}
+
+      {!loadingWithoutItems && !items.length && !hasErrors ? (
+        <p className={styles.empty}>这一天还没有安排</p>
+      ) : null}
+
+      {items.length ? (
+        <ol className={styles.agendaList}>
+          {items.map((item) => (
+            <li key={item.id}>
+              <time dateTime={item.timestamp}>{formatScheduleTime(item.timestamp, timezone)}</time>
+              <span
+                aria-hidden="true"
+                className={`${styles.agendaMarker} ${
+                  item.kind === "calendar" ? styles.calendarMarker : styles.taskMarker
+                }`}
+              >
+                {item.kind === "calendar" ? <CalendarClock size={16} /> : <Circle size={16} />}
+              </span>
+              <div className={styles.agendaBody}>
+                <strong>{item.kind === "calendar" ? item.entry.title : item.task.title}</strong>
+                <p>
+                  {item.kind === "calendar"
+                    ? `日程${
+                        item.entry.end_time
+                          ? ` · 至 ${formatScheduleTime(item.entry.end_time, timezone)}`
+                          : ""
+                      }${
+                        item.entry.participants.length
+                          ? ` · ${item.entry.participants.length} 位参与者`
+                          : ""
+                      }`
+                    : "待办"}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+
+      {calendar.error ? <RetryNotice message={calendar.error} onRetry={calendar.retry} /> : null}
+      {tasks.error ? <RetryNotice message={tasks.error} onRetry={tasks.retry} /> : null}
+
+      {calendar.cursor ? (
+        <button
+          className={styles.moreButton}
+          disabled={calendar.loading}
+          onClick={calendar.loadMore}
+          type="button"
+        >
+          {calendar.loading ? (
+            <LoaderCircle className={styles.spinner} size={16} />
+          ) : (
+            <ChevronDown size={16} />
+          )}
+          {calendar.loading ? "正在加载" : "更多日程"}
+        </button>
+      ) : null}
+      {tasks.cursor ? (
+        <button
+          className={styles.moreButton}
+          disabled={tasks.loading}
+          onClick={tasks.loadMore}
+          type="button"
+        >
+          {tasks.loading ? (
+            <LoaderCircle className={styles.spinner} size={16} />
+          ) : (
+            <ChevronDown size={16} />
+          )}
+          {tasks.loading ? "正在加载" : "更多待办"}
+        </button>
+      ) : null}
+    </section>
+  );
+}

@@ -45,13 +45,15 @@ Avoid:
 
 Use CSS variables as the first design-token layer. If shadcn/ui is installed, map these concepts to the shadcn theme variables instead of inventing a parallel theme.
 
-Initial token groups:
+Initial token groups include semantic colors, spacing, typography, control sizing, radii, focus,
+opacity, shadows, and motion:
 
 ```css
 :root {
   --color-bg: #f3f3f2;
   --color-surface: #fafafa;
   --color-surface-raised: #ffffff;
+  --color-surface-muted: #efefed;
   --color-text: #111111;
   --color-text-muted: #6b6b68;
   --color-border: #d8d8d4;
@@ -74,6 +76,13 @@ Initial token groups:
   --space-5: 20px;
   --space-6: 24px;
 
+  --font-size-caption: 12px;
+  --font-size-label: 13px;
+  --font-size-ui: 14px;
+  --font-size-body: 15px;
+  --font-size-title: 19px;
+  --control-size: 44px;
+
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
@@ -84,6 +93,11 @@ Initial token groups:
 ```
 
 These values are starting points, not brand law. Keep the names stable so later visual redesigns can change values without rewriting components.
+
+Feature styles must not contain raw color values. Put theme-changing decisions in global semantic
+tokens. Put geometry that belongs to one component, such as date-cell width or agenda time-column
+width, in custom properties on that component's root. Structural CSS such as percentages, grid
+fractions, and media-query conditions may remain literal when CSS variables cannot express them.
 
 ## Layout Rules
 
@@ -152,10 +166,9 @@ It is not a month board or a dashboard. Keep these stable regions:
 
 ```text
 day-view dialog / mobile bottom sheet
-  -> selected date heading
-  -> previous day / date input / today / next day controls
-  -> chronological calendar-entry timeline
-  -> dated open tasks for the selected day
+  -> selected weekday / native month-year date picker / close
+  -> horizontally scrollable date rail centered on the selected date
+  -> chronological agenda merging calendar entries and dated tasks
   -> separate undated open-task list
 ```
 
@@ -164,7 +177,26 @@ not invent UTC offsets for arbitrary IANA timezones. Date-only navigation can us
 arithmetic; event instants are formatted in the timezone returned by the account API. This is
 currently server-configured `Asia/Shanghai`; a trusted tenant setting may replace it later.
 
-Keep timeline rows and task rows unframed, show the due time on dated tasks, wrap long titles,
-preserve 44px controls, and give each section independent loading, empty, retry, and pagination
-states. Circular visualization, month/week layouts, direct editing, and reminder delivery UI are
-later product slices.
+The selected date uses the semantic selection background. Today uses a neutral surface when it is
+not selected; do not use a decorative dot. Swiping scrolls the rail but does not change selection;
+tapping a cell selects it. The month-year control retains the native date picker for distant jumps.
+
+Keep agenda and task rows unframed, show the due/start time, wrap long titles, preserve 44px
+controls, and give each source independent loading, error, retry, and pagination state. The date rail
+uses a 31-day window, CSS scroll snapping, and cached `Intl.DateTimeFormat` instances; do not add a
+carousel or date-picker dependency for this interaction.
+
+Component ownership:
+
+```text
+ScheduleInspector.tsx  # selected date and resource composition
+ScheduleHeader.tsx     # weekday, native date picker, close
+DateRail.tsx           # date window, selection, horizontal navigation
+DayAgendaSection.tsx   # merged chronological calendar/task display
+TaskListSection.tsx    # undated task display
+useSchedulePage.ts     # pagination, stale-request cancellation, retry
+date.ts                # cached display formatters and date-key arithmetic
+```
+
+Circular visualization, month/week layouts, direct editing, and reminder delivery UI are later
+product slices.

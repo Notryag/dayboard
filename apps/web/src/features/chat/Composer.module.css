@@ -1,13 +1,24 @@
 .wrapper {
+  --composer-min-height: 56px;
+  --composer-recording-dot-size: 8px;
+  --composer-level-container-height: 22px;
+  --composer-level-bar-width: 3px;
+  --composer-level-bar-height: 20px;
+  --composer-level-gap: 2px;
+  --composer-level-motion: 80ms;
+  --composer-error-min-height: 36px;
+  --composer-error-icon-column: 18px;
+  --composer-error-action-size: 32px;
+
   display: grid;
   gap: var(--space-2);
 }
 
 .composer {
-  min-height: 56px;
+  min-height: var(--composer-min-height);
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-pill);
   padding: var(--space-1);
   background: var(--color-surface-raised);
@@ -16,12 +27,12 @@
 
 .textComposer {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: var(--control-size) minmax(0, 1fr) var(--control-size);
 }
 
 .voiceComposer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) var(--control-size);
 }
 
 .recordingComposer {
@@ -32,8 +43,8 @@
 .sendButton,
 .stopButton,
 .voiceActionSpacer {
-  width: 44px;
-  height: 44px;
+  width: var(--control-size);
+  height: var(--control-size);
 }
 
 .iconButton,
@@ -75,7 +86,7 @@
 .stopButton:disabled,
 .iconButton:disabled {
   cursor: not-allowed;
-  opacity: 0.46;
+  opacity: var(--opacity-disabled);
 }
 
 .inputWrap {
@@ -88,7 +99,7 @@
   outline: 0;
   background: transparent;
   color: var(--color-text);
-  font-size: 15px;
+  font-size: var(--font-size-body);
 }
 
 .inputWrap input::placeholder {
@@ -101,15 +112,15 @@
 
 .voiceHoldButton {
   width: 100%;
-  height: 46px;
+  height: var(--field-size);
   min-width: 0;
   border: 0;
   border-radius: var(--radius-pill);
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-border), transparent 62%);
   cursor: pointer;
-  font-size: 15px;
-  font-weight: 650;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -121,7 +132,7 @@
 
 .voiceHoldButton:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: var(--opacity-disabled);
 }
 
 .voiceHoldButtonActive {
@@ -144,8 +155,8 @@
 }
 
 .recordingDot {
-  width: 8px;
-  height: 8px;
+  width: var(--composer-recording-dot-size);
+  height: var(--composer-recording-dot-size);
   flex: 0 0 auto;
   border-radius: 50%;
   background: currentColor;
@@ -153,9 +164,9 @@
 
 .durationLimit {
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: var(--font-weight-medium);
 }
 
 .voiceHoldButtonCancel .durationLimit {
@@ -164,42 +175,45 @@
 }
 
 .levelBars {
-  height: 22px;
+  height: var(--composer-level-container-height);
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--composer-level-gap);
 }
 
 .levelBars span {
-  width: 3px;
-  height: 20px;
+  width: var(--composer-level-bar-width);
+  height: var(--composer-level-bar-height);
   border-radius: var(--radius-pill);
   background: currentColor;
   transform-origin: center;
-  transition: transform 80ms linear;
+  transition: transform var(--composer-level-motion) linear;
 }
 
 .spinner {
-  animation: spin 900ms linear infinite;
+  animation: spin var(--motion-spinner) linear infinite;
 }
 
 .voiceError {
-  min-height: 36px;
+  min-height: var(--composer-error-min-height);
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) 32px;
+  grid-template-columns:
+    var(--composer-error-icon-column)
+    minmax(0, 1fr)
+    var(--composer-error-action-size);
   align-items: center;
   gap: var(--space-2);
   padding-left: var(--space-3);
-  border-left: 3px solid var(--color-danger);
+  border-left: var(--border-width-accent) solid var(--color-danger);
   color: var(--color-danger);
   background: var(--color-danger-surface);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: var(--font-size-label);
+  line-height: var(--line-height-compact);
 }
 
 .dismissButton {
-  width: 32px;
-  height: 32px;
+  width: var(--composer-error-action-size);
+  height: var(--composer-error-action-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -232,7 +246,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spinner {
-    animation-duration: 1800ms;
+    animation-duration: var(--motion-spinner-reduced);
   }
 
   .levelBars span {
