@@ -58,7 +58,13 @@ class AgentCreateCalendarEntryInput(BaseModel):
         description="Optional ISO 8601 datetime with timezone offset.",
     )
     participants: list[str] = Field(default_factory=list)
-    reminder: Reminder | None = None
+    reminder: Reminder | None = Field(
+        default=None,
+        description=(
+            "Required when the user says remind/reminder/提醒. Use offset PT0M at the event "
+            "time unless the user explicitly requests an earlier offset; anchor must be start_time."
+        ),
+    )
 
 
 class AgentCreateTaskItemInput(BaseModel):
@@ -189,6 +195,9 @@ def build_scheduling_tools(
             "type": result.type,
             "calendar_entry_id": str(result.calendar_entry_id),
             "previous_start_time": result.previous_start_time.isoformat(),
+            "previous_end_time": (
+                result.previous_end_time.isoformat() if result.previous_end_time else None
+            ),
             "calendar_entry": _calendar_entry_view(result.calendar_entry),
             "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
         }
@@ -267,7 +276,11 @@ def build_scheduling_tools(
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
-            description="Create a Dayboard calendar entry when title and start time are known.",
+            description=(
+                "Create a Dayboard calendar entry when title and start time are known. When the "
+                "request says remind/reminder/提醒, always include reminder with PT0M or the "
+                "explicit advance offset."
+            ),
             args_schema=AgentCreateCalendarEntryInput,
         ),
         StructuredTool.from_function(
@@ -289,8 +302,10 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_reschedule_calendar_entry),
             name="reschedule_calendar_entry",
             description=(
-                "Move one identified calendar entry to a new start time while preserving "
-                "its duration, title, participants, reminder, and original timezone."
+                "Change one identified calendar entry's date, start time, and/or end time. "
+                "An omitted start stays unchanged; changing only the date or start preserves "
+                "the original duration unless new_end_time is supplied. "
+                "Title, participants, reminder, and original timezone are always preserved."
             ),
             args_schema=RescheduleCalendarEntryInput,
         ),

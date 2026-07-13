@@ -88,7 +88,8 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
 - Scheduling: natural-language create, search, reschedule, complete, and cancel for calendar entries
   and tasks, including multiple instructions per message and structured clarification; tenant-scoped
   calendar/task read APIs support account-local calendar dates, time/status/due-kind filters, and
-  keyset pagination for inspectable UI.
+  keyset pagination for inspectable UI. Calendar rescheduling can change date, start, and/or end
+  time; omitted start/end semantics are deterministic and exact no-op updates are rejected.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
   idempotency, queued arq execution, cancellation, stale-run recovery, reconnectable SSE execution,
   stable API errors, health checks, daily database backups, and rehearsed restore tooling.
@@ -124,6 +125,14 @@ Implementation notes:
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
 - A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
 - The current release defaults each entry's timezone to the trusted user timezone. Explicit natural-language event timezones such as "9 AM New York time" are not supported yet and must not be inferred as the user's default timezone.
+- Relative date references are rendered as exact account-local dates in every agent system prompt.
+  Reminder intent is also explicit in the create-calendar tool schema, and final confirmations are
+  instructed to use returned object values. These prompt-level model behaviors still require live
+  acceptance; the server-enforced end-time update and no-op rejection paths have focused coverage.
+- When an assistant confirmation disagrees with stored scheduling data, correlate `agent_runs`,
+  `agent_run_events`, and the calendar/task row. HTTP and worker logs intentionally omit command
+  text; persisted `tool_call_started` events retain only allowlisted product inputs and are the
+  authoritative diagnostic trace for model tool arguments.
 
 Next implementation slice:
 
@@ -131,7 +140,9 @@ Next implementation slice:
    acceptance with a non-sensitive Chinese sample recording
 2. add day-view item details and explicit actions, starting with event details and task completion;
    introduce narrow authenticated write APIs rather than routing deterministic UI actions through AI
-3. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
+3. after the provider budget window resets, run live acceptance for relative "tomorrow" dates,
+   at-time reminders, end-time-only changes, then resume broader `calendar-changes` and
+   `task-changes` acceptance
 4. add encrypted off-host backup replication when storage credentials and retention requirements are
    available; keep circular visualization, reminder UI, and external notification providers deferred
    until priorities change

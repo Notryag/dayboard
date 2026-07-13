@@ -33,6 +33,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert "user_id" not in fields
     assert "owner_user_id" not in fields
     assert "created_by_run_id" not in fields
+    assert "PT0M" in schema["properties"]["reminder"]["description"]
     assert set(check_conflicts.args_schema.model_json_schema()["properties"]) == {
         "start_time",
         "end_time",
@@ -47,6 +48,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
         "calendar_entry_id",
         "new_date",
         "new_start_time",
+        "new_end_time",
         "expected_updated_at",
     }
     assert set(cancel_entry.args_schema.model_json_schema()["properties"]) == {

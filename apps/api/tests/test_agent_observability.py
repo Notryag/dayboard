@@ -121,3 +121,24 @@ def test_cancel_search_and_tool_have_product_specific_progress() -> None:
     assert cancel is not None
     assert cancel.content == "正在取消日程"
     assert "must-not-leak" not in str(cancel)
+
+
+def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
+    projected = project_runtime_event(
+        RuntimeEvent(
+            event_type="tool.started",
+            category="tool",
+            content={
+                "calendar_entry_id": "00000000-0000-0000-0000-000000000001",
+                "new_end_time": "2026-07-14T17:00:00+08:00",
+                "expected_updated_at": "2026-07-13T08:00:00+00:00",
+                "secret": "must-not-leak",
+            },
+            metadata={"call_id": "call-4", "tool_name": "reschedule_calendar_entry"},
+        )
+    )
+
+    assert projected is not None
+    assert projected.content == "正在修改日程结束时间为 2026-07-14T17:00:00+08:00"
+    assert projected.metadata["inputs"]["new_end_time"] == "2026-07-14T17:00:00+08:00"
+    assert "must-not-leak" not in str(projected)

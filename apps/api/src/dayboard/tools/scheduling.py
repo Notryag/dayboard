@@ -52,12 +52,15 @@ class RescheduleCalendarEntryInput(BaseModel):
     calendar_entry_id: UUID
     new_date: date | None = None
     new_start_time: AwareDatetime | None = None
+    new_end_time: AwareDatetime | None = None
     expected_updated_at: AwareDatetime
 
     @model_validator(mode="after")
     def validate_target(self) -> RescheduleCalendarEntryInput:
-        if (self.new_date is None) == (self.new_start_time is None):
-            raise ValueError("provide exactly one of new_date or new_start_time")
+        if self.new_date is not None and self.new_start_time is not None:
+            raise ValueError("new_date and new_start_time cannot be combined")
+        if self.new_date is None and self.new_start_time is None and self.new_end_time is None:
+            raise ValueError("provide at least one calendar time change")
         return self
 
 
@@ -234,6 +237,10 @@ async def reschedule_calendar_entry(
     existing = await service.get_calendar_entry(context, data.calendar_entry_id)
     if existing is None:
         raise LookupError("Calendar entry not found")
+    if existing.updated_at != data.expected_updated_at:
+        raise CalendarEntryChangedError(
+            "Calendar entry changed after it was selected; search again before updating"
+        )
     duration = (
         existing.end_time - existing.start_time
         if existing.end_time is not None
@@ -241,18 +248,27 @@ async def reschedule_calendar_entry(
     )
     if data.new_start_time is not None:
         resolved_start_time = data.new_start_time
-    else:
+    elif data.new_date is not None:
         local_start = existing.start_time.astimezone(ZoneInfo(existing.timezone))
         resolved_start_time = datetime.combine(
             data.new_date,
             local_start.time(),
             tzinfo=ZoneInfo(existing.timezone),
         )
-    new_end_time = resolved_start_time + duration
+    else:
+        resolved_start_time = existing.start_time
+    resolved_end_time = data.new_end_time or resolved_start_time + duration
+    if resolved_end_time <= resolved_start_time:
+        raise ValueError("new_end_time must be after the resolved start time")
+    if (
+        resolved_start_time == existing.start_time
+        and resolved_end_time == existing.end_time
+    ):
+        raise ValueError("calendar entry already has the requested time range")
     conflicts = await service.list_calendar_conflicts(
         context,
         start_time=resolved_start_time,
-        end_time=new_end_time,
+        end_time=resolved_end_time,
         default_duration=timedelta(hours=1),
         exclude_entry_id=existing.id,
     )
@@ -260,7 +276,7 @@ async def reschedule_calendar_entry(
         context,
         entry_id=existing.id,
         start_time=resolved_start_time,
-        end_time=new_end_time,
+        end_time=resolved_end_time,
         expected_updated_at=data.expected_updated_at,
         updated_by_run_id=updated_by_run_id,
         operation_key=operation_key,
@@ -276,8 +292,10 @@ async def reschedule_calendar_entry(
         calendar_entry=updated,
         conflicts=list(conflicts),
         summary=(
-            f"Moved {updated.title} from {existing.start_time.isoformat()} "
-            f"to {updated.start_time.isoformat()} with {len(conflicts)} conflict(s)"
+            f"Changed {updated.title} from {existing.start_time.isoformat()}"
+            f"-{existing.end_time.isoformat() if existing.end_time else 'open'} to "
+            f"{updated.start_time.isoformat()}-{updated.end_time.isoformat()} "
+            f"with {len(conflicts)} conflict(s)"
         ),
     )
 

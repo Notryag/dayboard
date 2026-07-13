@@ -399,6 +399,54 @@ async def test_reschedule_rejects_stale_selected_version(
         )
 
 
+async def test_reschedule_can_change_only_end_time_and_rejects_noop(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="吃饭",
+            start_time="2026-07-14T12:00:00+08:00",
+            end_time="2026-07-14T13:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    extended = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=created.calendar_entry_id,
+            new_end_time="2026-07-14T17:00:00+08:00",
+            expected_updated_at=created.calendar_entry.updated_at,
+        ),
+        updated_by_run_id=uuid4(),
+        operation_key="extend-lunch",
+    )
+
+    assert extended.previous_start_time == created.calendar_entry.start_time
+    assert extended.previous_end_time == created.calendar_entry.end_time
+    assert extended.calendar_entry.start_time == created.calendar_entry.start_time
+    assert extended.calendar_entry.end_time == datetime(
+        2026, 7, 14, 17, 0, tzinfo=ZoneInfo("Asia/Shanghai")
+    )
+
+    with pytest.raises(ValueError, match="already has the requested time range"):
+        await reschedule_calendar_entry(
+            db_session,
+            tenant_context,
+            RescheduleCalendarEntryInput(
+                calendar_entry_id=extended.calendar_entry_id,
+                new_end_time="2026-07-14T17:00:00+08:00",
+                expected_updated_at=extended.calendar_entry.updated_at,
+            ),
+            updated_by_run_id=uuid4(),
+            operation_key="noop-extension",
+        )
+
+
 async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     db_session: AsyncSession,
     tenant_context: TenantContext,

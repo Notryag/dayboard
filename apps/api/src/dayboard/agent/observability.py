@@ -114,6 +114,7 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
             "calendar_entry_id",
             "new_date",
             "new_start_time",
+            "new_end_time",
             "expected_updated_at",
         ),
         "cancel_calendar_entry": (
@@ -159,8 +160,13 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             inputs.get("start_time"), inputs.get("end_time")
         )
     if tool_name == "reschedule_calendar_entry":
-        target = inputs.get("new_start_time") or inputs.get("new_date")
-        return f"正在修改日程时间为 {target}"
+        start = inputs.get("new_start_time") or inputs.get("new_date")
+        end = inputs.get("new_end_time")
+        if start and end:
+            return f"正在修改日程时间为 {start} 至 {end}"
+        if end:
+            return f"正在修改日程结束时间为 {end}"
+        return f"正在修改日程时间为 {start}"
     if tool_name == "cancel_calendar_entry":
         return "正在取消日程"
     if tool_name == "search_task_items":
