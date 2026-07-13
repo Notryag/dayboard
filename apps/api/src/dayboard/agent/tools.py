@@ -77,7 +77,10 @@ class AgentCreateTaskItemInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     due_local: NaiveDatetime | None = Field(
         default=None,
-        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
+        description=(
+            "Optional exact local deadline without Z or a timezone offset. Omit it for an "
+            "undated task; vague words such as later or when free are not exact deadlines."
+        ),
     )
     reminder: Reminder | None = None
     status: TaskStatus = TaskStatus.open
@@ -437,8 +440,10 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
             description=(
-                "Create a Dayboard task item. Any due_local value is local date/time without a "
-                "timezone offset."
+                "Create an action or outcome that the user needs to complete without reserving a "
+                "calendar time block. due_local is optional and must be omitted when the user gives "
+                "no exact deadline or only a vague expression such as later or when free. Any "
+                "provided due_local value is local date/time without a timezone offset."
             ),
             args_schema=AgentCreateTaskItemInput,
         ),

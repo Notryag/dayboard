@@ -27,4 +27,8 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "Never append Z, +08:00, or any timezone offset" in prompt
     assert "Explicit foreign timezones are not supported" in prompt
     assert "new_local_end when the user changes the ending time or duration" in prompt
+    assert "a calendar entry reserves a concrete time block" in prompt
+    assert "A date or broad daypart by itself does not reserve a calendar block" in prompt
+    assert "Create undated tasks for those actions and never invent a clock time" in prompt
+    assert "Never ask for a due time merely because an ordinary task is undated" in prompt
     assert "Never state a date, start time, end time, or status" in prompt

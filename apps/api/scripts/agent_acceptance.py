@@ -15,6 +15,7 @@ class Turn:
     message: str
     expected_tools: dict[str, int] = field(default_factory=dict)
     expected_status: str = "completed"
+    forbidden_tools: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +26,17 @@ class Scenario:
 
 
 SCENARIOS = (
+    Scenario(
+        name="undated-todos",
+        description="Turn vague, independent completion actions into undated tasks.",
+        turns=(
+            Turn(
+                "我等会儿要买个「验收{tag}洗衣液」、回复「验收{tag}消息」、取「验收{tag}快递」，帮我记一下",
+                {"create_task_item": 3},
+                forbidden_tools=("create_calendar_entry", "ask_clarification"),
+            ),
+        ),
+    ),
     Scenario(
         name="multi-create",
         description="Create distinct calendar and task objects from one command.",
@@ -160,7 +172,16 @@ async def _run_scenario(
             for name, expected in turn.expected_tools.items()
             if actual_tools.get(name, 0) < expected
         }
-        turn_passed = run["status"] == turn.expected_status and not missing_tools
+        forbidden_tools_used = {
+            name: actual_tools[name]
+            for name in turn.forbidden_tools
+            if actual_tools.get(name, 0) > 0
+        }
+        turn_passed = (
+            run["status"] == turn.expected_status
+            and not missing_tools
+            and not forbidden_tools_used
+        )
         passed = passed and turn_passed
         turns.append(
             {
@@ -171,6 +192,7 @@ async def _run_scenario(
                 "actual_tools": actual_tools,
                 "token_usage": _token_usage(events),
                 "missing_tools": missing_tools,
+                "forbidden_tools_used": forbidden_tools_used,
                 "passed": turn_passed,
                 "result": run.get("result_message"),
             }

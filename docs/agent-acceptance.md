@@ -33,6 +33,8 @@ inspect its durable events.
 
 Initial scenarios cover:
 
+- creating separate undated Todo items from vague, unpunctuated action phrases without creating a
+  calendar entry or asking for a time;
 - mixed calendar/task creation in one message;
 - modifying and cancelling multiple calendar entries in one Run (`calendar-changes`);
 - completing and changing multiple tasks in one Run (`task-changes`);

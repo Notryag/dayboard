@@ -109,6 +109,9 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   navigation, a chronological event timeline, and a separate undated/open-task list. The server
   owns trusted-timezone day boundaries; both sections have independent loading, empty, retry, and
   cursor-pagination states.
+- Calendar/task intent: the Agent treats concrete time blocks as calendar entries and
+  completion-oriented actions as tasks. Vague timing such as "later" or "when free" remains an
+  undated task, and independent actions in an unpunctuated voice transcript are split into tasks.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
