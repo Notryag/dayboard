@@ -1,21 +1,36 @@
 import { apiFetch } from "@/lib/api/client";
-import type { CalendarEntry, SchedulePage, ScheduleView, TaskItem } from "./types";
+import type { CalendarEntry, SchedulePage, TaskItem } from "./types";
 
-export async function getSchedulePage(
-  view: ScheduleView,
+async function getSchedulePage<T>(
+  path: string,
+  params: URLSearchParams,
   cursor?: string,
   signal?: AbortSignal,
-): Promise<SchedulePage<CalendarEntry | TaskItem>> {
-  const params = new URLSearchParams({ limit: "20" });
+): Promise<SchedulePage<T>> {
+  params.set("limit", "20");
   if (cursor) params.set("cursor", cursor);
-
-  const path = view === "tasks" ? "/api/task-items" : "/api/calendar-entries";
-  if (view === "tasks") {
-    params.set("status", "open");
-  } else {
-    params.set("period", view);
-  }
-
   const response = await apiFetch(`${path}?${params}`, { signal });
-  return response.json() as Promise<SchedulePage<CalendarEntry | TaskItem>>;
+  return response.json() as Promise<SchedulePage<T>>;
+}
+
+export function getCalendarEntryPage(
+  date: string,
+  cursor?: string,
+  signal?: AbortSignal,
+) {
+  return getSchedulePage<CalendarEntry>(
+    "/api/calendar-entries",
+    new URLSearchParams({ date }),
+    cursor,
+    signal,
+  );
+}
+
+export function getUndatedTaskPage(cursor?: string, signal?: AbortSignal) {
+  return getSchedulePage<TaskItem>(
+    "/api/task-items",
+    new URLSearchParams({ status: "open", due_kind: "undated" }),
+    cursor,
+    signal,
+  );
 }

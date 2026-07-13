@@ -4,7 +4,7 @@ import base64
 import binascii
 from datetime import datetime
 import json
-from typing import Generic, TypeVar
+from typing import Generic, Literal, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -139,6 +139,7 @@ class ScheduleQueryService:
         context: TenantContext,
         *,
         status: TaskStatus | None,
+        due_kind: Literal["all", "dated", "undated"],
         due_from: datetime | None,
         due_to: datetime | None,
         cursor: str | None,
@@ -164,6 +165,7 @@ class ScheduleQueryService:
         rows = await self.task_items.list_page(
             context,
             status=status,
+            due_kind=due_kind,
             due_from=due_from,
             due_to=due_to,
             cursor_due_at=cursor_due,

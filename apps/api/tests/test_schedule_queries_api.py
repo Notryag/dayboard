@@ -75,6 +75,10 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
             },
         )
         today = await client.get("/api/calendar-entries", params={"period": "today"})
+        selected_date = await client.get(
+            "/api/calendar-entries",
+            params={"date": scheduled_day.date().isoformat()},
+        )
 
     assert first.status_code == 200
     assert [item["title"] for item in first.json()["items"]] == ["Morning"]
@@ -82,6 +86,10 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
     assert [item["title"] for item in second.json()["items"]] == ["Afternoon"]
     assert second.json()["next_cursor"] is None
     assert [item["title"] for item in today.json()["items"]] == ["Today in account timezone"]
+    assert [item["title"] for item in selected_date.json()["items"]] == [
+        "Morning",
+        "Afternoon",
+    ]
     assert "tenant_id" not in first.json()["items"][0]
     assert "owner_user_id" not in first.json()["items"][0]
 
@@ -131,10 +139,15 @@ async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
             params={"status": "open", "limit": 1, "cursor": first.json()["next_cursor"]},
         )
         completed = await client.get("/api/task-items", params={"status": "completed"})
+        undated = await client.get(
+            "/api/task-items",
+            params={"status": "open", "due_kind": "undated"},
+        )
 
     assert [item["title"] for item in first.json()["items"]] == ["Due task"]
     assert [item["title"] for item in second.json()["items"]] == ["No due task"]
     assert [item["title"] for item in completed.json()["items"]] == ["Completed task"]
+    assert [item["title"] for item in undated.json()["items"]] == ["No due task"]
 
 
 async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> None:
@@ -148,7 +161,17 @@ async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> No
             },
         )
         invalid_cursor = await client.get("/api/calendar-entries", params={"cursor": "not-base64"})
+        mixed_date_range = await client.get(
+            "/api/calendar-entries",
+            params={"date": "2026-07-13", "from": "2026-07-13T00:00:00+08:00"},
+        )
+        mixed_undated_range = await client.get(
+            "/api/task-items",
+            params={"due_kind": "undated", "due_from": "2026-07-13T00:00:00+08:00"},
+        )
 
     assert naive.status_code == 422
     assert reversed_range.status_code == 422
     assert invalid_cursor.status_code == 422
+    assert mixed_date_range.status_code == 422
+    assert mixed_undated_range.status_code == 422

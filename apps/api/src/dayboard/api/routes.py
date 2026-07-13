@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -100,6 +100,15 @@ def _validate_aware_range(
         raise HTTPException(status_code=422, detail=f"{start_name} must be before {end_name}")
 
 
+def _local_day_range(day: date, timezone: str) -> tuple[datetime, datetime]:
+    zone = ZoneInfo(timezone)
+    next_day = day + timedelta(days=1)
+    return (
+        datetime.combine(day, time.min, tzinfo=zone),
+        datetime.combine(next_day, time.min, tzinfo=zone),
+    )
+
+
 def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
     return request.app.state.command_dispatcher
 
@@ -150,6 +159,7 @@ async def list_reminders(
 @router.get("/api/calendar-entries", response_model=SchedulePage[CalendarEntryView])
 async def list_calendar_entries(
     period: Literal["today", "tomorrow"] | None = Query(default=None),
+    selected_date: date | None = Query(default=None, alias="date"),
     from_time: datetime | None = Query(default=None, alias="from"),
     to_time: datetime | None = Query(default=None, alias="to"),
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
@@ -157,15 +167,21 @@ async def list_calendar_entries(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> SchedulePage[CalendarEntryView]:
-    if period is not None:
-        if from_time is not None or to_time is not None:
-            raise HTTPException(status_code=422, detail="period cannot be combined with from or to")
-        local_now = datetime.now(ZoneInfo(tenant_context.timezone))
-        day_offset = 0 if period == "today" else 1
-        from_time = (local_now + timedelta(days=day_offset)).replace(
-            hour=0, minute=0, second=0, microsecond=0
+    if period is not None and selected_date is not None:
+        raise HTTPException(status_code=422, detail="period cannot be combined with date")
+    if (period is not None or selected_date is not None) and (
+        from_time is not None or to_time is not None
+    ):
+        parameter = "period" if period is not None else "date"
+        raise HTTPException(
+            status_code=422,
+            detail=f"{parameter} cannot be combined with from or to",
         )
-        to_time = from_time + timedelta(days=1)
+    if period is not None:
+        local_today = datetime.now(ZoneInfo(tenant_context.timezone)).date()
+        selected_date = local_today + timedelta(days=0 if period == "today" else 1)
+    if selected_date is not None:
+        from_time, to_time = _local_day_range(selected_date, tenant_context.timezone)
     _validate_aware_range(from_time, to_time, "from", "to")
     try:
         return await ScheduleQueryService(session).list_calendar_entries(
@@ -186,6 +202,7 @@ async def list_task_items(
         alias="status",
         pattern="^(open|completed|cancelled|all)$",
     ),
+    due_kind: Literal["all", "dated", "undated"] = Query(default="all"),
     due_from: datetime | None = Query(default=None),
     due_to: datetime | None = Query(default=None),
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
@@ -193,12 +210,18 @@ async def list_task_items(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> SchedulePage[TaskItemView]:
+    if due_kind == "undated" and (due_from is not None or due_to is not None):
+        raise HTTPException(
+            status_code=422,
+            detail="due_kind=undated cannot be combined with due_from or due_to",
+        )
     _validate_aware_range(due_from, due_to, "due_from", "due_to")
     resolved_status = None if task_status == "all" else TaskStatus(task_status)
     try:
         return await ScheduleQueryService(session).list_task_items(
             tenant_context,
             status=resolved_status,
+            due_kind=due_kind,
             due_from=due_from,
             due_to=due_to,
             cursor=cursor,

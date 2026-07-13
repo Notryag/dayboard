@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select, update
@@ -306,6 +307,7 @@ class TaskItemRepository:
         context: TenantContext,
         *,
         status: TaskStatus | None,
+        due_kind: Literal["all", "dated", "undated"],
         due_from: datetime | None,
         due_to: datetime | None,
         cursor_due_at: datetime | None,
@@ -321,6 +323,10 @@ class TaskItemRepository:
         ]
         if status is not None:
             conditions.append(TaskItemRow.status == status.value)
+        if due_kind == "dated":
+            conditions.append(TaskItemRow.due_at.is_not(None))
+        elif due_kind == "undated":
+            conditions.append(TaskItemRow.due_at.is_(None))
         if due_from is not None:
             conditions.append(TaskItemRow.due_at >= due_from)
         if due_to is not None:

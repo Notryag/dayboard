@@ -1,6 +1,8 @@
 .dialog {
-  width: min(440px, calc(100% - 24px));
-  max-height: min(680px, calc(100dvh - 32px));
+  width: min(560px, calc(100% - 24px));
+  height: min(760px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px);
+  grid-template-rows: auto auto minmax(0, 1fr);
   margin: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -11,16 +13,26 @@
   box-shadow: 0 24px 80px rgb(0 0 0 / 24%);
 }
 
+.dialog[open] {
+  display: grid;
+}
+
 .dialog::backdrop {
   background: rgb(0 0 0 / 48%);
   backdrop-filter: blur(2px);
 }
 
 .header {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-5);
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-3);
+}
+
+.header > div {
+  min-width: 0;
 }
 
 .header p {
@@ -31,112 +43,261 @@
 }
 
 .header h2 {
+  overflow-wrap: anywhere;
   font-size: 19px;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
-.header button {
+.iconButton {
   width: 44px;
   height: 44px;
+  flex: 0 0 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--color-text-muted);
   background: transparent;
   cursor: pointer;
 }
 
-.tabs {
+.iconButton:hover {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.dateNavigation {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin: 0 var(--space-5);
+  grid-template-columns: 44px minmax(0, 1fr) 52px 44px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--color-border);
 }
 
-.tabs button {
-  min-height: 44px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  color: var(--color-text-muted);
-  background: transparent;
-  cursor: pointer;
-}
-
-.tabs button[aria-selected="true"] {
-  border-bottom-color: var(--color-text);
+.dateInput,
+.todayButton {
+  height: 44px;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
-  font-weight: 700;
+  background: var(--color-surface-raised);
 }
 
-.content {
-  min-height: 220px;
-  max-height: min(440px, 55dvh);
-  overflow-y: auto;
-  padding: var(--space-2) var(--space-5);
-}
-
-.notice {
-  display: grid;
-  min-height: 200px;
-  place-items: center;
-  color: var(--color-text-muted);
+.dateInput {
+  width: 100%;
+  padding: 0 var(--space-3);
   font-size: 14px;
 }
 
-.list {
+.todayButton {
+  padding: 0 var(--space-2);
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.todayButton:disabled {
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: default;
+  opacity: 0.65;
+}
+
+.content {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-5) max(var(--space-5), env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+}
+
+.section {
+  padding: var(--space-5) 0;
+}
+
+.section + .section {
+  border-top: 1px solid var(--color-border);
+}
+
+.sectionHeader {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.sectionHeader > span {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.sectionTitle {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-calendar);
+}
+
+.sectionTitle h3 {
+  color: var(--color-text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.taskSectionTitle {
+  color: var(--color-task);
+}
+
+.timeline,
+.taskList {
   list-style: none;
 }
 
-.list li {
-  min-height: 66px;
+.timeline > li {
+  min-height: 72px;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 50px 14px minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.timeline time {
+  padding-top: 3px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+}
+
+.timelineTrack {
+  position: relative;
+  display: block;
+}
+
+.timelineTrack > span {
+  position: absolute;
+  top: 7px;
+  left: 3px;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--color-surface);
+  border-radius: 50%;
+  background: var(--color-calendar);
+  box-shadow: 0 0 0 1px var(--color-calendar);
+}
+
+.timeline > li:not(:last-child) .timelineTrack::after {
+  position: absolute;
+  top: 15px;
+  bottom: -1px;
+  left: 6px;
+  width: 1px;
+  background: var(--color-border);
+  content: "";
+}
+
+.eventBody {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: 2px 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.timeline > li:last-child .eventBody {
+  border-bottom: 0;
+}
+
+.eventBody strong,
+.taskList strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.eventBody p {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.taskList li {
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
   border-bottom: 1px solid var(--color-border);
 }
 
-.list li:last-child {
+.taskList li:last-child {
   border-bottom: 0;
 }
 
-.itemIcon {
+.taskList svg {
+  color: var(--color-task);
+}
+
+.notice,
+.empty {
+  min-height: 112px;
   color: var(--color-text-muted);
+  font-size: 13px;
 }
 
-.list div {
-  min-width: 0;
-  display: grid;
-  gap: var(--space-1);
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  text-align: center;
 }
 
-.list strong,
-.list span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.list strong {
-  font-size: 14px;
-}
-
-.list div span {
-  color: var(--color-text-muted);
-  font-size: 12px;
-}
-
+.notice button,
 .moreButton {
-  width: calc(100% - 40px);
   min-height: 44px;
-  margin: var(--space-2) var(--space-5) var(--space-5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
   background: var(--color-surface-raised);
   cursor: pointer;
+}
+
+.notice button {
+  padding: 0 var(--space-4);
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.inlineError {
+  margin-top: var(--space-2);
+  color: var(--color-danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.moreButton {
+  width: 100%;
+  margin-top: var(--space-3);
+  font-size: 13px;
 }
 
 .moreButton:disabled {
@@ -144,15 +305,45 @@
   opacity: 0.55;
 }
 
+.spinner {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 520px) {
   .dialog {
     width: 100%;
+    height: min(720px, 88dvh);
     max-width: none;
-    max-height: 82dvh;
+    max-height: 88dvh;
     margin: auto 0 0;
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .header {
+    padding: var(--space-4) var(--space-4) var(--space-2);
+  }
+
+  .dateNavigation {
+    padding: 0 var(--space-4) var(--space-3);
+  }
+
+  .content {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
   }
 }

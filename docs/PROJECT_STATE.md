@@ -77,9 +77,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
-deployment, and production password-auth switch are complete. The minimal
-today/tomorrow/open-task inspector is now connected to the structured query APIs. The
-Run execution now reconnects after a page reload or a transient SSE disconnect. API HTTP and
+deployment, and production password-auth switch are complete. The schedule inspector is now a
+date-selectable day view with an account-timezone calendar timeline and a separate undated-task
+area. Run execution now reconnects after a page reload or a transient SSE disconnect. API HTTP and
 validation errors now share a request-ID-bearing envelope, with stable product codes for auth,
 thread, Run, command conflict, clarification conflict, and queue failure paths.
 
@@ -87,7 +87,8 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
 
 - Scheduling: natural-language create, search, reschedule, complete, and cancel for calendar entries
   and tasks, including multiple instructions per message and structured clarification; tenant-scoped
-  calendar/task read APIs support time or status filters and keyset pagination for inspectable UI.
+  calendar/task read APIs support account-local calendar dates, time/status/due-kind filters, and
+  keyset pagination for inspectable UI.
 - Reliability: PostgreSQL source of truth, tenant scoping, optimistic concurrency, per-operation
   idempotency, queued arq execution, cancellation, stale-run recovery, reconnectable SSE execution,
   stable API errors, health checks, daily database backups, and rehearsed restore tooling.
@@ -99,8 +100,10 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   profiles, reusable web login state, production fail-closed configuration, endpoint-specific abuse
   limits, and tenant-plus-owner repository boundaries for conversations, Runs, schedules, tasks,
   transcripts, reminders, and provider usage.
-- Inspectable UI: a reusable schedule panel exposes today, tomorrow, and open tasks with account-
-  timezone day boundaries, empty/error states, and cursor pagination.
+- Inspectable UI: a reusable day-view panel supports direct date selection, previous/next/today
+  navigation, a chronological event timeline, and a separate undated/open-task list. The server
+  owns account-timezone day boundaries; both sections have independent loading, empty, retry, and
+  cursor-pagination states.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,
@@ -126,11 +129,12 @@ Next implementation slice:
 
 1. configure the production Alibaba Cloud ASR credential and complete live browser-to-transcript
    acceptance with a non-sensitive Chinese sample recording
-2. expand the schedule inspector into a date-selectable day view with chronological calendar entries
-   and a separate undated/open-task area; keep circular visualization deferred
+2. add day-view item details and explicit actions, starting with event details and task completion;
+   introduce narrow authenticated write APIs rather than routing deterministic UI actions through AI
 3. resume `calendar-changes` and `task-changes` acceptance after the provider budget window resets
 4. add encrypted off-host backup replication when storage credentials and retention requirements are
-   available; keep reminder UI and external notification providers deferred until priorities change
+   available; keep circular visualization, reminder UI, and external notification providers deferred
+   until priorities change
 
 Use scaffolding tools where available. Do not manually recreate boilerplate that a maintained CLI can generate.
 

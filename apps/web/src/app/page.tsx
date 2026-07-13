@@ -129,7 +129,7 @@ function persistedMessage(message: ConversationMessage): ChatMessage {
 }
 
 function ChatHome() {
-  const { logout } = useAuth();
+  const { account, logout } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [input, setInput] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -497,7 +497,10 @@ function ChatHome() {
           />
         </div>
         {scheduleOpen ? (
-          <ScheduleInspector onClose={() => setScheduleOpen(false)} />
+          <ScheduleInspector
+            onClose={() => setScheduleOpen(false)}
+            timezone={account?.timezone ?? "Asia/Shanghai"}
+          />
         ) : null}
       </main>
     </div>

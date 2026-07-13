@@ -134,3 +134,24 @@ When the command flow becomes real:
 - use Zustand or Jotai only when state needs to be shared across distant components
 
 Agent run records, calendar entries, tasks, and transcripts should remain server-backed.
+
+## Day View
+
+The first inspectable calendar surface is a focused day view opened from the conversation header.
+It is not a month board or a dashboard. Keep these stable regions:
+
+```text
+day-view dialog / mobile bottom sheet
+  -> selected date heading
+  -> previous day / date input / today / next day controls
+  -> chronological calendar-entry timeline
+  -> separate undated open-task list
+```
+
+The API must interpret a selected `YYYY-MM-DD` using the trusted account timezone. The browser must
+not invent UTC offsets for arbitrary IANA timezones. Date-only navigation can use calendar-day
+arithmetic; event instants are formatted in the account timezone.
+
+Keep timeline rows and task rows unframed, wrap long titles, preserve 44px controls, and give each
+section independent loading, empty, retry, and pagination states. Circular visualization, month/week
+layouts, direct editing, and reminder delivery UI are later product slices.

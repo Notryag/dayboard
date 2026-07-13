@@ -1,110 +1,210 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarClock, CheckSquare, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CalendarClock,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  ListTodo,
+  LoaderCircle,
+  RotateCw,
+  X,
+} from "lucide-react";
 import { userFacingApiError } from "@/lib/api/client";
-import { getSchedulePage } from "./api";
-import type { CalendarEntry, ScheduleView, TaskItem } from "./types";
+import { getCalendarEntryPage, getUndatedTaskPage } from "./api";
+import type { CalendarEntry, TaskItem } from "./types";
 import styles from "./schedule.module.css";
 
 type ScheduleInspectorProps = {
   onClose: () => void;
+  timezone: string;
 };
 
-const views: Array<{ key: ScheduleView; label: string }> = [
-  { key: "today", label: "今天" },
-  { key: "tomorrow", label: "明天" },
-  { key: "tasks", label: "任务" },
-];
+function dateKeyInTimezone(value: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: timezone,
+  }).formatToParts(value);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function dateFromKey(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 12));
+}
+
+function shiftDateKey(value: string, amount: number) {
+  const date = dateFromKey(value);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDateHeading(value: string) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+    timeZone: "UTC",
+  }).format(dateFromKey(value));
+}
 
 function formatTime(value: string, timezone: string) {
   return new Intl.DateTimeFormat("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
     timeZone: timezone,
   }).format(new Date(value));
 }
 
-function isTask(item: CalendarEntry | TaskItem): item is TaskItem {
-  return "status" in item;
-}
-
-export function ScheduleInspector({ onClose }: ScheduleInspectorProps) {
+export function ScheduleInspector({ onClose, timezone }: ScheduleInspectorProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const requestRef = useRef<AbortController | null>(null);
-  const [view, setView] = useState<ScheduleView>("today");
-  const [items, setItems] = useState<Array<CalendarEntry | TaskItem>>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const entryRequestRef = useRef<AbortController | null>(null);
+  const taskRequestRef = useRef<AbortController | null>(null);
+  const today = dateKeyInTimezone(new Date(), timezone);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [entries, setEntries] = useState<CalendarEntry[]>([]);
+  const [entryCursor, setEntryCursor] = useState<string | null>(null);
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [entriesError, setEntriesError] = useState<string | null>(null);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [taskCursor, setTaskCursor] = useState<string | null>(null);
+  const [tasksLoading, setTasksLoading] = useState(true);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+
+  function selectDate(date: string) {
+    if (date === selectedDate) return;
+    entryRequestRef.current?.abort();
+    setEntries([]);
+    setEntryCursor(null);
+    setEntriesError(null);
+    setEntriesLoading(true);
+    setSelectedDate(date);
+  }
+
+  const loadEntries = useCallback(
+    async (date: string, cursor?: string) => {
+      const append = Boolean(cursor);
+      entryRequestRef.current?.abort();
+      const controller = new AbortController();
+      entryRequestRef.current = controller;
+      setEntriesLoading(true);
+      setEntriesError(null);
+      if (!append) {
+        setEntries([]);
+        setEntryCursor(null);
+      }
+      try {
+        const page = await getCalendarEntryPage(date, cursor, controller.signal);
+        setEntries((current) => (append ? [...current, ...page.items] : page.items));
+        setEntryCursor(page.next_cursor);
+      } catch (caught: unknown) {
+        if (!controller.signal.aborted) {
+          setEntriesError(
+            userFacingApiError(caught, append ? "暂时无法加载更多日程" : "暂时无法加载日程"),
+          );
+        }
+      } finally {
+        if (entryRequestRef.current === controller) {
+          entryRequestRef.current = null;
+          setEntriesLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const loadTasks = useCallback(async (cursor?: string) => {
+    const append = Boolean(cursor);
+    taskRequestRef.current?.abort();
+    const controller = new AbortController();
+    taskRequestRef.current = controller;
+    setTasksLoading(true);
+    setTasksError(null);
+    if (!append) {
+      setTasks([]);
+      setTaskCursor(null);
+    }
+    try {
+      const page = await getUndatedTaskPage(cursor, controller.signal);
+      setTasks((current) => (append ? [...current, ...page.items] : page.items));
+      setTaskCursor(page.next_cursor);
+    } catch (caught: unknown) {
+      if (!controller.signal.aborted) {
+        setTasksError(
+          userFacingApiError(caught, append ? "暂时无法加载更多待办" : "暂时无法加载待办"),
+        );
+      }
+    } finally {
+      if (taskRequestRef.current === controller) {
+        taskRequestRef.current = null;
+        setTasksLoading(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
-    if (!dialog) return;
+    if (dialog && !dialog.open) dialog.showModal();
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
-    requestRef.current = controller;
-    dialog.showModal();
-    void getSchedulePage("today", undefined, controller.signal)
+    entryRequestRef.current = controller;
+    void getCalendarEntryPage(selectedDate, undefined, controller.signal)
       .then((page) => {
-        setItems(page.items);
-        setCursor(page.next_cursor);
+        setEntries(page.items);
+        setEntryCursor(page.next_cursor);
       })
       .catch((caught: unknown) => {
         if (!controller.signal.aborted) {
-          setError(userFacingApiError(caught, "暂时无法加载安排"));
+          setEntriesError(userFacingApiError(caught, "暂时无法加载日程"));
         }
       })
       .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
-        if (requestRef.current === controller) requestRef.current = null;
+        if (entryRequestRef.current === controller) {
+          entryRequestRef.current = null;
+          setEntriesLoading(false);
+        }
       });
-    return () => {
-      controller.abort();
-      requestRef.current = null;
-    };
+    return () => controller.abort();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    taskRequestRef.current = controller;
+    void getUndatedTaskPage(undefined, controller.signal)
+      .then((page) => {
+        setTasks(page.items);
+        setTaskCursor(page.next_cursor);
+      })
+      .catch((caught: unknown) => {
+        if (!controller.signal.aborted) {
+          setTasksError(userFacingApiError(caught, "暂时无法加载待办"));
+        }
+      })
+      .finally(() => {
+        if (taskRequestRef.current === controller) {
+          taskRequestRef.current = null;
+          setTasksLoading(false);
+        }
+      });
+    return () => controller.abort();
   }, []);
 
-  async function changeView(nextView: ScheduleView) {
-    if (nextView === view) return;
-    setView(nextView);
-    setItems([]);
-    setCursor(null);
-    setError(null);
-    setIsLoading(true);
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    try {
-      const page = await getSchedulePage(nextView, undefined, controller.signal);
-      setItems(page.items);
-      setCursor(page.next_cursor);
-    } catch (caught) {
-      if (!controller.signal.aborted) {
-        setError(userFacingApiError(caught, "暂时无法加载安排"));
-      }
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setIsLoading(false);
-      }
-    }
-  }
-
-  async function loadMore() {
-    if (!cursor || isLoading) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const page = await getSchedulePage(view, cursor);
-      setItems((current) => [...current, ...page.items]);
-      setCursor(page.next_cursor);
-    } catch (caught) {
-      setError(userFacingApiError(caught, "暂时无法加载更多安排"));
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  useEffect(
+    () => () => {
+      entryRequestRef.current?.abort();
+      taskRequestRef.current?.abort();
+    },
+    [],
+  );
 
   return (
     <dialog
@@ -118,66 +218,172 @@ export function ScheduleInspector({ onClose }: ScheduleInspectorProps) {
     >
       <div className={styles.header}>
         <div>
-          <p>安排</p>
-          <h2>我的日程与任务</h2>
+          <p>日视图</p>
+          <h2>{formatDateHeading(selectedDate)}</h2>
         </div>
-        <button type="button" onClick={onClose} aria-label="关闭" title="关闭">
+        <button className={styles.iconButton} type="button" onClick={onClose} aria-label="关闭" title="关闭">
           <X size={20} />
         </button>
       </div>
 
-      <div className={styles.tabs} role="tablist" aria-label="安排视图">
-        {views.map((candidate) => (
-          <button
-            aria-selected={view === candidate.key}
-            key={candidate.key}
-            onClick={() => void changeView(candidate.key)}
-            role="tab"
-            type="button"
-          >
-            {candidate.label}
-          </button>
-        ))}
-      </div>
+      <nav className={styles.dateNavigation} aria-label="选择日期">
+        <button
+          className={styles.iconButton}
+          type="button"
+          onClick={() => selectDate(shiftDateKey(selectedDate, -1))}
+          aria-label="前一天"
+          title="前一天"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <input
+          className={styles.dateInput}
+          type="date"
+          value={selectedDate}
+          onChange={(event) => {
+            if (event.target.value) selectDate(event.target.value);
+          }}
+          aria-label="日期"
+        />
+        <button
+          className={styles.todayButton}
+          type="button"
+          disabled={selectedDate === today}
+          onClick={() => selectDate(today)}
+        >
+          今天
+        </button>
+        <button
+          className={styles.iconButton}
+          type="button"
+          onClick={() => selectDate(shiftDateKey(selectedDate, 1))}
+          aria-label="后一天"
+          title="后一天"
+        >
+          <ChevronRight size={20} />
+        </button>
+      </nav>
 
       <div className={styles.content} aria-live="polite">
-        {error ? <p className={styles.notice}>{error}</p> : null}
-        {!error && isLoading && !items.length ? (
-          <p className={styles.notice}>正在加载</p>
-        ) : null}
-        {!error && !isLoading && !items.length ? (
-          <p className={styles.notice}>{view === "tasks" ? "没有待办任务" : "没有安排"}</p>
-        ) : null}
-        {items.length ? (
-          <ol className={styles.list}>
-            {items.map((item) => (
-              <li key={item.id}>
-                <span className={styles.itemIcon} aria-hidden="true">
-                  {isTask(item) ? <CheckSquare size={17} /> : <CalendarClock size={17} />}
-                </span>
-                <div>
-                  <strong>{item.title}</strong>
-                  <span>
-                    {isTask(item)
-                      ? item.due_at
-                        ? `截止 ${formatTime(item.due_at, item.timezone)}`
-                        : "无截止时间"
-                      : `${formatTime(item.start_time, item.timezone)}${
-                          item.end_time ? ` - ${formatTime(item.end_time, item.timezone)}` : ""
-                        }`}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ol>
-        ) : null}
-      </div>
+        <section className={styles.section} aria-labelledby="calendar-section-heading">
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>
+              <CalendarClock size={18} aria-hidden="true" />
+              <h3 id="calendar-section-heading">日程</h3>
+            </div>
+            {!entriesLoading && !entriesError ? (
+              <span>{`${entries.length}${entryCursor ? "+" : ""} 项`}</span>
+            ) : null}
+          </div>
 
-      {cursor ? (
-        <button className={styles.moreButton} disabled={isLoading} onClick={loadMore} type="button">
-          {isLoading ? "正在加载" : "加载更多"}
-        </button>
-      ) : null}
+          {entriesError && !entries.length ? (
+            <div className={styles.notice} role="status">
+              <p>{entriesError}</p>
+              <button type="button" onClick={() => void loadEntries(selectedDate)}>
+                <RotateCw size={16} />
+                重试
+              </button>
+            </div>
+          ) : null}
+          {entriesLoading && !entries.length ? (
+            <div className={styles.notice} role="status">
+              <LoaderCircle className={styles.spinner} size={20} />
+              <p>正在加载日程</p>
+            </div>
+          ) : null}
+          {!entriesLoading && !entriesError && !entries.length ? (
+            <p className={styles.empty}>这一天还没有日程</p>
+          ) : null}
+          {entries.length ? (
+            <ol className={styles.timeline}>
+              {entries.map((entry) => (
+                <li key={entry.id}>
+                  <time dateTime={entry.start_time}>{formatTime(entry.start_time, timezone)}</time>
+                  <span className={styles.timelineTrack} aria-hidden="true">
+                    <span />
+                  </span>
+                  <div className={styles.eventBody}>
+                    <strong>{entry.title}</strong>
+                    <p>
+                      {entry.end_time
+                        ? `至 ${formatTime(entry.end_time, timezone)}`
+                        : "未设置结束时间"}
+                      {entry.participants.length
+                        ? ` · ${entry.participants.length} 位参与者`
+                        : ""}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          {entriesError && entries.length ? <p className={styles.inlineError}>{entriesError}</p> : null}
+          {entryCursor ? (
+            <button
+              className={styles.moreButton}
+              disabled={entriesLoading}
+              onClick={() => void loadEntries(selectedDate, entryCursor)}
+              type="button"
+            >
+              {entriesLoading ? <LoaderCircle className={styles.spinner} size={16} /> : <ChevronDown size={16} />}
+              {entriesLoading ? "正在加载" : "更多日程"}
+            </button>
+          ) : null}
+        </section>
+
+        <section className={styles.section} aria-labelledby="task-section-heading">
+          <div className={styles.sectionHeader}>
+            <div className={`${styles.sectionTitle} ${styles.taskSectionTitle}`}>
+              <ListTodo size={18} aria-hidden="true" />
+              <h3 id="task-section-heading">未排时间</h3>
+            </div>
+            {!tasksLoading && !tasksError ? (
+              <span>{`${tasks.length}${taskCursor ? "+" : ""} 项`}</span>
+            ) : null}
+          </div>
+
+          {tasksError && !tasks.length ? (
+            <div className={styles.notice} role="status">
+              <p>{tasksError}</p>
+              <button type="button" onClick={() => void loadTasks()}>
+                <RotateCw size={16} />
+                重试
+              </button>
+            </div>
+          ) : null}
+          {tasksLoading && !tasks.length ? (
+            <div className={styles.notice} role="status">
+              <LoaderCircle className={styles.spinner} size={20} />
+              <p>正在加载待办</p>
+            </div>
+          ) : null}
+          {!tasksLoading && !tasksError && !tasks.length ? (
+            <p className={styles.empty}>没有未安排时间的待办</p>
+          ) : null}
+          {tasks.length ? (
+            <ul className={styles.taskList}>
+              {tasks.map((task) => (
+                <li key={task.id}>
+                  <Circle size={17} aria-hidden="true" />
+                  <strong>{task.title}</strong>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {tasksError && tasks.length ? <p className={styles.inlineError}>{tasksError}</p> : null}
+          {taskCursor ? (
+            <button
+              className={styles.moreButton}
+              disabled={tasksLoading}
+              onClick={() => void loadTasks(taskCursor)}
+              type="button"
+            >
+              {tasksLoading ? <LoaderCircle className={styles.spinner} size={16} /> : <ChevronDown size={16} />}
+              {tasksLoading ? "正在加载" : "更多待办"}
+            </button>
+          ) : null}
+        </section>
+      </div>
     </dialog>
   );
 }

@@ -32,5 +32,3 @@ export type SchedulePage<T> = {
   items: T[];
   next_cursor: string | null;
 };
-
-export type ScheduleView = "today" | "tomorrow" | "tasks";
