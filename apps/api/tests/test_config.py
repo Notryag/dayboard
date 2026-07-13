@@ -19,6 +19,8 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAYBOARD_IDEMPOTENCY_RETENTION_SECONDS", "86400")
     monkeypatch.setenv("DAYBOARD_ASR_PROVIDER", "aliyun")
     monkeypatch.setenv("DAYBOARD_ASR_MAX_AUDIO_SECONDS", "90")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "account-1")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "cloudflare-secret")
 
     settings = Settings()
 
@@ -37,6 +39,10 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.idempotency_retention_seconds == 86400
     assert settings.asr_provider == "aliyun"
     assert settings.asr_max_audio_seconds == 90
+    assert settings.cloudflare_account_id == "account-1"
+    assert settings.cloudflare_api_token is not None
+    assert settings.cloudflare_api_token.get_secret_value() == "cloudflare-secret"
+    assert "cloudflare-secret" not in repr(settings)
 
 
 def test_password_auth_requires_secure_cookie_in_production() -> None:

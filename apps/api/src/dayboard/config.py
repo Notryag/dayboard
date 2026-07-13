@@ -72,6 +72,19 @@ class Settings(BaseSettings):
         alias="DAYBOARD_ASR_MAX_UPLOAD_BYTES",
         ge=1024,
     )
+    cloudflare_account_id: str | None = Field(default=None, alias="CLOUDFLARE_ACCOUNT_ID")
+    cloudflare_api_token: SecretStr | None = Field(
+        default=None,
+        alias="CLOUDFLARE_API_TOKEN",
+    )
+    cloudflare_asr_model: str = Field(
+        default="@cf/openai/whisper-large-v3-turbo",
+        alias="CLOUDFLARE_ASR_MODEL",
+    )
+    cloudflare_asr_base_url: str = Field(
+        default="https://api.cloudflare.com/client/v4",
+        alias="CLOUDFLARE_ASR_BASE_URL",
+    )
     volcengine_asr_app_id: str | None = Field(default=None, alias="VOLCENGINE_ASR_APP_ID")
     volcengine_asr_access_key: SecretStr | None = Field(
         default=None,

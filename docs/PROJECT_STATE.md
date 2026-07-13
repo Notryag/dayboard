@@ -31,8 +31,9 @@ The current direction is:
   Vercel remains an optional preview deployment
 - first UI surface: mobile-first chat-style command screen
 - voice status: browser recording, upload limits, editable transcript confirmation, the
-  provider-neutral API, and Alibaba Cloud ASR adapter are implemented; production credential and
-  sample-audio acceptance remain pending, so the microphone is disabled when ASR is unavailable
+  provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
+  production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
+  part of release verification
 - first UI design approach: CSS variables/design tokens before detailed UI expansion
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`
@@ -114,13 +115,16 @@ thread, Run, command conflict, clarification conflict, and queue failure paths.
   tenant-scoped status API, SKIP LOCKED worker claiming, and idempotent in-app delivery.
 - Voice: browser MediaRecorder capture with cancel, live level/timer, automatic duration stop,
   server-side format/size/duration validation, editable transcript confirmation, provider-neutral
-  transcription API, and Alibaba Cloud ASR adapter. Live credential acceptance remains pending.
+  transcription API, and selectable Cloudflare Workers AI or Alibaba Cloud ASR adapters.
 
 Git history is the detailed implementation chronology. ADRs record decisions that remain
 architecturally significant.
 
 Implementation notes:
 
+- A live Cloudflare Workers AI smoke test verified the production credential, request correlation,
+  Chinese transcription, and equivalent results for MP3, WebM/Opus, M4A/AAC, and OGG/Opus input.
+  Server-side transcoding is therefore not required for the current browser recording formats.
 - `CommandService` now calls `north.invoke_agent_once` directly; the old runtime placeholder path has been removed.
 - Tests can still inject a fake service or fake invoker to avoid live model calls.
 - Do not add natural-language interpretation outside the north-backed executor path.
@@ -144,8 +148,8 @@ Implementation notes:
 
 Next implementation slice:
 
-1. configure the production Alibaba Cloud ASR credential and complete live browser-to-transcript
-   acceptance with a non-sensitive Chinese sample recording
+1. complete authenticated browser-to-transcript acceptance with non-sensitive Chinese recordings
+   from Chrome and Safari, including date, time, and reminder phrases
 2. add day-view item details and explicit actions, starting with event details and task completion;
    introduce narrow authenticated write APIs rather than routing deterministic UI actions through AI
 3. after the provider budget window resets, run live acceptance for relative "tomorrow" dates,

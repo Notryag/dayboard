@@ -14,7 +14,11 @@ from dayboard.api.auth import router as auth_router
 from dayboard.api.routes import router
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.config import get_settings
-from dayboard.integrations.speech import AliyunSpeechProvider, SpeechProviderRegistry
+from dayboard.integrations.speech import (
+    AliyunSpeechProvider,
+    CloudflareSpeechProvider,
+    SpeechProviderRegistry,
+)
 from dayboard.observability.logging import RequestContextMiddleware, configure_logging
 
 
@@ -39,6 +43,21 @@ async def lifespan(app: FastAPI):
                 api_key=aliyun_api_key,
                 model=settings.aliyun_asr_model,
                 base_url=settings.aliyun_asr_base_url,
+            ),
+        )
+    cloudflare_api_token = (
+        settings.cloudflare_api_token.get_secret_value()
+        if settings.cloudflare_api_token is not None
+        else ""
+    )
+    if settings.cloudflare_account_id and cloudflare_api_token:
+        speech_registry.register(
+            "cloudflare",
+            lambda: CloudflareSpeechProvider(
+                account_id=settings.cloudflare_account_id or "",
+                api_token=cloudflare_api_token,
+                model=settings.cloudflare_asr_model,
+                base_url=settings.cloudflare_asr_base_url,
             ),
         )
     speech_provider = None

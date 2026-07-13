@@ -173,7 +173,14 @@ Short command audio is processed synchronously and discarded after the provider 
 not persist raw audio. Object storage and queued transcription remain options for future long-form
 audio, but are not part of the short scheduling-command path.
 
-Speech recognition is provider-neutral inside Dayboard. `SpeechToTextProvider` accepts validated audio plus optional language and vocabulary hints and returns a normalized `Transcript`. Deployment selects a provider through `DAYBOARD_ASR_PROVIDER`; the first adapter uses Alibaba Cloud Model Studio's `qwen3-asr-flash` in the China region because short audio can be submitted directly as Base64 without adding object storage. Provider credentials, request signatures, and raw response formats remain inside `dayboard.integrations.speech`. Adding Volcengine, Tencent Cloud, OpenAI, or an on-premise adapter must not change Dayboard's public upload API or transcript domain model.
+Speech recognition is provider-neutral inside Dayboard. `SpeechToTextProvider` accepts validated
+audio plus optional language and vocabulary hints and returns a normalized `Transcript`. Deployment
+selects a provider through `DAYBOARD_ASR_PROVIDER`. The production adapter calls Cloudflare Workers
+AI `@cf/openai/whisper-large-v3-turbo` through its REST API with Base64 audio; the Alibaba Cloud
+Model Studio `qwen3-asr-flash` adapter remains available as an alternate China-region provider.
+Provider credentials, request signatures, and raw response formats remain inside
+`dayboard.integrations.speech`. Adding Volcengine, Tencent Cloud, or an on-premise adapter must not
+change Dayboard's public upload API or transcript domain model.
 
 ## API Surface
 

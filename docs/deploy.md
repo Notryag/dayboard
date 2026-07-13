@@ -82,11 +82,12 @@ DAYBOARD_RATE_LIMIT_REGISTRATION=5/hour
 DAYBOARD_RATE_LIMIT_LOGIN=10/minute
 DAYBOARD_RATE_LIMIT_COMMAND=20/minute
 DAYBOARD_RATE_LIMIT_VOICE=10/minute
-DAYBOARD_ASR_PROVIDER=aliyun
+DAYBOARD_ASR_PROVIDER=cloudflare
 DAYBOARD_ASR_MAX_AUDIO_SECONDS=60
 DAYBOARD_ASR_MAX_UPLOAD_BYTES=10485760
-ALIYUN_ASR_API_KEY=...
-ALIYUN_ASR_MODEL=qwen3-asr-flash
+CLOUDFLARE_ACCOUNT_ID=...
+CLOUDFLARE_API_TOKEN=...
+CLOUDFLARE_ASR_MODEL=@cf/openai/whisper-large-v3-turbo
 DAYBOARD_CORS_ORIGINS=https://your-vercel-domain
 APP_MODEL_NAME=openai:gpt-4o-mini
 OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
@@ -103,11 +104,13 @@ DAYBOARD_AUTH_COOKIE_SECURE=true
 Keep provider credentials in the server environment or secret store only.
 
 The microphone stays disabled when the configured ASR provider has no credential. After adding or
-rotating `ALIYUN_ASR_API_KEY`, rebuild and recreate API and Web, then verify
-`GET /api/voice/capabilities` reports `available: true`. The API runs PyAV media inspection in an
+rotating `CLOUDFLARE_API_TOKEN`, rebuild and recreate the API, then verify the authenticated
+`GET /api/voice/capabilities` response reports `available: true`. The token needs Workers AI Read
+and Edit permissions. The API runs PyAV media inspection in an
 isolated, time-limited subprocess to enforce decoded audio duration before a provider call. Uploaded
 audio is held only for request processing; Dayboard persists transcript text and metadata, not raw
-audio bytes.
+audio bytes. Live provider acceptance covers MP3, WebM/Opus, M4A/AAC, and OGG/Opus, so the API does
+not transcode the current browser recording formats before calling Cloudflare.
 
 Current API deployment:
 
