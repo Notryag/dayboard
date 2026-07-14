@@ -68,9 +68,8 @@ Two explicit runtime modes are allowed:
 - `development`: one configured identity for local development and controlled demos;
 - `password`: verified server-side session plus Dayboard user/membership resolution.
 
-Before external beta access, production must run in `password` mode and refuse insecure password
-cookies. Until the coordinated account migration and web release, the controlled production demo
-may remain explicitly in `development` mode. Development mode is not an external-user mode.
+Production runs in `password` mode and refuses insecure password cookies. Development mode is only
+for local development or controlled demos; it is not an external-user mode.
 
 ## Authorization Rules
 

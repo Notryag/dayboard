@@ -82,10 +82,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 ## Next Milestone
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
-[phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
-deployment, and production password-auth switch are complete. The application shell now uses a
-conversation-first mobile home with a bottom Conversation/Schedule tab bar and a desktop
-conversation/day-view workspace. The schedule panel has a
+[phase-2-plan.md](./phase-2-plan.md). The application shell uses a conversation-first mobile home
+with a bottom Conversation/Schedule tab bar and a desktop conversation/day-view workspace. The
+schedule panel has a
 swipeable date rail, a chronological calendar/task agenda, and a separate undated-task area. Run
 execution now reconnects after a page reload or a transient SSE
 disconnect. API HTTP and validation errors now share a request-ID-bearing envelope, with stable
