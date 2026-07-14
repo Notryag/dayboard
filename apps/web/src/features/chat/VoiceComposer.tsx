@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, LoaderCircle, Mic, X } from "lucide-react";
+import { Keyboard, LoaderCircle, X } from "lucide-react";
 import styles from "./Composer.module.css";
 
 export type VoiceComposerStatus = "idle" | "requesting" | "recording" | "transcribing";
@@ -102,49 +102,32 @@ export function VoiceComposer({
 
   const primaryLabel = unavailableReason ?? "按住说话";
   const elapsedLabel = formatDuration(elapsedSeconds);
+  const visualLabel =
+    status === "requesting"
+      ? "正在连接"
+      : status === "recording"
+        ? cancelIntent
+          ? "松开取消"
+          : "松开发送"
+        : status === "transcribing"
+          ? "正在识别"
+          : primaryLabel;
   const controlLabel =
     status === "requesting"
       ? "正在连接麦克风"
       : status === "recording"
         ? cancelIntent
           ? "松开取消"
-          : `松开发送，已录音 ${elapsedLabel}`
+          : `松开发送，已录音 ${elapsedLabel}，最长 ${formatDuration(maxDurationSeconds)}`
         : status === "transcribing"
           ? "正在识别语音"
           : primaryLabel;
 
   return (
-    <div
-      className={`${styles.composer} ${styles.voiceComposer} ${
-        status === "recording" ? styles.recordingComposer : ""
-      }`}
-    >
-      <div className={styles.voiceStatus} aria-live="polite">
-        {status === "requesting" ? (
-          <span>正在连接</span>
-        ) : status === "recording" ? (
-          <>
-            <span className={styles.levelBars} aria-hidden="true">
-              {LEVEL_WEIGHTS.map((weight, index) => (
-                <span
-                  key={index}
-                  style={{ transform: `scaleY(${Math.max(0.2, level * weight)})` }}
-                />
-              ))}
-            </span>
-            <span
-              aria-label={`${controlLabel}，最长 ${formatDuration(maxDurationSeconds)}`}
-              className={styles.durationLimit}
-            >
-              {cancelIntent ? "取消" : elapsedLabel}
-            </span>
-          </>
-        ) : status === "transcribing" ? (
-          <span>正在识别</span>
-        ) : (
-          <span>{primaryLabel}</span>
-        )}
-      </div>
+    <div className={`${styles.composer} ${styles.voiceComposer}`}>
+      <span aria-live="polite" className={styles.srOnly}>
+        {controlLabel}
+      </span>
 
       <button
         aria-label={controlLabel}
@@ -197,12 +180,29 @@ export function VoiceComposer({
           pointerIdRef.current = null;
           finishRecording("cancel");
         }}
+        title={status === "idle" ? primaryLabel : undefined}
         type="button"
       >
-        {status === "requesting" || status === "transcribing" ? (
-          <LoaderCircle className={styles.spinner} size={25} />
+        {status === "recording" ? (
+          <span className={styles.voiceButtonFeedback}>
+            <span className={styles.levelBars} aria-hidden="true">
+              {LEVEL_WEIGHTS.map((weight, index) => (
+                <span
+                  key={index}
+                  style={{ transform: `scaleY(${Math.max(0.2, level * weight)})` }}
+                />
+              ))}
+            </span>
+            <span className={styles.voiceButtonLabel}>{visualLabel}</span>
+            <span className={styles.durationLimit}>{elapsedLabel}</span>
+          </span>
+        ) : status === "requesting" || status === "transcribing" ? (
+          <span className={styles.voiceButtonState}>
+            <LoaderCircle className={styles.spinner} size={18} />
+            <span className={styles.voiceButtonLabel}>{visualLabel}</span>
+          </span>
         ) : (
-          <Mic size={26} strokeWidth={2.2} />
+          <span className={styles.voiceButtonLabel}>{visualLabel}</span>
         )}
       </button>
 

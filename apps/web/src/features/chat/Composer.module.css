@@ -1,10 +1,10 @@
 .wrapper {
   --composer-min-height: 56px;
-  --composer-voice-min-height: 72px;
-  --composer-voice-button-size: 60px;
-  --composer-level-container-height: 22px;
+  --composer-voice-min-height: 52px;
+  --composer-voice-control-height: 48px;
+  --composer-level-container-height: 18px;
   --composer-level-bar-width: 3px;
-  --composer-level-bar-height: 20px;
+  --composer-level-bar-height: 16px;
   --composer-level-gap: 2px;
   --composer-level-motion: 80ms;
   --composer-error-min-height: 36px;
@@ -34,16 +34,12 @@
 .voiceComposer {
   min-height: var(--composer-voice-min-height);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--composer-voice-button-size) minmax(0, 1fr);
-  gap: 0;
+  grid-template-columns: minmax(0, 1fr) var(--control-size);
+  gap: var(--space-2);
   border-color: transparent;
   padding: 0;
   background: transparent;
   box-shadow: none;
-}
-
-.recordingComposer {
-  border-color: transparent;
 }
 
 .iconButton,
@@ -70,7 +66,7 @@
 }
 
 .voiceActionSpacer {
-  grid-column: 3;
+  grid-column: 2;
   justify-self: end;
   display: block;
 }
@@ -81,7 +77,7 @@
 }
 
 .voiceComposer > .iconButton {
-  grid-column: 3;
+  grid-column: 2;
   justify-self: end;
 }
 
@@ -135,15 +131,21 @@
 }
 
 .voiceHoldButton {
-  width: var(--composer-voice-button-size);
-  height: var(--composer-voice-button-size);
-  grid-column: 2;
-  justify-self: center;
-  border: 0;
-  border-radius: 50%;
-  color: var(--color-primary-foreground);
-  background: var(--color-primary);
-  box-shadow: var(--shadow-primary);
+  width: 100%;
+  height: var(--composer-voice-control-height);
+  min-width: 0;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  overflow: hidden;
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: none;
   cursor: pointer;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
@@ -157,8 +159,7 @@
 }
 
 .voiceHoldButton:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  transform: scale(1.035);
+  background: var(--color-surface-hover);
 }
 
 .voiceHoldButton:disabled:not(.voiceHoldButtonProcessing) {
@@ -173,58 +174,55 @@
 
 .voiceHoldButtonActive {
   color: var(--color-accent-foreground);
+  border-color: var(--color-accent);
   background: var(--color-accent);
-  box-shadow: var(--shadow-accent);
+  box-shadow: none;
 }
 
 .voiceHoldButtonProcessing {
-  color: var(--color-accent-foreground);
-  background: var(--color-accent);
-  box-shadow: var(--shadow-accent);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-surface);
+  box-shadow: none;
 }
 
 .voiceHoldButtonCancel {
   color: var(--color-danger-foreground);
+  border-color: var(--color-danger);
   background: var(--color-danger);
-  box-shadow: var(--shadow-danger);
+  box-shadow: none;
 }
 
-.voiceStatus {
+.voiceButtonLabel {
   min-width: 0;
-  grid-column: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--space-2);
-  padding-left: var(--space-1);
   overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-label);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-medium);
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.voiceStatus > span:not(.levelBars) {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.voiceButtonFeedback {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.voiceComposer:has(.voiceHoldButtonActive) .voiceStatus {
-  color: var(--color-accent);
-}
-
-.voiceComposer:has(.voiceHoldButtonCancel) .voiceStatus,
-.voiceComposer:has(.voiceHoldButtonCancel) .durationLimit {
-  color: var(--color-danger);
+.voiceButtonState {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .durationLimit {
-  color: var(--color-text);
+  color: currentColor;
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-medium);
-  opacity: 0.78;
+  opacity: 0.82;
 }
 
 .voiceHoldButton:focus-visible,

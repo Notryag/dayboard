@@ -168,13 +168,14 @@ fractions, and media-query conditions may remain literal when CSS variables cann
   must not move fixed-format navigation controls.
 
 Voice is the conversation home's default input mode rather than a modal, page, or navigation item.
-The microphone is a fixed-size circular control centered above the tab bar; compact state feedback
-stays to its left and the keyboard switch stays to its right. Its stable states are:
+The primary voice control is a full-width hold-to-talk bar above the tab bar, following the familiar
+WeChat interaction shape without copying its visual branding. Recording feedback stays inside the
+bar and the keyboard switch remains a compact icon on its right. Its stable states are:
 
 ```text
-voice idle   -> centered teal hold-to-talk control, keyboard-mode icon on the right
-requesting   -> hold control shows microphone permission progress
-recording    -> fuchsia control, live level/timer, slide up to cancel, release to send
+voice idle   -> neutral "hold to talk" bar, keyboard-mode icon on the right
+requesting   -> bar shows microphone permission progress
+recording    -> fuchsia bar with live level/timer, slide up to cancel, release to send
 transcribing -> upload/provider progress and cancel before command submission
 text         -> microphone-mode icon, editable text, send
 ```
