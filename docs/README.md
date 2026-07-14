@@ -67,7 +67,7 @@ Architecture decisions:
 
 Deployment:
 
-- [deploy.md](./deploy.md), starting with "Production Handoff" for any production operation
+- [deploy.md](./deploy.md) for the Docker Compose production runbook
 - [postgres-backup.md](./postgres-backup.md) before changing production PostgreSQL data or volumes
 
 ## Loading Guidance
@@ -76,6 +76,7 @@ Deployment:
 - Read [architecture.md](./architecture.md) when changing backend, agent, storage, API, or infrastructure boundaries.
 - Read [engineering-guidelines.md](./engineering-guidelines.md) before adding code.
 - Read [ui-design.md](./ui-design.md) before changing the main chat UI, theme variables, or component system.
-- Read [deploy.md](./deploy.md) before changing GitHub, Vercel, API hosting, or secret handling.
+- Read [deploy.md](./deploy.md) before changing Docker Compose, Nginx, production services, or
+  deployment secrets.
 - Read ADRs only when making or revisiting a major technical decision.
 - Avoid pulling all docs into context for small edits.

@@ -1,350 +1,196 @@
-# Deploy
+# Docker 部署
 
-## GitHub
-
-The repository can be public. Before pushing, verify that only placeholders are committed:
-
-Current public repository:
+Dayboard 生产环境只使用仓库根目录的 `docker-compose.yml` 管理应用与数据服务：
 
 ```text
-https://github.com/Notryag/dayboard
+Nginx
+  -> 127.0.0.1:8000 -> API
+  -> 127.0.0.1:3001 -> Web
+
+Docker Compose
+  -> PostgreSQL、Redis、API、Worker、Web
 ```
+
+生产工作目录固定为 `/home/zx/dayboard`。不要从其他代码副本启动同名服务，也不要为
+API、Worker 或 Web 增加第二套进程管理器。
+
+## 前置条件
+
+- Docker Engine 与 Docker Compose 插件
+- 一个 HTTPS 域名和 Nginx
+- OpenAI 兼容模型接口
+- 可选的 Cloudflare Workers AI 或阿里云 ASR 凭据
+
+容器端口只绑定到 `127.0.0.1`，PostgreSQL 和 Redis 不应暴露到公网。
+
+## 配置环境变量
+
+从模板创建本地配置：
 
 ```bash
-git status
-git grep -n -I -E "(sk-[A-Za-z0-9_-]{20,}|OPENAI_API_KEY=.+|api[_-]?key|password)"
+cd /home/zx/dayboard
+cp .env.example .env
+chmod 600 .env
 ```
 
-Real secrets belong in `.env` or the deployment platform secret store. Do not commit `.env`.
+生产环境至少需要检查以下配置：
 
-## Vercel Web Deployment
+```dotenv
+DAYBOARD_ENV=production
+DAYBOARD_AUTH_MODE=password
+DAYBOARD_AUTH_COOKIE_SECURE=true
+DAYBOARD_DEFAULT_TIMEZONE=Asia/Shanghai
 
-Deploy only the Next.js app to Vercel.
+POSTGRES_DB=dayboard
+POSTGRES_USER=dayboard
+POSTGRES_PASSWORD=replace-with-a-strong-password
 
-Current Vercel deployment:
-
-```text
-https://web-red-rho-d3dz7i2rkr.vercel.app
+APP_MODEL_NAME=openai:gpt-4o-mini
+OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
+OPENAI_API_KEY=replace-with-a-real-secret
 ```
 
-The successful CLI deployment was run from `apps/web`. A repository import should set the root directory to `apps/web`; deploying from the repository root can fail Next.js detection unless the Vercel project is explicitly configured for the monorepo root.
+使用 Cloudflare 语音识别时再配置：
 
-Vercel project settings:
-
-```text
-Framework Preset: Next.js
-Root Directory: apps/web
-Install Command: npm install
-Build Command: npm run build
-Output Directory: .next
+```dotenv
+DAYBOARD_ASR_PROVIDER=cloudflare
+CLOUDFLARE_ACCOUNT_ID=replace-with-your-account-id
+CLOUDFLARE_API_TOKEN=replace-with-a-workers-ai-token
+CLOUDFLARE_ASR_MODEL=@cf/openai/whisper-large-v3-turbo
 ```
 
-Required Vercel environment variable:
+真实凭据只能保存在 `.env` 或密钥管理服务中，不能提交到 Git、写入 Dockerfile 或打印到
+日志。修改 `NEXT_PUBLIC_DAYBOARD_API_BASE_URL` 或 `NEXT_PUBLIC_DAYBOARD_BASE_PATH` 后必须重新
+构建 Web 镜像，因为这两个变量会被编译进浏览器资源。
 
-```text
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=https://your-api-host
+## 首次启动
+
+先校验配置，再构建并启动所有服务：
+
+```bash
+cd /home/zx/dayboard
+docker compose config --quiet
+docker compose build api worker web
+docker compose up -d
+docker compose ps
 ```
 
-For local development:
+API 容器启动时会自动执行 `alembic upgrade head`。不要在生产宿主机额外启动一份迁移、
+FastAPI、arq 或 Next.js 进程。
 
-```text
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=http://127.0.0.1:8000
-NEXT_PUBLIC_DAYBOARD_BASE_PATH=
+## 更新版本
+
+先拉取和构建，构建成功后再替换容器：
+
+```bash
+cd /home/zx/dayboard
+git status --short --branch
+git pull --ff-only
+docker compose config --quiet
+docker compose build api worker web
+docker compose up -d
+docker compose ps
 ```
 
-These variables are compiled into the browser bundle by Next.js. They must be present when
-`npm run build` runs. Setting them only at container runtime does not change an already-built
-bundle.
+只修改单个应用时可以缩小更新范围：
 
-The server-hosted build uses:
+```bash
+# 仅更新 Web
+docker compose build web
+docker compose up -d --no-deps web
+
+# 更新 API 与 Worker；两者共用 API 镜像
+docker compose build api worker
+docker compose up -d --no-deps api worker
+```
+
+修改数据库迁移、Compose 依赖或共享环境变量时应执行全量 `docker compose up -d`，不要使用
+`--no-deps` 跳过依赖协调。
+
+## 验证部署
+
+```bash
+cd /home/zx/dayboard
+docker compose ps
+curl -fsS http://127.0.0.1:8000/health
+curl -fsSL -o /dev/null -w 'Web HTTP %{http_code}\n' \
+  http://127.0.0.1:3001/dayboard/
+curl -fsSL -o /dev/null -w 'Public HTTP %{http_code}\n' \
+  https://your-host/dayboard/
+```
+
+API 健康响应中的 `database`、`redis` 和 `worker` 都应为 `ok`，Web 最终响应应为 HTTP 200。
+还应在浏览器中验证登录、发送一条文字命令和打开日视图。启用语音后，再验证已登录请求
+`GET /dayboard-api/api/voice/capabilities` 返回 `available: true`。
+
+## 查看日志
+
+```bash
+docker compose logs --tail=100 api worker web
+docker compose logs -f api worker
+docker compose events
+```
+
+先用 `docker compose ps` 确认失败的服务，再只读取相关容器日志。不要输出整个 `.env` 排查
+问题。
+
+## Nginx
+
+仓库中的 [dayboard-locations.conf](../deploy/nginx/dayboard-locations.conf) 提供路径代理模板：
+
+- `/dayboard-api/` -> `127.0.0.1:8000`
+- `/dayboard` 和 `/dayboard/` -> `127.0.0.1:3001`
+
+将模板包含到 HTTPS `server` 块后执行：
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+只有容器健康且本机端口验证通过后才能重载 Nginx。生产 Web 构建默认使用：
 
 ```text
 NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api
 NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard
 ```
 
-Password authentication uses an `HttpOnly`, `SameSite=Lax` server session cookie. Production web
-and API endpoints must therefore be same-site, normally custom subdomains under one registrable
-domain. Do not assume that a `vercel.app` web origin can use a session cookie issued by an unrelated
-API domain. Keep `credentials: include` on HTTP requests and `withCredentials` on SSE connections.
+Web 和 API 保持同站点，才能稳定使用 `HttpOnly`、`SameSite=Lax` 的登录会话 Cookie。
 
-## API Deployment
+## 数据安全
 
-Do not deploy the FastAPI API to Vercel in the first version. Run it as a normal server service with Docker-managed PostgreSQL and Redis/Valkey.
-
-Core API environment variables:
+PostgreSQL 数据保存在 `dayboard_postgres_data` 命名卷中，Redis 数据保存在
+`dayboard_redis_data`。生产环境禁止执行：
 
 ```text
-DATABASE_URL=postgresql+asyncpg://...
-REDIS_URL=redis://...
-DAYBOARD_RATE_LIMIT_STORAGE_URL=redis://...
-DAYBOARD_RATE_LIMIT_REGISTRATION=5/hour
-DAYBOARD_RATE_LIMIT_LOGIN=10/minute
-DAYBOARD_RATE_LIMIT_COMMAND=20/minute
-DAYBOARD_RATE_LIMIT_VOICE=10/minute
-DAYBOARD_ASR_PROVIDER=cloudflare
-DAYBOARD_ASR_MAX_AUDIO_SECONDS=60
-DAYBOARD_ASR_MAX_UPLOAD_BYTES=10485760
-CLOUDFLARE_ACCOUNT_ID=...
-CLOUDFLARE_API_TOKEN=...
-CLOUDFLARE_ASR_MODEL=@cf/openai/whisper-large-v3-turbo
-DAYBOARD_CORS_ORIGINS=https://your-vercel-domain
-APP_MODEL_NAME=openai:gpt-4o-mini
-OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
-OPENAI_API_KEY=...
+docker compose down -v
+docker volume rm dayboard_dayboard_postgres_data
 ```
 
-The current server-hosted deployment uses password auth:
+普通停止使用 `docker compose stop`，重新创建应用容器不会删除命名卷。数据库升级、恢复或
+其他破坏性操作前，先阅读 [PostgreSQL 备份与恢复](./postgres-backup.md) 并确认存在可用备份。
+备份定时器只负责调用 Compose 内的 PostgreSQL 工具，不管理应用进程。
 
-```text
-DAYBOARD_AUTH_MODE=password
-DAYBOARD_AUTH_COOKIE_SECURE=true
-```
-
-Keep provider credentials in the server environment or secret store only.
-
-The microphone stays disabled when the configured ASR provider has no credential. After adding or
-rotating `CLOUDFLARE_API_TOKEN`, rebuild and recreate the API, then verify the authenticated
-`GET /api/voice/capabilities` response reports `available: true`. The token needs Workers AI Read
-and Edit permissions. The API runs PyAV media inspection in an
-isolated, time-limited subprocess to enforce decoded audio duration before a provider call. Uploaded
-audio is held only for request processing; Dayboard persists transcript text and metadata, not raw
-audio bytes. Live provider acceptance covers MP3, WebM/Opus, M4A/AAC, and OGG/Opus, so the API does
-not transcode the current browser recording formats before calling Cloudflare.
-
-Current API deployment:
-
-```text
-https://www.selfapi.art/dayboard-api
-```
-
-Current server-hosted web deployment:
-
-```text
-https://www.selfapi.art/dayboard
-```
-
-## Production Handoff
-
-The active checkout and Compose project are:
-
-```text
-/home/zx/dayboard
-```
-
-Do not operate production from `/root/dayboard`. That path belongs to the previous systemd-based
-deployment. The installed `dayboard-api.service`, `dayboard-worker.service`, and
-`dayboard-web.service` units are disabled and inactive; do not re-enable them while Compose owns the
-application ports.
-
-Production ownership is:
-
-```text
-Nginx
-  -> 127.0.0.1:8000 -> Compose API
-  -> 127.0.0.1:3001 -> Compose Web
-Compose
-  -> API, Worker, Web, PostgreSQL, Redis
-```
-
-Start every production session by checking repository and runtime state:
+## 常用运维命令
 
 ```bash
-cd /home/zx/dayboard
-git status --short --branch
-docker compose config --quiet
+# 服务状态
 docker compose ps
-systemctl is-enabled dayboard-api.service dayboard-worker.service dayboard-web.service
-systemctl is-active dayboard-api.service dayboard-worker.service dayboard-web.service
+
+# 重启单个应用服务
+docker compose restart web
+
+# 重新构建并替换单个服务
+docker compose build web
+docker compose up -d --no-deps web
+
+# 停止或恢复全部服务，不删除数据卷
+docker compose stop
+docker compose start
+
+# 查看 Compose 最终配置，不输出完整环境值
+docker compose config --services
 ```
 
-Expected service-manager state is `disabled` and `inactive` for all three old systemd units.
-Expected Compose state is running PostgreSQL, Redis, API, Worker, and Web containers; PostgreSQL,
-Redis, API, and Worker should report `healthy`.
-
-For an application deployment, build before recreating containers:
-
-```bash
-cd /home/zx/dayboard
-docker compose build api worker web
-docker compose up -d
-docker compose ps
-curl -fsS http://127.0.0.1:8000/health
-curl -fsS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:3001/dayboard
-```
-
-The API health response must report `database`, `redis`, and `worker` as `ok`; the Web check must
-return HTTP 200. Inspect failures with:
-
-```bash
-docker compose logs --tail=100 api worker web
-```
-
-Compose uses restart policies for host reboots. Do not add a second process manager for the
-application containers. Never run `docker compose down -v`, remove the named volumes, or replace
-`.env` without confirming a backup and recovery plan. Real secrets stay only in `.env` or a secret
-store and must not be copied into images or committed.
-
-PostgreSQL backups are created by a systemd timer that invokes the Compose-aware backup script. The
-timer is only an operational scheduler; Docker Compose remains the application process manager.
-Install it and create the first verified backup before any destructive database operation:
-
-```bash
-cd /home/zx/dayboard
-sudo install -d -m 0700 /var/backups/dayboard/postgres
-sudo install -m 0644 deploy/systemd/dayboard-postgres-backup.service /etc/systemd/system/
-sudo install -m 0644 deploy/systemd/dayboard-postgres-backup.timer /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now dayboard-postgres-backup.timer
-sudo systemctl start dayboard-postgres-backup.service
-sudo deploy/scripts/postgres-restore-rehearsal.sh
-```
-
-The complete installation, verification, restore, rollback, and troubleshooting runbook is in
-[postgres-backup.md](./postgres-backup.md). The restore script intentionally refuses to overwrite
-the active database and restores into a new database for an explicit application cutover.
-
-Nginx proxies `/dayboard-api/` to the loopback-only FastAPI container on port 8000. The API, Web, Worker, PostgreSQL, and Redis services run from the root `docker-compose.yml` file. The application containers bind only to loopback ports; Nginx remains the public entry point.
-
-The account migration, web login release, and `DAYBOARD_AUTH_MODE=password` switch were deployed as
-one batch. Preserve that coordination in future environments: deploying only the mode switch makes
-an old web client return 401, while deploying only the login UI with development-mode business APIs
-still uses the shared development identity.
-
-The checked-in deployment templates are:
-
-- `deploy/github-actions/ci.yml` (copy to `.github/workflows/ci.yml` using GitHub credentials with
-  workflow-write permission to enable it)
-- `docker-compose.yml` and the application Dockerfiles
-- `deploy/nginx/dayboard-locations.conf`
-- `deploy/scripts/postgres-*.sh` and `deploy/systemd/dayboard-postgres-backup.*`
-
-The Compose Web build injects `/dayboard-api` and `/dayboard` into the browser bundle. After a
-deployment, verify the page, one hashed static asset under `/dayboard/_next/static/`, and the API
-independently. A page `200` alone is insufficient because the prerendered loading screen can render
-without a working browser bundle or API URL.
-
-```bash
-curl -I https://your-host/dayboard
-curl -I https://your-host/dayboard/_next/static/chunks/<chunk-from-page-source>.js
-curl -I https://your-host/dayboard-api/api/auth/me
-```
-
-An unauthenticated `401` from `/api/auth/me` is a healthy response. Validate Nginx with `nginx -t`,
-and reload it only after the web container is healthy on
-`127.0.0.1:3001`.
-
-## Local Deployment
-
-### Prerequisites And Layout
-
-Install Docker with Compose, Node.js with npm, Python 3.11 or newer, and `uv`. Normal installs fetch
-the pinned `north` commit from the `deerflow-lite` Git repository, so a clean Dayboard checkout is
-self-contained. When changing Dayboard and north together, the repositories may be kept as siblings
-and the pinned package can be temporarily replaced in the active virtual environment:
-
-```text
-workspace/
-  dayboard/
-  deerflow-lite/
-```
-
-```bash
-cd /path/to/dayboard/apps/api
-uv sync
-uv pip install --editable /path/to/deerflow-lite/packages/harness
-```
-
-Do not commit a local path override. Before committing a Dayboard change that requires new north
-behavior, push north first, update the pinned commit in `apps/api/pyproject.toml`, and regenerate
-`apps/api/uv.lock`.
-
-Create local configuration from the tracked template. The default values are intended for the
-Compose services bound to loopback:
-
-```bash
-cd /path/to/dayboard
-cp .env.example .env
-```
-
-Add a real model gateway URL and key to `.env` before exercising Agent commands. Do not commit this
-file. `DAYBOARD_AUTH_MODE=development` uses the fixed local identity. Set it to `password` to exercise
-registration and login locally; keep `DAYBOARD_AUTH_COOKIE_SECURE=false` while serving over local
-HTTP. Production password authentication requires HTTPS and `DAYBOARD_AUTH_COOKIE_SECURE=true`.
-
-### PostgreSQL And Redis
-
-Start the data services from the repository root:
-
-```bash
-docker compose up -d postgres redis
-docker compose ps
-```
-
-Compose exposes both services only on the local machine. Processes running directly on the host use:
-
-```text
-DATABASE_URL=postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard
-REDIS_URL=redis://localhost:6379/0
-DAYBOARD_COMMAND_QUEUE_URL=redis://localhost:6379/0
-DAYBOARD_RATE_LIMIT_STORAGE_URL=redis://localhost:6379/1
-DAYBOARD_PROVIDER_BUDGET_STORAGE_URL=redis://localhost:6379/2
-```
-
-The Redis database suffixes (`/0`, `/1`, `/2`) separate the command queue, rate limits, and provider
-budgets logically while using the same Redis process. PostgreSQL persists product data in the
-`dayboard_postgres_data` volume; Redis persists in `dayboard_redis_data`. Do not replace `localhost`
-with the Compose service names unless the API and worker are also moved into the Compose network.
-
-### Start The Application
-
-Install API dependencies and apply migrations once, then keep the API and worker running in separate
-terminals. Export the root `.env` because the commands run from `apps/api`:
-
-```bash
-cd /path/to/dayboard/apps/api
-uv sync
-set -a
-source ../../.env
-set +a
-uv run alembic upgrade head
-uv run fastapi dev src/dayboard/main.py
-```
-
-Worker terminal:
-
-```bash
-cd /path/to/dayboard/apps/api
-set -a
-source ../../.env
-set +a
-uv run arq dayboard.workers.commands.WorkerSettings
-```
-
-Web terminal:
-
-```bash
-cd /path/to/dayboard/apps/web
-npm install
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=http://127.0.0.1:8000 \
-NEXT_PUBLIC_DAYBOARD_BASE_PATH='' \
-npm run dev
-```
-
-Open `http://localhost:3000`. The browser talks to FastAPI on port `8000`; FastAPI and the worker
-talk to PostgreSQL on `5432` and Redis on `6379`. Keep `http://localhost:3000` in
-`DAYBOARD_CORS_ORIGINS`. For a production-like local build, use the same two web variables with
-`npm run build`, then `npm run start`.
-
-## Current Deployment Shape
-
-```text
-GitHub public repo
-  -> server-hosted Next.js at /dayboard/ (primary China-access path)
-  -> optional Vercel preview project rooted at apps/web
-  -> HTTPS Nginx proxy on www.selfapi.art
-  -> Docker Compose FastAPI service and arq worker
-  -> PostgreSQL and Redis/Valkey via Docker or managed services
-```
-
-The server Docker Compose deployment binds PostgreSQL and Redis to `127.0.0.1`. Do not expose either data service directly to the public network.
+Compose 的 `restart: unless-stopped` 负责宿主机重启后的服务恢复。应用生命周期统一使用
+Docker Compose，不再维护宿主机直跑应用的部署流程。

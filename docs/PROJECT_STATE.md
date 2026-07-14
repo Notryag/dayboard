@@ -8,13 +8,12 @@ Dayboard has completed its natural-language scheduling foundation and is now bec
 releasable product. Self-service password registration and the Next.js web app are deployed on the
 same HTTPS site; the in-app reminder foundation is implemented but not yet rendered in the web UI.
 
-The active production repository is `/home/zx/dayboard`. `/root/dayboard` is a legacy checkout from
-the previous systemd deployment and must not be used for production changes.
+The active production repository is `/home/zx/dayboard`. Other checkouts must not be used for
+production changes.
 
 Production runs PostgreSQL, Redis, FastAPI, arq Worker, and Next.js through the root
-`docker-compose.yml`. The old Dayboard systemd application units are disabled and inactive. Nginx
-continues to proxy the loopback-only API and Web ports. See [deploy.md](./deploy.md), section
-"Production Handoff", before operating the deployment.
+`docker-compose.yml`. Docker Compose is the only application process manager. Nginx proxies the
+loopback-only API and Web ports. Read [deploy.md](./deploy.md) before operating the deployment.
 
 The production host also runs the `dayboard-postgres-backup.timer` systemd timer. It creates daily
 custom-format PostgreSQL dumps under `/var/backups/dayboard/postgres` with SHA-256 checksums and a
@@ -27,8 +26,7 @@ commit hash into this document because it becomes stale on the next change.
 The current direction is:
 
 - product name: Dayboard
-- frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
-  Vercel remains an optional preview deployment
+- frontend: Next.js, React, TypeScript; the server-hosted path is `/dayboard/`
 - primary UI surfaces: a voice-first conversation home and a date-selectable day view; mobile uses a
   persistent bottom Conversation/Schedule tab bar and desktop keeps both visible in a two-pane
   workspace
@@ -209,7 +207,7 @@ The `/health` response was:
 
 PostgreSQL, Redis, API, Worker, and Web are running through Docker Compose after verification. API,
 Worker, PostgreSQL, and Redis report healthy; Web is verified through its `/dayboard` HTTP response.
-The legacy Dayboard systemd application units remain disabled and inactive.
+Application lifecycle is managed only through the root Docker Compose project.
 
 PostgreSQL-backed tests require access to the Docker-exposed PostgreSQL port. In Codex sandboxed command contexts, normal commands may not reach Docker or `localhost:5432`; if these tests hang or time out, rerun them from an execution context that can access Docker-exposed local ports after confirming `docker compose ps` reports healthy PostgreSQL and Redis containers.
 

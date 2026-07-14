@@ -11,13 +11,10 @@ These notes are for coding agents working on Dayboard.
 
 ## Production Checkout And Runtime
 
-- The active production checkout is `/home/zx/dayboard`. Do not deploy from `/root/dayboard`; it is
-  a legacy checkout from the previous systemd deployment.
-- Docker Compose owns PostgreSQL, Redis, API, Worker, and Web in production. The old
-  `dayboard-api.service`, `dayboard-worker.service`, and `dayboard-web.service` units are disabled
-  and must not be re-enabled.
-- Read `docs/deploy.md`, especially "Production Handoff", before changing deployment files or
-  restarting services.
+- The active production checkout is `/home/zx/dayboard`. Do not deploy from another checkout.
+- Docker Compose owns PostgreSQL, Redis, API, Worker, and Web in production. Do not add another
+  process manager for these application services.
+- Read `docs/deploy.md` before changing deployment files or restarting services.
 - Never run `docker compose down -v` in production. The named PostgreSQL and Redis volumes contain
   product data.
 - Build replacement images before recreating application containers so a build failure does not
