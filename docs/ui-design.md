@@ -20,7 +20,7 @@ mobile (< 900px)
   -> one active full-width view
   -> conversation is the default home view
   -> centered voice composer above navigation
-  -> persistent bottom Conversation / Schedule tab bar
+  -> persistent floating-glass Conversation / Schedule tab bar
 
 desktop (>= 900px)
   -> full-height work surface, maximum width 1280px
@@ -54,14 +54,15 @@ Avoid:
 
 ### 2026 Color Direction
 
-The visual direction combines a Cloud Dancer-inspired neutral canvas with vivid semantic signals.
-The implementation colors are screen-oriented product colors, not claimed digital equivalents of
+The visual direction uses a cool system-neutral canvas with vivid semantic signals. Conversation
+surfaces must read as cool white or neutral gray, never cream, beige, or warm yellow. The
+implementation colors are screen-oriented product colors, not claimed digital equivalents of
 proprietary forecast swatches.
 
 | Semantic role | Light token value | Product use |
 | --- | --- | --- |
-| canvas | `#eef2ef` | viewport around the work surface |
-| surface | `#f8f9f6` | primary application surface |
+| canvas | `#edf1f5` | viewport around the work surface |
+| surface | `#f7f8fa` | primary application surface |
 | brand / primary | `#087a72` | selected dates, voice idle, send, focus |
 | AI / voice activity | `#d92d7a` | assistant mark, recording state, active progress |
 | calendar | `#4967e8` | calendar entries and agenda markers |
@@ -92,13 +93,13 @@ opacity, shadows, and motion:
 
 ```css
 :root {
-  --color-bg: #eef2ef;
-  --color-surface: #f8f9f6;
+  --color-bg: #edf1f5;
+  --color-surface: #f7f8fa;
   --color-surface-raised: #ffffff;
-  --color-surface-muted: #edf2ee;
-  --color-text: #171b18;
-  --color-text-muted: #66716b;
-  --color-border: #d8e1dc;
+  --color-surface-muted: #eef1f5;
+  --color-text: #181a1d;
+  --color-text-muted: #68717c;
+  --color-border: #d9dfe7;
 
   --color-primary: #087a72;
   --color-primary-foreground: #ffffff;
@@ -150,10 +151,14 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Switch to the persistent two-pane workspace at 900px; do not squeeze two panes onto tablets.
 - Keep the desktop work surface at or below 1280px and give both panes independent scrolling.
 - Keep the input dock fixed or sticky at the bottom.
-- Keep the mobile tab bar below the input dock and inside the bottom safe area. Use icon-above-label
-  tabs, selected tint, and no underline or selected background capsule.
+- Keep the mobile tab bar below the input dock and inside the bottom safe area. It is a floating,
+  translucent system control with background blur, a light glass border, and restrained elevation.
+  Use icon-above-label tabs, selected tint, and no underline or selected background capsule.
 - Respect mobile safe-area insets.
 - Message bubbles should have stable max widths and must not shift layout while loading.
+- Assistant messages use a raised neutral surface and subtle border. A long press opens a compact,
+  WeChat-style action menu for real local actions only: copy and select text. Moving the pointer
+  while pressing cancels the menu so vertical conversation scrolling remains natural.
 - Use icons for microphone and send actions, with accessible labels.
 - Keep touch targets at least 44px.
 - Avoid explanatory text in the product UI unless it is necessary for the current task.

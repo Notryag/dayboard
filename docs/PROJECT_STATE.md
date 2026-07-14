@@ -36,7 +36,7 @@ The current direction is:
   provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
   production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
   part of release verification
-- UI design approach: semantic CSS variables with a neutral canvas, teal brand/primary actions,
+- UI design approach: semantic CSS variables with a cool neutral canvas, teal brand/primary actions,
   fuchsia AI/voice activity, blue calendar state, amber task state, and mint completion state
 - backend: FastAPI, Pydantic, SQLAlchemy, Alembic
 - agent runtime: `north`

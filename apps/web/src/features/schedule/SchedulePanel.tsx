@@ -82,10 +82,10 @@ export function SchedulePanel({ active, refreshKey, timezone }: SchedulePanelPro
       <div className={styles.content} aria-live="polite">
         <DayAgendaSection calendar={calendar} tasks={datedTasks} timezone={timezone} />
         <TaskListSection
-          emptyText="没有未安排时间的待办"
+          emptyText="没有待办"
           id="undated-task-section"
           resource={undatedTasks}
-          title="未排时间"
+          title="待办清单"
         />
       </div>
     </section>

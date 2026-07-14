@@ -46,6 +46,8 @@
   max-width: min(82%, var(--chat-message-max-width));
   padding: var(--space-3) var(--space-4) var(--space-2);
   border-radius: var(--radius-message);
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 
 .message p {
@@ -65,11 +67,10 @@
 
 .assistantMessage {
   max-width: min(86%, var(--chat-message-max-width));
-  padding: var(--space-1) 0 var(--space-2);
-  border: 0;
-  border-radius: 0;
+  border: var(--border-width) solid var(--message-assistant-border);
+  border-bottom-left-radius: var(--radius-sm);
   color: var(--message-assistant-text);
-  background: transparent;
+  background: var(--message-assistant-bg);
   box-shadow: none;
 }
 
@@ -79,6 +80,76 @@
   color: var(--message-user-text);
   background: var(--message-user-bg);
   box-shadow: none;
+}
+
+.messageMenuLayer {
+  --chat-message-menu-width: 154px;
+  --chat-message-menu-height: 54px;
+  --chat-message-menu-offset: 8px;
+  --chat-message-menu-edge-inset: 85px;
+
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--color-message-menu-backdrop);
+}
+
+.messageMenu {
+  position: absolute;
+  top: var(--chat-menu-anchor-y);
+  left: clamp(
+    var(--chat-message-menu-edge-inset),
+    var(--chat-menu-anchor-x),
+    calc(100vw - var(--chat-message-menu-edge-inset))
+  );
+  width: var(--chat-message-menu-width);
+  min-height: var(--chat-message-menu-height);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-message-menu-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-message-menu-foreground);
+  background: var(--color-message-menu);
+  box-shadow: var(--shadow-message-menu);
+  transform: translateX(-50%);
+}
+
+.messageMenuAbove {
+  transform: translate(-50%, calc(-100% - var(--chat-message-menu-offset)));
+}
+
+.messageMenuBelow {
+  transform: translate(-50%, var(--chat-message-menu-offset));
+}
+
+.messageMenu button {
+  min-width: 0;
+  min-height: var(--chat-message-menu-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-none);
+}
+
+.messageMenu button + button {
+  border-left: var(--border-width) solid var(--color-message-menu-border);
+}
+
+.messageMenu button:active {
+  background: color-mix(in srgb, currentColor, transparent 90%);
+}
+
+.messageMenu button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: calc(-1 * var(--focus-ring-width));
 }
 
 @media (min-width: 900px) {
