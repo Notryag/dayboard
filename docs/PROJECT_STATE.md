@@ -110,11 +110,11 @@ paths.
   limits, and tenant-plus-owner repository boundaries for conversations, Runs, schedules, tasks,
   transcripts, reminders, and provider usage.
 - Inspectable UI: the responsive shell presents conversation and schedule as first-level views. A
-  reusable day-view panel supports a native distant-date picker, a swipeable
-  31-day rail, a chronological agenda merging calendar entries with dated tasks, and a separate
-  undated/open-task list. A shared semantic-icon schedule item renders in both the day view and AI
-  confirmations, opens item details, and supports direct task completion plus calendar/task
-  cancellation with optimistic concurrency. Edit actions return a prefilled draft to conversation.
+  reusable day-view panel supports a native distant-date picker, a swipeable forward-looking
+  31-day rail starting at today, a chronological agenda merging calendar entries with dated tasks, and a separate
+  undated/open-task list. A shared semantic-icon schedule card renders in both the day view and AI
+  confirmations, opens item details, and supports direct editing, task completion, plus calendar/task
+  cancellation with optimistic concurrency.
   The server owns trusted-timezone day boundaries; each source has independent loading, error,
   retry, stale-request cancellation, and cursor-pagination states.
 - Calendar/task intent: the Agent treats concrete time blocks as calendar entries and

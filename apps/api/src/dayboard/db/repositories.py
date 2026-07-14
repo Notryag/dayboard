@@ -176,6 +176,36 @@ class CalendarEntryRepository:
             .returning(CalendarEntryRow)
         )
 
+    async def update_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        title: str,
+        start_time: datetime,
+        end_time: datetime,
+        expected_updated_at: datetime,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            update(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.deleted_at.is_(None),
+            )
+            .values(
+                title=title,
+                start_time=start_time,
+                end_time=end_time,
+                updated_by_run_id=None,
+                updated_operation_key=None,
+                updated_at=func.now(),
+            )
+            .returning(CalendarEntryRow)
+        )
+
     async def get_by_cancelled_operation(
         self,
         context: TenantContext,
@@ -481,6 +511,34 @@ class TaskItemRepository:
                 TaskItemRow.deleted_at.is_(None),
             )
             .values(**values)
+            .returning(TaskItemRow)
+        )
+
+    async def update_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        task_id: UUID,
+        title: str,
+        due_at: datetime | None,
+        expected_updated_at: datetime,
+    ) -> TaskItemRow | None:
+        return await self.session.scalar(
+            update(TaskItemRow)
+            .where(
+                TaskItemRow.id == task_id,
+                TaskItemRow.tenant_id == context.tenant_id,
+                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.updated_at == expected_updated_at,
+                TaskItemRow.deleted_at.is_(None),
+            )
+            .values(
+                title=title,
+                due_at=due_at,
+                updated_by_run_id=None,
+                updated_operation_key=None,
+                updated_at=func.now(),
+            )
             .returning(TaskItemRow)
         )
 

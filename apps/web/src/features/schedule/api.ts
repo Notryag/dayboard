@@ -84,3 +84,36 @@ export function completeTaskItem(task: TaskItem): Promise<TaskItem> {
 export function cancelTaskItem(task: TaskItem): Promise<TaskItem> {
   return mutateScheduleItem(`/api/task-items/${task.id}/cancel`, task.updated_at);
 }
+
+export async function updateCalendarEntry(
+  entry: CalendarEntry,
+  input: { title: string; startTime: string; durationMinutes: number },
+): Promise<CalendarEntry> {
+  const response = await apiFetch(`/api/calendar-entries/${entry.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      expected_updated_at: entry.updated_at,
+      title: input.title,
+      start_time: input.startTime,
+      duration_minutes: input.durationMinutes,
+    }),
+  });
+  return response.json() as Promise<CalendarEntry>;
+}
+
+export async function updateTaskItem(
+  task: TaskItem,
+  input: { title: string; dueAt: string | null },
+): Promise<TaskItem> {
+  const response = await apiFetch(`/api/task-items/${task.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      expected_updated_at: task.updated_at,
+      title: input.title,
+      due_at: input.dueAt,
+    }),
+  });
+  return response.json() as Promise<TaskItem>;
+}

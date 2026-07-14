@@ -4,14 +4,13 @@ import { useMemo } from "react";
 import { ChevronDown, Clock3, LoaderCircle, RotateCw } from "lucide-react";
 import { formatScheduleTime } from "./date";
 import { ScheduleItem } from "./ScheduleItem";
-import type { CalendarEntry, ScheduleDisplayItem, TaskItem } from "./types";
+import type { CalendarEntry, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type DayAgendaSectionProps = {
   calendar: SchedulePageResource<CalendarEntry>;
   onChanged: () => void;
-  onEdit: (item: ScheduleDisplayItem) => void;
   tasks: SchedulePageResource<TaskItem>;
   timezone: string;
 };
@@ -31,7 +30,7 @@ function RetryNotice({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
-export function DayAgendaSection({ calendar, onChanged, onEdit, tasks, timezone }: DayAgendaSectionProps) {
+export function DayAgendaSection({ calendar, onChanged, tasks, timezone }: DayAgendaSectionProps) {
   const items = useMemo<AgendaItem[]>(() => {
     const calendarItems: AgendaItem[] = calendar.items.map((entry) => ({
       entry,
@@ -94,7 +93,6 @@ export function DayAgendaSection({ calendar, onChanged, onEdit, tasks, timezone 
                     : { kind: "task", value: item.task }
                 }
                 onChanged={onChanged}
-                onEdit={onEdit}
                 timezone={timezone}
                 variant="agenda"
               />

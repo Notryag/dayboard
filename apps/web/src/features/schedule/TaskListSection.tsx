@@ -2,7 +2,7 @@
 
 import { ChevronDown, ListTodo, LoaderCircle, RotateCw } from "lucide-react";
 import { ScheduleItem } from "./ScheduleItem";
-import type { ScheduleDisplayItem, TaskItem } from "./types";
+import type { TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
@@ -10,7 +10,6 @@ type TaskListSectionProps = {
   emptyText: string;
   id: string;
   onChanged: () => void;
-  onEdit: (item: ScheduleDisplayItem) => void;
   resource: SchedulePageResource<TaskItem>;
   title: string;
 };
@@ -19,7 +18,6 @@ export function TaskListSection({
   emptyText,
   id,
   onChanged,
-  onEdit,
   resource,
   title,
 }: TaskListSectionProps) {
@@ -61,7 +59,6 @@ export function TaskListSection({
               <ScheduleItem
                 item={{ kind: "task", value: task }}
                 onChanged={onChanged}
-                onEdit={onEdit}
                 timezone={task.timezone}
                 variant="task"
               />

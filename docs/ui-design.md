@@ -237,8 +237,10 @@ arithmetic; event instants are formatted in the timezone returned by the account
 currently server-configured `Asia/Shanghai`; a trusted tenant setting may replace it later.
 
 The selected date uses the semantic selection background. Today uses a neutral surface when it is
-not selected; do not use a decorative dot. Swiping scrolls the rail but does not change selection;
-tapping a cell selects it. The month-year control retains the native date picker for distant jumps.
+not selected; do not use a decorative dot. The initial 31-day rail starts with today at the left edge
+so upcoming dates receive the available space. Swiping scrolls the rail but does not change
+selection; tapping a cell selects it. A distant date jump starts a new forward-looking window at that
+date. The month-year control retains the native date picker for distant jumps.
 
 Render the chronological agenda as separate cards. Place each start-time label in the vertical space
 before its card instead of reserving a left-hand time column. Calendar cards show duration rather
@@ -249,10 +251,11 @@ cached `Intl.DateTimeFormat` instances; do not add a carousel or date-picker dep
 interaction.
 
 Calendar entries and tasks share one schedule-item component across the day view and assistant
-messages. It chooses a semantic Lucide icon from centralized title keywords, opens the same detail
-dialog, and exposes deterministic complete/cancel actions through narrow authenticated APIs.
-Editing returns to a prefilled conversation draft so time and reminder semantics stay in the Agent
-command path. Mutations use `updated_at` as an optimistic-concurrency boundary.
+messages. It chooses a semantic Lucide icon from centralized title keywords; icons use semantic
+foreground colors without decorative background tiles. The same detail dialog exposes direct edit,
+complete, and cancel actions through narrow authenticated APIs. Calendar editing covers title, start
+time, and duration; task editing covers title and optional due time. Mutations use `updated_at` as an
+optimistic-concurrency boundary.
 
 Component ownership:
 
@@ -262,13 +265,13 @@ ScheduleHeader.tsx     # weekday and native date picker
 DateRail.tsx           # date window, selection, horizontal navigation
 DayAgendaSection.tsx   # merged chronological calendar/task display
 TaskListSection.tsx    # undated task display
-ScheduleItem.tsx       # shared semantic-icon card, details, actions, conversation edit handoff
+ScheduleItem.tsx       # shared semantic-icon card, details, direct actions
+ScheduleItemEditForm.tsx # direct editing and account-timezone conversion
 useSchedulePage.ts     # pagination, stale-request cancellation, retry
 date.ts                # cached display formatters and date-key arithmetic
 ```
 
-Circular visualization, month/week layouts, direct form-based time editing, and reminder delivery UI
-are later product slices.
+Circular visualization, month/week layouts, and reminder delivery UI are later product slices.
 
 ## Interaction And Performance Acceptance
 

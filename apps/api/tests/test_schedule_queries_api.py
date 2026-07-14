@@ -275,3 +275,72 @@ async def test_run_schedule_items_and_direct_actions(
     assert cancelled.json()["status"] == "cancelled"
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "CALENDAR_ENTRY_NOT_FOUND"
+
+
+async def test_direct_schedule_item_updates(
+    api_app,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    timezone = ZoneInfo("Asia/Shanghai")
+    entry = CalendarEntryRow(
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        title="旧日程",
+        start_time=datetime(2026, 7, 20, 9, 0, tzinfo=timezone),
+        end_time=datetime(2026, 7, 20, 10, 0, tzinfo=timezone),
+        timezone="Asia/Shanghai",
+        participants=[],
+    )
+    task = TaskItemRow(
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        title="旧待办",
+        due_at=datetime(2026, 7, 20, 18, 0, tzinfo=timezone),
+        timezone="Asia/Shanghai",
+        status="open",
+    )
+    db_session.add_all([entry, task])
+    await db_session.commit()
+    await db_session.refresh(entry)
+    await db_session.refresh(task)
+    entry_version = entry.updated_at.isoformat()
+
+    async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
+        updated_entry = await client.put(
+            f"/api/calendar-entries/{entry.id}",
+            json={
+                "expected_updated_at": entry_version,
+                "title": "新日程",
+                "start_time": "2026-07-21T14:30:00+08:00",
+                "duration_minutes": 90,
+            },
+        )
+        stale_entry = await client.put(
+            f"/api/calendar-entries/{entry.id}",
+            json={
+                "expected_updated_at": entry_version,
+                "title": "覆盖更新",
+                "start_time": "2026-07-21T15:00:00+08:00",
+                "duration_minutes": 60,
+            },
+        )
+        updated_task = await client.put(
+            f"/api/task-items/{task.id}",
+            json={
+                "expected_updated_at": task.updated_at.isoformat(),
+                "title": "新待办",
+                "due_at": None,
+            },
+        )
+
+    assert updated_entry.status_code == 200
+    assert updated_entry.json()["title"] == "新日程"
+    assert datetime.fromisoformat(updated_entry.json()["end_time"]) - datetime.fromisoformat(
+        updated_entry.json()["start_time"]
+    ) == timedelta(minutes=90)
+    assert stale_entry.status_code == 409
+    assert stale_entry.json()["error"]["code"] == "SCHEDULE_ITEM_CONFLICT"
+    assert updated_task.status_code == 200
+    assert updated_task.json()["title"] == "新待办"
+    assert updated_task.json()["due_at"] is None

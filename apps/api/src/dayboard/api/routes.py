@@ -85,6 +85,17 @@ class ScheduleMutationRequest(BaseModel):
     expected_updated_at: AwareDatetime
 
 
+class CalendarEntryUpdateRequest(ScheduleMutationRequest):
+    title: str = Field(min_length=1, max_length=240)
+    start_time: AwareDatetime
+    duration_minutes: int = Field(ge=5, le=10080)
+
+
+class TaskItemUpdateRequest(ScheduleMutationRequest):
+    title: str = Field(min_length=1, max_length=240)
+    due_at: AwareDatetime | None
+
+
 TERMINAL_RUN_EVENTS = {
     "run_completed",
     "run_failed",
@@ -291,6 +302,38 @@ async def cancel_calendar_entry_from_ui(
     return CalendarEntryView.from_domain(entry)
 
 
+@router.put("/api/calendar-entries/{entry_id}", response_model=CalendarEntryView)
+async def update_calendar_entry_from_ui(
+    entry_id: UUID,
+    body: CalendarEntryUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> CalendarEntryView:
+    service = SchedulingService(session)
+    current = await service.get_calendar_entry(tenant_context, entry_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="CALENDAR_ENTRY_NOT_FOUND",
+            message="Calendar entry not found",
+        )
+    entry = await service.update_calendar_entry_from_ui(
+        tenant_context,
+        entry_id=entry_id,
+        title=body.title,
+        start_time=body.start_time,
+        end_time=body.start_time + timedelta(minutes=body.duration_minutes),
+        expected_updated_at=body.expected_updated_at,
+    )
+    if entry is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Calendar entry changed before this operation",
+        )
+    return CalendarEntryView.from_domain(entry)
+
+
 async def _set_task_status_from_ui(
     task_id: UUID,
     body: ScheduleMutationRequest,
@@ -337,6 +380,37 @@ async def complete_task_item_from_ui(
         session,
         tenant_context,
     )
+
+
+@router.put("/api/task-items/{task_id}", response_model=TaskItemView)
+async def update_task_item_from_ui(
+    task_id: UUID,
+    body: TaskItemUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> TaskItemView:
+    service = SchedulingService(session)
+    current = await service.get_task_item(tenant_context, task_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="TASK_ITEM_NOT_FOUND",
+            message="Task item not found",
+        )
+    task = await service.update_task_item_from_ui(
+        tenant_context,
+        task_id=task_id,
+        title=body.title,
+        due_at=body.due_at,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if task is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Task item changed before this operation",
+        )
+    return TaskItemView.from_domain(task)
 
 
 @router.post("/api/task-items/{task_id}/cancel", response_model=TaskItemView)

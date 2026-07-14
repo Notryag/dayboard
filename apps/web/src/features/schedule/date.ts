@@ -67,10 +67,8 @@ export function shiftDateKey(value: string, amount: number) {
   return date.toISOString().slice(0, 10);
 }
 
-export function dateRangeAround(value: string, radius = 15) {
-  return Array.from({ length: radius * 2 + 1 }, (_, index) =>
-    shiftDateKey(value, index - radius),
-  );
+export function dateRangeFrom(value: string, length = 31) {
+  return Array.from({ length }, (_, index) => shiftDateKey(value, index));
 }
 
 export function formatSelectedWeekday(value: string) {

@@ -16,7 +16,7 @@ import { ClarificationInteraction } from "@/features/clarifications/Clarificatio
 import type { ConversationState } from "@/features/clarifications/types";
 import { getScheduleItemsByRunIds } from "@/features/schedule/api";
 import { ScheduleItem } from "@/features/schedule/ScheduleItem";
-import type { RunScheduleItemGroup, ScheduleDisplayItem } from "@/features/schedule/types";
+import type { RunScheduleItemGroup } from "@/features/schedule/types";
 import styles from "./ChatMessageList.module.css";
 
 export type ChatMessage = {
@@ -33,7 +33,6 @@ type ChatMessageListProps = {
   messages: ChatMessage[];
   onChanged: () => void;
   onClarificationChoice: (optionKey: string) => void;
-  onEdit: (item: ScheduleDisplayItem) => void;
   refreshKey: number;
   scrollRef: RefObject<HTMLElement | null>;
   timezone: string;
@@ -61,7 +60,6 @@ export function ChatMessageList({
   messages,
   onChanged,
   onClarificationChoice,
-  onEdit,
   refreshKey,
   scrollRef,
   timezone,
@@ -261,7 +259,6 @@ export function ChatMessageList({
                         item={item}
                         key={`${item.kind}-${item.value.id}`}
                         onChanged={onChanged}
-                        onEdit={onEdit}
                         timezone={timezone}
                         variant="chat"
                       />

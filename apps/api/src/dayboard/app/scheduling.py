@@ -208,6 +208,31 @@ class SchedulingService:
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
 
+    async def update_calendar_entry_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        title: str,
+        start_time: datetime,
+        end_time: datetime,
+        expected_updated_at: datetime,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.update_from_ui(
+            context,
+            entry_id=entry_id,
+            title=title,
+            start_time=start_time,
+            end_time=end_time,
+            expected_updated_at=expected_updated_at,
+        )
+        if row is None:
+            return None
+        await ReminderService(self.session).sync_calendar_entry(context, row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
+
     async def list_calendar_conflicts(
         self,
         context: TenantContext,
@@ -300,6 +325,29 @@ class SchedulingService:
             context,
             task_id=task_id,
             status=status,
+            expected_updated_at=expected_updated_at,
+        )
+        if row is None:
+            return None
+        await ReminderService(self.session).sync_task_item(context, row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return task_item_from_row(row)
+
+    async def update_task_item_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        task_id: UUID,
+        title: str,
+        due_at: datetime | None,
+        expected_updated_at: datetime,
+    ) -> TaskItem | None:
+        row = await self.task_items.update_from_ui(
+            context,
+            task_id=task_id,
+            title=title,
+            due_at=due_at,
             expected_updated_at=expected_updated_at,
         )
         if row is None:

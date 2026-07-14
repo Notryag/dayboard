@@ -25,7 +25,6 @@ import {
 import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageList";
 import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
-import type { ScheduleDisplayItem } from "@/features/schedule/types";
 import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
 import styles from "./page.module.css";
 
@@ -442,12 +441,6 @@ function ChatHome() {
     if (view === "schedule") setScheduleRevision((current) => current + 1);
   }
 
-  function handleScheduleEdit(item: ScheduleDisplayItem) {
-    setInput(`修改“${item.value.title}”：`);
-    setInputMode("text");
-    setActiveView("chat");
-  }
-
   function handleViewTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -501,7 +494,6 @@ function ChatHome() {
               messages={messages}
               onChanged={() => setScheduleRevision((current) => current + 1)}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
-              onEdit={handleScheduleEdit}
               refreshKey={scheduleRevision}
               scrollRef={messagesRef}
               timezone={timezone}
@@ -542,7 +534,6 @@ function ChatHome() {
             <SchedulePanel
               active={activeView === "schedule"}
               onChanged={() => setScheduleRevision((current) => current + 1)}
-              onEdit={handleScheduleEdit}
               refreshKey={scheduleRevision}
               timezone={timezone}
             />

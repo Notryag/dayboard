@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useMemo, useRef } from "react";
 import {
-  dateRangeAround,
+  dateRangeFrom,
   formatAccessibleDate,
   formatDayNumber,
   formatRailWeekday,
@@ -29,12 +29,12 @@ export function DateRail({
 }: DateRailProps) {
   const railRef = useRef<HTMLElement>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
-  const dates = useMemo(() => dateRangeAround(centerDate), [centerDate]);
+  const dates = useMemo(() => dateRangeFrom(centerDate), [centerDate]);
   const selectedMonth = selectedDate.slice(0, 7);
 
   useLayoutEffect(() => {
     if (!railRef.current?.offsetWidth) return;
-    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "center" });
+    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "start" });
   }, [active, centerDate]);
 
   return (

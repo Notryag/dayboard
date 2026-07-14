@@ -34,6 +34,7 @@ import {
   completeTaskItem,
 } from "./api";
 import { formatScheduleTime } from "./date";
+import { ScheduleItemEditForm } from "./ScheduleItemEditForm";
 import type {
   CalendarEntry,
   ScheduleDisplayItem,
@@ -45,7 +46,6 @@ type ScheduleItemProps = {
   timezone: string;
   variant?: "agenda" | "chat" | "task";
   onChanged: () => void;
-  onEdit: (item: ScheduleDisplayItem) => void;
 };
 
 type IconComponent = typeof CalendarClock;
@@ -134,7 +134,6 @@ export function ScheduleItem({
   timezone,
   variant = "agenda",
   onChanged,
-  onEdit,
 }: ScheduleItemProps) {
   const [open, setOpen] = useState(false);
   const Icon = iconForTitle(itemTitle(item), item.kind);
@@ -164,10 +163,6 @@ export function ScheduleItem({
               item={item}
               onChanged={onChanged}
               onClose={() => setOpen(false)}
-              onEdit={() => {
-                setOpen(false);
-                onEdit(item);
-              }}
               timezone={timezone}
             />,
             document.body,
@@ -182,7 +177,6 @@ type ScheduleItemDialogProps = {
   timezone: string;
   onChanged: () => void;
   onClose: () => void;
-  onEdit: () => void;
 };
 
 function ScheduleItemDialog({
@@ -190,9 +184,9 @@ function ScheduleItemDialog({
   timezone,
   onChanged,
   onClose,
-  onEdit,
 }: ScheduleItemDialogProps) {
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const Icon = iconForTitle(itemTitle(item), item.kind);
@@ -257,7 +251,7 @@ function ScheduleItemDialog({
             {createElement(Icon, { size: 21 })}
           </span>
           <div className={styles.dialogHeading}>
-            <span>{item.kind === "calendar" ? "日程" : "待办"}</span>
+            <span>{editing ? "编辑" : item.kind === "calendar" ? "日程" : "待办"}</span>
             <h2>{itemTitle(item)}</h2>
           </div>
           <button aria-label="关闭详情" className={styles.closeButton} disabled={busy} onClick={onClose} title="关闭" type="button">
@@ -265,6 +259,17 @@ function ScheduleItemDialog({
           </button>
         </header>
 
+        {editing ? (
+          <ScheduleItemEditForm
+            item={item}
+            onCancel={() => setEditing(false)}
+            onSaved={() => {
+              onChanged();
+              onClose();
+            }}
+            timezone={timezone}
+          />
+        ) : (
         <div className={styles.details}>
           <p className={styles.detailLine}>
             {item.kind === "calendar" ? (
@@ -294,8 +299,9 @@ function ScheduleItemDialog({
             </p>
           ) : null}
         </div>
+        )}
 
-        {confirmCancel ? (
+        {!editing && confirmCancel ? (
           <div className={styles.confirmation}>
             <p>确定取消“{itemTitle(item)}”？</p>
             <div>
@@ -310,9 +316,9 @@ function ScheduleItemDialog({
           </div>
         ) : null}
 
-        {!confirmCancel && status === "open" ? (
+        {!editing && !confirmCancel && status === "open" ? (
           <footer className={styles.actions}>
-            <button className={styles.editButton} disabled={busy} onClick={onEdit} type="button">
+            <button className={styles.editButton} disabled={busy} onClick={() => setEditing(true)} type="button">
               <Pencil aria-hidden="true" size={16} />
               修改
             </button>
