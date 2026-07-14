@@ -21,17 +21,11 @@ Open `http://localhost:3000`. Local API CORS configuration must include this ori
 - `NEXT_PUBLIC_DAYBOARD_BASE_PATH`: Next.js mount path; empty locally and `/dayboard` on the
   server-hosted deployment.
 
-Both variables are compiled into the browser bundle. Set them when running `npm run build`; setting
-them only for `npm run start` cannot change an existing build.
+Both variables are compiled into the browser bundle. Production must set them while building the
+Web image; changing only the environment of an existing container cannot update its browser assets.
 
-## Server Build
+## Production Deployment
 
-```bash
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api \
-NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard \
-npm run build
-npm run start -- --hostname 127.0.0.1 --port 3001
-```
-
-See [../../docs/deploy.md](../../docs/deploy.md) for the full API, worker, database, reverse proxy,
-and verification procedure.
+Production does not run Next.js directly on the host. Build and start Web together with API,
+Worker, PostgreSQL, and Redis through the root Docker Compose project. See the
+[Docker deployment guide](../../docs/deploy.md).
