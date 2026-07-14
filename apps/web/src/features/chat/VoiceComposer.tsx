@@ -101,6 +101,17 @@ export function VoiceComposer({
   }
 
   const primaryLabel = unavailableReason ?? "按住说话";
+  const elapsedLabel = formatDuration(elapsedSeconds);
+  const controlLabel =
+    status === "requesting"
+      ? "正在连接麦克风"
+      : status === "recording"
+        ? cancelIntent
+          ? "松开取消"
+          : `松开发送，已录音 ${elapsedLabel}`
+        : status === "transcribing"
+          ? "正在识别语音"
+          : primaryLabel;
 
   return (
     <div
@@ -108,11 +119,42 @@ export function VoiceComposer({
         status === "recording" ? styles.recordingComposer : ""
       }`}
     >
+      <div className={styles.voiceStatus} aria-live="polite">
+        {status === "requesting" ? (
+          <span>正在连接</span>
+        ) : status === "recording" ? (
+          <>
+            <span className={styles.levelBars} aria-hidden="true">
+              {LEVEL_WEIGHTS.map((weight, index) => (
+                <span
+                  key={index}
+                  style={{ transform: `scaleY(${Math.max(0.2, level * weight)})` }}
+                />
+              ))}
+            </span>
+            <span
+              aria-label={`${controlLabel}，最长 ${formatDuration(maxDurationSeconds)}`}
+              className={styles.durationLimit}
+            >
+              {cancelIntent ? "取消" : elapsedLabel}
+            </span>
+          </>
+        ) : status === "transcribing" ? (
+          <span>正在识别</span>
+        ) : (
+          <span>{primaryLabel}</span>
+        )}
+      </div>
+
       <button
-        aria-label={status === "recording" ? "松开发送" : primaryLabel}
+        aria-label={controlLabel}
         aria-pressed={status === "requesting" || status === "recording"}
         className={`${styles.voiceHoldButton} ${
           status === "recording" ? styles.voiceHoldButtonActive : ""
+        } ${
+          status === "requesting" || status === "transcribing"
+            ? styles.voiceHoldButtonProcessing
+            : ""
         } ${cancelIntent ? styles.voiceHoldButtonCancel : ""}`}
         disabled={(status === "idle" && disabled) || status === "transcribing"}
         onBlur={() => finishRecording("cancel")}
@@ -157,37 +199,10 @@ export function VoiceComposer({
         }}
         type="button"
       >
-        {status === "requesting" ? (
-          <span className={styles.voiceButtonContent} aria-live="polite">
-            <LoaderCircle className={styles.spinner} size={19} />
-            正在连接麦克风
-          </span>
-        ) : status === "recording" ? (
-          <span className={styles.voiceButtonContent} aria-live="polite">
-            <span className={styles.recordingDot} aria-hidden="true" />
-            <span className={styles.levelBars} aria-hidden="true">
-              {LEVEL_WEIGHTS.map((weight, index) => (
-                <span
-                  key={index}
-                  style={{ transform: `scaleY(${Math.max(0.2, level * weight)})` }}
-                />
-              ))}
-            </span>
-            <span>{cancelIntent ? "松开取消" : "松开发送"}</span>
-            <span className={styles.durationLimit}>
-              {formatDuration(elapsedSeconds)} / {formatDuration(maxDurationSeconds)}
-            </span>
-          </span>
-        ) : status === "transcribing" ? (
-          <span className={styles.voiceButtonContent} aria-live="polite">
-            <LoaderCircle className={styles.spinner} size={19} />
-            正在识别语音
-          </span>
+        {status === "requesting" || status === "transcribing" ? (
+          <LoaderCircle className={styles.spinner} size={25} />
         ) : (
-          <span className={styles.voiceButtonContent}>
-            <Mic size={20} strokeWidth={2.2} />
-            {primaryLabel}
-          </span>
+          <Mic size={26} strokeWidth={2.2} />
         )}
       </button>
 

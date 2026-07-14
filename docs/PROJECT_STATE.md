@@ -29,8 +29,9 @@ The current direction is:
 - product name: Dayboard
 - frontend: Next.js, React, TypeScript; the primary server-hosted path is `/dayboard/`, while
   Vercel remains an optional preview deployment
-- primary UI surfaces: a voice-first conversation pane and a date-selectable day-view pane; mobile
-  switches them through first-level tabs and desktop keeps both visible in a two-pane workspace
+- primary UI surfaces: a voice-first conversation home and a date-selectable day view; mobile uses a
+  persistent bottom Conversation/Schedule tab bar and desktop keeps both visible in a two-pane
+  workspace
 - voice status: browser recording, upload limits, release-to-transcribe-and-submit interaction, the
   provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
   production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
@@ -84,8 +85,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The coordinated account migration, same-site web/API
-deployment, and production password-auth switch are complete. The application shell now uses mobile
-Conversation/Schedule tabs and a desktop conversation/day-view workspace. The schedule panel has a
+deployment, and production password-auth switch are complete. The application shell now uses a
+conversation-first mobile home with a bottom Conversation/Schedule tab bar and a desktop
+conversation/day-view workspace. The schedule panel has a
 swipeable date rail, a chronological calendar/task agenda, and a separate undated-task area. Run
 execution now reconnects after a page reload or a transient SSE
 disconnect. API HTTP and validation errors now share a request-ID-bearing envelope, with stable

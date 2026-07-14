@@ -1,10 +1,10 @@
 .messages {
-  --chat-assistant-mark-size: 28px;
+  --chat-assistant-mark-size: 24px;
 
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: var(--space-5) var(--space-4) var(--space-6);
@@ -21,6 +21,7 @@
 }
 
 .assistantRow {
+  align-items: flex-start;
   justify-content: flex-start;
 }
 
@@ -35,10 +36,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-1);
-  border-radius: var(--radius-md);
+  margin-top: var(--space-1);
   color: var(--color-accent);
-  background: var(--color-accent-surface);
+  background: transparent;
 }
 
 .message {
@@ -64,11 +64,13 @@
 }
 
 .assistantMessage {
-  border: var(--border-width) solid var(--color-border);
-  border-bottom-left-radius: var(--radius-sm);
+  max-width: min(86%, var(--chat-message-max-width));
+  padding: var(--space-1) 0 var(--space-2);
+  border: 0;
+  border-radius: 0;
   color: var(--message-assistant-text);
-  background: var(--message-assistant-bg);
-  box-shadow: var(--shadow-message);
+  background: transparent;
+  box-shadow: none;
 }
 
 .userMessage {
@@ -76,7 +78,7 @@
   border-bottom-right-radius: var(--radius-sm);
   color: var(--message-user-text);
   background: var(--message-user-bg);
-  box-shadow: var(--shadow-primary);
+  box-shadow: none;
 }
 
 @media (min-width: 900px) {

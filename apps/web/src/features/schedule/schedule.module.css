@@ -1,11 +1,13 @@
 .panel {
-  --schedule-header-height: 56px;
+  --schedule-header-height: 66px;
   --schedule-date-cell-width: 50px;
   --schedule-date-cell-height: 64px;
   --schedule-date-gap: 6px;
   --schedule-time-column-width: 48px;
   --schedule-marker-column-width: 30px;
+  --schedule-marker-half-width: 15px;
   --schedule-agenda-row-min-height: 68px;
+  --schedule-agenda-row-half-height: 34px;
   --schedule-task-row-min-height: 52px;
   --schedule-empty-min-height: 84px;
   --schedule-inline-action-size: 32px;
@@ -36,7 +38,7 @@
 .header h2 {
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: var(--font-size-title);
+  font-size: var(--font-size-heading);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-height-tight);
 }
@@ -92,7 +94,7 @@
   overflow-x: auto;
   padding: var(--space-2) var(--space-4) var(--space-3);
   border-bottom: var(--border-width) solid var(--color-border);
-  background: var(--color-primary-surface);
+  background: var(--color-surface);
   scroll-padding-inline: var(--space-4);
   scroll-snap-type: x proximity;
   scrollbar-width: none;
@@ -154,7 +156,7 @@
   border-color: var(--color-selection);
   color: var(--color-selection-foreground);
   background: var(--color-selection);
-  box-shadow: var(--shadow-primary);
+  box-shadow: none;
 }
 
 .dateCellOutsideMonth {
@@ -233,6 +235,22 @@
   list-style: none;
 }
 
+.agendaList {
+  position: relative;
+}
+
+.agendaList::before {
+  position: absolute;
+  top: var(--schedule-agenda-row-half-height);
+  bottom: var(--schedule-agenda-row-half-height);
+  left: calc(
+    var(--schedule-time-column-width) + var(--space-2) + var(--schedule-marker-half-width)
+  );
+  width: var(--border-width);
+  background: var(--color-border);
+  content: "";
+}
+
 .agendaList > li {
   min-height: var(--schedule-agenda-row-min-height);
   display: grid;
@@ -251,6 +269,8 @@
 }
 
 .agendaMarker {
+  position: relative;
+  z-index: 1;
   width: var(--schedule-marker-column-width);
   height: var(--schedule-marker-column-width);
   display: inline-flex;

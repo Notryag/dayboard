@@ -1,6 +1,7 @@
 .wrapper {
   --composer-min-height: 56px;
-  --composer-recording-dot-size: 8px;
+  --composer-voice-min-height: 72px;
+  --composer-voice-button-size: 60px;
   --composer-level-container-height: 22px;
   --composer-level-bar-width: 3px;
   --composer-level-bar-height: 20px;
@@ -31,9 +32,12 @@
 }
 
 .voiceComposer {
+  min-height: var(--composer-voice-min-height);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--control-size);
+  grid-template-columns: minmax(0, 1fr) var(--composer-voice-button-size) minmax(0, 1fr);
+  gap: 0;
   border-color: transparent;
+  padding: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -66,12 +70,19 @@
 }
 
 .voiceActionSpacer {
+  grid-column: 3;
+  justify-self: end;
   display: block;
 }
 
 .iconButton {
   color: var(--color-text-muted);
   background: var(--color-surface-muted);
+}
+
+.voiceComposer > .iconButton {
+  grid-column: 3;
+  justify-self: end;
 }
 
 .iconButton:hover:not(:disabled) {
@@ -124,11 +135,12 @@
 }
 
 .voiceHoldButton {
-  width: 100%;
-  height: var(--field-size);
-  min-width: 0;
+  width: var(--composer-voice-button-size);
+  height: var(--composer-voice-button-size);
+  grid-column: 2;
+  justify-self: center;
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: 50%;
   color: var(--color-primary-foreground);
   background: var(--color-primary);
   box-shadow: var(--shadow-primary);
@@ -146,15 +158,26 @@
 
 .voiceHoldButton:hover:not(:disabled) {
   background: var(--color-primary-hover);
-  transform: translateY(-1px);
+  transform: scale(1.035);
 }
 
-.voiceHoldButton:disabled {
+.voiceHoldButton:disabled:not(.voiceHoldButtonProcessing) {
   cursor: not-allowed;
   opacity: var(--opacity-disabled);
 }
 
+.voiceHoldButtonProcessing:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
 .voiceHoldButtonActive {
+  color: var(--color-accent-foreground);
+  background: var(--color-accent);
+  box-shadow: var(--shadow-accent);
+}
+
+.voiceHoldButtonProcessing {
   color: var(--color-accent-foreground);
   background: var(--color-accent);
   box-shadow: var(--shadow-accent);
@@ -166,33 +189,41 @@
   box-shadow: var(--shadow-danger);
 }
 
-.voiceButtonContent {
+.voiceStatus {
   min-width: 0;
+  grid-column: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-2);
+  padding-left: var(--space-1);
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-label);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
 }
 
-.recordingDot {
-  width: var(--composer-recording-dot-size);
-  height: var(--composer-recording-dot-size);
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: currentColor;
+.voiceStatus > span:not(.levelBars) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voiceComposer:has(.voiceHoldButtonActive) .voiceStatus {
+  color: var(--color-accent);
+}
+
+.voiceComposer:has(.voiceHoldButtonCancel) .voiceStatus,
+.voiceComposer:has(.voiceHoldButtonCancel) .durationLimit {
+  color: var(--color-danger);
 }
 
 .durationLimit {
-  color: currentColor;
+  color: var(--color-text);
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-medium);
-  opacity: 0.78;
-}
-
-.voiceHoldButtonCancel .durationLimit {
-  color: currentColor;
   opacity: 0.78;
 }
 
@@ -266,12 +297,6 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@media (max-width: 380px) {
-  .durationLimit {
-    display: none;
   }
 }
 

@@ -17,19 +17,21 @@ The current application shell is:
 ```text
 mobile (< 900px)
   -> compact brand/date header
-  -> first-level Conversation / Schedule tabs
   -> one active full-width view
-  -> conversation keeps the voice composer at the bottom
+  -> conversation is the default home view
+  -> centered voice composer above navigation
+  -> persistent bottom Conversation / Schedule tab bar
 
 desktop (>= 900px)
-  -> centered work surface, maximum width 1120px
+  -> full-height work surface, maximum width 1280px
   -> compact shared brand/account header
   -> conversation pane on the left
   -> persistent day-view pane on the right
 ```
 
-The desktop layout is a two-pane operational tool, not a dashboard of cards. The mobile tabs are the
-primary navigation and replace the old hidden calendar dialog entry point.
+The desktop layout is a two-pane operational tool, not a dashboard of cards. On mobile, conversation
+is the home page and a bottom tab bar switches only between the two top-level sections. Tasks remain
+inside Schedule; account settings remain in the header.
 
 ## Design Direction
 
@@ -146,8 +148,10 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Design mobile first, then expand carefully for desktop.
 - The conversation screen should be usable at 360px width.
 - Switch to the persistent two-pane workspace at 900px; do not squeeze two panes onto tablets.
-- Keep the desktop work surface at or below 1120px and give both panes independent scrolling.
+- Keep the desktop work surface at or below 1280px and give both panes independent scrolling.
 - Keep the input dock fixed or sticky at the bottom.
+- Keep the mobile tab bar below the input dock and inside the bottom safe area. Use icon-above-label
+  tabs, selected tint, and no underline or selected background capsule.
 - Respect mobile safe-area insets.
 - Message bubbles should have stable max widths and must not shift layout while loading.
 - Use icons for microphone and send actions, with accessible labels.
@@ -158,13 +162,14 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Use transitions only for color, opacity, and small transforms. Date selection and resource loading
   must not move fixed-format navigation controls.
 
-Voice is the composer's default input mode rather than a modal or separate page. Its stable states
-are:
+Voice is the conversation home's default input mode rather than a modal, page, or navigation item.
+The microphone is a fixed-size circular control centered above the tab bar; compact state feedback
+stays to its left and the keyboard switch stays to its right. Its stable states are:
 
 ```text
-voice idle   -> wide hold-to-talk control, keyboard-mode icon
+voice idle   -> centered teal hold-to-talk control, keyboard-mode icon on the right
 requesting   -> hold control shows microphone permission progress
-recording    -> keep holding, live level/timer, slide up to cancel, release to send
+recording    -> fuchsia control, live level/timer, slide up to cancel, release to send
 transcribing -> upload/provider progress and cancel before command submission
 text         -> microphone-mode icon, editable text, send
 ```

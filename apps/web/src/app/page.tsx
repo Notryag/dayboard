@@ -6,7 +6,6 @@ import {
   CalendarRange,
   LogOut,
   MessageCircle,
-  Sparkles,
 } from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -479,42 +478,6 @@ function ChatHome() {
           </div>
         </header>
 
-        <nav
-          aria-label="主要视图"
-          aria-orientation="horizontal"
-          className={styles.viewTabs}
-          role="tablist"
-        >
-          <button
-            aria-controls="chat-panel"
-            aria-selected={activeView === "chat"}
-            className={styles.viewTab}
-            id="chat-tab"
-            onClick={() => selectView("chat")}
-            onKeyDown={handleViewTabKeyDown}
-            role="tab"
-            tabIndex={activeView === "chat" ? 0 : -1}
-            type="button"
-          >
-            <MessageCircle aria-hidden="true" size={17} />
-            对话
-          </button>
-          <button
-            aria-controls="schedule-panel"
-            aria-selected={activeView === "schedule"}
-            className={styles.viewTab}
-            id="schedule-tab"
-            onClick={() => selectView("schedule")}
-            onKeyDown={handleViewTabKeyDown}
-            role="tab"
-            tabIndex={activeView === "schedule" ? 0 : -1}
-            type="button"
-          >
-            <CalendarDays aria-hidden="true" size={17} />
-            日程
-          </button>
-        </nav>
-
         <div className={styles.workspace}>
           <section
             aria-labelledby="chat-tab"
@@ -524,21 +487,6 @@ function ChatHome() {
             id="chat-panel"
             role="tabpanel"
           >
-            <header className={styles.paneHeader}>
-              <div className={styles.paneTitle}>
-                <MessageCircle aria-hidden="true" size={18} />
-                <h2>对话</h2>
-              </div>
-              <span
-                aria-label="AI 可用"
-                className={styles.aiSignal}
-                role="img"
-                title="AI 可用"
-              >
-                <Sparkles size={17} strokeWidth={2.2} />
-              </span>
-            </header>
-
             <ChatMessageList
               conversationState={conversationState}
               isSubmitting={isSubmitting}
@@ -584,6 +532,50 @@ function ChatHome() {
             />
           </div>
         </div>
+
+        <nav
+          aria-label="主要视图"
+          aria-orientation="horizontal"
+          className={styles.tabBar}
+          role="tablist"
+        >
+          <button
+            aria-controls="chat-panel"
+            aria-selected={activeView === "chat"}
+            className={styles.tabItem}
+            id="chat-tab"
+            onClick={() => selectView("chat")}
+            onKeyDown={handleViewTabKeyDown}
+            role="tab"
+            tabIndex={activeView === "chat" ? 0 : -1}
+            type="button"
+          >
+            <MessageCircle
+              aria-hidden="true"
+              size={22}
+              strokeWidth={activeView === "chat" ? 2.5 : 1.9}
+            />
+            <span>对话</span>
+          </button>
+          <button
+            aria-controls="schedule-panel"
+            aria-selected={activeView === "schedule"}
+            className={styles.tabItem}
+            id="schedule-tab"
+            onClick={() => selectView("schedule")}
+            onKeyDown={handleViewTabKeyDown}
+            role="tab"
+            tabIndex={activeView === "schedule" ? 0 : -1}
+            type="button"
+          >
+            <CalendarDays
+              aria-hidden="true"
+              size={22}
+              strokeWidth={activeView === "schedule" ? 2.5 : 1.9}
+            />
+            <span>日程</span>
+          </button>
+        </nav>
       </main>
     </div>
   );
