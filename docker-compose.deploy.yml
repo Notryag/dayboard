@@ -1,0 +1,9 @@
+services:
+  api:
+    image: ghcr.io/notryag/dayboard-api:${DAYBOARD_IMAGE_TAG:?DAYBOARD_IMAGE_TAG is required}
+
+  worker:
+    image: ghcr.io/notryag/dayboard-api:${DAYBOARD_IMAGE_TAG:?DAYBOARD_IMAGE_TAG is required}
+
+  web:
+    image: ghcr.io/notryag/dayboard-web:${DAYBOARD_IMAGE_TAG:?DAYBOARD_IMAGE_TAG is required}

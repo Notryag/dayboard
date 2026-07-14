@@ -25,3 +25,5 @@ coverage/
 .DS_Store
 .vercel/
 .vercel
+.dayboard-deployed-image
+.dayboard-deployed-image.tmp

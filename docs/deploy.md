@@ -78,9 +78,40 @@ docker compose ps
 API 容器启动时会自动执行 `alembic upgrade head`。不要在生产宿主机额外启动一份迁移、
 FastAPI、arq 或 Next.js 进程。
 
-## 更新版本
+## 自动部署
 
-先拉取和构建，构建成功后再替换容器：
+推送到 `main` 后，[GitHub Actions workflow](../.github/workflows/deploy.yml) 自动执行：
+
+1. API Ruff 检查和聚焦配置测试；
+2. Web ESLint 和生产构建；
+3. 构建 API、Web 镜像并以 Git commit SHA 为标签推送到 GHCR；
+4. 通过 SSH 连接服务器，拉取对应镜像；
+5. 备份 PostgreSQL，使用新 API 镜像执行迁移；
+6. 替换 API、Worker、Web 容器并执行健康检查。
+
+API 和 Worker 使用同一个 API 镜像。自动部署使用
+[`docker-compose.deploy.yml`](../docker-compose.deploy.yml) 覆盖应用镜像，服务器不会再次构建
+源码。`concurrency` 保证同一时间只有一个生产部署运行。
+
+在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
+
+| Secret | 内容 |
+| --- | --- |
+| `DEPLOY_HOST` | SSH 主机名，例如 `www.selfapi.art` |
+| `DEPLOY_USER` | 受限部署用户，例如 `zx` |
+| `DEPLOY_SSH_KEY` | 仅供 Actions 使用的 Ed25519 私钥 |
+| `DEPLOY_KNOWN_HOSTS` | 已核验的 SSH 主机公钥记录 |
+
+对应公钥必须加入服务器部署用户的 `~/.ssh/authorized_keys`。部署用户需要读取仓库、运行
+Docker Compose 和以免密 sudo 调用数据库备份脚本的权限。GHCR 登录使用当前 workflow 的
+短期 `GITHUB_TOKEN`，不需要保存长期 Registry Token。
+
+`production` GitHub Environment 可以增加审批人和分支保护。配置完成后，也可以在 Actions
+页面通过 `workflow_dispatch` 手动重新部署当前 `main`。
+
+## 手动更新
+
+自动部署异常时，保留源码构建流程作为回退手段。先拉取和构建，构建成功后再替换容器：
 
 ```bash
 cd /home/zx/dayboard
