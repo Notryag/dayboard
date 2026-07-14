@@ -92,6 +92,16 @@ function formatScheduleDateTime(value: string, timezone: string) {
   }).format(new Date(value));
 }
 
+function formatDuration(startTime: string, endTime: string | null) {
+  if (!endTime) return "未设置时长";
+  const minutes = Math.round((Date.parse(endTime) - Date.parse(startTime)) / 60000);
+  if (minutes <= 0) return "未设置时长";
+  if (minutes < 60) return `持续 ${minutes} 分钟`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `持续 ${hours} 小时 ${remainder} 分钟` : `持续 ${hours} 小时`;
+}
+
 function itemMeta(
   item: ScheduleDisplayItem,
   timezone: string,
@@ -100,9 +110,7 @@ function itemMeta(
   if (item.kind === "calendar") {
     if (item.value.status === "cancelled") return "日程 · 已取消";
     if (variant === "agenda") {
-      return item.value.end_time
-        ? `日程 · 至 ${formatScheduleTime(item.value.end_time, timezone)}`
-        : "日程";
+      return `日程 · ${formatDuration(item.value.start_time, item.value.end_time)}`;
     }
     const start = formatScheduleDateTime(item.value.start_time, timezone);
     const end = item.value.end_time ? ` - ${formatScheduleTime(item.value.end_time, timezone)}` : "";

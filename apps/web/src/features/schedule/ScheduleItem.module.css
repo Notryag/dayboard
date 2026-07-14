@@ -36,11 +36,13 @@
 }
 
 .agenda {
-  min-height: var(--schedule-agenda-row-min-height);
+  min-height: var(--schedule-agenda-card-min-height);
   align-self: stretch;
-  padding: var(--space-3) var(--space-2);
-  border-bottom: var(--border-width) solid var(--color-border);
-  border-radius: 0;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-message);
 }
 
 .task {

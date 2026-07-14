@@ -240,10 +240,13 @@ The selected date uses the semantic selection background. Today uses a neutral s
 not selected; do not use a decorative dot. Swiping scrolls the rail but does not change selection;
 tapping a cell selects it. The month-year control retains the native date picker for distant jumps.
 
-Keep agenda and task rows unframed, show the due/start time, wrap long titles, preserve 44px
-controls, and give each source independent loading, error, retry, and pagination state. The date rail
-uses a 31-day window, CSS scroll snapping, and cached `Intl.DateTimeFormat` instances; do not add a
-carousel or date-picker dependency for this interaction.
+Render the chronological agenda as separate cards. Place each start-time label in the vertical space
+before its card instead of reserving a left-hand time column. Calendar cards show duration rather
+than an end clock time; exact start and end times remain available in the detail dialog. Keep undated
+task rows compact, wrap long titles, preserve 44px controls, and give each source independent loading,
+error, retry, and pagination state. The date rail uses a 31-day window, CSS scroll snapping, and
+cached `Intl.DateTimeFormat` instances; do not add a carousel or date-picker dependency for this
+interaction.
 
 Calendar entries and tasks share one schedule-item component across the day view and assistant
 messages. It chooses a semantic Lucide icon from centralized title keywords, opens the same detail
@@ -259,7 +262,7 @@ ScheduleHeader.tsx     # weekday and native date picker
 DateRail.tsx           # date window, selection, horizontal navigation
 DayAgendaSection.tsx   # merged chronological calendar/task display
 TaskListSection.tsx    # undated task display
-ScheduleItem.tsx       # shared icon row, details, complete/cancel, conversation edit handoff
+ScheduleItem.tsx       # shared semantic-icon card, details, actions, conversation edit handoff
 useSchedulePage.ts     # pagination, stale-request cancellation, retry
 date.ts                # cached display formatters and date-key arithmetic
 ```

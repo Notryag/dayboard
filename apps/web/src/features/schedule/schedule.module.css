@@ -5,9 +5,9 @@
   --schedule-date-gap: 6px;
   --schedule-time-column-width: 48px;
   --schedule-marker-column-width: 30px;
-  --schedule-marker-half-width: 15px;
-  --schedule-agenda-row-min-height: 68px;
-  --schedule-agenda-row-half-height: 34px;
+  --schedule-agenda-row-min-height: 0;
+  --schedule-agenda-card-gap: var(--space-2);
+  --schedule-agenda-card-min-height: 76px;
   --schedule-task-row-min-height: 52px;
   --schedule-empty-min-height: 84px;
   --schedule-inline-action-size: 32px;
@@ -236,34 +236,22 @@
 }
 
 .agendaList {
-  position: relative;
-}
-
-.agendaList::before {
-  position: absolute;
-  top: var(--schedule-agenda-row-half-height);
-  bottom: var(--schedule-agenda-row-half-height);
-  left: calc(
-    var(--schedule-time-column-width) + var(--space-2) + var(--schedule-marker-half-width)
-  );
-  width: var(--border-width);
-  background: var(--color-border);
-  content: "";
+  display: grid;
+  gap: var(--schedule-agenda-card-gap);
 }
 
 .agendaList > li {
-  min-height: var(--schedule-agenda-row-min-height);
+  min-width: 0;
   display: grid;
-  grid-template-columns:
-    var(--schedule-time-column-width)
-    minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 
 .agendaList > li > time {
+  width: fit-content;
+  padding: 0 var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 
