@@ -112,8 +112,11 @@ paths.
 - Inspectable UI: the responsive shell presents conversation and schedule as first-level views. A
   reusable day-view panel supports a native distant-date picker, a swipeable
   31-day rail, a chronological agenda merging calendar entries with dated tasks, and a separate
-  undated/open-task list. The server owns trusted-timezone day boundaries; each source has
-  independent loading, error, retry, stale-request cancellation, and cursor-pagination states.
+  undated/open-task list. A shared semantic-icon schedule item renders in both the day view and AI
+  confirmations, opens item details, and supports direct task completion plus calendar/task
+  cancellation with optimistic concurrency. Edit actions return a prefilled draft to conversation.
+  The server owns trusted-timezone day boundaries; each source has independent loading, error,
+  retry, stale-request cancellation, and cursor-pagination states.
 - Calendar/task intent: the Agent treats concrete time blocks as calendar entries and
   completion-oriented actions as tasks. Vague timing such as "later" or "when free" remains an
   undated task, and independent actions in an unpunctuated voice transcript are split into tasks.
@@ -160,12 +163,10 @@ Next implementation slice:
 
 1. complete authenticated browser-to-transcript acceptance with non-sensitive Chinese recordings
    from Chrome and Safari, including date, time, and reminder phrases
-2. add day-view item details and explicit actions, starting with event details and task completion;
-   introduce narrow authenticated write APIs rather than routing deterministic UI actions through AI
-3. after the provider budget window resets, run live acceptance for relative "tomorrow" dates,
+2. after the provider budget window resets, run live acceptance for relative "tomorrow" dates,
    at-time reminders, end-time-only changes, then resume broader `calendar-changes` and
    `task-changes` acceptance
-4. add encrypted off-host backup replication when storage credentials and retention requirements are
+3. add encrypted off-host backup replication when storage credentials and retention requirements are
    available; keep circular visualization, reminder UI, and external notification providers deferred
    until priorities change
 

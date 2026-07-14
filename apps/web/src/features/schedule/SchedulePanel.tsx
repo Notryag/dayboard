@@ -8,18 +8,21 @@ import { TaskListSection } from "./TaskListSection";
 import { getCalendarEntryPage, getDatedTaskPage, getUndatedTaskPage } from "./api";
 import { dateKeyInTimezone } from "./date";
 import type { CalendarEntry, TaskItem } from "./types";
+import type { ScheduleDisplayItem } from "./types";
 import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type SchedulePanelProps = {
   active: boolean;
+  onChanged: () => void;
+  onEdit: (item: ScheduleDisplayItem) => void;
   refreshKey: number;
   timezone: string;
 };
 
 const headingId = "schedule-heading";
 
-export function SchedulePanel({ active, refreshKey, timezone }: SchedulePanelProps) {
+export function SchedulePanel({ active, onChanged, onEdit, refreshKey, timezone }: SchedulePanelProps) {
   const today = dateKeyInTimezone(new Date(), timezone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [dateRailCenter, setDateRailCenter] = useState(today);
@@ -80,10 +83,18 @@ export function SchedulePanel({ active, refreshKey, timezone }: SchedulePanelPro
       />
 
       <div className={styles.content} aria-live="polite">
-        <DayAgendaSection calendar={calendar} tasks={datedTasks} timezone={timezone} />
+        <DayAgendaSection
+          calendar={calendar}
+          onChanged={onChanged}
+          onEdit={onEdit}
+          tasks={datedTasks}
+          timezone={timezone}
+        />
         <TaskListSection
           emptyText="没有待办"
           id="undated-task-section"
+          onChanged={onChanged}
+          onEdit={onEdit}
           resource={undatedTasks}
           title="待办清单"
         />

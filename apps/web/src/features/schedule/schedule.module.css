@@ -256,7 +256,6 @@
   display: grid;
   grid-template-columns:
     var(--schedule-time-column-width)
-    var(--schedule-marker-column-width)
     minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
@@ -268,70 +267,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.agendaMarker {
-  position: relative;
-  z-index: 1;
-  width: var(--schedule-marker-column-width);
-  height: var(--schedule-marker-column-width);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-}
-
-.calendarMarker {
-  color: var(--color-calendar);
-  background: var(--color-calendar-surface);
-}
-
-.taskMarker {
-  color: var(--color-task);
-  background: var(--color-task-surface);
-}
-
-.agendaBody {
-  min-width: 0;
-  display: grid;
-  align-content: center;
-  gap: var(--space-1);
-  align-self: stretch;
-  padding: var(--space-3) 0;
-  border-bottom: var(--border-width) solid var(--color-border);
-}
-
-.agendaList > li:last-child .agendaBody {
-  border-bottom: 0;
-}
-
-.agendaBody strong,
-.taskList strong {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  font-size: var(--font-size-ui);
-  line-height: var(--line-height-body);
-}
-
-.agendaBody p {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-body);
-}
-
 .taskList li {
   min-height: var(--schedule-task-row-min-height);
-  display: grid;
-  grid-template-columns: var(--schedule-marker-column-width) minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-2);
-  border-bottom: var(--border-width) solid var(--color-border);
-}
-
-.taskList li:last-child {
-  border-bottom: 0;
-}
-
-.taskList svg {
-  color: var(--color-task);
+  display: block;
 }
 
 .notice,

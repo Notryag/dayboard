@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -13,6 +14,9 @@ import { createPortal } from "react-dom";
 import { Copy, ScanText, Sparkles } from "lucide-react";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import type { ConversationState } from "@/features/clarifications/types";
+import { getScheduleItemsByRunIds } from "@/features/schedule/api";
+import { ScheduleItem } from "@/features/schedule/ScheduleItem";
+import type { RunScheduleItemGroup, ScheduleDisplayItem } from "@/features/schedule/types";
 import styles from "./ChatMessageList.module.css";
 
 export type ChatMessage = {
@@ -27,8 +31,12 @@ type ChatMessageListProps = {
   conversationState: ConversationState | null;
   isSubmitting: boolean;
   messages: ChatMessage[];
+  onChanged: () => void;
   onClarificationChoice: (optionKey: string) => void;
+  onEdit: (item: ScheduleDisplayItem) => void;
+  refreshKey: number;
   scrollRef: RefObject<HTMLElement | null>;
+  timezone: string;
 };
 
 type MessageActionMenu = {
@@ -41,6 +49,7 @@ type MessageActionMenu = {
 
 const longPressDurationMs = 450;
 const longPressMoveTolerancePx = 10;
+const autoScrollThresholdPx = 80;
 
 function messageTextId(messageId: string) {
   return `chat-message-text-${messageId}`;
@@ -50,12 +59,45 @@ export function ChatMessageList({
   conversationState,
   isSubmitting,
   messages,
+  onChanged,
   onClarificationChoice,
+  onEdit,
+  refreshKey,
   scrollRef,
+  timezone,
 }: ChatMessageListProps) {
   const [messageMenu, setMessageMenu] = useState<MessageActionMenu | null>(null);
+  const [scheduleGroups, setScheduleGroups] = useState<Record<string, RunScheduleItemGroup>>({});
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const pressTimerRef = useRef<number | null>(null);
+  const assistantRunIds = useMemo(
+    () => Array.from(new Set(messages.flatMap((message) =>
+      message.role === "assistant" && message.runId ? [message.runId] : [],
+    ))).slice(-50),
+    [messages],
+  );
+  const assistantRunKey = assistantRunIds.join(",");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    if (!assistantRunIds.length) return () => controller.abort();
+    const container = scrollRef.current;
+    const shouldKeepBottom = container
+      ? container.scrollHeight - container.scrollTop - container.clientHeight < autoScrollThresholdPx
+      : false;
+    void getScheduleItemsByRunIds(assistantRunIds, controller.signal)
+      .then((groups) => {
+        setScheduleGroups(Object.fromEntries(groups.map((group) => [group.run_id, group])));
+        if (shouldKeepBottom) {
+          window.requestAnimationFrame(() => {
+            const currentContainer = scrollRef.current;
+            if (currentContainer) currentContainer.scrollTop = currentContainer.scrollHeight;
+          });
+        }
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [assistantRunKey, assistantRunIds, refreshKey, scrollRef]);
 
   function clearLongPress() {
     if (pressTimerRef.current !== null) {
@@ -204,6 +246,27 @@ export function ChatMessageList({
                   />
                 ) : null}
                 <time>{message.time}</time>
+                {!isUser && message.runId && scheduleGroups[message.runId]
+                  ? [
+                      ...scheduleGroups[message.runId].calendar_entries.map((entry) => ({
+                        kind: "calendar" as const,
+                        value: entry,
+                      })),
+                      ...scheduleGroups[message.runId].task_items.map((task) => ({
+                        kind: "task" as const,
+                        value: task,
+                      })),
+                    ].map((item) => (
+                      <ScheduleItem
+                        item={item}
+                        key={`${item.kind}-${item.value.id}`}
+                        onChanged={onChanged}
+                        onEdit={onEdit}
+                        timezone={timezone}
+                        variant="chat"
+                      />
+                    ))
+                  : null}
               </article>
             </div>
           );

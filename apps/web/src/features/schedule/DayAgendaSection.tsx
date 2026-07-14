@@ -1,14 +1,17 @@
 "use client";
 
 import { useMemo } from "react";
-import { CalendarClock, ChevronDown, Circle, Clock3, LoaderCircle, RotateCw } from "lucide-react";
+import { ChevronDown, Clock3, LoaderCircle, RotateCw } from "lucide-react";
 import { formatScheduleTime } from "./date";
-import type { CalendarEntry, TaskItem } from "./types";
+import { ScheduleItem } from "./ScheduleItem";
+import type { CalendarEntry, ScheduleDisplayItem, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type DayAgendaSectionProps = {
   calendar: SchedulePageResource<CalendarEntry>;
+  onChanged: () => void;
+  onEdit: (item: ScheduleDisplayItem) => void;
   tasks: SchedulePageResource<TaskItem>;
   timezone: string;
 };
@@ -28,7 +31,7 @@ function RetryNotice({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
-export function DayAgendaSection({ calendar, tasks, timezone }: DayAgendaSectionProps) {
+export function DayAgendaSection({ calendar, onChanged, onEdit, tasks, timezone }: DayAgendaSectionProps) {
   const items = useMemo<AgendaItem[]>(() => {
     const calendarItems: AgendaItem[] = calendar.items.map((entry) => ({
       entry,
@@ -84,30 +87,17 @@ export function DayAgendaSection({ calendar, tasks, timezone }: DayAgendaSection
           {items.map((item) => (
             <li key={item.id}>
               <time dateTime={item.timestamp}>{formatScheduleTime(item.timestamp, timezone)}</time>
-              <span
-                aria-hidden="true"
-                className={`${styles.agendaMarker} ${
-                  item.kind === "calendar" ? styles.calendarMarker : styles.taskMarker
-                }`}
-              >
-                {item.kind === "calendar" ? <CalendarClock size={16} /> : <Circle size={16} />}
-              </span>
-              <div className={styles.agendaBody}>
-                <strong>{item.kind === "calendar" ? item.entry.title : item.task.title}</strong>
-                <p>
-                  {item.kind === "calendar"
-                    ? `日程${
-                        item.entry.end_time
-                          ? ` · 至 ${formatScheduleTime(item.entry.end_time, timezone)}`
-                          : ""
-                      }${
-                        item.entry.participants.length
-                          ? ` · ${item.entry.participants.length} 位参与者`
-                          : ""
-                      }`
-                    : "待办"}
-                </p>
-              </div>
+              <ScheduleItem
+                item={
+                  item.kind === "calendar"
+                    ? { kind: "calendar", value: item.entry }
+                    : { kind: "task", value: item.task }
+                }
+                onChanged={onChanged}
+                onEdit={onEdit}
+                timezone={timezone}
+                variant="agenda"
+              />
             </li>
           ))}
         </ol>

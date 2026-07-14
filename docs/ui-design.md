@@ -245,6 +245,12 @@ controls, and give each source independent loading, error, retry, and pagination
 uses a 31-day window, CSS scroll snapping, and cached `Intl.DateTimeFormat` instances; do not add a
 carousel or date-picker dependency for this interaction.
 
+Calendar entries and tasks share one schedule-item component across the day view and assistant
+messages. It chooses a semantic Lucide icon from centralized title keywords, opens the same detail
+dialog, and exposes deterministic complete/cancel actions through narrow authenticated APIs.
+Editing returns to a prefilled conversation draft so time and reminder semantics stay in the Agent
+command path. Mutations use `updated_at` as an optimistic-concurrency boundary.
+
 Component ownership:
 
 ```text
@@ -253,12 +259,13 @@ ScheduleHeader.tsx     # weekday and native date picker
 DateRail.tsx           # date window, selection, horizontal navigation
 DayAgendaSection.tsx   # merged chronological calendar/task display
 TaskListSection.tsx    # undated task display
+ScheduleItem.tsx       # shared icon row, details, complete/cancel, conversation edit handoff
 useSchedulePage.ts     # pagination, stale-request cancellation, retry
 date.ts                # cached display formatters and date-key arithmetic
 ```
 
-Circular visualization, month/week layouts, direct editing, and reminder delivery UI are later
-product slices.
+Circular visualization, month/week layouts, direct form-based time editing, and reminder delivery UI
+are later product slices.
 
 ## Interaction And Performance Acceptance
 

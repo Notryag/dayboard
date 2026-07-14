@@ -13,14 +13,16 @@ import styles from "./Composer.module.css";
 type ComposerProps = {
   activeRunId: string | null;
   disabled: boolean;
+  inputMode: InputMode;
   isSubmitting: boolean;
   onCancelRun: () => void;
   onChange: (value: string) => void;
+  onInputModeChange: (mode: InputMode) => void;
   onSubmit: (value: string) => void;
   value: string;
 };
 
-type InputMode = "voice" | "text";
+export type InputMode = "voice" | "text";
 
 function recordingErrorMessage(error: unknown) {
   if (error instanceof DOMException) {
@@ -34,13 +36,14 @@ function recordingErrorMessage(error: unknown) {
 export function Composer({
   activeRunId,
   disabled,
+  inputMode,
   isSubmitting,
   onCancelRun,
   onChange,
+  onInputModeChange,
   onSubmit,
   value,
 }: ComposerProps) {
-  const [inputMode, setInputMode] = useState<InputMode>("voice");
   const [capabilities, setCapabilities] = useState<VoiceCapabilities | null>(null);
   const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -75,9 +78,9 @@ export function Composer({
   }, []);
 
   const showTextInput = useCallback(() => {
-    setInputMode("text");
+    onInputModeChange("text");
     window.requestAnimationFrame(() => inputRef.current?.focus());
-  }, []);
+  }, [onInputModeChange]);
 
   const handleRecorded = useCallback(
     async (recording: RecordedAudio) => {
@@ -122,10 +125,10 @@ export function Composer({
 
   useEffect(() => {
     if (wasSubmittingRef.current && !isSubmitting && voiceAvailable) {
-      setInputMode("voice");
+      onInputModeChange("voice");
     }
     wasSubmittingRef.current = isSubmitting;
-  }, [isSubmitting, voiceAvailable]);
+  }, [isSubmitting, onInputModeChange, voiceAvailable]);
 
   const voiceStatus: VoiceComposerStatus = isTranscribing
     ? "transcribing"
@@ -187,7 +190,7 @@ export function Composer({
           onCancelRun={onCancelRun}
           onChange={onChange}
           onSubmit={onSubmit}
-          onSwitchToVoice={() => setInputMode("voice")}
+          onSwitchToVoice={() => onInputModeChange("voice")}
           value={value}
         />
       )}

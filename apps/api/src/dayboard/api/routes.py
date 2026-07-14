@@ -23,11 +23,13 @@ from dayboard.app.conversations import (
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from dayboard.app.runs import ActiveThreadRunError, AgentRunService
+from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
+    RunScheduleItemGroup,
     SchedulePage,
     ScheduleQueryService,
     TaskItemView,
@@ -57,7 +59,7 @@ from dayboard.domain.conversations import (
     ConversationState,
     ConversationThread,
 )
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 router = APIRouter()
 
@@ -77,6 +79,10 @@ AUDIO_METADATA_PROBE = PyavAudioMetadataProbe()
 
 class ThreadCreateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=240)
+
+
+class ScheduleMutationRequest(BaseModel):
+    expected_updated_at: AwareDatetime
 
 
 TERMINAL_RUN_EVENTS = {
@@ -243,6 +249,110 @@ async def list_task_items(
         )
     except InvalidScheduleCursor as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/schedule-items/by-runs", response_model=list[RunScheduleItemGroup])
+async def list_schedule_items_by_runs(
+    run_ids: list[UUID] = Query(alias="run_id"),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> list[RunScheduleItemGroup]:
+    if len(run_ids) > 50:
+        raise HTTPException(status_code=422, detail="at most 50 run IDs are allowed")
+    return await ScheduleQueryService(session).list_created_by_runs(tenant_context, run_ids)
+
+
+@router.post("/api/calendar-entries/{entry_id}/cancel", response_model=CalendarEntryView)
+async def cancel_calendar_entry_from_ui(
+    entry_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> CalendarEntryView:
+    service = SchedulingService(session)
+    current = await service.get_calendar_entry(tenant_context, entry_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="CALENDAR_ENTRY_NOT_FOUND",
+            message="Calendar entry not found",
+        )
+    entry = await service.cancel_calendar_entry_from_ui(
+        tenant_context,
+        entry_id=entry_id,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if entry is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Calendar entry changed before this operation",
+        )
+    return CalendarEntryView.from_domain(entry)
+
+
+async def _set_task_status_from_ui(
+    task_id: UUID,
+    body: ScheduleMutationRequest,
+    target_status: TaskStatus,
+    session: AsyncSession,
+    tenant_context: TenantContext,
+) -> TaskItemView:
+    service = SchedulingService(session)
+    current = await service.get_task_item(tenant_context, task_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="TASK_ITEM_NOT_FOUND",
+            message="Task item not found",
+        )
+    if current.status == target_status:
+        return TaskItemView.from_domain(current)
+    task = await service.set_task_status_from_ui(
+        tenant_context,
+        task_id=task_id,
+        status=target_status,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if task is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Task item changed before this operation",
+        )
+    return TaskItemView.from_domain(task)
+
+
+@router.post("/api/task-items/{task_id}/complete", response_model=TaskItemView)
+async def complete_task_item_from_ui(
+    task_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> TaskItemView:
+    return await _set_task_status_from_ui(
+        task_id,
+        body,
+        TaskStatus.completed,
+        session,
+        tenant_context,
+    )
+
+
+@router.post("/api/task-items/{task_id}/cancel", response_model=TaskItemView)
+async def cancel_task_item_from_ui(
+    task_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> TaskItemView:
+    return await _set_task_status_from_ui(
+        task_id,
+        body,
+        TaskStatus.cancelled,
+        session,
+        tenant_context,
+    )
 
 
 @router.post(

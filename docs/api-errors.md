@@ -32,6 +32,9 @@ Current product error codes:
 | `COMMAND_ALREADY_IN_PROGRESS` | 409 | The thread already has an active Run. |
 | `IDEMPOTENCY_CONFLICT` | 409 | An idempotency key was reused for different input. |
 | `CLARIFICATION_CONFLICT` | 409 | Clarification state is stale or no longer valid. |
+| `CALENDAR_ENTRY_NOT_FOUND` | 404 | The calendar entry does not exist for the current owner. |
+| `TASK_ITEM_NOT_FOUND` | 404 | The task does not exist for the current owner. |
+| `SCHEDULE_ITEM_CONFLICT` | 409 | The schedule item changed after the client loaded it. |
 | `COMMAND_QUEUE_UNAVAILABLE` | 503 | The Run was persisted but could not be queued. |
 | `RATE_LIMIT_EXCEEDED` | 429 | The endpoint-specific request limit was exceeded. |
 | `VOICE_UNAVAILABLE` | 503 | No speech recognition provider is configured. |

@@ -11,6 +11,7 @@ export type CalendarEntry = {
   timezone: string;
   participants: string[];
   reminder: Reminder | null;
+  status: "scheduled" | "cancelled";
   created_by_run_id: string | null;
   created_at: string;
   updated_at: string;
@@ -32,3 +33,13 @@ export type SchedulePage<T> = {
   items: T[];
   next_cursor: string | null;
 };
+
+export type RunScheduleItemGroup = {
+  run_id: string;
+  calendar_entries: CalendarEntry[];
+  task_items: TaskItem[];
+};
+
+export type ScheduleDisplayItem =
+  | { kind: "calendar"; value: CalendarEntry }
+  | { kind: "task"; value: TaskItem };

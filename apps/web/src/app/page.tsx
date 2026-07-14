@@ -23,8 +23,9 @@ import {
   type RunActivityStep,
 } from "@/features/chat/RunActivityTicker";
 import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageList";
-import { Composer } from "@/features/chat/Composer";
+import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
+import type { ScheduleDisplayItem } from "@/features/schedule/types";
 import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
 import styles from "./page.module.css";
 
@@ -139,6 +140,7 @@ function ChatHome() {
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
   const [activeView, setActiveView] = useState<PrimaryView>("chat");
   const [scheduleRevision, setScheduleRevision] = useState(0);
+  const [inputMode, setInputMode] = useState<InputMode>("voice");
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
   const messagesRef = useRef<HTMLElement>(null);
@@ -440,6 +442,12 @@ function ChatHome() {
     if (view === "schedule") setScheduleRevision((current) => current + 1);
   }
 
+  function handleScheduleEdit(item: ScheduleDisplayItem) {
+    setInput(`修改“${item.value.title}”：`);
+    setInputMode("text");
+    setActiveView("chat");
+  }
+
   function handleViewTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
@@ -491,8 +499,12 @@ function ChatHome() {
               conversationState={conversationState}
               isSubmitting={isSubmitting}
               messages={messages}
+              onChanged={() => setScheduleRevision((current) => current + 1)}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
+              onEdit={handleScheduleEdit}
+              refreshKey={scheduleRevision}
               scrollRef={messagesRef}
+              timezone={timezone}
             />
 
             <div className={styles.composerDock}>
@@ -508,9 +520,11 @@ function ChatHome() {
               <Composer
                 activeRunId={activeRunId}
                 disabled={!threadId}
+                inputMode={inputMode}
                 isSubmitting={isSubmitting}
                 onCancelRun={() => void handleCancel()}
                 onChange={setInput}
+                onInputModeChange={setInputMode}
                 onSubmit={(text) => void handleSubmit(text)}
                 value={input}
               />
@@ -527,6 +541,8 @@ function ChatHome() {
           >
             <SchedulePanel
               active={activeView === "schedule"}
+              onChanged={() => setScheduleRevision((current) => current + 1)}
+              onEdit={handleScheduleEdit}
               refreshKey={scheduleRevision}
               timezone={timezone}
             />

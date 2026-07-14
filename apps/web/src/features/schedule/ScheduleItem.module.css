@@ -1,0 +1,314 @@
+.item {
+  --schedule-item-icon-size: 32px;
+
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--schedule-item-icon-size) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.item:hover {
+  background: var(--color-surface-hover);
+}
+
+.item:active {
+  transform: scale(0.99);
+}
+
+.item:focus-visible,
+.closeButton:focus-visible,
+.actions button:focus-visible,
+.confirmation button:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agenda {
+  min-height: var(--schedule-agenda-row-min-height);
+  align-self: stretch;
+  padding: var(--space-3) var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+}
+
+.task {
+  min-height: var(--schedule-task-row-min-height);
+  padding-right: 0;
+  padding-left: 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+  border-radius: 0;
+}
+
+.chat {
+  padding: var(--space-2) 0;
+  border-top: var(--border-width) solid color-mix(in srgb, var(--color-border), transparent 12%);
+  border-radius: 0;
+}
+
+.icon,
+.dialogIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-calendar);
+  background: var(--color-calendar-surface);
+}
+
+.icon {
+  width: var(--schedule-item-icon-size);
+  height: var(--schedule-item-icon-size);
+  border-radius: var(--radius-md);
+}
+
+.icon.task,
+.dialogIcon.task {
+  color: var(--color-task);
+  background: var(--color-task-surface);
+}
+
+.copy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.copy strong,
+.copy > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copy strong {
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-body);
+}
+
+.copy > span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-tight);
+}
+
+.chat .copy strong {
+  font-size: var(--font-size-label);
+}
+
+.completed .copy strong {
+  text-decoration: line-through;
+}
+
+.completed,
+.cancelled {
+  opacity: 0.68;
+}
+
+.dialogLayer {
+  --schedule-dialog-max-width: 440px;
+  --schedule-dialog-max-height: 720px;
+  --schedule-dialog-viewport-gap: 32px;
+  --schedule-detail-icon-offset: 2px;
+
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: end center;
+  padding: var(--space-4);
+  background: var(--color-message-menu-backdrop);
+}
+
+.dialog {
+  width: min(100%, var(--schedule-dialog-max-width));
+  max-height: min(
+    var(--schedule-dialog-max-height),
+    calc(100dvh - var(--schedule-dialog-viewport-gap))
+  );
+  overflow-y: auto;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-dialog);
+}
+
+.dialogHeader {
+  display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr) var(--control-size);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.dialogIcon {
+  width: var(--control-size);
+  height: var(--control-size);
+  border-radius: var(--radius-md);
+}
+
+.dialogHeading {
+  min-width: 0;
+}
+
+.dialogHeading > span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.dialogHeading h2 {
+  overflow: hidden;
+  margin-top: var(--space-1);
+  font-size: var(--font-size-subtitle);
+  line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.closeButton {
+  width: var(--control-size);
+  height: var(--control-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+  cursor: pointer;
+}
+
+.details {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+}
+
+.detailLine,
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-body);
+}
+
+.detailLine svg {
+  flex: 0 0 auto;
+  margin-top: var(--schedule-detail-icon-offset);
+  color: var(--color-primary);
+}
+
+.status {
+  width: fit-content;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-success);
+  background: var(--color-success-surface);
+  font-size: var(--font-size-caption);
+}
+
+.error {
+  color: var(--color-danger);
+}
+
+.confirmation {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border-top: var(--border-width) solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--font-size-ui);
+}
+
+.confirmation > div,
+.actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.confirmation button,
+.actions button {
+  min-height: var(--control-size);
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  cursor: pointer;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+}
+
+.actions {
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.actions .editButton {
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+.actions .completeButton {
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: var(--color-success-surface);
+}
+
+.actions .cancelButton,
+.confirmation .dangerButton {
+  color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger), var(--color-border) 55%);
+  background: var(--color-danger-surface);
+}
+
+.confirmation button:disabled,
+.actions button:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+.spinner {
+  animation: spin var(--motion-spinner) linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (min-width: 900px) {
+  .dialogLayer {
+    place-items: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item {
+    transition: none;
+  }
+
+  .spinner {
+    animation-duration: var(--motion-spinner-reduced);
+  }
+}
