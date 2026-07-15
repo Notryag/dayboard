@@ -15,6 +15,33 @@ from dayboard.config import Settings, get_settings
 from dayboard.context import TenantContext
 
 
+TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(
+    {
+        "tenant_id",
+        "user_id",
+        "owner_user_id",
+        "timezone",
+        "locale",
+        "run_id",
+        "thread_id",
+        "request_id",
+        "permissions",
+    }
+)
+
+
+def _validate_model_visible_tool_fields(tools: list) -> None:
+    for tool in tools:
+        fields = set(getattr(tool, "args", {}) or {})
+        exposed = sorted(fields & TRUSTED_TOOL_CONTEXT_FIELDS)
+        if exposed:
+            name = getattr(tool, "name", type(tool).__name__)
+            raise ValueError(
+                f"Tool {name!r} exposes trusted server context to the model: "
+                f"{', '.join(exposed)}"
+            )
+
+
 def build_dayboard_agent(
     settings: Settings | None = None,
     *,
@@ -38,6 +65,7 @@ def build_dayboard_agent(
     resolved_tools = list(resolved_tools or [])
     if not any(getattr(tool, "name", None) == ask_clarification.name for tool in resolved_tools):
         resolved_tools.append(ask_clarification)
+    _validate_model_visible_tool_fields(resolved_tools)
 
     config = AppConfig(
         model_name=resolved_settings.agent_model_name,

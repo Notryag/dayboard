@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import asdict
 from uuid import UUID
 
 from arq.connections import ArqRedis
@@ -23,11 +22,10 @@ class RedisCommandDispatcher:
         context: TenantContext,
         request: CommandRequest,
     ) -> None:
+        del context, request
         job = await self.redis.enqueue_job(
             "execute_command_run",
             str(run_id),
-            {key: str(value) if isinstance(value, UUID) else value for key, value in asdict(context).items()},
-            request.model_dump(mode="json"),
             _job_id=f"dayboard-command:{run_id}",
             _queue_name=self.queue_name,
         )

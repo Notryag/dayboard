@@ -170,6 +170,21 @@ def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch)
     assert [tool.name for tool in captured["tools"]] == ["ask_clarification"]
 
 
+def test_build_dayboard_agent_rejects_trusted_context_in_tool_schema() -> None:
+    class UnsafeTool:
+        name = "search_knowledge"
+        args = {"query": {"type": "string"}, "tenant_id": {"type": "string"}}
+
+    with pytest.raises(
+        ValueError,
+        match="search_knowledge.*trusted server context.*tenant_id",
+    ):
+        build_dayboard_agent(
+            Settings(APP_MODEL_NAME="openai:gpt-test"),
+            tools=[UnsafeTool()],
+        )
+
+
 async def test_command_service_maps_north_clarification_result_to_run(
     tenant_context: TenantContext,
     monkeypatch,

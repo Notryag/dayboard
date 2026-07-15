@@ -136,8 +136,9 @@ Client
   -> POST /api/command-runs
   -> API validates request and resolves TenantContext
   -> application service persists a queued agent_run and returns 202
-  -> API enqueues an arq job in Redis using run_id as the job id
-  -> arq worker opens an independent database session and runs north
+  -> API enqueues an arq job in Redis containing only the run_id
+  -> arq worker opens an independent database session
+  -> worker restores tenant, owner, and input text from agent_runs, then runs north
   -> north calls Dayboard tools
   -> tool calls Dayboard domain service
   -> repository writes PostgreSQL
@@ -348,6 +349,12 @@ agent = build_dayboard_agent(
 
 This keeps product behavior in Dayboard and avoids adding Dayboard-specific assumptions to `north`.
 
+The same injection boundary applies to slow or remote tools. A future knowledge-search tool remains
+a Dayboard tool with an independent client/session lifecycle; North only executes it. Embeddings,
+document ownership, credentials, tenant filtering, and authorization stay in Dayboard or its
+external knowledge service. See
+[ADR-006](./adr/006-tenant-isolation-and-external-tools.md).
+
 The model-visible tool schemas must only contain business fields. Trusted
 fields are injected by server closures and must not be exposed to the model:
 
@@ -359,6 +366,9 @@ model-visible fields:
 server-injected fields:
   session, tenant_id, user_id, timezone, run_id, request_id, permissions
 ```
+
+Agent assembly rejects a tool whose model-visible schema exposes trusted context fields. This is a
+runtime guard against accidentally turning model output into an authorization decision.
 
 Dayboard should keep the command application service as the product boundary:
 

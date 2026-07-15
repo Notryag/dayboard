@@ -39,3 +39,4 @@ Create another ADR when a new decision in one of these areas becomes expensive t
 - [ADR-003: Separate Conversation and Checkpoint Persistence](./003-separate-conversation-and-checkpoint-persistence.md)
 - [ADR-004: Adopt Callback-First Token Accounting](./004-adopt-callback-first-token-accounting.md)
 - [ADR-005: Authenticated Identity Boundary](./005-authenticated-identity-boundary.md)
+- [ADR-006: Tenant Isolation and External Tool Boundaries](./006-tenant-isolation-and-external-tools.md)

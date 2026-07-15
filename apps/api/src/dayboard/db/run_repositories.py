@@ -79,6 +79,17 @@ class AgentRunRepository:
             .execution_options(populate_existing=True)
         )
 
+    async def get_for_worker(self, run_id: UUID) -> AgentRunRow | None:
+        """Load persisted execution ownership before a worker creates TenantContext."""
+        return await self.session.scalar(
+            select(AgentRunRow)
+            .where(
+                AgentRunRow.id == run_id,
+                AgentRunRow.deleted_at.is_(None),
+            )
+            .execution_options(populate_existing=True)
+        )
+
     async def get_active_for_thread(
         self,
         context: TenantContext,

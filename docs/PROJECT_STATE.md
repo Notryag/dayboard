@@ -60,6 +60,9 @@ The bullets below summarize decisions that affect current work; they do not repl
 - Redis or Valkey is infrastructure, not a source of truth.
 - All product boundaries carry `TenantContext`; full tenant administration and dedicated tenant
   databases remain deferred.
+- Shared-database isolation is application-enforced and fail-closed: model-visible tool schemas
+  cannot expose tenant, owner, timezone, Run, thread, request, or permission fields. External tools
+  bind trusted context on the server; see ADR-006.
 - Scheduling currently uses server-configured Beijing time (`Asia/Shanghai`). Agent tools and
   per-command browser requests cannot supply timezone or numeric UTC offsets; `TenantContext.timezone`
   remains the future extension point for a trusted tenant setting.

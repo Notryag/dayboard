@@ -24,8 +24,7 @@ async def test_redis_dispatcher_enqueues_serializable_unique_job(
 
     assert captured["function"] == "execute_command_run"
     assert captured["args"][0] == str(run_id)
-    assert captured["args"][1]["tenant_id"] == str(tenant_context.tenant_id)
-    assert captured["args"][2] == {"message": "安排会议"}
+    assert captured["args"] == (str(run_id),)
     assert captured["kwargs"]["_job_id"] == f"dayboard-command:{run_id}"
     assert captured["kwargs"]["_queue_name"] == "dayboard:test"
 

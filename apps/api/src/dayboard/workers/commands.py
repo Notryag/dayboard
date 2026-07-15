@@ -12,12 +12,12 @@ import structlog
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
+from dayboard.app.reminders import ReminderService
+from dayboard.app.runs import AgentRunService
 from dayboard.config import get_settings
 from dayboard.context import TenantContext
+from dayboard.db.run_repositories import AgentRunRepository, IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal
-from dayboard.app.runs import AgentRunService
-from dayboard.db.run_repositories import IdempotencyKeyRepository
-from dayboard.app.reminders import ReminderService
 
 logger = structlog.get_logger(__name__)
 
@@ -25,22 +25,24 @@ logger = structlog.get_logger(__name__)
 async def execute_command_run(
     ctx: dict[str, Any],
     run_id: str,
-    context_data: dict[str, Any],
-    request_data: dict[str, Any],
+    *_legacy_untrusted_args: object,
 ) -> None:
-    context = TenantContext(
-        tenant_id=UUID(context_data["tenant_id"]),
-        user_id=UUID(context_data["user_id"]),
-        timezone=context_data["timezone"],
-        locale=context_data["locale"],
-        isolation_mode=context_data.get("isolation_mode", "shared"),
-    )
-    request = CommandRequest.model_validate(request_data)
+    resolved_run_id = UUID(run_id)
     async with SessionLocal() as session:
+        run = await AgentRunRepository(session).get_for_worker(resolved_run_id)
+        if run is None:
+            raise LookupError(f"Run {resolved_run_id} not found")
+        context = TenantContext(
+            tenant_id=run.tenant_id,
+            user_id=run.owner_user_id,
+            timezone=settings.default_timezone,
+            locale=settings.default_locale,
+        )
+        request = CommandRequest(message=run.input_message)
         await CommandService(
             session,
             checkpointer=ctx.get("checkpointer"),
-        ).execute_command_run(context, request, UUID(run_id))
+        ).execute_command_run(context, request, resolved_run_id)
 
 
 async def startup(ctx: dict[str, Any]) -> None:
