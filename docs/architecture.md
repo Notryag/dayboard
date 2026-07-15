@@ -78,7 +78,7 @@ Real values belong in `.env`, which is ignored by git. `.env.example` should con
 - Frontend shared client state: Zustand or Jotai when local React state is insufficient
 - Icons: lucide-react
 - Backend: FastAPI, Pydantic, SQLAlchemy 2.x, Alembic
-- Agent runtime: `north` pinned to a `deerflow-lite` Git commit for reproducible installs, with an
+- Agent runtime: `north` pinned to a `north-agent` Git commit for reproducible installs, with an
   editable sibling checkout used only while developing both repositories together
 - Database: PostgreSQL
 - Queue/cache/stream fanout: Redis or Valkey

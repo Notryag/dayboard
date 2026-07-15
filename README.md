@@ -74,7 +74,7 @@ flowchart LR
 
 Dayboard 是产品层，负责账号、对话、日程、待办、提醒、语音和用户界面；可复用的 Agent
 构建、运行、工具编排与事件能力由
-[`north`](https://github.com/Notryag/deerflow-lite/tree/2eec31f606cac184ddc98dafbb2f1d4574024141/packages/harness) 提供。
+[`north`](https://github.com/Notryag/north-agent/tree/30041409a0160d557078c332985202295e887638/packages/harness) 提供。
 
 ## 技术栈
 
