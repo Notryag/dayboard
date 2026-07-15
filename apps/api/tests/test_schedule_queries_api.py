@@ -210,6 +210,16 @@ async def test_run_schedule_items_and_direct_actions(
         participants=[],
         created_by_run_id=run_id,
     )
+    cancelled_entry = CalendarEntryRow(
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        title="开会",
+        start_time=datetime(2026, 7, 15, 21, 0, tzinfo=timezone),
+        end_time=datetime(2026, 7, 15, 22, 0, tzinfo=timezone),
+        timezone="Asia/Shanghai",
+        participants=[],
+        created_by_run_id=run_id,
+    )
     task = TaskItemRow(
         tenant_id=tenant_context.tenant_id,
         owner_user_id=tenant_context.user_id,
@@ -222,6 +232,7 @@ async def test_run_schedule_items_and_direct_actions(
     db_session.add_all(
         [
             entry,
+            cancelled_entry,
             task,
             TaskItemRow(
                 tenant_id=uuid4(),
@@ -236,6 +247,7 @@ async def test_run_schedule_items_and_direct_actions(
     )
     await db_session.commit()
     await db_session.refresh(entry)
+    await db_session.refresh(cancelled_entry)
     await db_session.refresh(task)
     original_task_updated_at = task.updated_at.isoformat()
 
@@ -252,27 +264,49 @@ async def test_run_schedule_items_and_direct_actions(
             f"/api/task-items/{task.id}/cancel",
             json={"expected_updated_at": original_task_updated_at},
         )
-        cancelled = await client.post(
+        completed_entry = await client.post(
+            f"/api/calendar-entries/{entry.id}/complete",
+            json={"expected_updated_at": entry.updated_at.isoformat()},
+        )
+        repeated_completion = await client.post(
+            f"/api/calendar-entries/{entry.id}/complete",
+            json={"expected_updated_at": entry.updated_at.isoformat()},
+        )
+        completed_entry_cancel = await client.post(
             f"/api/calendar-entries/{entry.id}/cancel",
             json={"expected_updated_at": entry.updated_at.isoformat()},
         )
+        cancelled = await client.post(
+            f"/api/calendar-entries/{cancelled_entry.id}/cancel",
+            json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
+        )
+        selected_date = await client.get(
+            "/api/calendar-entries",
+            params={"date": "2026-07-15"},
+        )
         missing = await client.post(
             f"/api/calendar-entries/{uuid4()}/cancel",
-            json={"expected_updated_at": entry.updated_at.isoformat()},
+            json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
         )
 
     assert grouped.status_code == 200
     assert len(grouped.json()) == 1
     assert grouped.json()[0]["run_id"] == str(run_id)
-    assert [item["title"] for item in grouped.json()[0]["calendar_entries"]] == ["游泳"]
+    assert [item["title"] for item in grouped.json()[0]["calendar_entries"]] == ["游泳", "开会"]
     assert grouped.json()[0]["calendar_entries"][0]["status"] == "scheduled"
     assert [item["title"] for item in grouped.json()[0]["task_items"]] == ["拿快递"]
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
     assert stale_cancel.status_code == 409
     assert stale_cancel.json()["error"]["code"] == "SCHEDULE_ITEM_CONFLICT"
+    assert completed_entry.status_code == 200
+    assert completed_entry.json()["status"] == "completed"
+    assert repeated_completion.status_code == 200
+    assert repeated_completion.json()["status"] == "completed"
+    assert completed_entry_cancel.status_code == 409
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
+    assert [item["status"] for item in selected_date.json()["items"]] == ["completed"]
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "CALENDAR_ENTRY_NOT_FOUND"
 

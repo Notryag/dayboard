@@ -11,7 +11,7 @@ export type CalendarEntry = {
   timezone: string;
   participants: string[];
   reminder: Reminder | null;
-  status: "scheduled" | "cancelled";
+  status: "scheduled" | "completed" | "cancelled";
   created_by_run_id: string | null;
   created_at: string;
   updated_at: string;

@@ -4,7 +4,7 @@
   min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: var(--schedule-item-icon-size) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--schedule-item-icon-size);
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -13,7 +13,6 @@
   color: var(--color-text);
   background: transparent;
   text-align: left;
-  cursor: pointer;
   transition:
     background var(--motion-fast) ease,
     transform var(--motion-fast) ease;
@@ -28,11 +27,60 @@
 }
 
 .item:focus-visible,
+.itemMain:focus-visible,
+.completionControl:focus-visible,
 .closeButton:focus-visible,
 .actions button:focus-visible,
 .confirmation button:focus-visible {
   outline: var(--focus-ring-width) solid var(--color-primary);
   outline-offset: var(--focus-ring-offset);
+}
+
+.itemMain {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--schedule-item-icon-size) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.completionControl {
+  width: var(--schedule-item-icon-size);
+  height: var(--schedule-item-icon-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid color-mix(in srgb, var(--color-text-muted), transparent 28%);
+  border-radius: var(--radius-pill);
+  color: var(--color-primary-foreground);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.completionControl:hover:not(:disabled) {
+  border-color: var(--color-success);
+  transform: scale(1.05);
+}
+
+.completionControl[aria-pressed="true"] {
+  border-color: var(--color-success);
+  background: var(--color-success);
+}
+
+.completionControl:disabled {
+  cursor: default;
 }
 
 .agenda {
@@ -118,8 +166,12 @@
   opacity: 0.68;
 }
 
+.cancelled {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dialogLayer {
-  --schedule-dialog-max-width: 440px;
+  --schedule-dialog-max-width: 520px;
   --schedule-dialog-max-height: 720px;
   --schedule-dialog-viewport-gap: 32px;
   --schedule-detail-icon-offset: 2px;
@@ -129,7 +181,7 @@
   z-index: 40;
   display: grid;
   place-items: end center;
-  padding: var(--space-4);
+  padding: var(--space-4) var(--space-4) 0;
   background: var(--color-message-menu-backdrop);
 }
 
@@ -141,7 +193,10 @@
   );
   overflow-y: auto;
   border: var(--border-width) solid var(--color-border);
+  border-bottom: 0;
   border-radius: var(--radius-lg);
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
   color: var(--color-text);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-dialog);
@@ -239,14 +294,13 @@
 
 .confirmation > div,
 .actions {
-  display: flex;
+  display: grid;
   gap: var(--space-2);
 }
 
 .confirmation button,
 .actions button {
   min-height: var(--control-size);
-  flex: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -262,7 +316,14 @@
 }
 
 .actions {
+  grid-template-columns: 1fr;
   padding: 0 var(--space-5) var(--space-5);
+}
+
+.actions button {
+  justify-content: flex-start;
+  min-height: var(--field-size);
+  padding-inline: var(--space-4);
 }
 
 .actions .editButton {
@@ -368,12 +429,6 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-@media (min-width: 900px) {
-  .dialogLayer {
-    place-items: center;
   }
 }
 

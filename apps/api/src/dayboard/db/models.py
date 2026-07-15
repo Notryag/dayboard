@@ -206,6 +206,7 @@ class CalendarEntryRow(TimestampMixin, Base):
     cancelled_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     cancelled_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TaskItemRow(TimestampMixin, Base):

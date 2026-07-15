@@ -89,5 +89,6 @@ class CalendarEntry(BaseModel):
     cancelled_operation_key: str | None
     cancellation_reason: str | None
     cancelled_at: datetime | None
+    completed_at: datetime | None
     created_at: datetime
     updated_at: datetime

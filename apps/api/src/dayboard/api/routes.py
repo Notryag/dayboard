@@ -302,6 +302,37 @@ async def cancel_calendar_entry_from_ui(
     return CalendarEntryView.from_domain(entry)
 
 
+@router.post("/api/calendar-entries/{entry_id}/complete", response_model=CalendarEntryView)
+async def complete_calendar_entry_from_ui(
+    entry_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> CalendarEntryView:
+    service = SchedulingService(session)
+    current = await service.get_calendar_entry(tenant_context, entry_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="CALENDAR_ENTRY_NOT_FOUND",
+            message="Calendar entry not found",
+        )
+    if current.completed_at is not None:
+        return CalendarEntryView.from_domain(current)
+    entry = await service.complete_calendar_entry_from_ui(
+        tenant_context,
+        entry_id=entry_id,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if entry is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Calendar entry changed before this operation",
+        )
+    return CalendarEntryView.from_domain(entry)
+
+
 @router.put("/api/calendar-entries/{entry_id}", response_model=CalendarEntryView)
 async def update_calendar_entry_from_ui(
     entry_id: UUID,

@@ -7,7 +7,6 @@ import {
   Bell,
   CalendarClock,
   Check,
-  ChevronRight,
   Coffee,
   Dumbbell,
   GraduationCap,
@@ -31,6 +30,7 @@ import { userFacingApiError } from "@/lib/api/client";
 import {
   cancelCalendarEntry,
   cancelTaskItem,
+  completeCalendarEntry,
   completeTaskItem,
 } from "./api";
 import { formatScheduleTime } from "./date";
@@ -125,7 +125,11 @@ function itemMeta(
 }
 
 function itemStatus(item: ScheduleDisplayItem) {
-  if (item.kind === "calendar") return item.value.status === "cancelled" ? "cancelled" : "open";
+  if (item.kind === "calendar") {
+    if (item.value.status === "cancelled") return "cancelled";
+    if (item.value.status === "completed") return "completed";
+    return "open";
+  }
   return item.value.status;
 }
 
@@ -136,30 +140,73 @@ export function ScheduleItem({
   onChanged,
 }: ScheduleItemProps) {
   const [open, setOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [directError, setDirectError] = useState<string | null>(null);
   const Icon = iconForTitle(itemTitle(item), item.kind);
+  const status = itemStatus(item);
+
+  async function completeFromCard() {
+    if (status !== "open" || completing) return;
+    setCompleting(true);
+    setDirectError(null);
+    try {
+      if (item.kind === "calendar") await completeCalendarEntry(item.value);
+      else await completeTaskItem(item.value);
+      onChanged();
+    } catch (caught) {
+      setDirectError(userFacingApiError(caught, "完成失败，请刷新后重试。"));
+      setOpen(true);
+    } finally {
+      setCompleting(false);
+    }
+  }
 
   return (
     <>
-      <button
-        aria-label={`查看${item.kind === "calendar" ? "日程" : "待办"}：${itemTitle(item)}`}
+      <div
         className={`${styles.item} ${styles[variant]} ${
-          itemStatus(item) !== "open" ? styles[itemStatus(item)] : ""
+          status !== "open" ? styles[status] : ""
         }`}
-        onClick={() => setOpen(true)}
-        type="button"
       >
-        <span aria-hidden="true" className={`${styles.icon} ${styles[item.kind]}`}>
-          {createElement(Icon, { size: variant === "chat" ? 17 : 18, strokeWidth: 2.1 })}
-        </span>
-        <span className={styles.copy}>
-          <strong>{itemTitle(item)}</strong>
-          <span>{itemMeta(item, timezone, variant)}</span>
-        </span>
-        {variant !== "task" ? <ChevronRight aria-hidden="true" size={17} /> : null}
-      </button>
+        <button
+          aria-label={`查看${item.kind === "calendar" ? "日程" : "待办"}：${itemTitle(item)}`}
+          className={styles.itemMain}
+          onClick={() => {
+            setDirectError(null);
+            setOpen(true);
+          }}
+          type="button"
+        >
+          <span aria-hidden="true" className={`${styles.icon} ${styles[item.kind]}`}>
+            {createElement(Icon, { size: variant === "chat" ? 17 : 18, strokeWidth: 2.1 })}
+          </span>
+          <span className={styles.copy}>
+            <strong>{itemTitle(item)}</strong>
+            <span>{itemMeta(item, timezone, variant)}</span>
+          </span>
+        </button>
+        {status !== "cancelled" ? (
+          <button
+            aria-label={`${status === "completed" ? "已完成" : "完成"}${item.kind === "calendar" ? "日程" : "待办"}：${itemTitle(item)}`}
+            aria-pressed={status === "completed"}
+            className={styles.completionControl}
+            disabled={status === "completed" || completing}
+            onClick={() => void completeFromCard()}
+            title={status === "completed" ? "已完成" : "标记完成"}
+            type="button"
+          >
+            {completing ? (
+              <LoaderCircle className={styles.spinner} size={15} />
+            ) : status === "completed" ? (
+              <Check aria-hidden="true" size={16} strokeWidth={2.8} />
+            ) : null}
+          </button>
+        ) : null}
+      </div>
       {open
         ? createPortal(
             <ScheduleItemDialog
+              initialError={directError}
               item={item}
               onChanged={onChanged}
               onClose={() => setOpen(false)}
@@ -173,6 +220,7 @@ export function ScheduleItem({
 }
 
 type ScheduleItemDialogProps = {
+  initialError: string | null;
   item: ScheduleDisplayItem;
   timezone: string;
   onChanged: () => void;
@@ -180,6 +228,7 @@ type ScheduleItemDialogProps = {
 };
 
 function ScheduleItemDialog({
+  initialError,
   item,
   timezone,
   onChanged,
@@ -188,7 +237,7 @@ function ScheduleItemDialog({
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const Icon = iconForTitle(itemTitle(item), item.kind);
   const reminder = formatReminder(item.value.reminder);
   const status = itemStatus(item);
@@ -202,15 +251,15 @@ function ScheduleItemDialog({
   }, [busy, onClose]);
 
   async function complete() {
-    if (item.kind !== "task") return;
     setBusy(true);
     setError(null);
     try {
-      await completeTaskItem(item.value);
+      if (item.kind === "calendar") await completeCalendarEntry(item.value);
+      else await completeTaskItem(item.value);
       onChanged();
       onClose();
     } catch (caught) {
-      setError(userFacingApiError(caught, "完成待办失败，请刷新后重试。"));
+      setError(userFacingApiError(caught, "完成失败，请刷新后重试。"));
     } finally {
       setBusy(false);
     }
@@ -270,35 +319,37 @@ function ScheduleItemDialog({
             timezone={timezone}
           />
         ) : (
-        <div className={styles.details}>
-          <p className={styles.detailLine}>
-            {item.kind === "calendar" ? (
-              <CalendarClock aria-hidden="true" size={17} />
-            ) : (
-              <ListTodo aria-hidden="true" size={17} />
-            )}
-            <span>{itemMeta(item, timezone, "detail")}</span>
-          </p>
-          {item.kind === "calendar" && item.value.participants.length ? (
+          <div className={styles.details}>
             <p className={styles.detailLine}>
-              <Users aria-hidden="true" size={17} />
-              <span>{item.value.participants.join("、")}</span>
+              {item.kind === "calendar" ? (
+                <CalendarClock aria-hidden="true" size={17} />
+              ) : (
+                <ListTodo aria-hidden="true" size={17} />
+              )}
+              <span>{itemMeta(item, timezone, "detail")}</span>
             </p>
-          ) : null}
-          {reminder ? (
-            <p className={styles.detailLine}>
-              <Bell aria-hidden="true" size={17} />
-              <span>{reminder}</span>
-            </p>
-          ) : null}
-          {status !== "open" ? <p className={styles.status}>{status === "completed" ? "已完成" : "已取消"}</p> : null}
-          {error ? (
-            <p className={styles.error} role="alert">
-              <AlertCircle aria-hidden="true" size={16} />
-              <span>{error}</span>
-            </p>
-          ) : null}
-        </div>
+            {item.kind === "calendar" && item.value.participants.length ? (
+              <p className={styles.detailLine}>
+                <Users aria-hidden="true" size={17} />
+                <span>{item.value.participants.join("、")}</span>
+              </p>
+            ) : null}
+            {reminder ? (
+              <p className={styles.detailLine}>
+                <Bell aria-hidden="true" size={17} />
+                <span>{reminder}</span>
+              </p>
+            ) : null}
+            {status !== "open" ? (
+              <p className={styles.status}>{status === "completed" ? "已完成" : "已取消"}</p>
+            ) : null}
+            {error ? (
+              <p className={styles.error} role="alert">
+                <AlertCircle aria-hidden="true" size={16} />
+                <span>{error}</span>
+              </p>
+            ) : null}
+          </div>
         )}
 
         {!editing && confirmCancel ? (
@@ -322,12 +373,10 @@ function ScheduleItemDialog({
               <Pencil aria-hidden="true" size={16} />
               修改
             </button>
-            {item.kind === "task" ? (
-              <button className={styles.completeButton} disabled={busy} onClick={() => void complete()} type="button">
-                {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Check size={16} />}
-                完成
-              </button>
-            ) : null}
+            <button className={styles.completeButton} disabled={busy} onClick={() => void complete()} type="button">
+              {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Check size={16} />}
+              标记完成
+            </button>
             <button className={styles.cancelButton} disabled={busy} onClick={() => setConfirmCancel(true)} type="button">
               <Trash2 aria-hidden="true" size={16} />
               取消

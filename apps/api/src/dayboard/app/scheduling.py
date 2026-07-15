@@ -33,6 +33,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         cancelled_operation_key=row.cancelled_operation_key,
         cancellation_reason=row.cancellation_reason,
         cancelled_at=row.deleted_at,
+        completed_at=row.completed_at,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -197,6 +198,25 @@ class SchedulingService:
         expected_updated_at: datetime,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.cancel_from_ui(
+            context,
+            entry_id=entry_id,
+            expected_updated_at=expected_updated_at,
+        )
+        if row is None:
+            return None
+        await ReminderService(self.session).cancel_calendar_entry(context, row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
+
+    async def complete_calendar_entry_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.complete_from_ui(
             context,
             entry_id=entry_id,
             expected_updated_at=expected_updated_at,

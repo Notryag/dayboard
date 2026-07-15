@@ -41,6 +41,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
             )
             .order_by(CalendarEntryRow.start_time.asc())
         )
@@ -95,6 +96,7 @@ class CalendarEntryRepository:
             CalendarEntryRow.tenant_id == context.tenant_id,
             CalendarEntryRow.owner_user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
+            CalendarEntryRow.completed_at.is_(None),
             CalendarEntryRow.start_time >= start_time,
             CalendarEntryRow.start_time < end_time,
         ]
@@ -165,6 +167,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.updated_at == expected_updated_at,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
             )
             .values(
                 start_time=start_time,
@@ -194,6 +197,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.updated_at == expected_updated_at,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
             )
             .values(
                 title=title,
@@ -241,6 +245,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.updated_at == expected_updated_at,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
             )
             .values(
                 deleted_at=now,
@@ -304,6 +309,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.updated_at == expected_updated_at,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
             )
             .values(
                 deleted_at=now,
@@ -312,6 +318,28 @@ class CalendarEntryRepository:
                 cancelled_operation_key=None,
                 cancellation_reason=None,
             )
+            .returning(CalendarEntryRow)
+        )
+
+    async def complete_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+    ) -> CalendarEntryRow | None:
+        now = func.now()
+        return await self.session.scalar(
+            update(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
+            )
+            .values(completed_at=now, updated_at=now)
             .returning(CalendarEntryRow)
         )
 
@@ -332,6 +360,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_(None),
                 CalendarEntryRow.start_time < end_time,
                 effective_end > start_time,
         ]

@@ -244,7 +244,7 @@ date. The month-year control retains the native date picker for distant jumps.
 
 Render the chronological agenda as separate cards. Place each start-time label in the vertical space
 before its card instead of reserving a left-hand time column. Calendar cards show duration rather
-than an end clock time; exact start and end times remain available in the detail dialog. Keep undated
+than an end clock time; exact start and end times remain available in the bottom action sheet. Keep undated
 task rows compact, wrap long titles, preserve 44px controls, and give each source independent loading,
 error, retry, and pagination state. The date rail uses a 31-day window, CSS scroll snapping, and
 cached `Intl.DateTimeFormat` instances; do not add a carousel or date-picker dependency for this
@@ -252,9 +252,11 @@ interaction.
 
 Calendar entries and tasks share one schedule-item component across the day view and assistant
 messages. It chooses a semantic Lucide icon from centralized title keywords; icons use semantic
-foreground colors without decorative background tiles. The same detail dialog exposes direct edit,
-complete, and cancel actions through narrow authenticated APIs. Calendar editing covers title, start
-time, and duration; task editing covers title and optional due time. Mutations use `updated_at` as an
+foreground colors without decorative background tiles. Each active card has a separate right-aligned
+circular completion control; the rest of the card opens a bottom action sheet instead of a centered
+dialog. The sheet presents details and vertical edit, complete, and cancel actions, and editing
+replaces the sheet body without opening another layer. Calendar editing covers title, start time,
+and duration; task editing covers title and optional due time. Mutations use `updated_at` as an
 optimistic-concurrency boundary.
 
 Component ownership:

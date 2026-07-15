@@ -29,7 +29,7 @@ class CalendarEntryView(BaseModel):
     timezone: str
     participants: list[str]
     reminder: Reminder | None
-    status: Literal["scheduled", "cancelled"]
+    status: Literal["scheduled", "completed", "cancelled"]
     created_by_run_id: UUID | None
     created_at: datetime
     updated_at: datetime
@@ -39,7 +39,13 @@ class CalendarEntryView(BaseModel):
         return cls.model_validate(
             {
                 **entry.model_dump(),
-                "status": "cancelled" if entry.cancelled_at is not None else "scheduled",
+                "status": (
+                    "cancelled"
+                    if entry.cancelled_at is not None
+                    else "completed"
+                    if entry.completed_at is not None
+                    else "scheduled"
+                ),
             }
         )
 
