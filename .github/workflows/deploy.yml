@@ -2,8 +2,8 @@ name: Build and deploy
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch:
+    tags:
+      - "v*.*.*"
 
 permissions:
   contents: read
@@ -75,7 +75,9 @@ jobs:
           context: .
           file: ${{ matrix.dockerfile }}
           push: true
-          tags: ${{ matrix.image }}:${{ github.sha }}
+          tags: |
+            ${{ matrix.image }}:${{ github.sha }}
+            ${{ matrix.image }}:${{ github.ref_name }}
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -111,9 +113,12 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           ssh -i ~/.ssh/dayboard_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd /home/zx/dayboard && \
              git pull --ff-only origin main && \
+             git fetch --tags origin && \
+             test \"\$(git rev-list -n 1 '$RELEASE_TAG')\" = '$COMMIT_SHA' && \
              test \"\$(git rev-parse HEAD)\" = '$COMMIT_SHA' && \
              ./deploy/scripts/deploy-images.sh '$COMMIT_SHA'"

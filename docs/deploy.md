@@ -80,11 +80,11 @@ FastAPI、arq 或 Next.js 进程。
 
 ## 自动部署
 
-推送到 `main` 后，[GitHub Actions workflow](../.github/workflows/deploy.yml) 自动执行：
+推送语义化版本标签后，[GitHub Actions workflow](../.github/workflows/deploy.yml) 自动执行：
 
 1. API Ruff 检查和聚焦配置测试；
 2. Web ESLint 和生产构建；
-3. 构建 API、Web 镜像并以 Git commit SHA 为标签推送到 GHCR；
+3. 构建 API、Web 镜像并以 Git commit SHA 和版本号为标签推送到 GHCR；
 4. 通过 SSH 连接服务器，拉取对应镜像；
 5. 备份 PostgreSQL，使用新 API 镜像执行迁移；
 6. 替换 API、Worker、Web 容器并执行健康检查。
@@ -92,6 +92,19 @@ FastAPI、arq 或 Next.js 进程。
 API 和 Worker 使用同一个 API 镜像。自动部署使用
 [`docker-compose.deploy.yml`](../docker-compose.deploy.yml) 覆盖应用镜像，服务器不会再次构建
 源码。`concurrency` 保证同一时间只有一个生产部署运行。
+
+普通 `main` push 和 Pull Request 只触发 [CI workflow](../.github/workflows/ci.yml)，不会部署。
+准备发布时，确保 `main` 已推送且工作区干净，再创建带说明的版本标签：
+
+```bash
+git switch main
+git pull --ff-only
+git tag -a v0.2.0 -m "Dayboard v0.2.0"
+git push origin v0.2.0
+```
+
+标签必须指向当前 `main` 最新提交。已经推送的版本标签不要移动或覆盖；下一次发布使用
+`v0.2.1` 或 `v0.3.0`。
 
 在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中配置：
 
@@ -106,8 +119,7 @@ API 和 Worker 使用同一个 API 镜像。自动部署使用
 Docker Compose 和以免密 sudo 调用数据库备份脚本的权限。GHCR 登录使用当前 workflow 的
 短期 `GITHUB_TOKEN`，不需要保存长期 Registry Token。
 
-`production` GitHub Environment 可以增加审批人和分支保护。配置完成后，也可以在 Actions
-页面通过 `workflow_dispatch` 手动重新部署当前 `main`。
+`production` GitHub Environment 可以增加审批人和分支保护。
 
 ## 手动更新
 
