@@ -1,14 +1,18 @@
 # Docker 部署
 
-Dayboard 生产环境只使用仓库根目录的 `docker-compose.yml` 管理应用与数据服务：
+Dayboard 生产应用使用仓库根目录的 Compose 文件管理；PostgreSQL 和 Redis 由独立的基础设施
+Compose 管理，Dayboard 通过 `docker-compose.platform.yml` 接入可配置的共享外部网络：
 
 ```text
 Nginx
   -> 127.0.0.1:8000 -> API
   -> 127.0.0.1:3001 -> Web
 
-Docker Compose
-  -> PostgreSQL、Redis、API、Worker、Web
+platform-infra Compose
+  -> PostgreSQL、Redis
+
+Dayboard Docker Compose
+  -> API、Worker、Web
 ```
 
 生产工作目录固定为 `/home/zx/dayboard`。不要从其他代码副本启动同名服务，也不要为
@@ -91,7 +95,8 @@ FastAPI、arq 或 Next.js 进程。
 
 API 和 Worker 使用同一个 API 镜像。自动部署使用
 [`docker-compose.deploy.yml`](../docker-compose.deploy.yml) 覆盖应用镜像，服务器不会再次构建
-源码。`concurrency` 保证同一时间只有一个生产部署运行。
+源码，并使用 `docker-compose.platform.yml` 接入共享基础设施。`concurrency` 保证同一时间只有
+一个生产部署运行。
 
 普通 `main` push 和 Pull Request 只触发 [CI workflow](../.github/workflows/ci.yml)，不会部署。
 准备发布时，确保 `main` 已推送且工作区干净，再创建带说明的版本标签：

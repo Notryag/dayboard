@@ -1,7 +1,5 @@
 FROM python:3.11-slim
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
-
 WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1 \
@@ -12,6 +10,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv==0.11.28 \
     && groupadd --system dayboard \
     && useradd --system --create-home --home-dir /home/dayboard --gid dayboard --shell /usr/sbin/nologin dayboard
 

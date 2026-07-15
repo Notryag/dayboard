@@ -25,7 +25,7 @@ if ! flock -n 9; then
 fi
 
 export DAYBOARD_IMAGE_TAG="$IMAGE_TAG"
-compose=(docker compose -f docker-compose.yml -f docker-compose.deploy.yml)
+compose=(docker compose -f docker-compose.yml -f docker-compose.deploy.yml -f docker-compose.platform.yml)
 
 "${compose[@]}" config --quiet
 "${compose[@]}" pull api worker web
@@ -33,6 +33,7 @@ compose=(docker compose -f docker-compose.yml -f docker-compose.deploy.yml)
 sudo -n env \
   DAYBOARD_PROJECT_DIR="$PROJECT_DIR" \
   DAYBOARD_BACKUP_DIR="$BACKUP_DIR" \
+  DAYBOARD_POSTGRES_CONTAINER=platform-postgres \
   "$PROJECT_DIR/deploy/scripts/postgres-backup.sh"
 
 "${compose[@]}" run --rm --no-deps api /app/.venv/bin/alembic upgrade head

@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${DAYBOARD_PROJECT_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 BACKUP_DIR="${DAYBOARD_BACKUP_DIR:-/var/backups/dayboard/postgres}"
 RETENTION_DAYS="${DAYBOARD_BACKUP_RETENTION_DAYS:-14}"
+POSTGRES_CONTAINER="${DAYBOARD_POSTGRES_CONTAINER:-dayboard-postgres-1}"
 
 if [[ ! "$RETENTION_DAYS" =~ ^[0-9]+$ ]]; then
   printf 'DAYBOARD_BACKUP_RETENTION_DAYS must be a non-negative integer\n' >&2
@@ -53,9 +54,7 @@ if [[ -e "$final_dump" || -e "$final_checksum" ]]; then
   exit 1
 fi
 
-cd "$PROJECT_DIR"
-
-docker compose exec -T postgres sh -ceu '
+docker exec -i "$POSTGRES_CONTAINER" sh -ceu '
   pg_isready --quiet --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"
   exec pg_dump \
     --username="$POSTGRES_USER" \
@@ -71,7 +70,7 @@ if [[ ! -s "$temporary_dump" ]]; then
   exit 1
 fi
 
-docker compose exec -T postgres pg_restore --list <"$temporary_dump" >/dev/null
+docker exec -i "$POSTGRES_CONTAINER" pg_restore --list <"$temporary_dump" >/dev/null
 
 checksum="$(sha256sum "$temporary_dump" | cut -d ' ' -f 1)"
 printf '%s  %s\n' "$checksum" "$filename" >"$temporary_checksum"

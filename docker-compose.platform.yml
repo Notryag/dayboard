@@ -1,0 +1,25 @@
+services:
+  postgres:
+    profiles: [local-infra]
+
+  redis:
+    profiles: [local-infra]
+
+  api:
+    depends_on: !reset []
+    networks: !override
+      - platform-infra
+
+  worker:
+    depends_on: !reset []
+    networks: !override
+      - platform-infra
+
+  web:
+    networks: !override
+      - platform-infra
+
+networks:
+  platform-infra:
+    name: ${PLATFORM_INFRA_NETWORK:-platform-infra}
+    external: true
