@@ -28,16 +28,16 @@ RUN addgroup -S -g 1001 dayboard \
 
 ENV NODE_ENV=production \
     NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api \
-    NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard
+    NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard \
+    HOSTNAME=0.0.0.0 \
+    PORT=3001
 
-COPY --chown=dayboard:dayboard --from=builder /app/.next ./.next
+COPY --chown=dayboard:dayboard --from=builder /app/.next/standalone ./
+COPY --chown=dayboard:dayboard --from=builder /app/.next/static ./.next/static
 COPY --chown=dayboard:dayboard --from=builder /app/public ./public
-COPY --chown=dayboard:dayboard --from=builder /app/next.config.ts ./next.config.ts
-COPY --chown=dayboard:dayboard --from=builder /app/package.json ./package.json
-COPY --chown=dayboard:dayboard --from=deps /app/node_modules ./node_modules
 
 USER dayboard
 
 EXPOSE 3001
 
-CMD ["node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3001"]
+CMD ["node", "server.js"]

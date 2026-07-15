@@ -4,6 +4,7 @@ const basePath = process.env.NEXT_PUBLIC_DAYBOARD_BASE_PATH ?? "";
 
 const nextConfig: NextConfig = {
   basePath,
+  output: "standalone",
 };
 
 export default nextConfig;
