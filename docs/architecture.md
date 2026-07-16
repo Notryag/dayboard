@@ -430,6 +430,36 @@ DELETE /api/task-items/{task_id}
 
 `POST /api/command-runs` supports idempotent retries with an `Idempotency-Key` header.
 
+## Account Recovery
+
+Email remains optional at registration. Accounts with a bound email can use self-service password
+recovery; accounts without one require a future authenticated email-binding or support process.
+
+```text
+POST /api/auth/password-reset/request
+  -> always return the same 202 response
+  -> lock the matching active user when one exists
+  -> delete previous reset tokens for that user
+  -> store only SHA-256(token), never the raw token
+  -> send the raw token in a configured public-web reset link through the SMTP adapter
+
+POST /api/auth/password-reset/confirm
+  -> lock and validate an unused, unexpired token
+  -> replace the Argon2id password hash
+  -> consume every outstanding reset token for the user
+  -> revoke every existing login session
+  -> require a fresh login
+```
+
+Unknown emails and accounts without email receive the same `202` response as a known account.
+Globally unavailable mail configuration returns the same `503` for every address, so the UI can be
+honest without revealing account existence. `GET /api/auth/capabilities` controls whether the web
+client renders the recovery entry point; token confirmation remains available independently of mail
+delivery. Reset-request and reset-confirm endpoints have separate IP rate limits. SMTP credentials
+and the canonical public web URL are server configuration; the request `Host` header is never used
+to construct the reset link. The mail adapter sends a plain text message so the link remains usable
+across conservative email clients.
+
 ## Rate Limiting
 
 Rate limiting belongs at multiple layers:
@@ -645,6 +675,7 @@ external_identities
 tenant_memberships
 user_profiles
 user_sessions
+password_reset_tokens
 calendar_entries
 task_items
 reminder_deliveries

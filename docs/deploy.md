@@ -63,6 +63,24 @@ CLOUDFLARE_API_TOKEN=replace-with-a-workers-ai-token
 CLOUDFLARE_ASR_MODEL=@cf/openai/whisper-large-v3-turbo
 ```
 
+启用邮箱找回密码时配置 SMTP。没有配置 `DAYBOARD_SMTP_HOST` 和
+`DAYBOARD_MAIL_FROM_ADDRESS` 时，注册和登录不受影响，找回密码接口会明确返回暂不可用：
+
+```dotenv
+DAYBOARD_PUBLIC_WEB_URL=https://your-host/dayboard
+DAYBOARD_PASSWORD_RESET_TTL_SECONDS=1800
+DAYBOARD_SMTP_HOST=smtp.example.com
+DAYBOARD_SMTP_PORT=587
+DAYBOARD_SMTP_USERNAME=replace-with-smtp-user
+DAYBOARD_SMTP_PASSWORD=replace-with-smtp-password
+DAYBOARD_SMTP_SECURITY=starttls
+DAYBOARD_MAIL_FROM_ADDRESS=no-reply@example.com
+DAYBOARD_MAIL_FROM_NAME=Dayboard
+```
+
+注册邮箱保持可选；只有已经绑定邮箱的账号可以自助找回密码。SMTP 使用隐式 TLS 时将
+`DAYBOARD_SMTP_SECURITY` 设为 `ssl`，直接可信内网连接才使用 `plain`。
+
 真实凭据只能保存在 `.env` 或密钥管理服务中，不能提交到 Git、写入 Dockerfile 或打印到
 日志。修改 `NEXT_PUBLIC_DAYBOARD_API_BASE_URL` 或 `NEXT_PUBLIC_DAYBOARD_BASE_PATH` 后必须重新
 构建 Web 镜像，因为这两个变量会被编译进浏览器资源。

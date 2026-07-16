@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { ApiError, userFacingApiError } from "@/lib/api/client";
 import {
   getAccount,
+  getAuthCapabilities,
   loginAccount,
   logoutAccount,
   registerAccount,
@@ -14,6 +15,7 @@ import {
 type AuthContextValue = {
   account: Account | null;
   isLoading: boolean;
+  passwordResetAvailable: boolean;
   recoveryError: string | null;
   login: (identifier: string, password: string) => Promise<void>;
   register: (registration: Registration) => Promise<void>;
@@ -25,6 +27,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [account, setAccount] = useState<Account | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [passwordResetAvailable, setPasswordResetAvailable] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,10 +42,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => {
+    void getAuthCapabilities()
+      .then((capabilities) => setPasswordResetAvailable(capabilities.password_reset_available))
+      .catch(() => setPasswordResetAvailable(false));
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       account,
       isLoading,
+      passwordResetAvailable,
       recoveryError,
       async login(identifier, password) {
         setAccount(await loginAccount(identifier, password));
@@ -56,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAccount(null);
       },
     }),
-    [account, isLoading, recoveryError],
+    [account, isLoading, passwordResetAvailable, recoveryError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

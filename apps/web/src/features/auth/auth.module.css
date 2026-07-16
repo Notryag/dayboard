@@ -104,6 +104,44 @@
   font-size: var(--font-size-label);
 }
 
+.notice {
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-ui);
+  line-height: 1.5;
+}
+
+.linkButton,
+.backButton {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  color: var(--color-primary);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-ui);
+}
+
+.linkButton {
+  justify-self: end;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-size);
+  margin-bottom: var(--space-3);
+}
+
+.linkButton:hover,
+.backButton:hover {
+  color: var(--color-primary-hover);
+}
+
 .submit {
   min-height: var(--field-size);
   border: 0;

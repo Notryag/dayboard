@@ -30,6 +30,26 @@ class Settings(BaseSettings):
         ge=3600,
     )
     auth_cookie_secure: bool = Field(default=False, alias="DAYBOARD_AUTH_COOKIE_SECURE")
+    public_web_url: str = Field(
+        default="http://localhost:3000",
+        alias="DAYBOARD_PUBLIC_WEB_URL",
+    )
+    password_reset_ttl_seconds: int = Field(
+        default=30 * 60,
+        alias="DAYBOARD_PASSWORD_RESET_TTL_SECONDS",
+        ge=300,
+        le=24 * 60 * 60,
+    )
+    smtp_host: str | None = Field(default=None, alias="DAYBOARD_SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="DAYBOARD_SMTP_PORT", ge=1, le=65535)
+    smtp_username: str | None = Field(default=None, alias="DAYBOARD_SMTP_USERNAME")
+    smtp_password: SecretStr | None = Field(default=None, alias="DAYBOARD_SMTP_PASSWORD")
+    smtp_security: Literal["starttls", "ssl", "plain"] = Field(
+        default="starttls",
+        alias="DAYBOARD_SMTP_SECURITY",
+    )
+    mail_from_address: str | None = Field(default=None, alias="DAYBOARD_MAIL_FROM_ADDRESS")
+    mail_from_name: str = Field(default="Dayboard", alias="DAYBOARD_MAIL_FROM_NAME")
     database_url: str = Field(
         default="postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard",
         alias="DATABASE_URL",
@@ -138,6 +158,14 @@ class Settings(BaseSettings):
         default="5/hour", alias="DAYBOARD_RATE_LIMIT_REGISTRATION"
     )
     rate_limit_login: str = Field(default="10/minute", alias="DAYBOARD_RATE_LIMIT_LOGIN")
+    rate_limit_password_reset_request: str = Field(
+        default="3/hour",
+        alias="DAYBOARD_RATE_LIMIT_PASSWORD_RESET_REQUEST",
+    )
+    rate_limit_password_reset: str = Field(
+        default="5/hour",
+        alias="DAYBOARD_RATE_LIMIT_PASSWORD_RESET",
+    )
     rate_limit_command: str = Field(default="20/minute", alias="DAYBOARD_RATE_LIMIT_COMMAND")
     rate_limit_voice: str = Field(default="10/minute", alias="DAYBOARD_RATE_LIMIT_VOICE")
     rate_limit_storage_url: str | None = Field(
@@ -170,6 +198,14 @@ class Settings(BaseSettings):
             raise ValueError("DAYBOARD_DEFAULT_TIMEZONE must be a valid IANA timezone") from exc
         return value
 
+    @field_validator("public_web_url")
+    @classmethod
+    def validate_public_web_url(cls, value: str) -> str:
+        normalized = value.rstrip("/")
+        if not normalized.startswith(("http://", "https://")):
+            raise ValueError("DAYBOARD_PUBLIC_WEB_URL must use http or https")
+        return normalized
+
     @model_validator(mode="after")
     def require_secure_production_auth(self) -> "Settings":
         if self.environment.lower() != "production":
@@ -197,6 +233,10 @@ class Settings(BaseSettings):
     @property
     def allowed_cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
+    def password_reset_mail_enabled(self) -> bool:
+        return bool(self.smtp_host and self.mail_from_address)
 
     @property
     def effective_checkpointer_database_url(self) -> str | None:

@@ -34,6 +34,7 @@ from dayboard.db.models import (
     ConversationStateRow,
     ConversationThreadRow,
     IdempotencyKeyRow,
+    PasswordResetTokenRow,
     ProviderUsageRecordRow,
     TaskItemRow,
     VoiceTranscriptRow,
@@ -133,6 +134,7 @@ def tenant_context() -> TenantContext:
 @pytest.fixture
 async def db_session() -> AsyncIterator[AsyncSession]:
     async with SessionLocal() as session:
+        await session.execute(delete(PasswordResetTokenRow))
         await session.execute(delete(UserSessionRow))
         await session.execute(delete(ExternalIdentityRow))
         await session.execute(delete(UserCredentialRow))
@@ -153,6 +155,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(VoiceTranscriptRow))
         await session.commit()
         yield session
+        await session.execute(delete(PasswordResetTokenRow))
         await session.execute(delete(UserSessionRow))
         await session.execute(delete(ExternalIdentityRow))
         await session.execute(delete(UserCredentialRow))

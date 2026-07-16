@@ -5,7 +5,7 @@ from hashlib import sha256
 import secrets
 
 from fastapi import APIRouter, Depends, Request, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from pwdlib import PasswordHash
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
@@ -35,7 +35,7 @@ _dummy_password_hash = password_hash.hash("dayboard-invalid-password-placeholder
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_.-]+$")
     password: str = Field(min_length=10, max_length=128)
-    email: str | None = Field(default=None, max_length=320)
+    email: EmailStr | None = None
     display_name: str | None = Field(default=None, min_length=1, max_length=160)
     locale: str = Field(default="zh-CN", max_length=32)
 
@@ -168,7 +168,7 @@ async def register(
 ) -> AccountResponse:
     del request
     username = _normalized(body.username)
-    email = _normalized(body.email) if body.email else None
+    email = _normalized(str(body.email)) if body.email else None
     user = UserRow(username=username, email=email, display_name=body.display_name)
     tenant = TenantRow(name=body.display_name or username)
     session.add_all([user, tenant])

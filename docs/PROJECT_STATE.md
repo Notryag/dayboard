@@ -109,9 +109,10 @@ paths.
 - Agent runtime: North-backed execution, safe tool progress events, durable Run history, SSE,
   provider budgets, normalized token accounting, and exactly-once usage settlement.
 - Identity: FastAPI password accounts, Argon2id credentials, server-side sessions, memberships,
-  profiles, reusable web login state, production fail-closed configuration, endpoint-specific abuse
+  profiles, reusable web login state, optional-email password recovery with single-use hashed
+  tokens and session revocation, production fail-closed configuration, endpoint-specific abuse
   limits, and tenant-plus-owner repository boundaries for conversations, Runs, schedules, tasks,
-  transcripts, reminders, and provider usage.
+  transcripts, reminders, and provider usage. Recovery email delivery requires configured SMTP.
 - Inspectable UI: the responsive shell presents conversation and schedule as first-level views. A
   reusable day-view panel supports a native distant-date picker, a swipeable forward-looking
   31-day rail starting at today, a chronological agenda merging calendar entries with dated tasks, and a separate

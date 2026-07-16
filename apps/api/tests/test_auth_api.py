@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 from httpx import ASGITransport, AsyncClient
@@ -8,10 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.config import Settings, get_settings
+from dayboard.api.account_recovery import get_password_reset_mailer
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.context import TenantContext
-from dayboard.db.models import UserCredentialRow, UserProfileRow, UserSessionRow
+from dayboard.db.models import (
+    PasswordResetTokenRow,
+    UserCredentialRow,
+    UserProfileRow,
+    UserSessionRow,
+)
 from dayboard.db.session import get_session
 from dayboard.main import app
 
@@ -28,6 +35,26 @@ class RecordingDispatcher:
     async def cancel(self, run_id: UUID) -> bool:
         self.cancelled.append(run_id)
         return True
+
+
+class RecordingPasswordResetMailer:
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str | int]] = []
+
+    async def send_password_reset(
+        self,
+        *,
+        recipient: str,
+        reset_url: str,
+        expires_minutes: int,
+    ) -> None:
+        self.messages.append(
+            {
+                "recipient": recipient,
+                "reset_url": reset_url,
+                "expires_minutes": expires_minutes,
+            }
+        )
 
 
 async def test_register_login_logout_and_resolve_tenant_context(
@@ -107,6 +134,115 @@ async def test_request_id_is_returned_and_invalid_input_is_replaced() -> None:
     assert accepted.headers["x-request-id"] == "support-123"
     assert generated.headers["x-request-id"].startswith("req_")
     assert generated.headers["x-request-id"] != "bad request id"
+
+
+async def test_password_reset_is_private_single_use_and_revokes_sessions(
+    db_session: AsyncSession,
+) -> None:
+    settings = Settings(
+        DAYBOARD_AUTH_MODE="password",
+        DAYBOARD_RATE_LIMIT_ENABLED=False,
+        DAYBOARD_PUBLIC_WEB_URL="https://example.com/dayboard",
+        DAYBOARD_SMTP_HOST="smtp.example.com",
+        DAYBOARD_MAIL_FROM_ADDRESS="no-reply@example.com",
+    )
+    mailer = RecordingPasswordResetMailer()
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_password_reset_mailer] = lambda: mailer
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            capabilities = await client.get("/api/auth/capabilities")
+            assert capabilities.json() == {"password_reset_available": True}
+            registered = await client.post(
+                "/api/auth/register",
+                json={
+                    "username": "password-reset-user",
+                    "password": "original-password-123",
+                    "email": "RESET@example.com",
+                },
+            )
+            assert registered.status_code == 201
+
+            unknown = await client.post(
+                "/api/auth/password-reset/request",
+                json={"email": "unknown@example.com"},
+            )
+            requested = await client.post(
+                "/api/auth/password-reset/request",
+                json={"email": "RESET@example.com"},
+            )
+            assert unknown.status_code == requested.status_code == 202
+            assert unknown.json() == requested.json()
+            assert len(mailer.messages) == 1
+
+            reset_url = str(mailer.messages[0]["reset_url"])
+            raw_token = parse_qs(urlparse(reset_url).query)["reset_token"][0]
+            token_row = await db_session.scalar(select(PasswordResetTokenRow))
+            assert token_row is not None
+            assert token_row.token_hash != raw_token
+            assert len(token_row.token_hash) == 64
+
+            changed = await client.post(
+                "/api/auth/password-reset/confirm",
+                json={"token": raw_token, "password": "replacement-password-456"},
+            )
+            assert changed.status_code == 204
+            assert all(
+                row.revoked_at is not None
+                for row in (await db_session.scalars(select(UserSessionRow))).all()
+            )
+
+            reused = await client.post(
+                "/api/auth/password-reset/confirm",
+                json={"token": raw_token, "password": "another-password-789"},
+            )
+            assert reused.status_code == 400
+            assert reused.json()["error"]["code"] == "PASSWORD_RESET_TOKEN_INVALID"
+
+            old_login = await client.post(
+                "/api/auth/login",
+                json={"identifier": "reset@example.com", "password": "original-password-123"},
+            )
+            assert old_login.status_code == 401
+            new_login = await client.post(
+                "/api/auth/login",
+                json={
+                    "identifier": "reset@example.com",
+                    "password": "replacement-password-456",
+                },
+            )
+            assert new_login.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_password_reset_reports_globally_unavailable_mail(
+    db_session: AsyncSession,
+) -> None:
+    settings = Settings(DAYBOARD_AUTH_MODE="password", DAYBOARD_RATE_LIMIT_ENABLED=False)
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            capabilities = await client.get("/api/auth/capabilities")
+            assert capabilities.json() == {"password_reset_available": False}
+            response = await client.post(
+                "/api/auth/password-reset/request",
+                json={"email": "anyone@example.com"},
+            )
+        assert response.status_code == 503
+        assert response.json()["error"]["code"] == "PASSWORD_RESET_UNAVAILABLE"
+    finally:
+        app.dependency_overrides.clear()
 
 
 async def test_password_sessions_cannot_read_another_users_thread(

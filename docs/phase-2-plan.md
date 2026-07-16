@@ -44,6 +44,8 @@ Completed:
 - Dayboard users, memberships, timezone/locale profiles, and an external-identity extension point;
 - trusted `TenantContext` resolution from sessions and memberships;
 - minimal web registration, login, logout, session recovery, and credentialed SSE;
+- optional-email password recovery with single-use expiring tokens, SMTP delivery, and global
+  session revocation after reset;
 - two-user ownership acceptance for threads and Run status, events, streaming, and cancellation.
 
 Remaining:
@@ -61,7 +63,8 @@ production deployment cannot start in development-auth mode by accident.
 
 Backend acceptance now covers password-session isolation for threads, Run status, durable Run
 events, SSE, and cancellation. The same-site web/API deployment and coordinated password-auth
-release are complete.
+release are complete. Password recovery is implemented; production delivery additionally requires
+SMTP configuration.
 
 ### P2.2 Reminder Delivery
 

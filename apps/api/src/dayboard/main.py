@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dayboard.api.rate_limit import configure_rate_limiting
 from dayboard.api.errors import configure_error_handling
 from dayboard.api.auth import router as auth_router
+from dayboard.api.account_recovery import router as account_recovery_router
 from dayboard.api.routes import router
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.config import get_settings
@@ -87,6 +88,7 @@ def create_app() -> FastAPI:
     configure_error_handling(app)
     configure_rate_limiting(app, settings)
     app.include_router(auth_router)
+    app.include_router(account_recovery_router)
     app.include_router(router)
     return app
 

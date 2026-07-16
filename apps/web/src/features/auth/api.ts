@@ -18,8 +18,16 @@ export type Registration = {
   locale: string;
 };
 
+export type AuthCapabilities = {
+  password_reset_available: boolean;
+};
+
 export async function getAccount(): Promise<Account> {
   return (await (await apiFetch("/api/auth/me")).json()) as Account;
+}
+
+export async function getAuthCapabilities(): Promise<AuthCapabilities> {
+  return (await (await apiFetch("/api/auth/capabilities")).json()) as AuthCapabilities;
 }
 
 export async function registerAccount(body: Registration): Promise<Account> {
@@ -40,6 +48,22 @@ export async function loginAccount(identifier: string, password: string): Promis
       body: JSON.stringify({ identifier, password }),
     })
   ).json()) as Account;
+}
+
+export async function requestPasswordReset(email: string): Promise<void> {
+  await apiFetch("/api/auth/password-reset/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function confirmPasswordReset(token: string, password: string): Promise<void> {
+  await apiFetch("/api/auth/password-reset/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, password }),
+  });
 }
 
 export async function logoutAccount(): Promise<void> {
