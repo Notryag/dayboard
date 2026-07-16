@@ -35,7 +35,8 @@ Reminder delivery:
 
 Agent and tools:
 
-- [architecture.md](./architecture.md), sections "Agent Assembly Boundary", "Product Tools", and "Create Calendar Entry Flow"
+- [architecture.md](./architecture.md), sections "System Overview", "Intent Recognition And Tool Selection",
+  "Command Execution Sequence", "Agent Assembly Boundary", and "Product Tools"
 - [engineering-guidelines.md](./engineering-guidelines.md), sections "Tool Design" and "Agent And LLM Rules"
 - [product-and-scope.md](./product-and-scope.md), section "Minimum Data Contract"
 - [agent-acceptance.md](./agent-acceptance.md) for explicit live model acceptance runs

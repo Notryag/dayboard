@@ -31,6 +31,50 @@ The current SSE implementation reads durable Run events from PostgreSQL every 50
 fanout is a future scale optimization, not part of the current request path. PostgreSQL remains the
 event source of truth before and after fanout is introduced.
 
+## System Overview
+
+The following diagram is the current production-shaped component map. API and Worker are separate
+processes built from the same backend codebase: API owns short-lived HTTP boundaries, while Worker
+owns long-running Agent execution.
+
+```mermaid
+flowchart LR
+    User[User] --> Web[Next.js Web]
+    Web -->|HTTPS / REST / SSE| Proxy[Nginx]
+    Proxy --> API[FastAPI API]
+
+    API -->|sessions, Runs, reads| DB[(PostgreSQL)]
+    API -->|enqueue run_id, limits| Redis[(Redis)]
+    Redis --> Worker[arq Worker]
+    Worker -->|restore Run and context| DB
+
+    Worker --> North[North Agent Runtime]
+    North --> LLM[OpenAI-compatible LLM]
+    North --> Tools[Dayboard Scheduling Tools]
+    Tools --> Services[Domain Services]
+    Services --> Repositories[Repositories]
+    Repositories --> DB
+
+    API --> Speech[Speech-to-Text Adapter]
+    Speech --> ASR[Cloudflare Workers AI or Alibaba ASR]
+
+    ReminderWorker[Reminder Worker] -->|claim due delivery| DB
+    ReminderWorker --> ReminderProvider[In-app / future external provider]
+```
+
+Important module boundaries:
+
+| Module | Owns | Does not own |
+| --- | --- | --- |
+| Web | recording gestures, chat/day-view presentation, REST/SSE clients | intent rules, tenant identity, timezone decisions |
+| API | authentication, validation, rate limits, durable Run creation, reads and direct UI mutations | long-running Agent execution |
+| Worker | queued Run lifecycle, Agent invocation, runtime event persistence | HTTP sessions or browser state |
+| North | generic Agent loop, model/tool execution, checkpoints and runtime events | Dayboard calendar/task business rules |
+| Dayboard Agent | system prompt, installed product tools, conversation context | trusted identity or direct database access from model output |
+| Domain services | deterministic validation, authorization scope, concurrency and transactions | natural-language interpretation |
+| PostgreSQL | durable product and Run source of truth | queue delivery or transient limits |
+| Redis | queue, rate limits and short-lived coordination | authoritative business state |
+
 ## Responsibility Split
 
 ### Dayboard
@@ -166,8 +210,8 @@ Browser MediaRecorder
   -> MIME, byte-size, and isolated PyAV duration validation
   -> ASR provider
   -> voice_transcripts row
-  -> editable composer text
-  -> normal command flow after user confirmation
+  -> normalized transcript text
+  -> normal command flow automatically after release-to-send
 ```
 
 Short command audio is processed synchronously and discarded after the provider call. Dayboard does
@@ -182,6 +226,112 @@ Model Studio `qwen3-asr-flash` adapter remains available as an alternate China-r
 Provider credentials, request signatures, and raw response formats remain inside
 `dayboard.integrations.speech`. Adding Volcengine, Tencent Cloud, or an on-premise adapter must not
 change Dayboard's public upload API or transcript domain model.
+
+## Intent Recognition And Tool Selection
+
+Dayboard does not maintain a separate keyword classifier that first labels input as
+`create_calendar`, `create_task`, or `reschedule`. Intent recognition happens inside the Agent's
+model tool-calling turn. The model receives four controlled inputs:
+
+1. the current user message or normalized voice transcript;
+2. bounded conversation history and any persisted compaction summary;
+3. a server-built system prompt containing exact local dates and scheduling policy;
+4. model-visible tool names, descriptions, and JSON schemas.
+
+The model uses meaning and context to choose one or more tools. Tool schemas constrain the shape of
+its proposal; trusted server context and domain services then validate and execute it. The model is
+therefore responsible for semantic interpretation, but it is never the authority for user identity,
+timezone, database ownership, optimistic concurrency, idempotency, or final stored values.
+
+```mermaid
+flowchart TD
+    Input[Text or normalized voice transcript] --> Context[Load bounded thread context]
+    Context --> Prompt[Build prompt with exact Beijing local dates]
+    Prompt --> Model[LLM semantic interpretation and tool selection]
+
+    Model --> Split{One or several independent actions?}
+    Split -->|Several| Calls[Produce multiple tool calls]
+    Split -->|One| Object{What business object?}
+    Calls --> Object
+
+    Object -->|Concrete start time and occupied block| Calendar[Calendar entry tools]
+    Object -->|Action or outcome, optional deadline| Task[Task tools]
+    Object -->|Missing required or ambiguous data| Clarify[ask_clarification]
+    Object -->|Question or lookup| Search[List or search tools]
+
+    Calendar --> Validate[Server schema and domain validation]
+    Task --> Validate
+    Search --> Match{Target matches}
+    Match -->|Exactly one| Validate
+    Match -->|Several| Clarify
+    Match -->|None| Explain[Return not found without creating]
+
+    Validate --> Inject[Inject tenant, user, timezone and run_id]
+    Inject --> Persist[Transactional PostgreSQL write]
+    Persist --> Result[Return authoritative stored object]
+    Result --> Reply[Model generates concise grounded confirmation]
+```
+
+Current semantic policy examples:
+
+| User meaning | Agent route |
+| --- | --- |
+| "明天下午三点游泳一小时" | `create_calendar_entry`: concrete time block |
+| "等会儿拿快递" | `create_task_item`: undated completion action |
+| "明天下午五点前交报告" | `create_task_item`: task with an exact deadline |
+| "把游泳改到下午四点" | search calendar first, then reschedule one match |
+| "买菜做完了" | search task first, then update one match to completed |
+| "安排一个会议" | `ask_clarification`: calendar start time is required |
+
+This policy currently lives in `dayboard.agent.prompts`, while model-visible schemas and trusted
+closure injection live in `dayboard.agent.tools`. Deterministic rules such as timezone resolution,
+default one-hour duration, conflict checks, reminders, tenant filtering, idempotency, and optimistic
+concurrency live below the Agent in application/domain services.
+
+## Command Execution Sequence
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web as Next.js Web
+    participant API as FastAPI API
+    participant Redis
+    participant Worker as arq Worker
+    participant DB as PostgreSQL
+    participant Agent as North + Dayboard Agent
+    participant Model as LLM Provider
+    participant Tool as Dayboard Tool/Service
+
+    User->>Web: Type or release voice recording
+    Web->>API: POST /api/command-runs
+    API->>DB: Persist queued Run and message
+    API->>Redis: Enqueue run_id only
+    API-->>Web: 202 + run_id
+    Web->>API: Subscribe to Run SSE
+
+    Redis->>Worker: Deliver run_id
+    Worker->>DB: Restore Run, tenant, user and input
+    Worker->>Agent: Invoke with prompt, history and tools
+    Agent->>Model: Messages + tool schemas
+    Model-->>Agent: Tool call(s) or clarification
+
+    alt Tool call
+        Agent->>Tool: Model-visible business fields
+        Tool->>Tool: Inject trusted context and validate
+        Tool->>DB: Transactional scoped read/write
+        DB-->>Tool: Authoritative object
+        Tool-->>Agent: Structured result
+        Agent->>Model: Tool result
+        Model-->>Agent: Grounded confirmation
+        Agent->>DB: Persist messages, events and final status
+    else Clarification
+        Agent->>DB: Persist question and resumable state
+    end
+
+    API->>DB: Poll durable Run events
+    API-->>Web: SSE progress and result
+    Web-->>User: Render message and schedule card
+```
 
 ## API Surface
 
