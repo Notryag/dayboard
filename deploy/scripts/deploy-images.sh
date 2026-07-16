@@ -27,6 +27,21 @@ fi
 export DAYBOARD_IMAGE_TAG="$IMAGE_TAG"
 compose=(docker compose -f docker-compose.yml -f docker-compose.deploy.yml -f docker-compose.platform.yml)
 
+wait_for_url() {
+  local name="$1"
+  local url="$2"
+
+  for _ in $(seq 1 30); do
+    if curl -fsS --connect-timeout 2 --max-time 5 "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+
+  printf '%s did not become ready: %s\n' "$name" "$url" >&2
+  return 1
+}
+
 "${compose[@]}" config --quiet
 "${compose[@]}" pull api worker web
 
@@ -39,15 +54,8 @@ sudo -n env \
 "${compose[@]}" run --rm --no-deps api /app/.venv/bin/alembic upgrade head
 "${compose[@]}" up -d --no-build api worker web
 
-for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:8000/health >/dev/null; then
-    break
-  fi
-  sleep 2
-done
-
-curl -fsS http://127.0.0.1:8000/health >/dev/null
-curl -fsS http://127.0.0.1:3001/dayboard/ >/dev/null
+wait_for_url "Dayboard API" "http://127.0.0.1:8000/health"
+wait_for_url "Dayboard Web" "http://127.0.0.1:3001/dayboard/"
 "${compose[@]}" ps api worker web
 
 printf '%s\n' "$IMAGE_TAG" > .dayboard-deployed-image.tmp
