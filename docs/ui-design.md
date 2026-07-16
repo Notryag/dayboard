@@ -259,6 +259,10 @@ replaces the sheet body without opening another layer. Calendar editing covers t
 and duration; task editing covers title and optional due time. Mutations use `updated_at` as an
 optimistic-concurrency boundary.
 
+The direct circular completion control appears only in schedule/day-view contexts. Assistant
+confirmation cards reuse the same content and detail sheet but omit that control: a newly created
+item should read as confirmation rather than immediately prompting completion.
+
 Component ownership:
 
 ```text

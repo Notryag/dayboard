@@ -144,6 +144,7 @@ export function ScheduleItem({
   const [directError, setDirectError] = useState<string | null>(null);
   const Icon = iconForTitle(itemTitle(item), item.kind);
   const status = itemStatus(item);
+  const showCompletionControl = variant !== "chat" && status !== "cancelled";
 
   async function completeFromCard() {
     if (status !== "open" || completing) return;
@@ -166,7 +167,7 @@ export function ScheduleItem({
       <div
         className={`${styles.item} ${styles[variant]} ${
           status !== "open" ? styles[status] : ""
-        }`}
+        } ${!showCompletionControl ? styles.withoutCompletion : ""}`}
       >
         <button
           aria-label={`查看${item.kind === "calendar" ? "日程" : "待办"}：${itemTitle(item)}`}
@@ -185,7 +186,7 @@ export function ScheduleItem({
             <span>{itemMeta(item, timezone, variant)}</span>
           </span>
         </button>
-        {status !== "cancelled" ? (
+        {showCompletionControl ? (
           <button
             aria-label={`${status === "completed" ? "已完成" : "完成"}${item.kind === "calendar" ? "日程" : "待办"}：${itemTitle(item)}`}
             aria-pressed={status === "completed"}

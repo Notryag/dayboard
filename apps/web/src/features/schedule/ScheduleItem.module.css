@@ -170,6 +170,10 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.withoutCompletion {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .dialogLayer {
   --schedule-dialog-max-width: 520px;
   --schedule-dialog-max-height: 720px;

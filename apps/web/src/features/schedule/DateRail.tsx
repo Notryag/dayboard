@@ -34,8 +34,8 @@ export function DateRail({
 
   useLayoutEffect(() => {
     if (!railRef.current?.offsetWidth) return;
-    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "start" });
-  }, [active, centerDate]);
+    selectedRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active, centerDate, selectedDate]);
 
   return (
     <nav className={styles.dateRail} aria-label="浏览日期" ref={railRef}>
