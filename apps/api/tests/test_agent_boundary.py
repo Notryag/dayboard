@@ -130,6 +130,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
         del checkpointer, compaction_hooks
         captured["model_name"] = config.model_name
         captured["model_headers"] = config.model_headers
+        captured["model_options"] = config.model_options
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
         captured["summarization_enabled"] = config.summarization_enabled
@@ -143,6 +144,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert agent == {"agent": "fake"}
     assert captured["model_name"] == "openai:gpt-test"
     assert captured["model_headers"] == {}
+    assert captured["model_options"] == {}
     assert "scheduling assistant" in captured["system_prompt"]
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
@@ -193,6 +195,74 @@ def test_build_dayboard_agent_requires_trusted_context_for_northgate_metadata() 
             ),
             tools=[],
         )
+
+
+def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
+    monkeypatch,
+    tenant_context: TenantContext,
+) -> None:
+    captured = {}
+    run_id = UUID("00000000-0000-0000-0000-000000000402")
+
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del tools, checkpointer, compaction_hooks
+        captured["model_headers"] = config.model_headers
+        captured["model_options"] = config.model_options
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+    settings = Settings(
+        APP_MODEL_NAME="openai:gpt-test",
+        DAYBOARD_NORTHGATE_BASE_URL="http://northgate:8080/v1/gateways/dayboard/openai",
+        DAYBOARD_NORTHGATE_APPLICATION_KEY="northgate-key",
+        DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=str(tenant_context.tenant_id),
+    )
+
+    build_dayboard_agent(
+        settings,
+        tools=[],
+        context=tenant_context,
+        run_id=run_id,
+    )
+
+    assert captured["model_options"]["base_url"] == (
+        "http://northgate:8080/v1/gateways/dayboard/openai"
+    )
+    assert captured["model_options"]["api_key"].get_secret_value() == "northgate-key"
+    assert "Northgate-Metadata" in captured["model_headers"]
+
+
+def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
+    monkeypatch,
+    tenant_context: TenantContext,
+) -> None:
+    captured = {}
+
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del tools, checkpointer, compaction_hooks
+        captured["model_headers"] = config.model_headers
+        captured["model_options"] = config.model_options
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+    settings = Settings(
+        APP_MODEL_NAME="openai:gpt-test",
+        DAYBOARD_NORTHGATE_BASE_URL="http://northgate:8080/v1/gateways/dayboard/openai",
+        DAYBOARD_NORTHGATE_APPLICATION_KEY="northgate-key",
+        DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=(
+            "00000000-0000-0000-0000-000000000099"
+        ),
+    )
+
+    build_dayboard_agent(
+        settings,
+        tools=[],
+        context=tenant_context,
+        run_id=UUID("00000000-0000-0000-0000-000000000403"),
+    )
+
+    assert captured["model_options"] == {}
+    assert captured["model_headers"] == {}
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:

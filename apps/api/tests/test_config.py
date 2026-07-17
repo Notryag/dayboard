@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from dayboard.config import Settings
 from pydantic import ValidationError
 import pytest
@@ -10,6 +12,12 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "secret-value")
     monkeypatch.setenv("DAYBOARD_NORTHGATE_METADATA_ENABLED", "true")
+    monkeypatch.setenv("DAYBOARD_NORTHGATE_BASE_URL", "http://northgate:8080/v1")
+    monkeypatch.setenv("DAYBOARD_NORTHGATE_APPLICATION_KEY", "northgate-application-key")
+    monkeypatch.setenv(
+        "DAYBOARD_NORTHGATE_CANARY_TENANT_IDS",
+        "00000000-0000-0000-0000-000000000001",
+    )
     monkeypatch.setenv("DAYBOARD_RATE_LIMIT_DEFAULT", "10/minute")
     monkeypatch.setenv("DAYBOARD_RATE_LIMIT_STORAGE_URL", "redis://localhost:6379/9")
     monkeypatch.setenv("DAYBOARD_LOG_LEVEL", "DEBUG")
@@ -30,6 +38,13 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.openai_api_key is not None
     assert settings.openai_api_key.get_secret_value() == "secret-value"
     assert settings.northgate_metadata_enabled is True
+    assert settings.northgate_base_url == "http://northgate:8080/v1"
+    assert settings.northgate_application_key is not None
+    assert settings.northgate_application_key.get_secret_value() == "northgate-application-key"
+    assert settings.northgate_canary_tenants == {
+        UUID("00000000-0000-0000-0000-000000000001")
+    }
+    assert "northgate-application-key" not in repr(settings)
     assert "secret-value" not in repr(settings)
     assert settings.rate_limit_default == "10/minute"
     assert settings.effective_rate_limit_storage_url == "redis://localhost:6379/9"
@@ -74,3 +89,17 @@ def test_local_environment_allows_development_identity() -> None:
 def test_default_timezone_must_be_valid_iana_name() -> None:
     with pytest.raises(ValidationError, match="DEFAULT_TIMEZONE"):
         Settings(DAYBOARD_DEFAULT_TIMEZONE="Beijing")
+
+
+def test_northgate_canary_requires_complete_connection() -> None:
+    with pytest.raises(ValidationError, match="NORTHGATE_BASE_URL"):
+        Settings(
+            DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=(
+                "00000000-0000-0000-0000-000000000001"
+            )
+        )
+
+
+def test_northgate_canary_rejects_invalid_tenant_id() -> None:
+    with pytest.raises(ValidationError, match="must contain UUIDs"):
+        Settings(DAYBOARD_NORTHGATE_CANARY_TENANT_IDS="not-a-uuid")

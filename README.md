@@ -114,6 +114,11 @@ OPENAI_API_KEY=your-api-key
 OPENAI_BASE_URL=
 ```
 
+通过 Northgate 做小流量验证时，可以保留上述原供应商连接，并额外设置
+`DAYBOARD_NORTHGATE_BASE_URL`、`DAYBOARD_NORTHGATE_APPLICATION_KEY` 和
+`DAYBOARD_NORTHGATE_CANARY_TENANT_IDS`。只有 allowlist 中的可信 tenant 会切换，
+详细步骤见[部署文档](./docs/deploy.md)。
+
 语音输入是可选能力。需要启用时，再填写 `.env.example` 中对应 ASR 供应商的账号和密钥。
 真实密钥只能放在 `.env` 或密钥管理服务中，不要提交到 Git。
 

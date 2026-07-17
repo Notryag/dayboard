@@ -111,6 +111,9 @@ APP_MODEL_NAME
 OPENAI_BASE_URL
 OPENAI_API_KEY
 DAYBOARD_NORTHGATE_METADATA_ENABLED
+DAYBOARD_NORTHGATE_BASE_URL
+DAYBOARD_NORTHGATE_APPLICATION_KEY
+DAYBOARD_NORTHGATE_CANARY_TENANT_IDS
 ```
 
 Real values belong in `.env`, which is ignored by git. `.env.example` should contain only empty placeholders or safe defaults.
@@ -120,6 +123,12 @@ When `OPENAI_BASE_URL` points to Northgate, enable
 `user_id`, and `run_id` to the model client's `Northgate-Metadata` header for
 usage attribution. The browser, model input, and queued job cannot supply or
 override these values.
+
+For a bounded rollout, keep the original `OPENAI_BASE_URL` and `OPENAI_API_KEY`
+as the default connection and configure the separate Northgate URL, application
+key, and comma-separated tenant UUID allowlist. Agent construction selects the
+Northgate connection only when the trusted tenant ID is in that allowlist. Other
+tenants retain the original model connection and receive no Northgate header.
 
 ## Technology Choices
 

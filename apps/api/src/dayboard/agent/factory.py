@@ -36,7 +36,10 @@ def _model_headers(
     context: TenantContext | None,
     run_id: UUID | None,
 ) -> dict[str, str]:
-    if not settings.northgate_metadata_enabled:
+    canary_selected = (
+        context is not None and context.tenant_id in settings.northgate_canary_tenants
+    )
+    if not settings.northgate_metadata_enabled and not canary_selected:
         return {}
     if context is None or run_id is None:
         raise ValueError("Northgate metadata requires trusted tenant context and run ID")
@@ -46,6 +49,20 @@ def _model_headers(
         "run_id": str(run_id),
     }
     return {"Northgate-Metadata": json.dumps(metadata, separators=(",", ":"))}
+
+
+def _model_options(
+    settings: Settings,
+    context: TenantContext | None,
+) -> dict[str, object]:
+    if context is None or context.tenant_id not in settings.northgate_canary_tenants:
+        return {}
+    if settings.northgate_base_url is None or settings.northgate_application_key is None:
+        raise ValueError("Northgate canary connection is incomplete")
+    return {
+        "base_url": settings.northgate_base_url,
+        "api_key": settings.northgate_application_key,
+    }
 
 
 def _validate_model_visible_tool_fields(tools: list) -> None:
@@ -88,6 +105,7 @@ def build_dayboard_agent(
     config = AppConfig(
         model_name=resolved_settings.agent_model_name,
         model_headers=_model_headers(resolved_settings, context, run_id),
+        model_options=_model_options(resolved_settings, context),
         system_prompt=build_dayboard_system_prompt(context or TenantContext(
             tenant_id=resolved_settings.default_tenant_id,
             user_id=resolved_settings.default_user_id,

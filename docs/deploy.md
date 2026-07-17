@@ -67,6 +67,19 @@ DAYBOARD_NORTHGATE_METADATA_ENABLED=true
 API 和 Worker 必须使用相同配置。回滚时恢复原供应商 base URL 和 key，并将 metadata
 开关设为 `false`；不要把 Northgate metadata header 发送到其他供应商。
 
+生产 canary 不修改上述全局 OpenAI 配置，而是保留原供应商连接并设置独立的 Northgate
+连接和 tenant allowlist：
+
+```dotenv
+DAYBOARD_NORTHGATE_BASE_URL=http://northgate:8080/v1/gateways/dayboard/openai
+DAYBOARD_NORTHGATE_APPLICATION_KEY=replace-with-a-northgate-application-key
+DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=00000000-0000-0000-0000-000000000001
+```
+
+只有可信 tenant ID 命中 allowlist 的 run 使用 Northgate，并自动附带 tenant、user 和
+run metadata。其他 tenant 继续使用 `OPENAI_BASE_URL` 和 `OPENAI_API_KEY`。清空 allowlist
+并重建 API/Worker 容器即可回滚 canary，不依赖 Northgate 控制面。
+
 使用 Cloudflare 语音识别时再配置：
 
 ```dotenv

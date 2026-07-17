@@ -156,6 +156,15 @@ class Settings(BaseSettings):
         default=False,
         alias="DAYBOARD_NORTHGATE_METADATA_ENABLED",
     )
+    northgate_base_url: str | None = Field(default=None, alias="DAYBOARD_NORTHGATE_BASE_URL")
+    northgate_application_key: SecretStr | None = Field(
+        default=None,
+        alias="DAYBOARD_NORTHGATE_APPLICATION_KEY",
+    )
+    northgate_canary_tenant_ids: str = Field(
+        default="",
+        alias="DAYBOARD_NORTHGATE_CANARY_TENANT_IDS",
+    )
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
     rate_limit_registration: str = Field(
@@ -212,6 +221,17 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_secure_production_auth(self) -> "Settings":
+        canary_ids = self.northgate_canary_tenants
+        application_key = (
+            self.northgate_application_key.get_secret_value()
+            if self.northgate_application_key is not None
+            else ""
+        )
+        if canary_ids and (not self.northgate_base_url or not application_key):
+            raise ValueError(
+                "Northgate canary tenants require DAYBOARD_NORTHGATE_BASE_URL and "
+                "DAYBOARD_NORTHGATE_APPLICATION_KEY"
+            )
         if self.environment.lower() != "production":
             return self
         if self.auth_mode != "password":
@@ -221,6 +241,21 @@ class Settings(BaseSettings):
                 "Password auth in production requires DAYBOARD_AUTH_COOKIE_SECURE=true"
             )
         return self
+
+    @property
+    def northgate_canary_tenants(self) -> frozenset[UUID]:
+        tenants: set[UUID] = set()
+        for raw in self.northgate_canary_tenant_ids.split(","):
+            value = raw.strip()
+            if not value:
+                continue
+            try:
+                tenants.add(UUID(value))
+            except ValueError as exc:
+                raise ValueError(
+                    "DAYBOARD_NORTHGATE_CANARY_TENANT_IDS must contain UUIDs"
+                ) from exc
+        return frozenset(tenants)
 
     @property
     def effective_rate_limit_storage_url(self) -> str:
