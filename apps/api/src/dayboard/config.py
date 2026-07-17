@@ -152,6 +152,10 @@ class Settings(BaseSettings):
     )
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")
+    northgate_metadata_enabled: bool = Field(
+        default=False,
+        alias="DAYBOARD_NORTHGATE_METADATA_ENABLED",
+    )
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
     rate_limit_registration: str = Field(

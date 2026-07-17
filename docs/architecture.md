@@ -110,9 +110,16 @@ Model provider credentials must come from environment variables or a secret stor
 APP_MODEL_NAME
 OPENAI_BASE_URL
 OPENAI_API_KEY
+DAYBOARD_NORTHGATE_METADATA_ENABLED
 ```
 
 Real values belong in `.env`, which is ignored by git. `.env.example` should contain only empty placeholders or safe defaults.
+
+When `OPENAI_BASE_URL` points to Northgate, enable
+`DAYBOARD_NORTHGATE_METADATA_ENABLED`. Dayboard then binds trusted `tenant_id`,
+`user_id`, and `run_id` to the model client's `Northgate-Metadata` header for
+usage attribution. The browser, model input, and queued job cannot supply or
+override these values.
 
 ## Technology Choices
 

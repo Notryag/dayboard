@@ -52,7 +52,20 @@ POSTGRES_PASSWORD=replace-with-a-strong-password
 APP_MODEL_NAME=openai:gpt-4o-mini
 OPENAI_BASE_URL=https://your-openai-compatible-gateway/v1
 OPENAI_API_KEY=replace-with-a-real-secret
+DAYBOARD_NORTHGATE_METADATA_ENABLED=false
 ```
+
+接入 Northgate 时，`OPENAI_BASE_URL` 使用 gateway 的 OpenAI prefix，
+`OPENAI_API_KEY` 使用 Northgate application key，并显式启用可信归因：
+
+```dotenv
+OPENAI_BASE_URL=http://northgate:8080/v1/gateways/dayboard/openai
+OPENAI_API_KEY=replace-with-a-northgate-application-key
+DAYBOARD_NORTHGATE_METADATA_ENABLED=true
+```
+
+API 和 Worker 必须使用相同配置。回滚时恢复原供应商 base URL 和 key，并将 metadata
+开关设为 `false`；不要把 Northgate metadata header 发送到其他供应商。
 
 使用 Cloudflare 语音识别时再配置：
 

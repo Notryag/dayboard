@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID
@@ -28,6 +29,23 @@ TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(
         "permissions",
     }
 )
+
+
+def _model_headers(
+    settings: Settings,
+    context: TenantContext | None,
+    run_id: UUID | None,
+) -> dict[str, str]:
+    if not settings.northgate_metadata_enabled:
+        return {}
+    if context is None or run_id is None:
+        raise ValueError("Northgate metadata requires trusted tenant context and run ID")
+    metadata = {
+        "tenant_id": str(context.tenant_id),
+        "user_id": str(context.user_id),
+        "run_id": str(run_id),
+    }
+    return {"Northgate-Metadata": json.dumps(metadata, separators=(",", ":"))}
 
 
 def _validate_model_visible_tool_fields(tools: list) -> None:
@@ -69,6 +87,7 @@ def build_dayboard_agent(
 
     config = AppConfig(
         model_name=resolved_settings.agent_model_name,
+        model_headers=_model_headers(resolved_settings, context, run_id),
         system_prompt=build_dayboard_system_prompt(context or TenantContext(
             tenant_id=resolved_settings.default_tenant_id,
             user_id=resolved_settings.default_user_id,

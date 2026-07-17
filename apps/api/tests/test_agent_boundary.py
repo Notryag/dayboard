@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from langchain_core.messages import AIMessage, ToolMessage
@@ -129,6 +129,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
         del checkpointer, compaction_hooks
         captured["model_name"] = config.model_name
+        captured["model_headers"] = config.model_headers
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
         captured["summarization_enabled"] = config.summarization_enabled
@@ -141,6 +142,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
 
     assert agent == {"agent": "fake"}
     assert captured["model_name"] == "openai:gpt-test"
+    assert captured["model_headers"] == {}
     assert "scheduling assistant" in captured["system_prompt"]
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
@@ -148,6 +150,49 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert "{messages}" in captured["summarization_summary_prompt"]
     assert "no more than 250 words" in captured["summarization_summary_prompt"]
     assert len(captured["summarization_summary_prompt"]) < 800
+
+
+def test_build_dayboard_agent_attaches_trusted_northgate_metadata(
+    monkeypatch,
+    tenant_context: TenantContext,
+) -> None:
+    captured = {}
+    run_id = UUID("00000000-0000-0000-0000-000000000401")
+
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del tools, checkpointer, compaction_hooks
+        captured["model_headers"] = config.model_headers
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+
+    build_dayboard_agent(
+        Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_NORTHGATE_METADATA_ENABLED=True,
+        ),
+        tools=[],
+        context=tenant_context,
+        run_id=run_id,
+    )
+
+    assert captured["model_headers"] == {
+        "Northgate-Metadata": (
+            f'{{"tenant_id":"{tenant_context.tenant_id}",'
+            f'"user_id":"{tenant_context.user_id}","run_id":"{run_id}"}}'
+        )
+    }
+
+
+def test_build_dayboard_agent_requires_trusted_context_for_northgate_metadata() -> None:
+    with pytest.raises(ValueError, match="trusted tenant context and run ID"):
+        build_dayboard_agent(
+            Settings(
+                APP_MODEL_NAME="openai:gpt-test",
+                DAYBOARD_NORTHGATE_METADATA_ENABLED=True,
+            ),
+            tools=[],
+        )
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
