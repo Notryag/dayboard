@@ -79,5 +79,7 @@ Deployment:
 - Read [ui-design.md](./ui-design.md) before changing the main chat UI, theme variables, or component system.
 - Read [deploy.md](./deploy.md) before changing Docker Compose, Nginx, production services, or
   deployment secrets.
+- Read [token-usage-diagnostics.md](./token-usage-diagnostics.md) when investigating provider
+  usage, Northgate reservations, prompt caching, or token-limit incidents.
 - Read ADRs only when making or revisiting a major technical decision.
 - Avoid pulling all docs into context for small edits.
