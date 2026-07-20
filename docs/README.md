@@ -59,6 +59,7 @@ Product scope:
 
 Current milestone planning:
 
+- [TODO.md](./TODO.md) for active engineering work and acceptance conditions
 - [phase-2-plan.md](./phase-2-plan.md)
 - [phase-1-plan.md](./phase-1-plan.md) as completed historical context
 
@@ -81,5 +82,6 @@ Deployment:
   deployment secrets.
 - Read [token-usage-diagnostics.md](./token-usage-diagnostics.md) when investigating provider
   usage, Northgate reservations, prompt caching, or token-limit incidents.
+- Read [TODO.md](./TODO.md) before starting active token-efficiency or gateway-budget work.
 - Read ADRs only when making or revisiting a major technical decision.
 - Avoid pulling all docs into context for small edits.

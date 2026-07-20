@@ -40,3 +40,26 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "Never state a date, start time, end time, or status" in prompt
     assert "Use plain text only: do not use Markdown" in prompt
     assert "separate cards" in prompt
+    assert prompt.index("Rules:") < prompt.index("Runtime scheduling context:")
+    assert prompt.index("Runtime scheduling context:") < prompt.index("Current local datetime:")
+
+
+def test_system_prompt_keeps_runtime_values_after_the_stable_prefix() -> None:
+    context = TenantContext(
+        tenant_id=UUID("00000000-0000-0000-0000-000000000001"),
+        user_id=UUID("00000000-0000-0000-0000-000000000002"),
+        timezone="Asia/Shanghai",
+        locale="zh-CN",
+    )
+    first = build_dayboard_system_prompt(
+        context,
+        now=datetime(2026, 7, 13, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+    second = build_dayboard_system_prompt(
+        context,
+        now=datetime(2026, 7, 14, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+    )
+
+    marker = "Runtime scheduling context:"
+    assert first.partition(marker)[0] == second.partition(marker)[0]
+    assert first.partition(marker)[2] != second.partition(marker)[2]

@@ -234,6 +234,9 @@ def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
         "http://northgate:8080/v1/gateways/dayboard/openai"
     )
     assert captured["model_options"]["api_key"].get_secret_value() == "northgate-key"
+    assert captured["model_options"]["model_kwargs"]["prompt_cache_key"].startswith(
+        "dayboard-scheduling-v1-"
+    )
     assert "Northgate-Metadata" in captured["model_headers"]
 
 
@@ -266,8 +269,56 @@ def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
         run_id=UUID("00000000-0000-0000-0000-000000000403"),
     )
 
-    assert captured["model_options"] == {}
+    assert captured["model_options"]["model_kwargs"]["prompt_cache_key"].startswith(
+        "dayboard-scheduling-v1-"
+    )
+    assert "base_url" not in captured["model_options"]
+    assert "api_key" not in captured["model_options"]
     assert captured["model_headers"] == {}
+
+
+def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
+    monkeypatch,
+    tenant_context: TenantContext,
+) -> None:
+    captured = []
+
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del tools, checkpointer, compaction_hooks
+        captured.append(config.model_options["model_kwargs"]["prompt_cache_key"])
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+    settings = Settings(APP_MODEL_NAME="openai:gpt-test")
+
+    build_dayboard_agent(settings, tools=[], context=tenant_context)
+    build_dayboard_agent(settings, tools=[], context=tenant_context)
+
+    assert captured[0] == captured[1]
+    assert captured[0].startswith("dayboard-scheduling-v1-")
+    assert captured[0].rsplit("-", 1)[1].isdigit()
+
+
+def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
+    monkeypatch,
+    tenant_context: TenantContext,
+) -> None:
+    captured = {}
+
+    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+        del tools, checkpointer, compaction_hooks
+        captured.update(config.model_options)
+        return {"agent": "fake"}
+
+    monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
+
+    build_dayboard_agent(
+        Settings(APP_MODEL_NAME="anthropic:claude-test"),
+        tools=[],
+        context=tenant_context,
+    )
+
+    assert captured == {}
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:

@@ -57,11 +57,33 @@ Northgate. Raising Dayboard's separate token budget cannot fix this failure.
 
 ## Prompt Size And Cache Findings
 
-The short user message is not the main source of provider input tokens. The
-current agent sends approximately 7,569 characters of system instructions and
-9,109 characters across 11 tool descriptions and JSON schemas. A write command
-normally requires a second model call after the tool result, so most of this
-fixed context is sent twice.
+The short user message is not the main source of provider input tokens. After
+moving runtime context to the end, the current agent sends approximately 7,623
+characters of system instructions and 9,094 characters across 11 tool
+descriptions and JSON schemas. An offline `o200k_base` count estimates these at
+1,640 and 2,077 tokens respectively, or 3,717 fixed tokens before conversation
+messages and protocol overhead. Provider-reported usage remains authoritative.
+A write command normally requires a second model call after the tool result, so
+most fixed context is sent twice when prompt cache is not used.
+
+The first model call used 5,028 input tokens. The post-tool call used 5,272,
+only 244 more, which shows that repeated fixed context dominates the second
+round rather than the returned tool payload. The system prompt also placed a
+microsecond-precision current datetime near the beginning, before nearly all
+static rules. That arrangement made the request prefix change on every Run and
+prevented the long rule block from being a stable cross-Run cache prefix. The
+runtime scheduling context now follows the static rules; its content and
+scheduling semantics are unchanged.
+
+The affected thread had 13 messages before its first model call: four human,
+six AI, and three tool messages. Their text content totaled 1,091 characters,
+including 986 characters of historical tool results, plus approximately 300
+characters of historical tool-call arguments. The current write then added 64
+characters of tool arguments and a 426-character tool result before the second
+model call. This confirms that completed tool payloads are the fastest-growing
+part of thread history. The current summarization trigger is 40 messages, which
+does not account for large differences in message size; context compaction
+should be governed by a token budget while preserving active AI/tool pairs.
 
 The provider gateway recorded `cached_tokens=0` for both successful calls.
 Northgate exact-response caching was also disabled for the Dayboard gateway.
@@ -84,6 +106,17 @@ distinguish provider cache admission, upstream routing behavior, or a request
 serialization difference. Do not enable Northgate exact-response caching as a
 substitute: replaying complete model responses is a poor default for an Agent
 whose responses can contain write-tool calls.
+
+The deployed sub2api compatibility path supports `prompt_cache_key` and
+automatically derives one when the client omits it. Its current derivation
+includes the complete system message and the first user message. Dayboard's
+runtime datetime and each new command therefore changed that routing key, even
+when requests shared the same long static prefix. Dayboard now supplies an
+explicit versioned key for `openai:` models, deterministically partitioned into
+32 shards by a hash of trusted tenant/user identity. No raw identity is sent in
+the key. This keeps both model calls and later Runs for one user on a stable
+cache route while avoiding one global hot key. Northgate continues to record
+provider-reported cache reads so the effect can be measured rather than assumed.
 
 ## Required Diagnostics
 

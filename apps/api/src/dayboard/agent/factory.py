@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Awaitable, Callable
+from hashlib import sha256
 from typing import Any
 from uuid import UUID
 
@@ -29,6 +30,8 @@ TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(
         "permissions",
     }
 )
+PROMPT_CACHE_KEY_VERSION = "dayboard-scheduling-v1"
+PROMPT_CACHE_KEY_SHARDS = 32
 
 
 def _model_headers(
@@ -55,14 +58,24 @@ def _model_options(
     settings: Settings,
     context: TenantContext | None,
 ) -> dict[str, object]:
-    if context is None or context.tenant_id not in settings.northgate_canary_tenants:
-        return {}
-    if settings.northgate_base_url is None or settings.northgate_application_key is None:
-        raise ValueError("Northgate canary connection is incomplete")
-    return {
-        "base_url": settings.northgate_base_url,
-        "api_key": settings.northgate_application_key,
-    }
+    options: dict[str, object] = {}
+    if context is not None and settings.agent_model_name.startswith("openai:"):
+        identity = f"{context.tenant_id}:{context.user_id}".encode()
+        shard = int.from_bytes(sha256(identity).digest()[:2], "big") % PROMPT_CACHE_KEY_SHARDS
+        options["model_kwargs"] = {
+            "prompt_cache_key": f"{PROMPT_CACHE_KEY_VERSION}-{shard:02d}"
+        }
+
+    if context is not None and context.tenant_id in settings.northgate_canary_tenants:
+        if settings.northgate_base_url is None or settings.northgate_application_key is None:
+            raise ValueError("Northgate canary connection is incomplete")
+        options.update(
+            {
+                "base_url": settings.northgate_base_url,
+                "api_key": settings.northgate_application_key,
+            }
+        )
+    return options
 
 
 def _validate_model_visible_tool_fields(tools: list) -> None:
