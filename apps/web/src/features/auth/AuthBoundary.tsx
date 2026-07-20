@@ -150,7 +150,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
                     autoComplete="username"
                     minLength={3}
                     name="username"
-                    pattern="[a-zA-Z0-9_.-]+"
+                    pattern="[a-zA-Z0-9_.\-]+"
                     required
                   />
                 </label>

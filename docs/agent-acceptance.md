@@ -20,10 +20,18 @@ uv run python scripts/agent_acceptance.py \
   --scenario multi-create
 
 # Run the catalog against the production HTTPS API after a deployment batch.
+export DAYBOARD_ACCEPTANCE_IDENTIFIER=acceptance-user
+export DAYBOARD_ACCEPTANCE_PASSWORD='read-from-a-secret-store'
 uv run python scripts/agent_acceptance.py \
   --base-url https://www.selfapi.art/dayboard-api \
   --execute --allow-writes
 ```
+
+Authenticated deployments require a dedicated acceptance account. Supply its username or email
+through `DAYBOARD_ACCEPTANCE_IDENTIFIER` (or `--login-identifier`) and its password only through
+`DAYBOARD_ACCEPTANCE_PASSWORD`. The runner logs in once and reuses the returned session cookie; it
+does not print the password. Keep both values out of committed environment files and shell history,
+and load the password from the deployment secret store.
 
 Each turn records terminal status, elapsed time, expected and observed completed tools, missing
 tools, result text, Run ID, and thread ID. A non-zero process exit means at least one expectation

@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from dataclasses import dataclass, field
 import json
+import os
 import time
 from typing import Any
 
@@ -217,6 +218,19 @@ async def _main(args: argparse.Namespace) -> int:
     if not args.allow_writes:
         raise SystemExit("--execute requires --allow-writes because scenarios create persistent data")
     async with httpx.AsyncClient(base_url=args.base_url.rstrip("/"), timeout=args.timeout) as client:
+        if args.login_identifier:
+            password = os.getenv("DAYBOARD_ACCEPTANCE_PASSWORD")
+            if not password:
+                raise SystemExit(
+                    "DAYBOARD_ACCEPTANCE_PASSWORD is required when an acceptance login identifier is set"
+                )
+            login_response = await client.post(
+                "/api/auth/login",
+                json={"identifier": args.login_identifier, "password": password},
+            )
+            if login_response.status_code == 401:
+                raise SystemExit("Dayboard rejected the acceptance account credentials")
+            login_response.raise_for_status()
         results = [
             await _run_scenario(client, scenario, timeout=args.timeout)
             for scenario in selected
@@ -228,6 +242,11 @@ async def _main(args: argparse.Namespace) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run explicit Dayboard live Agent acceptance scenarios.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
+    parser.add_argument(
+        "--login-identifier",
+        default=os.getenv("DAYBOARD_ACCEPTANCE_IDENTIFIER"),
+        help="username or email; defaults to DAYBOARD_ACCEPTANCE_IDENTIFIER",
+    )
     parser.add_argument("--scenario", action="append", choices=[item.name for item in SCENARIOS])
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--execute", action="store_true")
