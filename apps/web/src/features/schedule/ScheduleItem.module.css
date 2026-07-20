@@ -1,14 +1,16 @@
 .item {
-  --schedule-item-icon-size: 32px;
+  --schedule-item-icon-size: 36px;
   --schedule-item-control-size: var(--control-size);
 
+  position: relative;
   min-width: 0;
   width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--schedule-item-control-size);
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow: hidden;
   border: 0;
   border-radius: var(--radius-md);
   color: var(--color-text);
@@ -17,6 +19,24 @@
   transition:
     background var(--motion-fast) ease,
     transform var(--motion-fast) ease;
+}
+
+.item::before {
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 0;
+  width: var(--border-width-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  content: "";
+}
+
+.kindCalendar::before {
+  background: var(--color-calendar);
+}
+
+.kindTask::before {
+  background: var(--color-task);
 }
 
 .item:hover {
@@ -87,25 +107,27 @@
 .agenda {
   min-height: var(--schedule-agenda-card-min-height);
   align-self: stretch;
-  padding: var(--space-3);
+  padding-left: var(--space-4);
   border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--color-surface-raised);
-  box-shadow: var(--shadow-message);
+  box-shadow: none;
 }
 
 .task {
   min-height: var(--schedule-task-row-min-height);
   padding-right: 0;
-  padding-left: 0;
+  padding-left: var(--space-3);
   border-bottom: var(--border-width) solid var(--color-border);
   border-radius: 0;
 }
 
 .chat {
-  padding: var(--space-2) 0;
-  border-top: var(--border-width) solid color-mix(in srgb, var(--color-border), transparent 12%);
-  border-radius: 0;
+  min-height: 64px;
+  padding-left: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
 }
 
 .icon,
@@ -114,7 +136,7 @@
   align-items: center;
   justify-content: center;
   color: var(--color-calendar);
-  background: transparent;
+  background: var(--color-calendar-surface);
 }
 
 .icon {
@@ -123,10 +145,9 @@
   border-radius: var(--radius-md);
 }
 
-.icon.task,
-.dialogIcon.task {
+.taskIcon {
   color: var(--color-task);
-  background: transparent;
+  background: var(--color-task-surface);
 }
 
 .copy {
@@ -145,6 +166,7 @@
 
 .copy strong {
   font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-body);
 }
 

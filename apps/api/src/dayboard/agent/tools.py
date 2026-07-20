@@ -415,7 +415,9 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description=(
-                "Create a Dayboard calendar entry from local date/time without a timezone offset. "
+                "Schedule an activity at a concrete local start time without a timezone offset. "
+                "This includes short personal routines such as taking medicine or making a call, "
+                "not only meetings or long time blocks. "
                 "Entries default to a PT0M reminder at their start; explicit advance offsets "
                 "override it, and an explicit no-reminder request must pass null."
             ),
@@ -461,9 +463,10 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
             description=(
-                "Create an action or outcome that the user needs to complete without reserving a "
-                "calendar time block. due_local is optional and must be omitted when the user gives "
-                "no exact deadline or only a vague expression such as later or when free. Any "
+                "Create an action or outcome that has no scheduled start time. Use due_local for a "
+                "deadline such as 'by 8 AM', but use create_calendar_entry when the user intends to "
+                "do the activity at 8 AM. due_local must be omitted when the user gives no exact "
+                "deadline or only a vague expression such as later or when free. Any "
                 "provided due_local value is local date/time without a timezone offset."
             ),
             args_schema=AgentCreateTaskItemInput,

@@ -31,7 +31,7 @@ export function ScheduleItem({
   const [open, setOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
-  const Icon = iconForScheduleItem(scheduleItemTitle(item), item.kind);
+  const Icon = iconForScheduleItem(item.kind);
   const status = scheduleItemStatus(item);
   const showCompletionControl = variant !== "chat" && status !== "cancelled";
 
@@ -54,7 +54,9 @@ export function ScheduleItem({
       <div
         className={`${styles.item} ${styles[variant]} ${
           status !== "open" ? styles[status] : ""
-        } ${!showCompletionControl ? styles.withoutCompletion : ""}`}
+        } ${item.kind === "calendar" ? styles.kindCalendar : styles.kindTask} ${
+          !showCompletionControl ? styles.withoutCompletion : ""
+        }`}
       >
         <button
           aria-label={`查看${item.kind === "calendar" ? "日程" : "待办"}：${scheduleItemTitle(item)}`}
@@ -65,7 +67,10 @@ export function ScheduleItem({
           }}
           type="button"
         >
-          <span aria-hidden="true" className={`${styles.icon} ${styles[item.kind]}`}>
+          <span
+            aria-hidden="true"
+            className={`${styles.icon} ${item.kind === "task" ? styles.taskIcon : ""}`}
+          >
             {createElement(Icon, { size: variant === "chat" ? 17 : 18, strokeWidth: 2.1 })}
           </span>
           <span className={styles.copy}>

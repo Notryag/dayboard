@@ -12,15 +12,24 @@ import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type SchedulePanelProps = {
+  accountName: string;
   active: boolean;
   onChanged: (change?: ScheduleChange) => void;
+  onLogout: () => void;
   refreshKey: number;
   timezone: string;
 };
 
 const headingId = "schedule-heading";
 
-export function SchedulePanel({ active, onChanged, refreshKey, timezone }: SchedulePanelProps) {
+export function SchedulePanel({
+  accountName,
+  active,
+  onChanged,
+  onLogout,
+  refreshKey,
+  timezone,
+}: SchedulePanelProps) {
   const today = dateKeyInTimezone(new Date(), timezone);
   const [selectedDate, setSelectedDate] = useState(today);
   const [dateRailCenter, setDateRailCenter] = useState(today);
@@ -67,9 +76,12 @@ export function SchedulePanel({ active, onChanged, refreshKey, timezone }: Sched
   return (
     <section aria-labelledby={headingId} className={styles.panel}>
       <ScheduleHeader
+        accountName={accountName}
         headingId={headingId}
         onJumpToDate={jumpToDate}
+        onLogout={onLogout}
         selectedDate={selectedDate}
+        timezone={timezone}
       />
       <DateRail
         active={active}

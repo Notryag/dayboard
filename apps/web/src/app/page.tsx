@@ -3,10 +3,7 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
-  CalendarRange,
-  LogOut,
   MessageCircle,
-  UserRound,
 } from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -28,7 +25,6 @@ import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageLi
 import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
 import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
-import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
 import type { ScheduleChange, ScheduleResultPart } from "@/features/schedule/types";
 import styles from "./page.module.css";
 
@@ -185,10 +181,6 @@ function ChatHome() {
 
   const apiUrl = useMemo(apiBaseUrl, []);
   const timezone = account?.timezone ?? "Asia/Shanghai";
-  const todayLabel = useMemo(
-    () => formatAccessibleDate(dateKeyInTimezone(new Date(), timezone)),
-    [timezone],
-  );
 
   useEffect(() => {
     return () => activeStreamRef.current?.close();
@@ -622,35 +614,22 @@ function ChatHome() {
     <div className={styles.page}>
       <main className={styles.appShell}>
         <header className={styles.appHeader}>
-          <div className={styles.brand}>
-            <span aria-hidden="true" className={styles.brandMark}>
-              <CalendarRange size={21} strokeWidth={2.2} />
-            </span>
-            <div className={styles.brandText}>
-              <h1>Dayboard</h1>
-              <p className={styles.brandDate}>{todayLabel}</p>
-            </div>
-          </div>
-          <div className={styles.headerActions}>
-            <span
-              aria-label={`当前账号：${account?.display_name || account?.username}`}
-              className={styles.accountIdentity}
-            >
-              <UserRound aria-hidden="true" size={17} />
-              <span className={styles.accountName}>
-                {account?.display_name || account?.username}
-              </span>
-            </span>
+          <div className={styles.headerLeading}>
             <button
-              className={styles.headerButton}
-              onClick={() => void logout()}
+              aria-label={activeView === "chat" ? "打开日程" : "返回对话"}
+              className={styles.floatingHeaderButton}
+              onClick={() => selectView(activeView === "chat" ? "schedule" : "chat")}
+              title={activeView === "chat" ? "日程" : "对话"}
               type="button"
-              aria-label="退出登录"
-              title="退出登录"
             >
-              <LogOut size={18} />
+              {activeView === "chat" ? (
+                <CalendarDays aria-hidden="true" size={19} />
+              ) : (
+                <MessageCircle aria-hidden="true" size={19} />
+              )}
             </button>
           </div>
+          <h1 className={styles.brand}>Dayboard</h1>
         </header>
 
         <div className={styles.workspace}>
@@ -712,8 +691,10 @@ function ChatHome() {
             role="tabpanel"
           >
             <SchedulePanel
+              accountName={account?.display_name || account?.username || "Dayboard 用户"}
               active={activeView === "schedule"}
               onChanged={handleScheduleChanged}
+              onLogout={() => void logout()}
               refreshKey={scheduleRevision}
               timezone={timezone}
             />

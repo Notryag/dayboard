@@ -47,7 +47,7 @@ export function ScheduleItemDialog({
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
-  const Icon = iconForScheduleItem(scheduleItemTitle(item), item.kind);
+  const Icon = iconForScheduleItem(item.kind);
   const reminder = formatScheduleReminder(item.value.reminder);
   const status = scheduleItemStatus(item);
 
@@ -90,7 +90,10 @@ export function ScheduleItemDialog({
         onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}
       >
         <header className={styles.dialogHeader}>
-          <span aria-hidden="true" className={`${styles.dialogIcon} ${styles[item.kind]}`}>
+          <span
+            aria-hidden="true"
+            className={`${styles.dialogIcon} ${item.kind === "task" ? styles.taskIcon : ""}`}
+          >
             {createElement(Icon, { size: 21 })}
           </span>
           <div className={styles.dialogHeading}>

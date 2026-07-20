@@ -2,18 +2,25 @@
 
 import { ChevronDown } from "lucide-react";
 import { formatMonthYear, formatSelectedWeekday } from "./date";
+import { ScheduleSettingsDrawer } from "./ScheduleSettingsDrawer";
 import styles from "./schedule.module.css";
 
 type ScheduleHeaderProps = {
+  accountName: string;
   headingId: string;
   onJumpToDate: (date: string) => void;
+  onLogout: () => void;
   selectedDate: string;
+  timezone: string;
 };
 
 export function ScheduleHeader({
+  accountName,
   headingId,
   onJumpToDate,
+  onLogout,
   selectedDate,
+  timezone,
 }: ScheduleHeaderProps) {
   return (
     <header className={styles.header}>
@@ -31,6 +38,11 @@ export function ScheduleHeader({
             value={selectedDate}
           />
         </label>
+        <ScheduleSettingsDrawer
+          accountName={accountName}
+          onLogout={onLogout}
+          timezone={timezone}
+        />
       </div>
     </header>
   );

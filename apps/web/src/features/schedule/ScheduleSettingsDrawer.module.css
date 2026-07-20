@@ -1,0 +1,176 @@
+.trigger,
+.closeButton {
+  width: var(--control-size-compact);
+  height: var(--control-size-compact);
+  flex: 0 0 var(--control-size-compact);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width) solid var(--color-glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  background: var(--color-glass-surface);
+  box-shadow: var(--shadow-message);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+
+.trigger:hover,
+.closeButton:hover {
+  color: var(--color-text);
+  background: var(--color-surface-muted);
+}
+
+.closeButton {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.trigger:focus-visible,
+.closeButton:focus-visible,
+.logoutButton:focus-visible {
+  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--color-backdrop);
+  animation: overlay-in var(--motion-standard) ease-out;
+}
+
+.drawer {
+  --schedule-settings-drawer-width: 360px;
+
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 61;
+  width: min(var(--schedule-settings-drawer-width), calc(100vw - var(--space-4)));
+  display: flex;
+  flex-direction: column;
+  border-left: var(--border-width) solid var(--color-border);
+  color: var(--color-text);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-dialog);
+  animation: drawer-in var(--motion-standard) ease-out;
+}
+
+.drawerHeader {
+  min-height: calc(var(--control-size) + (2 * var(--space-4)));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.drawerHeader h2 {
+  font-size: var(--font-size-subtitle);
+  line-height: var(--line-height-tight);
+}
+
+.accountSection {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: var(--control-size) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.accountIcon {
+  width: var(--control-size);
+  height: var(--control-size);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: var(--color-primary);
+  background: var(--color-primary-surface);
+}
+
+.accountCopy {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.accountCopy strong,
+.accountCopy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountCopy strong {
+  font-size: var(--font-size-ui);
+}
+
+.accountCopy span {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.drawerActions {
+  margin-top: auto;
+  padding: var(--space-4) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.logoutButton {
+  width: 100%;
+  min-height: var(--control-size);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid color-mix(in srgb, var(--color-danger), var(--color-border) 55%);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  background: var(--color-danger-surface);
+  cursor: pointer;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger,
+  .closeButton {
+    transition: none;
+  }
+
+  .overlay,
+  .drawer {
+    animation: none;
+  }
+}

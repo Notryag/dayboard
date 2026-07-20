@@ -48,6 +48,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: var(--space-1);
 }
 
 .monthPicker {
@@ -243,16 +244,19 @@
 .agendaList > li {
   min-width: 0;
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: var(--schedule-time-column-width) minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--space-2);
 }
 
 .agendaList > li > time {
-  width: fit-content;
-  padding: 0 var(--space-1);
+  width: 100%;
+  padding-top: var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .taskList li {
