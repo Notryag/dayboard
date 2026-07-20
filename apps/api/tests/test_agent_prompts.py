@@ -28,16 +28,15 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "Explicit foreign timezones are not supported" in prompt
     assert "new_local_end changes end/duration" in prompt
     assert "the original entry's local interval (not its requested destination interval)" in prompt
-    assert "a task tracks an action/outcome with no scheduled date/time" in prompt
-    assert '"明天早上 8 点吃药" schedules the activity at 08:00 and is a calendar entry' in prompt
-    assert '"明天早上 8 点前吃药" sets a deadline and is a task with due_local' in prompt
+    assert "Only actions with no resolvable date/time are tasks" in prompt
+    assert '"明天提交报告" is a calendar entry tomorrow at 09:00' in prompt
+    assert '"明天早上 8 点前吃药" is a calendar entry at 08:00' in prompt
     assert '"明天早上吃药" is a calendar entry at the deterministic 08:00 morning default' in prompt
-    assert "a calendar entry schedules an activity with any resolvable date or time" in prompt
+    assert "any action with a resolvable date, clock time, or daypart is a calendar entry" in prompt
     assert "date only defaults to 09:00" in prompt
     assert "早上 08:00" in prompt
     assert "晚上 20:00" in prompt
-    assert "Create undated tasks for those actions and never invent a clock time" in prompt
-    assert "Never ask for a due time merely because an ordinary task is undated" in prompt
+    assert "Create tasks for those actions and never invent a date or clock time" in prompt
     assert "never state a date, start time, end time, or status" in prompt
     assert "Use plain text only: do not use Markdown" in prompt
     assert "separate cards" in prompt

@@ -27,9 +27,9 @@ Dayboard exposes seven scheduling tools:
 | Calendar | `search_calendar_entries` | List or search calendar entries and answer overlap/availability queries. |
 | Calendar | `reschedule_calendar_entry` | Move one selected entry and return internal conflict results. |
 | Calendar | `cancel_calendar_entry` | Cancel one selected entry without hard deletion. |
-| Task | `create_task_item` | Create one open task, optionally with an exact deadline. |
+| Task | `create_task_item` | Create one open task with no resolvable date or time. |
 | Task | `search_task_items` | List or search tasks by optional title and status. |
-| Task | `update_task_item` | Rename, reschedule, complete, or cancel one selected task. |
+| Task | `update_task_item` | Rename, complete, or cancel one selected task. |
 
 `ask_clarification` is a runtime interaction tool, not a scheduling business tool. It remains
 model-visible in every active tool set so ambiguous selections and missing required data use the
@@ -51,6 +51,11 @@ actual mutation/clarification flow rather than a model-provided search label.
 
 New task status is not model-selectable. `create_task_item` always creates `open`; status changes use
 `update_task_item`.
+
+Classification is intentionally mechanical: any resolvable date, clock, or daypart creates a
+calendar entry, even when the wording describes completion or a deadline. Date-only calendar intent
+uses 09:00; dayparts use the documented deterministic clock. Tasks have no model-visible date or
+time fields and are reserved for actions with no resolvable temporal anchor.
 
 ## Input And Result Shape
 

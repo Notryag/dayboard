@@ -272,8 +272,8 @@ flowchart TD
     Split -->|One| Object{What business object?}
     Calls --> Object
 
-    Object -->|Concrete start time and occupied block| Calendar[Calendar entry tools]
-    Object -->|Action or outcome, optional deadline| Task[Task tools]
+    Object -->|Any resolvable date, time, or daypart| Calendar[Calendar entry tools]
+    Object -->|No resolvable temporal anchor| Task[Task tools]
     Object -->|Missing required or ambiguous data| Clarify[ask_clarification]
     Object -->|Question or lookup| Search[List or search tools]
 
@@ -296,7 +296,8 @@ Current semantic policy examples:
 | --- | --- |
 | "明天下午三点游泳一小时" | `create_calendar_entry`: concrete time block |
 | "等会儿拿快递" | `create_task_item`: undated completion action |
-| "明天下午五点前交报告" | `create_task_item`: task with an exact deadline |
+| "明天提交报告" | `create_calendar_entry`: date-only action at the 09:00 default |
+| "明天下午五点前交报告" | `create_calendar_entry`: resolvable time at 17:00 |
 | "把游泳改到下午四点" | search calendar first, then reschedule one match |
 | "买菜做完了" | search task first, then update one match to completed |
 | "安排一个会议" | `ask_clarification`: calendar start time is required |
@@ -564,8 +565,8 @@ fields are injected by server closures and must not be exposed to the model:
 
 ```text
 model-visible fields:
-  title, local_start, local_end, start_date, end_date, participants, reminder,
-  due_local, status, expected_updated_at
+  title, local_start, local_end, participants, reminder, title_query, status,
+  object ids, new_date, new_local_start, new_local_end, expected_updated_at
 
 server-injected fields:
   session, tenant_id, user_id, timezone, run_id, request_id, permissions

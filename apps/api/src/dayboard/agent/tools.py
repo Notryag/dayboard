@@ -54,13 +54,6 @@ class AgentCreateCalendarEntryInput(BaseModel):
 
 class AgentCreateTaskItemInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    due_local: NaiveDatetime | None = Field(
-        default=None,
-        description=(
-            "Optional exact local deadline without an offset; omit for an undated task."
-        ),
-    )
-    reminder: Reminder | None = None
 
 
 class AgentSearchCalendarEntriesInput(BaseModel):
@@ -111,12 +104,11 @@ class AgentUpdateTaskItemInput(BaseModel):
     task_item_id: UUID
     expected_updated_at: AwareDatetime
     new_title: str | None = Field(default=None, min_length=1, max_length=240)
-    new_due_local: NaiveDatetime | None = None
     new_status: TaskStatus | None = None
 
     @model_validator(mode="after")
     def validate_change(self) -> AgentUpdateTaskItemInput:
-        if self.new_title is None and self.new_due_local is None and self.new_status is None:
+        if self.new_title is None and self.new_status is None:
             raise ValueError("provide at least one task change")
         return self
 
@@ -290,13 +282,7 @@ def build_scheduling_tools(
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
         data = CreateTaskItemInput(
             title=input_data.title,
-            due_at=(
-                resolve_local_datetime(input_data.due_local, context.timezone)
-                if input_data.due_local
-                else None
-            ),
             timezone=context.timezone,
-            reminder=input_data.reminder,
         )
         result = await create_task_item(
             session,
@@ -324,11 +310,6 @@ def build_scheduling_tools(
             task_item_id=input_data.task_item_id,
             expected_updated_at=input_data.expected_updated_at,
             new_title=input_data.new_title,
-            new_due_at=(
-                resolve_local_datetime(input_data.new_due_local, context.timezone)
-                if input_data.new_due_local
-                else None
-            ),
             new_status=input_data.new_status,
         )
         result = await update_task_item(
@@ -379,7 +360,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
             description=(
-                "Create an action or outcome without a scheduled start; due_local is a deadline."
+                "Create an action with no resolvable date or time."
             ),
             args_schema=AgentCreateTaskItemInput,
         ),
@@ -395,7 +376,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_update_task_item),
             name="update_task_item",
             description=(
-                "Update one identified task's title, local due time, or status."
+                "Update one identified task's title or status."
             ),
             args_schema=AgentUpdateTaskItemInput,
         ),

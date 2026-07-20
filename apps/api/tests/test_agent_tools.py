@@ -77,16 +77,11 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
         "title_query",
         "status",
     }
-    assert set(create_task.args_schema.model_json_schema()["properties"]) == {
-        "title",
-        "due_local",
-        "reminder",
-    }
+    assert set(create_task.args_schema.model_json_schema()["properties"]) == {"title"}
     assert set(update_task.args_schema.model_json_schema()["properties"]) == {
         "task_item_id",
         "expected_updated_at",
         "new_title",
-        "new_due_local",
         "new_status",
     }
 
@@ -115,10 +110,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "local_start": "2026-07-10T10:00:00",
         "participants": ["Alice"],
     }
-    task_input = {
-        "title": "整理会议纪要",
-        "due_local": "2026-07-10T18:00:00",
-    }
+    task_input = {"title": "整理会议纪要"}
     entry_result = await create_entry.ainvoke(entry_input)
     second_entry_result = await create_entry.ainvoke(
         {
@@ -129,9 +121,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     )
     repeated_entry_result = await create_entry.ainvoke(entry_input)
     task_result = await create_task.ainvoke(task_input)
-    second_task_result = await create_task.ainvoke(
-        {"title": "回复邮件", "due_local": "2026-07-11T18:00:00"}
-    )
+    second_task_result = await create_task.ainvoke({"title": "回复邮件"})
     repeated_task_result = await create_task.ainvoke(task_input)
 
     assert entry_result["type"] == "calendar_entry_created"
@@ -199,9 +189,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].owner_user_id == tenant_context.user_id
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
-    assert datetime.fromisoformat(task_result["task_item"]["due_at"]).astimezone(
-        ZoneInfo("Asia/Shanghai")
-    ).hour == 18
+    assert task_result["task_item"]["due_at"] is None
     assert progress_events == []
 
 
@@ -291,7 +279,7 @@ async def test_agent_search_and_reschedule_resolve_local_beijing_time(
     ).hour == 17
 
 
-async def test_agent_task_due_times_resolve_from_local_beijing_time(
+async def test_agent_task_updates_status_without_time_fields(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
@@ -304,9 +292,7 @@ async def test_agent_task_due_times_resolve_from_local_beijing_time(
     search_tasks = next(tool for tool in tools if tool.name == "search_task_items")
     update_task = next(tool for tool in tools if tool.name == "update_task_item")
 
-    created = await create_task.ainvoke(
-        {"title": "交作业", "due_local": "2026-07-14T18:00:00"}
-    )
+    created = await create_task.ainvoke({"title": "交作业"})
     matches = await search_tasks.ainvoke(
         {"title_query": "交作业", "status": "open"}
     )
@@ -314,14 +300,13 @@ async def test_agent_task_due_times_resolve_from_local_beijing_time(
         {
             "task_item_id": created["task_item"]["id"],
             "expected_updated_at": matches[0]["updated_at"],
-            "new_due_local": "2026-07-14T20:00:00",
+            "new_status": "completed",
         }
     )
 
     assert len(matches) == 1
-    assert datetime.fromisoformat(updated["task_item"]["due_at"]).astimezone(
-        ZoneInfo("Asia/Shanghai")
-    ).hour == 20
+    assert updated["task_item"]["status"] == "completed"
+    assert updated["task_item"]["due_at"] is None
 
 
 async def test_parallel_agent_tool_calls_are_serialized_on_shared_session(

@@ -121,11 +121,10 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
             "expected_updated_at",
             "reason",
         ),
-        "create_task_item": ("title", "due_local"),
+        "create_task_item": ("title",),
         "search_task_items": ("title_query", "status"),
         "update_task_item": (
             "new_title",
-            "new_due_local",
             "new_status",
             "expected_updated_at",
         ),
@@ -142,12 +141,7 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             + _time_suffix(inputs.get("local_start"), inputs.get("local_end"))
         )
     if tool_name == "create_task_item":
-        due_at = inputs.get("due_local")
-        return (
-            "正在创建任务"
-            + (f"“{title}”" if title else "")
-            + (f"，截止 {due_at}" if due_at else "")
-        )
+        return "正在创建任务" + (f"“{title}”" if title else "")
     if tool_name == "search_calendar_entries":
         return "正在查找日程" + _time_suffix(
             inputs.get("local_start"), inputs.get("local_end")

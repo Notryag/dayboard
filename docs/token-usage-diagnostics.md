@@ -154,15 +154,15 @@ deadline task, mixed creation, calendar rescheduling, and task cancellation. All
 selected by the real model, but none were executed. Compressing repeated policy text while keeping
 behavior contracts changed the approximate fixed offline size as follows:
 
-| Fixed input | Initial | Prompt-compressed 11-tool version | Current 7+1 surface |
-| --- | ---: | ---: | ---: |
-| System prompt | 1,640 | 897 | 903 |
-| Tool schemas | 2,077 | 1,797 | 1,556 |
-| Total | 3,717 | 2,694 | 2,459 |
+| Fixed input | Initial | Prompt-compressed 11-tool | Unified 7+1 | Current temporal rule |
+| --- | ---: | ---: | ---: | ---: |
+| System prompt | 1,640 | 897 | 903 | 861 |
+| Tool schemas | 2,077 | 1,797 | 1,556 | 1,341 |
+| Total | 3,717 | 2,694 | 2,459 | 2,202 |
 
-The current fixed surface is 33.8% smaller than the initial baseline and 8.7% smaller than the
-prompt-compressed 11-tool version. The small system-prompt increase documents unified search and
-internal conflict behavior; schema removal more than offsets it.
+The current fixed surface is 40.8% smaller than the initial baseline and 10.5% smaller than the
+unified 7+1 version. Task schemas no longer expose date/time fields because every resolvable
+temporal anchor now routes to a calendar entry.
 
 Provider-reported first-round input fell from 4,707-4,716 tokens to 2,915-2,943 tokens, about
 38%. Five compressed-prompt cases initially matched the baseline. The reschedule case exposed a
@@ -182,6 +182,12 @@ calendar 4+1 subset selected `reschedule_calendar_entry` with the authoritative 
 `expected_updated_at`, and requested destination time using 2,615 input tokens. The task 3+1 subset
 selected `update_task_item` with `new_status=cancelled` and `expected_updated_at` using 2,428 input
 tokens. This verifies that domain narrowing preserves the mutation path and optimistic-lock field.
+
+The absolute temporal rule was checked with six further live no-write cases. Date-only completion,
+explicit-before wording, and date-only errands all selected calendar creation with deterministic
+clocks. Untimed and vague-time actions selected task creation, and a mixed message selected both.
+Provider-reported first-round input was 2,566-2,573 tokens with 2,048-token cache reads after the
+first call.
 
 An independent live two-round write simulation used synthetic successful tool results and no
 database writes. Removing schemas from the final confirmation round reduced its actual input from

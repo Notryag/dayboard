@@ -122,11 +122,11 @@ paths.
   direct editing, completion, and calendar/task cancellation with optimistic concurrency.
   The server owns trusted-timezone day boundaries; each source has independent loading, error,
   retry, stale-request cancellation, and cursor-pagination states.
-- Calendar/task intent: the Agent treats activities associated with a resolvable date or time as
-  calendar intent, including short routines such as taking medicine. An exact clock time creates the
-  entry directly; a date or broad daypart without a clock time uses the documented deterministic
-  daypart default. Only actions with no temporal anchor, or explicit deadline wording such as "by 8
-  AM", become tasks. Independent actions in an unpunctuated voice transcript are split into tasks.
+- Calendar/task intent: any action with a resolvable date, clock, or daypart is calendar intent,
+  including completion and deadline wording. A date or broad daypart without a clock uses the
+  documented deterministic default. Only actions with no resolvable temporal anchor, including
+  vague expressions such as "later", become tasks. Independent actions in one message are split
+  into separate tool calls.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
   correlation without logging credentials or full command text.
 - Reminders: fixed-duration intent normalization, transactional PostgreSQL outbox synchronization,

@@ -16,9 +16,10 @@ stable system prompt and serialized model-visible tool schemas.
 | Initial 11-tool Agent | 1,640 | 2,077 | 3,717 | baseline | 4,707-5,028 |
 | Stable-prefix and prompt compression | 897 | 1,797 | 2,694 | -27.5% | 2,915-2,943 |
 | Unified 7+1 tool surface | 903 | 1,556 | 2,459 | -33.8% | 2,805-2,814 |
+| Absolute temporal classification | 861 | 1,341 | 2,202 | -40.8% | 2,566-2,573 |
 
-The current fixed surface is 1,258 tokens smaller than the initial baseline and 235 tokens smaller
-than the previous compressed version. Live input includes provider protocol overhead and user
+The current fixed surface is 1,515 tokens smaller than the initial baseline and 257 tokens smaller
+than the previous 7+1 version. Live input includes provider protocol overhead and user
 messages, so it will not equal the offline fixed count.
 
 ## 2026-07-20: Incident Baseline
@@ -74,6 +75,22 @@ Fixed input fell again from 2,694 to 2,459 tokens, an 8.7% reduction over the pr
 tokens and retained 2,560-token cache reads. Real synthetic-result second rounds correctly selected
 calendar rescheduling with the 4+1 subset at 2,615 input tokens and task cancellation with the 3+1
 subset at 2,428 input tokens. Both retained `expected_updated_at`; neither executed a write.
+
+## 2026-07-20: Absolute Temporal Classification
+
+Calendar/task classification was made deliberately mechanical: any resolvable date, clock, or
+daypart creates a calendar entry, including completion and deadline wording. Only actions with no
+resolvable temporal anchor become tasks. Date-only actions use the existing 09:00 calendar default.
+
+To keep schemas consistent with this rule, Agent task creation now accepts only `title`; task updates
+accept title or status and cannot add a due time. Domain due fields remain available to the schedule
+API and stored data, but the Agent cannot create a contradictory timed task.
+
+Fixed input fell from 2,459 to 2,202 tokens, a 10.5% reduction for this step and 40.8% from the
+initial baseline. Six real no-write cases used 2,566-2,573 input tokens. They verified that
+"明天提交报告", "明天早上8点前吃药", and "明天买牛奶" create calendar entries; "提交报告" and
+"晚点整理资料" create tasks; and a mixed message emits both calls. Warm requests reported 2,048
+cached input tokens. No write tool was executed.
 
 ## Entry Template
 

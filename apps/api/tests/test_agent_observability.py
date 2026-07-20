@@ -20,11 +20,8 @@ def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
 
     assert projected is not None
     assert projected.event_type == "tool_call_started"
-    assert projected.content == "正在创建任务“提交周报”，截止 2026-07-10T18:00:00"
-    assert projected.metadata["inputs"] == {
-        "title": "提交周报",
-        "due_local": "2026-07-10T18:00:00",
-    }
+    assert projected.content == "正在创建任务“提交周报”"
+    assert projected.metadata["inputs"] == {"title": "提交周报"}
     assert "must-not-leak" not in str(projected)
 
 
