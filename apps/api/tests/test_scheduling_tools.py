@@ -22,9 +22,6 @@ from dayboard.tools import (
     create_calendar_entry,
     cancel_calendar_entry,
     create_task_item,
-    check_calendar_conflicts,
-    list_calendar_entries,
-    list_task_items,
     reschedule_calendar_entry,
     search_calendar_entries,
     search_task_items,
@@ -47,10 +44,16 @@ async def test_create_and_list_calendar_entry(
         ),
     )
 
-    entries = await list_calendar_entries(db_session, tenant_context)
+    entries = await search_calendar_entries(
+        db_session,
+        tenant_context,
+        SearchCalendarEntriesInput(
+            start_time="2026-07-10T00:00:00+08:00",
+            end_time="2026-07-11T00:00:00+08:00",
+        ),
+    )
 
     assert result.type == "calendar_entry_created"
-    assert result.requires_follow_up is False
     assert result.calendar_entry.title == "产品复盘"
     assert result.calendar_entry.tenant_id == tenant_context.tenant_id
     assert result.calendar_entry.owner_user_id == tenant_context.user_id
@@ -74,10 +77,13 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
         ),
     )
 
-    conflict = await check_calendar_conflicts(
+    overlaps = await search_calendar_entries(
         db_session,
         tenant_context,
-        start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+        SearchCalendarEntriesInput(
+            start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+            end_time=datetime(2026, 7, 11, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
+        ),
     )
     created_with_warning = await create_calendar_entry(
         db_session,
@@ -88,15 +94,19 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
             timezone="Asia/Shanghai",
         ),
     )
-    entries = await list_calendar_entries(db_session, tenant_context)
+    entries = await search_calendar_entries(
+        db_session,
+        tenant_context,
+        SearchCalendarEntriesInput(
+            start_time="2026-07-11T00:00:00+08:00",
+            end_time="2026-07-12T00:00:00+08:00",
+        ),
+    )
 
     assert first.type == "calendar_entry_created"
-    assert conflict.type == "calendar_conflict"
-    assert conflict.requires_follow_up is True
-    assert [entry.title for entry in conflict.conflicts] == ["晨会"]
+    assert [entry.title for entry in overlaps] == ["晨会"]
     assert created_with_warning.type == "calendar_entry_created"
     assert [entry.title for entry in created_with_warning.conflicts] == ["晨会"]
-    assert created_with_warning.requires_follow_up is False
     assert [entry.title for entry in entries] == ["晨会", "产品会"]
 
 
@@ -136,6 +146,14 @@ def test_calendar_input_rejects_naive_datetime() -> None:
         )
 
 
+def test_calendar_search_rejects_reversed_interval() -> None:
+    with pytest.raises(ValidationError, match="start_time must be before end_time"):
+        SearchCalendarEntriesInput(
+            start_time="2026-07-11T10:00:00+08:00",
+            end_time="2026-07-11T09:00:00+08:00",
+        )
+
+
 async def test_calendar_creation_rejects_end_before_start(
     db_session: AsyncSession,
     tenant_context: TenantContext,
@@ -167,14 +185,16 @@ async def test_conflicts_compare_absolute_instants_across_offsets(
         ),
     )
 
-    result = await check_calendar_conflicts(
+    result = await search_calendar_entries(
         db_session,
         tenant_context,
-        start_time=datetime.fromisoformat("2026-07-11T00:30:00+00:00"),
-        end_time=datetime.fromisoformat("2026-07-11T01:00:00+00:00"),
+        SearchCalendarEntriesInput(
+            start_time=datetime.fromisoformat("2026-07-11T00:30:00+00:00"),
+            end_time=datetime.fromisoformat("2026-07-11T01:00:00+00:00"),
+        ),
     )
 
-    assert [entry.title for entry in result.conflicts] == ["上海会议"]
+    assert [entry.title for entry in result] == ["上海会议"]
 
 
 async def test_create_and_list_task_item(
@@ -191,14 +211,37 @@ async def test_create_and_list_task_item(
         ),
     )
 
-    tasks = await list_task_items(db_session, tenant_context)
+    tasks = await search_task_items(
+        db_session,
+        tenant_context,
+        SearchTaskItemsInput(status=None),
+    )
 
     assert result.type == "task_item_created"
-    assert result.requires_follow_up is False
     assert result.task_item.title == "整理周报"
     assert result.task_item.tenant_id == tenant_context.tenant_id
     assert result.task_item.owner_user_id == tenant_context.user_id
     assert tasks == [result.task_item]
+
+
+async def test_empty_task_search_is_bounded(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    for index in range(52):
+        await create_task_item(
+            db_session,
+            tenant_context,
+            CreateTaskItemInput(title=f"任务 {index}", timezone="Asia/Shanghai"),
+        )
+
+    tasks = await search_task_items(
+        db_session,
+        tenant_context,
+        SearchTaskItemsInput(status=None),
+    )
+
+    assert len(tasks) == 50
 
 
 async def test_search_and_update_multiple_tasks_in_one_run(
@@ -225,7 +268,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         db_session,
         tenant_context,
         UpdateTaskItemInput(
-            task_item_id=first.task_item_id,
+            task_item_id=first.task_item.id,
             expected_updated_at=first.task_item.updated_at,
             new_status="completed",
         ),
@@ -236,7 +279,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         db_session,
         tenant_context,
         UpdateTaskItemInput(
-            task_item_id=second.task_item_id,
+            task_item_id=second.task_item.id,
             expected_updated_at=second.task_item.updated_at,
             new_due_at="2026-07-13T18:00:00+08:00",
         ),
@@ -247,7 +290,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         db_session,
         tenant_context,
         UpdateTaskItemInput(
-            task_item_id=second.task_item_id,
+            task_item_id=second.task_item.id,
             expected_updated_at=second.task_item.updated_at,
             new_due_at="2026-07-13T18:00:00+08:00",
         ),
@@ -255,11 +298,11 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         operation_key="move-expense-report",
     )
 
-    assert {task.id for task in matches} == {first.task_item_id, second.task_item_id}
+    assert {task.id for task in matches} == {first.task_item.id, second.task_item.id}
     assert completed.task_item.status.value == "completed"
     assert moved.task_item.due_at is not None
     assert moved.task_item.updated_by_run_id == run_id
-    assert repeated.task_item_id == moved.task_item_id
+    assert repeated.task_item.id == moved.task_item.id
 
 
 async def test_update_task_rejects_stale_selected_version(
@@ -275,7 +318,7 @@ async def test_update_task_rejects_stale_selected_version(
         db_session,
         tenant_context,
         UpdateTaskItemInput(
-            task_item_id=created.task_item_id,
+            task_item_id=created.task_item.id,
             expected_updated_at=created.task_item.updated_at,
             new_title="整理会议纪要",
         ),
@@ -288,7 +331,7 @@ async def test_update_task_rejects_stale_selected_version(
             db_session,
             tenant_context,
             UpdateTaskItemInput(
-                task_item_id=created.task_item_id,
+                task_item_id=created.task_item.id,
                 expected_updated_at=created.task_item.updated_at,
                 new_status="cancelled",
             ),
@@ -345,7 +388,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
         operation_key="move-product-meeting",
     )
 
-    assert [entry.id for entry in matches] == [created.calendar_entry_id]
+    assert [entry.id for entry in matches] == [created.calendar_entry.id]
     assert moved.previous_start_time.isoformat() == "2026-07-11T00:00:00+00:00"
     assert moved.calendar_entry.start_time.isoformat() == "2026-07-12T00:00:00+00:00"
     assert moved.calendar_entry.end_time is not None
@@ -418,7 +461,7 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
         db_session,
         tenant_context,
         RescheduleCalendarEntryInput(
-            calendar_entry_id=created.calendar_entry_id,
+            calendar_entry_id=created.calendar_entry.id,
             new_end_time="2026-07-14T17:00:00+08:00",
             expected_updated_at=created.calendar_entry.updated_at,
         ),
@@ -438,7 +481,7 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
             db_session,
             tenant_context,
             RescheduleCalendarEntryInput(
-                calendar_entry_id=extended.calendar_entry_id,
+                calendar_entry_id=extended.calendar_entry.id,
                 new_end_time="2026-07-14T17:00:00+08:00",
                 expected_updated_at=extended.calendar_entry.updated_at,
             ),
@@ -522,11 +565,11 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         operation_key="move-morning-meeting",
     )
 
-    assert first_move.calendar_entry_id == entries[0].id
-    assert second_move.calendar_entry_id == entries[1].id
-    assert repeated_move.calendar_entry_id == first_move.calendar_entry_id
-    assert first_cancel.calendar_entry_id == entries[2].id
-    assert second_cancel.calendar_entry_id == entries[3].id
+    assert first_move.calendar_entry.id == entries[0].id
+    assert second_move.calendar_entry.id == entries[1].id
+    assert repeated_move.calendar_entry.id == first_move.calendar_entry.id
+    assert first_cancel.calendar_entry.id == entries[2].id
+    assert second_cancel.calendar_entry.id == entries[3].id
     assert first_move.calendar_entry.updated_operation_key == "move-morning-meeting"
     assert second_cancel.calendar_entry.cancelled_operation_key == "cancel-retrospective"
 
@@ -546,7 +589,7 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     )
     run_id = uuid4()
     input_data = CancelCalendarEntryInput(
-        calendar_entry_id=created.calendar_entry_id,
+        calendar_entry_id=created.calendar_entry.id,
         expected_updated_at=created.calendar_entry.updated_at,
         reason="客户改期",
     )
@@ -577,9 +620,8 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     assert cancelled.calendar_entry.cancelled_at is not None
     assert cancelled.calendar_entry.cancelled_by_run_id == run_id
     assert cancelled.calendar_entry.cancellation_reason == "客户改期"
-    assert repeated.calendar_entry_id == cancelled.calendar_entry_id
-    assert repeated_in_another_run.calendar_entry_id == cancelled.calendar_entry_id
-    assert await list_calendar_entries(db_session, tenant_context) == []
+    assert repeated.calendar_entry.id == cancelled.calendar_entry.id
+    assert repeated_in_another_run.calendar_entry.id == cancelled.calendar_entry.id
     assert await search_calendar_entries(
         db_session,
         tenant_context,

@@ -35,11 +35,14 @@ Reminder delivery:
 
 Agent and tools:
 
+- [tool-design.md](./tool-design.md) for the model-visible tool contract and dynamic binding policy
 - [architecture.md](./architecture.md), sections "System Overview", "Intent Recognition And Tool Selection",
   "Command Execution Sequence", "Agent Assembly Boundary", and "Product Tools"
 - [engineering-guidelines.md](./engineering-guidelines.md), sections "Tool Design" and "Agent And LLM Rules"
 - [product-and-scope.md](./product-and-scope.md), section "Minimum Data Contract"
 - [agent-acceptance.md](./agent-acceptance.md) for explicit live model acceptance runs
+- [agent-token-optimization-history.md](./agent-token-optimization-history.md) for the append-only
+  optimization baseline and measured product highlights
 
 Frontend:
 

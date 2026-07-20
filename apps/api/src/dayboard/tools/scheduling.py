@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -25,27 +24,21 @@ class CreateCalendarEntryInput(BaseModel):
 
 class CalendarEntryToolResult(BaseModel):
     type: str = "calendar_entry_created"
-    calendar_entry_id: UUID
     summary: str
     calendar_entry: CalendarEntry
     conflicts: list[CalendarEntry] = Field(default_factory=list)
-    requires_follow_up: bool = False
-
-
-class CalendarConflictResult(BaseModel):
-    type: str = "calendar_conflict"
-    requested_start_time: AwareDatetime
-    requested_end_time: AwareDatetime
-    conflicts: list[CalendarEntry]
-    summary: str
-    requires_follow_up: bool = True
 
 
 class SearchCalendarEntriesInput(BaseModel):
     start_time: AwareDatetime
     end_time: AwareDatetime
     title_query: str | None = Field(default=None, min_length=1, max_length=240)
-    purpose: Literal["view", "reschedule", "cancel"] = "view"
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> SearchCalendarEntriesInput:
+        if self.start_time >= self.end_time:
+            raise ValueError("start_time must be before end_time")
+        return self
 
 
 class RescheduleCalendarEntryInput(BaseModel):
@@ -66,13 +59,11 @@ class RescheduleCalendarEntryInput(BaseModel):
 
 class CalendarEntryRescheduleResult(BaseModel):
     type: str = "calendar_entry_rescheduled"
-    calendar_entry_id: UUID
     previous_start_time: AwareDatetime
     previous_end_time: AwareDatetime | None
     calendar_entry: CalendarEntry
     conflicts: list[CalendarEntry] = Field(default_factory=list)
     summary: str
-    requires_follow_up: bool = False
 
 
 class CalendarEntryChangedError(RuntimeError):
@@ -87,10 +78,8 @@ class CancelCalendarEntryInput(BaseModel):
 
 class CalendarEntryCancellationResult(BaseModel):
     type: str = "calendar_entry_cancelled"
-    calendar_entry_id: UUID
     calendar_entry: CalendarEntry
     summary: str
-    requires_follow_up: bool = False
 
 
 class CreateTaskItemInput(BaseModel):
@@ -98,21 +87,17 @@ class CreateTaskItemInput(BaseModel):
     due_at: AwareDatetime | None = None
     timezone: str = Field(min_length=1, max_length=64)
     reminder: Reminder | None = None
-    status: TaskStatus = TaskStatus.open
 
 
 class TaskItemToolResult(BaseModel):
     type: str = "task_item_created"
-    task_item_id: UUID
     summary: str
     task_item: TaskItem
-    requires_follow_up: bool = False
 
 
 class SearchTaskItemsInput(BaseModel):
     title_query: str | None = Field(default=None, min_length=1, max_length=240)
     status: TaskStatus | None = TaskStatus.open
-    purpose: Literal["view", "update", "complete", "cancel"] = "view"
 
 
 class UpdateTaskItemInput(BaseModel):
@@ -131,11 +116,9 @@ class UpdateTaskItemInput(BaseModel):
 
 class TaskItemUpdateResult(BaseModel):
     type: str = "task_item_updated"
-    task_item_id: UUID
     previous_task_item: TaskItem
     task_item: TaskItem
     summary: str
-    requires_follow_up: bool = False
 
 
 class TaskItemChangedError(RuntimeError):
@@ -157,7 +140,6 @@ async def create_calendar_entry(
         )
         if existing is not None:
             return CalendarEntryToolResult(
-                calendar_entry_id=existing.id,
                 summary=f"{existing.title} at {existing.start_time.isoformat()}",
                 calendar_entry=existing,
             )
@@ -178,7 +160,6 @@ async def create_calendar_entry(
         ),
     )
     return CalendarEntryToolResult(
-        calendar_entry_id=entry.id,
         summary=(
             f"{entry.title} at {entry.start_time.isoformat()}; created with "
             f"{len(conflicts)} calendar conflict(s)."
@@ -188,14 +169,6 @@ async def create_calendar_entry(
         calendar_entry=entry,
         conflicts=list(conflicts),
     )
-
-
-async def list_calendar_entries(
-    session: AsyncSession,
-    context: TenantContext,
-) -> list[CalendarEntry]:
-    service = SchedulingService(session)
-    return list(await service.list_calendar_entries(context))
 
 
 async def search_calendar_entries(
@@ -227,7 +200,6 @@ async def reschedule_calendar_entry(
     )
     if repeated is not None:
         return CalendarEntryRescheduleResult(
-            calendar_entry_id=repeated.id,
             previous_start_time=repeated.start_time,
             previous_end_time=repeated.end_time,
             calendar_entry=repeated,
@@ -286,7 +258,6 @@ async def reschedule_calendar_entry(
             "Calendar entry changed after it was selected; search again before updating"
         )
     return CalendarEntryRescheduleResult(
-        calendar_entry_id=updated.id,
         previous_start_time=existing.start_time,
         previous_end_time=existing.end_time,
         calendar_entry=updated,
@@ -297,33 +268,6 @@ async def reschedule_calendar_entry(
             f"{updated.start_time.isoformat()}-{updated.end_time.isoformat()} "
             f"with {len(conflicts)} conflict(s)"
         ),
-    )
-
-
-async def check_calendar_conflicts(
-    session: AsyncSession,
-    context: TenantContext,
-    *,
-    start_time: datetime,
-    end_time: datetime | None = None,
-) -> CalendarConflictResult:
-    resolved_end = end_time or start_time + timedelta(hours=1)
-    conflicts = await SchedulingService(session).list_calendar_conflicts(
-        context,
-        start_time=start_time,
-        end_time=resolved_end,
-        default_duration=timedelta(hours=1),
-    )
-    return CalendarConflictResult(
-        requested_start_time=start_time,
-        requested_end_time=resolved_end,
-        conflicts=list(conflicts),
-        summary=(
-            "The requested time overlaps an existing calendar entry."
-            if conflicts
-            else "No calendar conflicts found."
-        ),
-        requires_follow_up=bool(conflicts),
     )
 
 
@@ -341,7 +285,6 @@ async def cancel_calendar_entry(
     )
     if repeated is not None:
         return CalendarEntryCancellationResult(
-            calendar_entry_id=repeated.id,
             calendar_entry=repeated,
             summary=f"{repeated.title} is already cancelled",
         )
@@ -353,7 +296,6 @@ async def cancel_calendar_entry(
         raise LookupError("Calendar entry not found")
     if existing.cancelled_at is not None:
         return CalendarEntryCancellationResult(
-            calendar_entry_id=existing.id,
             calendar_entry=existing,
             summary=f"{existing.title} is already cancelled",
         )
@@ -371,7 +313,6 @@ async def cancel_calendar_entry(
         )
         if current is not None and current.cancelled_at is not None:
             return CalendarEntryCancellationResult(
-                calendar_entry_id=current.id,
                 calendar_entry=current,
                 summary=f"{current.title} is already cancelled",
             )
@@ -379,7 +320,6 @@ async def cancel_calendar_entry(
             "Calendar entry changed after it was selected; search again before cancelling"
         )
     return CalendarEntryCancellationResult(
-        calendar_entry_id=cancelled.id,
         calendar_entry=cancelled,
         summary=f"Cancelled {cancelled.title} at {cancelled.start_time.isoformat()}",
     )
@@ -400,7 +340,6 @@ async def create_task_item(
         )
         if existing is not None:
             return TaskItemToolResult(
-                task_item_id=existing.id,
                 summary=(
                     existing.title
                     if existing.due_at is None
@@ -417,18 +356,9 @@ async def create_task_item(
         ),
     )
     return TaskItemToolResult(
-        task_item_id=task.id,
         summary=task.title if task.due_at is None else f"{task.title} due {task.due_at.isoformat()}",
         task_item=task,
     )
-
-
-async def list_task_items(
-    session: AsyncSession,
-    context: TenantContext,
-) -> list[TaskItem]:
-    service = SchedulingService(session)
-    return list(await service.list_task_items(context))
 
 
 async def search_task_items(
@@ -457,7 +387,6 @@ async def update_task_item(
     )
     if repeated is not None:
         return TaskItemUpdateResult(
-            task_item_id=repeated.id,
             previous_task_item=repeated,
             task_item=repeated,
             summary=f"{repeated.title} was already updated",
@@ -483,7 +412,6 @@ async def update_task_item(
             "Task item changed after it was selected; search again before updating"
         )
     return TaskItemUpdateResult(
-        task_item_id=updated.id,
         previous_task_item=existing,
         task_item=updated,
         summary=f"Updated {updated.title} ({updated.status.value})",

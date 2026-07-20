@@ -11,7 +11,7 @@ from north import CompactionHook
 from north.tools.builtin import ask_clarification
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.agent.middleware import TerminalWriteToolPruningMiddleware
+from dayboard.agent.middleware import SchedulingToolBindingMiddleware
 from dayboard.agent.prompts import DAYBOARD_SUMMARY_PROMPT, build_dayboard_system_prompt
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
@@ -136,7 +136,7 @@ def build_dayboard_agent(
     return build_agent(
         config,
         tools=resolved_tools,
-        additional_middlewares=[TerminalWriteToolPruningMiddleware()],
+        additional_middlewares=[SchedulingToolBindingMiddleware()],
         checkpointer=checkpointer,
         compaction_hooks=compaction_hooks,
     )

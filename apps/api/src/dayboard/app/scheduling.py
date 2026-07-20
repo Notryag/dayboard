@@ -75,10 +75,6 @@ class SchedulingService:
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
 
-    async def list_calendar_entries(self, context: TenantContext) -> Sequence[CalendarEntry]:
-        rows = await self.calendar_entries.list_active(context)
-        return [calendar_entry_from_row(row) for row in rows]
-
     async def search_calendar_entries(
         self,
         context: TenantContext,
@@ -300,10 +296,6 @@ class SchedulingService:
         await self.session.commit()
         await self.session.refresh(row)
         return task_item_from_row(row)
-
-    async def list_task_items(self, context: TenantContext) -> Sequence[TaskItem]:
-        rows = await self.task_items.list_active(context)
-        return [task_item_from_row(row) for row in rows]
 
     async def search_task_items(
         self,

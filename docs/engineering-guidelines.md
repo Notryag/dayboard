@@ -121,9 +121,12 @@ Prefer:
 
 ```text
 create_calendar_entry
-list_calendar_entries
+search_calendar_entries
+reschedule_calendar_entry
+cancel_calendar_entry
 create_task_item
-list_task_items
+search_task_items
+update_task_item
 ```
 
 Avoid:
@@ -251,9 +254,13 @@ Good tool result shape:
 ```json
 {
   "type": "calendar_entry_created",
-  "calendar_entry_id": "cal_...",
-  "summary": "Product review with Alice, next Wednesday at 3:00 PM.",
-  "requires_follow_up": false
+  "calendar_entry": {
+    "id": "cal_...",
+    "title": "Product review",
+    "start_time": "2026-07-22T15:00:00+08:00",
+    "updated_at": "2026-07-20T09:00:00Z"
+  },
+  "conflicts": []
 }
 ```
 

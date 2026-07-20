@@ -747,7 +747,7 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
         )
     ]
     calendar_state_data: dict[str, Any] = {
-        "intent": args.get("purpose", "view"),
+        "intent": "select",
         "candidates": candidates,
     }
     if candidates:

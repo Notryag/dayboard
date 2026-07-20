@@ -5,8 +5,9 @@ Last reviewed: 2026-07-20
 ## Token Efficiency
 
 - [x] Establish offline and live no-write token baselines for representative scheduling commands.
-  The compressed fixed estimate is 897 system-prompt tokens plus 1,797 tokens across 11 schemas;
-  live first-round input fell from roughly 4,710 to 2,920 tokens. Continue tracking conversation,
+  The current fixed estimate is 903 system-prompt tokens plus 1,556 tokens across seven scheduling
+  schemas and `ask_clarification`. Live first-round input is now 2,805-2,814 tokens, down from about
+  4,710 initially and 2,915-2,943 in the compressed 11-tool version. Continue tracking conversation,
   tool-result, protocol, and per-round growth from provider-reported usage.
 - [x] Keep the long-lived system instructions and tool definitions as a stable request prefix.
   Runtime date/time context must follow static instructions so it does not invalidate cross-Run
@@ -17,11 +18,12 @@ Last reviewed: 2026-07-20
 - [x] Replace message-count-only compaction with a token-aware context budget. Preserve complete
   active AI/tool-call pairs, but summarize or compact completed historical tool payloads before
   they grow into every subsequent model request.
-- [x] Remove tool schemas from the final confirmation round only after successful terminal writes.
-  Search/error/clarification rounds and every new user turn retain the complete tool surface. This
-  phase policy adds no classifier call, keyword routing, or parallel Agent loop.
+- [x] Bind tools by canonical result phase: full 7+1 surface initially, same-domain tools plus
+  clarification after search, full surface for mixed batches or one recovery attempt, and no tools
+  after terminal writes or a second failure. This adds no classifier call, keyword routing, or
+  parallel Agent loop.
 - [ ] Re-evaluate provider-native deferred tool loading when the OpenAI-compatible gateway path
-  proves the capability or the product grows beyond the current cohesive 11-tool scheduling set.
+  proves the capability or the product grows beyond the current cohesive seven-tool scheduling set.
   A skill alone does not remove executable schemas, and a model-based selector adds a call.
 - [ ] Use Northgate's recorded `cached_prompt_tokens` to measure prompt-cache effectiveness by
   Dayboard `run_id`, including the effect of Dayboard's 32-way stable `prompt_cache_key`

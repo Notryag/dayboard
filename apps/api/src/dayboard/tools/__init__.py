@@ -1,7 +1,6 @@
 """Agent-facing Dayboard tools."""
 
 from dayboard.tools.scheduling import (
-    CalendarConflictResult,
     CalendarEntryCancellationResult,
     CalendarEntryToolResult,
     CalendarEntryRescheduleResult,
@@ -12,14 +11,11 @@ from dayboard.tools.scheduling import (
     RescheduleCalendarEntryInput,
     SearchCalendarEntriesInput,
     TaskItemToolResult,
-    check_calendar_conflicts,
     cancel_calendar_entry,
     create_calendar_entry,
     create_task_item,
-    list_calendar_entries,
     reschedule_calendar_entry,
     search_calendar_entries,
-    list_task_items,
     SearchTaskItemsInput,
     TaskItemChangedError,
     TaskItemUpdateResult,
@@ -29,7 +25,6 @@ from dayboard.tools.scheduling import (
 )
 
 __all__ = [
-    "CalendarConflictResult",
     "CalendarEntryCancellationResult",
     "CalendarEntryToolResult",
     "CalendarEntryRescheduleResult",
@@ -40,14 +35,11 @@ __all__ = [
     "RescheduleCalendarEntryInput",
     "SearchCalendarEntriesInput",
     "TaskItemToolResult",
-    "check_calendar_conflicts",
     "cancel_calendar_entry",
     "create_calendar_entry",
     "create_task_item",
-    "list_calendar_entries",
     "reschedule_calendar_entry",
     "search_calendar_entries",
-    "list_task_items",
     "SearchTaskItemsInput",
     "TaskItemChangedError",
     "TaskItemUpdateResult",

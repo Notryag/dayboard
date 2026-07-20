@@ -13,6 +13,9 @@ from dayboard.domain.calendar import CalendarEntryCreate
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
+SEARCH_RESULT_LIMIT = 50
+
+
 class CalendarEntryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -97,8 +100,12 @@ class CalendarEntryRepository:
             CalendarEntryRow.owner_user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
             CalendarEntryRow.completed_at.is_(None),
-            CalendarEntryRow.start_time >= start_time,
             CalendarEntryRow.start_time < end_time,
+            func.coalesce(
+                CalendarEntryRow.end_time,
+                CalendarEntryRow.start_time + timedelta(hours=1),
+            )
+            > start_time,
         ]
         if title_query:
             conditions.append(CalendarEntryRow.title.ilike(f"%{title_query}%"))
@@ -106,6 +113,7 @@ class CalendarEntryRepository:
             select(CalendarEntryRow)
             .where(*conditions)
             .order_by(CalendarEntryRow.start_time.asc())
+            .limit(SEARCH_RESULT_LIMIT)
         )
         return list(result)
 
@@ -485,6 +493,7 @@ class TaskItemRepository:
             select(TaskItemRow)
             .where(*conditions)
             .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
+            .limit(SEARCH_RESULT_LIMIT)
         )
         return list(result)
 

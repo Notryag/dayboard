@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from datetime import date
+from datetime import date, datetime, time, timedelta
 import asyncio
 from hashlib import sha256
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from langchain_core.tools import StructuredTool
 from pydantic import AwareDatetime, BaseModel, Field, NaiveDatetime, model_validator
@@ -14,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.context import TenantContext
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
-from dayboard.timezones import resolve_local_date_window, resolve_local_datetime
+from dayboard.timezones import resolve_local_datetime
 from dayboard.tools import (
     CancelCalendarEntryInput,
     CreateCalendarEntryInput,
@@ -23,35 +24,14 @@ from dayboard.tools import (
     SearchCalendarEntriesInput,
     SearchTaskItemsInput,
     UpdateTaskItemInput,
-    check_calendar_conflicts,
     cancel_calendar_entry,
     create_calendar_entry,
     create_task_item,
-    list_calendar_entries,
-    list_task_items,
     reschedule_calendar_entry,
     search_calendar_entries,
     search_task_items,
     update_task_item,
 )
-
-
-class ListCalendarEntriesInput(BaseModel):
-    pass
-
-
-class ListTaskItemsInput(BaseModel):
-    pass
-
-
-class CheckCalendarConflictsInput(BaseModel):
-    local_start: NaiveDatetime = Field(
-        description="Local ISO 8601 datetime without an offset."
-    )
-    local_end: NaiveDatetime | None = Field(
-        default=None,
-        description="Optional local ISO 8601 datetime without an offset.",
-    )
 
 
 class AgentCreateCalendarEntryInput(BaseModel):
@@ -81,19 +61,29 @@ class AgentCreateTaskItemInput(BaseModel):
         ),
     )
     reminder: Reminder | None = None
-    status: TaskStatus = TaskStatus.open
 
 
 class AgentSearchCalendarEntriesInput(BaseModel):
-    start_date: date
-    end_date: date
+    local_start: NaiveDatetime | None = Field(
+        default=None,
+        description="Optional inclusive local interval start without an offset.",
+    )
+    local_end: NaiveDatetime | None = Field(
+        default=None,
+        description="Optional exclusive local interval end without an offset.",
+    )
     title_query: str | None = Field(default=None, min_length=1, max_length=240)
-    purpose: Literal["view", "reschedule", "cancel"] = "view"
 
     @model_validator(mode="after")
     def validate_date_window(self) -> AgentSearchCalendarEntriesInput:
-        if self.start_date > self.end_date:
-            raise ValueError("start_date must be on or before end_date")
+        if (self.local_start is None) != (self.local_end is None):
+            raise ValueError("local_start and local_end must be provided together")
+        if (
+            self.local_start is not None
+            and self.local_end is not None
+            and self.local_start >= self.local_end
+        ):
+            raise ValueError("local_start must be before local_end")
         return self
 
 
@@ -147,9 +137,6 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
             if entry.completed_at is not None
             else "scheduled"
         ),
-        "created_by_run_id": (
-            str(entry.created_by_run_id) if entry.created_by_run_id else None
-        ),
         "created_at": entry.created_at.isoformat(),
         "updated_at": entry.updated_at.isoformat(),
     }
@@ -163,7 +150,6 @@ def _task_item_view(task) -> dict[str, Any]:
         "timezone": task.timezone,
         "reminder": task.reminder.model_dump() if task.reminder else None,
         "status": task.status.value,
-        "created_by_run_id": str(task.created_by_run_id) if task.created_by_run_id else None,
         "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),
     }
@@ -219,53 +205,22 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "calendar_entry_id": str(result.calendar_entry_id),
             "calendar_entry": _calendar_entry_view(result.calendar_entry),
             "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
         }
 
-    async def agent_check_calendar_conflicts(**kwargs):
-        input_data = CheckCalendarConflictsInput.model_validate(kwargs)
-        if progress:
-            await progress(
-                "conflict_check_started",
-                "正在检查日程冲突",
-                input_data.model_dump(),
-            )
-        result = await check_calendar_conflicts(
-            session,
-            context,
-            start_time=resolve_local_datetime(input_data.local_start, context.timezone),
-            end_time=(
-                resolve_local_datetime(input_data.local_end, context.timezone)
-                if input_data.local_end
-                else None
-            ),
-        )
-        if progress:
-            await progress(
-                "conflict_check_completed",
-                "发现日程冲突" if result.conflicts else "没有发现日程冲突",
-                {"conflict_count": len(result.conflicts)},
-            )
-        return {
-            "type": result.type,
-            "requested_start_time": result.requested_start_time.isoformat(),
-            "requested_end_time": result.requested_end_time.isoformat(),
-            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
-        }
-
-    async def agent_list_calendar_entries():
-        entries = await list_calendar_entries(session, context)
-        return [_calendar_entry_view(entry) for entry in entries]
-
     async def agent_search_calendar_entries(**kwargs):
         input_data = AgentSearchCalendarEntriesInput.model_validate(kwargs)
-        start_time, end_time = resolve_local_date_window(
-            input_data.start_date,
-            input_data.end_date,
-            context.timezone,
-        )
+        if input_data.local_start is None:
+            local_today = datetime.now(ZoneInfo(context.timezone)).date()
+            local_start = datetime.combine(local_today, time.min)
+            local_end = local_start + timedelta(days=90)
+        else:
+            local_start = input_data.local_start
+            local_end = input_data.local_end
+        assert local_end is not None
+        start_time = resolve_local_datetime(local_start, context.timezone)
+        end_time = resolve_local_datetime(local_end, context.timezone)
         entries = await search_calendar_entries(
             session,
             context,
@@ -273,7 +228,6 @@ def build_scheduling_tools(
                 start_time=start_time,
                 end_time=end_time,
                 title_query=input_data.title_query,
-                purpose=input_data.purpose,
             ),
         )
         return [_calendar_entry_view(entry) for entry in entries]
@@ -307,7 +261,6 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "calendar_entry_id": str(result.calendar_entry_id),
             "previous_start_time": result.previous_start_time.isoformat(),
             "previous_end_time": (
                 result.previous_end_time.isoformat() if result.previous_end_time else None
@@ -330,7 +283,6 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "calendar_entry_id": str(result.calendar_entry_id),
             "calendar_entry": _calendar_entry_view(result.calendar_entry),
         }
 
@@ -345,7 +297,6 @@ def build_scheduling_tools(
             ),
             timezone=context.timezone,
             reminder=input_data.reminder,
-            status=input_data.status,
         )
         result = await create_task_item(
             session,
@@ -357,13 +308,8 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "task_item_id": str(result.task_item_id),
             "task_item": _task_item_view(result.task_item),
         }
-
-    async def agent_list_task_items():
-        tasks = await list_task_items(session, context)
-        return [_task_item_view(task) for task in tasks]
 
     async def agent_search_task_items(**kwargs):
         input_data = SearchTaskItemsInput.model_validate(kwargs)
@@ -395,19 +341,10 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "task_item_id": str(result.task_item_id),
             "task_item": _task_item_view(result.task_item),
         }
 
     return [
-        StructuredTool.from_function(
-            coroutine=serialize_tool(agent_check_calendar_conflicts),
-            name="check_calendar_conflicts",
-            description=(
-                "Check whether a proposed local calendar time overlaps existing entries."
-            ),
-            args_schema=CheckCalendarConflictsInput,
-        ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
@@ -417,16 +354,10 @@ def build_scheduling_tools(
             args_schema=AgentCreateCalendarEntryInput,
         ),
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_list_calendar_entries),
-            name="list_calendar_entries",
-            description="List active Dayboard calendar entries for the current user.",
-            args_schema=ListCalendarEntriesInput,
-        ),
-        StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_calendar_entries),
             name="search_calendar_entries",
             description=(
-                "Search calendar entries by inclusive local-date range and optional title."
+                "List or search calendar entries overlapping an optional local interval."
             ),
             args_schema=AgentSearchCalendarEntriesInput,
         ),
@@ -451,12 +382,6 @@ def build_scheduling_tools(
                 "Create an action or outcome without a scheduled start; due_local is a deadline."
             ),
             args_schema=AgentCreateTaskItemInput,
-        ),
-        StructuredTool.from_function(
-            coroutine=serialize_tool(agent_list_task_items),
-            name="list_task_items",
-            description="List active Dayboard task items for the current user.",
-            args_schema=ListTaskItemsInput,
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_task_items),

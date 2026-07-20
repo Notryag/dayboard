@@ -3,6 +3,10 @@
 Status: active operational record  
 Last reviewed: 2026-07-20
 
+Measured optimization milestones are preserved in
+[agent-token-optimization-history.md](./agent-token-optimization-history.md). Append new reductions
+there instead of replacing earlier baselines.
+
 ## Production Request Path
 
 Production Dayboard model traffic for the configured tenant follows this path:
@@ -124,12 +128,12 @@ provider-reported cache reads so the effect can be measured rather than assumed.
 
 ## Tool Surface And Prompt Reduction
 
-Dayboard exposes 11 model-visible tools:
+Dayboard exposes seven scheduling tools plus the runtime interaction tool:
 
 | Area | Tools |
 | --- | --- |
-| Calendar | `check_calendar_conflicts`, `create_calendar_entry`, `list_calendar_entries`, `search_calendar_entries`, `reschedule_calendar_entry`, `cancel_calendar_entry` |
-| Tasks | `create_task_item`, `list_task_items`, `search_task_items`, `update_task_item` |
+| Calendar | `create_calendar_entry`, `search_calendar_entries`, `reschedule_calendar_entry`, `cancel_calendar_entry` |
+| Tasks | `create_task_item`, `search_task_items`, `update_task_item` |
 | Interaction | `ask_clarification` |
 
 This is one cohesive scheduling surface, not 11 independently loadable plugins. Moving the tool
@@ -137,21 +141,28 @@ instructions into a skill would not remove executable JSON schemas from a model 
 selector would also add a model call before most short commands, while provider-native deferred
 tool loading is not yet proven across the current OpenAI-compatible gateway path.
 
-Dayboard instead applies deterministic phase-based loading. The semantic/action round receives the
-complete tool surface. After every trailing tool result is a successful terminal write, the final
-confirmation round receives no tools. Search, conflict, clarification, malformed/error results,
-and the next user turn retain all tools. This needs no keyword router and no additional model call.
+Dayboard instead applies deterministic phase-based loading. The first semantic/action round receives
+all seven scheduling tools plus `ask_clarification`. A successful calendar search narrows the next
+round to four calendar tools plus clarification; a task search narrows it to three task tools plus
+clarification. Mixed-domain batches retain the full surface. Successful terminal writes remove
+scheduling tools for confirmation. A first malformed/error result restores the full surface; a
+second failure in the same user turn removes tools so the model explains the failure instead of
+looping. This needs no keyword router or additional model call.
 
 A live no-write comparison used six representative commands: calendar creation, undated task,
 deadline task, mixed creation, calendar rescheduling, and task cancellation. All tool calls were
 selected by the real model, but none were executed. Compressing repeated policy text while keeping
 behavior contracts changed the approximate fixed offline size as follows:
 
-| Fixed input | Before | After | Change |
+| Fixed input | Initial | Prompt-compressed 11-tool version | Current 7+1 surface |
 | --- | ---: | ---: | ---: |
-| System prompt | 1,640 | 897 | -743 |
-| 11 tool schemas | 2,077 | 1,797 | -280 |
-| Total | 3,717 | 2,694 | -1,023 (27.5%) |
+| System prompt | 1,640 | 897 | 903 |
+| Tool schemas | 2,077 | 1,797 | 1,556 |
+| Total | 3,717 | 2,694 | 2,459 |
+
+The current fixed surface is 33.8% smaller than the initial baseline and 8.7% smaller than the
+prompt-compressed 11-tool version. The small system-prompt increase documents unified search and
+internal conflict behavior; schema removal more than offsets it.
 
 Provider-reported first-round input fell from 4,707-4,716 tokens to 2,915-2,943 tokens, about
 38%. Five compressed-prompt cases initially matched the baseline. The reschedule case exposed a
@@ -159,6 +170,18 @@ regression where the destination date was used as the search window; an explicit
 rule fixed it, and the focused live rerun selected the correct original date. The final six semantic
 routes match the baseline. Repeated calls in each variant reported prompt-cache reads (4,608 before
 and 2,560 after), confirming that the smaller stable prefix remains cacheable.
+
+The 7+1 tool surface was then checked with the same six live no-write cases. All routes matched:
+calendar creation, undated task creation, deadline task creation, mixed calendar/task calls,
+calendar search over the original interval, and task search without `purpose`. Provider-reported
+first-round input was 2,805-2,814 tokens, another 101-138 token reduction from the compressed
+11-tool version, with 2,560-token cache reads after the first call.
+
+Two live synthetic-result checks exercised the narrowed second round without executing writes. The
+calendar 4+1 subset selected `reschedule_calendar_entry` with the authoritative ID,
+`expected_updated_at`, and requested destination time using 2,615 input tokens. The task 3+1 subset
+selected `update_task_item` with `new_status=cancelled` and `expected_updated_at` using 2,428 input
+tokens. This verifies that domain narrowing preserves the mutation path and optimistic-lock field.
 
 An independent live two-round write simulation used synthetic successful tool results and no
 database writes. Removing schemas from the final confirmation round reduced its actual input from

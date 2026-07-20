@@ -54,7 +54,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
                     {
                         "id": "search-1",
                         "name": "search_calendar_entries",
-                        "args": {"purpose": "cancel"},
+                        "args": {"title_query": "产品会议"},
                     }
                 ],
             ),
@@ -74,7 +74,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
     state_data = _extract_clarification_state_data(result)
 
     assert state_data == {
-        "intent": "cancel",
+        "intent": "select",
         "candidates": [
             {
                 "key": "candidate_1",
@@ -163,7 +163,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
     assert type(captured["additional_middlewares"][0]).__name__ == (
-        "TerminalWriteToolPruningMiddleware"
+        "SchedulingToolBindingMiddleware"
     )
     assert captured["summarization_enabled"] is True
     assert captured["summarization_trigger_tokens"] == 1200

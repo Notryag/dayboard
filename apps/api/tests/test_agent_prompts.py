@@ -27,7 +27,7 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "Never append Z, +08:00, or any timezone offset" in prompt
     assert "Explicit foreign timezones are not supported" in prompt
     assert "new_local_end changes end/duration" in prompt
-    assert "the original entry's date range (not its requested destination date)" in prompt
+    assert "the original entry's local interval (not its requested destination interval)" in prompt
     assert "a task tracks an action/outcome with no scheduled date/time" in prompt
     assert '"明天早上 8 点吃药" schedules the activity at 08:00 and is a calendar entry' in prompt
     assert '"明天早上 8 点前吃药" sets a deadline and is a task with due_local' in prompt

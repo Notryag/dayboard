@@ -615,11 +615,10 @@ scheduling.
 Initial tools:
 
 - `create_calendar_entry`
-- `list_calendar_entries`
 - `search_calendar_entries`
 - `reschedule_calendar_entry`
+- `cancel_calendar_entry`
 - `create_task_item`
-- `list_task_items`
 - `search_task_items`
 - `update_task_item`
 
@@ -683,7 +682,9 @@ Dayboard business data:
 - user profiles
 - audit attribution on business objects and Runs
 
-`CalendarEntry` should never be added to `north` state as a core runtime concept. A tool result may reference a `calendar_entry_id`.
+`CalendarEntry` should never be added to `north` state as a core runtime concept. A Dayboard tool
+result may contain an authoritative projected calendar entity, but North treats it as opaque tool
+content.
 
 ## Database Model
 

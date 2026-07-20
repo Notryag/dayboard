@@ -108,8 +108,7 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
         return {}
     allowed_fields = {
         "create_calendar_entry": ("title", "local_start", "local_end"),
-        "check_calendar_conflicts": ("local_start", "local_end"),
-        "search_calendar_entries": ("start_date", "end_date", "title_query", "purpose"),
+        "search_calendar_entries": ("local_start", "local_end", "title_query"),
         "reschedule_calendar_entry": (
             "calendar_entry_id",
             "new_date",
@@ -122,8 +121,8 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
             "expected_updated_at",
             "reason",
         ),
-        "create_task_item": ("title", "due_local", "status"),
-        "search_task_items": ("title_query", "status", "purpose"),
+        "create_task_item": ("title", "due_local"),
+        "search_task_items": ("title_query", "status"),
         "update_task_item": (
             "new_title",
             "new_due_local",
@@ -149,17 +148,9 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             + (f"“{title}”" if title else "")
             + (f"，截止 {due_at}" if due_at else "")
         )
-    if tool_name == "check_calendar_conflicts":
-        return "正在查询日程冲突" + _time_suffix(
-            inputs.get("local_start"), inputs.get("local_end")
-        )
     if tool_name == "search_calendar_entries":
-        action = {
-            "cancel": "取消",
-            "reschedule": "修改",
-        }.get(inputs.get("purpose"), "查看")
-        return f"正在查找要{action}的日程" + _time_suffix(
-            inputs.get("start_date"), inputs.get("end_date")
+        return "正在查找日程" + _time_suffix(
+            inputs.get("local_start"), inputs.get("local_end")
         )
     if tool_name == "reschedule_calendar_entry":
         start = inputs.get("new_local_start") or inputs.get("new_date")
@@ -172,12 +163,7 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
     if tool_name == "cancel_calendar_entry":
         return "正在取消日程"
     if tool_name == "search_task_items":
-        action = {
-            "update": "修改",
-            "complete": "完成",
-            "cancel": "取消",
-        }.get(inputs.get("purpose"), "查看")
-        return f"正在查找要{action}的任务"
+        return "正在查找任务"
     if tool_name == "update_task_item":
         status = inputs.get("new_status")
         if status == "completed":
@@ -186,8 +172,6 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
             return "正在取消任务"
         return "正在修改任务"
     return {
-        "list_calendar_entries": "正在查询日程",
-        "list_task_items": "正在查询任务",
         "ask_clarification": "正在确认缺少的信息",
     }.get(tool_name, "正在执行操作")
 
@@ -195,13 +179,10 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
 def _tool_label(tool_name: str) -> str:
     return {
         "create_calendar_entry": "创建日程",
-        "check_calendar_conflicts": "查询日程冲突",
-        "list_calendar_entries": "查询日程",
         "search_calendar_entries": "查找日程",
         "reschedule_calendar_entry": "修改日程",
         "cancel_calendar_entry": "取消日程",
         "create_task_item": "创建任务",
-        "list_task_items": "查询任务",
         "search_task_items": "查找任务",
         "update_task_item": "修改任务",
         "ask_clarification": "信息确认",

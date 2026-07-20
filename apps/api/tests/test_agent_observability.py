@@ -90,15 +90,14 @@ def test_validation_error_is_presented_as_recoverable_retry() -> None:
     assert projected.content == "创建日程参数需要调整，正在重试"
 
 
-def test_cancel_search_and_tool_have_product_specific_progress() -> None:
+def test_search_and_cancel_tool_have_product_specific_progress() -> None:
     search = project_runtime_event(
         RuntimeEvent(
             event_type="tool.started",
             category="tool",
             content={
-                "start_date": "2026-07-11",
-                "end_date": "2026-07-11",
-                "purpose": "cancel",
+                "local_start": "2026-07-11T00:00:00",
+                "local_end": "2026-07-12T00:00:00",
             },
             metadata={"call_id": "call-2", "tool_name": "search_calendar_entries"},
         )
@@ -117,7 +116,7 @@ def test_cancel_search_and_tool_have_product_specific_progress() -> None:
     )
 
     assert search is not None
-    assert search.content.startswith("正在查找要取消的日程")
+    assert search.content.startswith("正在查找日程")
     assert cancel is not None
     assert cancel.content == "正在取消日程"
     assert "must-not-leak" not in str(cancel)
