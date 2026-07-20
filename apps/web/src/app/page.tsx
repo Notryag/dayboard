@@ -6,6 +6,7 @@ import {
   CalendarRange,
   LogOut,
   MessageCircle,
+  UserRound,
 } from "lucide-react";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -522,8 +523,14 @@ function ChatHome() {
             </div>
           </div>
           <div className={styles.headerActions}>
-            <span className={styles.accountName}>
-              {account?.display_name || account?.username}
+            <span
+              aria-label={`当前账号：${account?.display_name || account?.username}`}
+              className={styles.accountIdentity}
+            >
+              <UserRound aria-hidden="true" size={17} />
+              <span className={styles.accountName}>
+                {account?.display_name || account?.username}
+              </span>
             </span>
             <button
               className={styles.headerButton}
