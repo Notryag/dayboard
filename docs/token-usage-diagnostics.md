@@ -122,6 +122,50 @@ the key. This keeps both model calls and later Runs for one user on a stable
 cache route while avoiding one global hot key. Northgate continues to record
 provider-reported cache reads so the effect can be measured rather than assumed.
 
+## Tool Surface And Prompt Reduction
+
+Dayboard exposes 11 model-visible tools:
+
+| Area | Tools |
+| --- | --- |
+| Calendar | `check_calendar_conflicts`, `create_calendar_entry`, `list_calendar_entries`, `search_calendar_entries`, `reschedule_calendar_entry`, `cancel_calendar_entry` |
+| Tasks | `create_task_item`, `list_task_items`, `search_task_items`, `update_task_item` |
+| Interaction | `ask_clarification` |
+
+This is one cohesive scheduling surface, not 11 independently loadable plugins. Moving the tool
+instructions into a skill would not remove executable JSON schemas from a model request. A tool
+selector would also add a model call before most short commands, while provider-native deferred
+tool loading is not yet proven across the current OpenAI-compatible gateway path.
+
+Dayboard instead applies deterministic phase-based loading. The semantic/action round receives the
+complete tool surface. After every trailing tool result is a successful terminal write, the final
+confirmation round receives no tools. Search, conflict, clarification, malformed/error results,
+and the next user turn retain all tools. This needs no keyword router and no additional model call.
+
+A live no-write comparison used six representative commands: calendar creation, undated task,
+deadline task, mixed creation, calendar rescheduling, and task cancellation. All tool calls were
+selected by the real model, but none were executed. Compressing repeated policy text while keeping
+behavior contracts changed the approximate fixed offline size as follows:
+
+| Fixed input | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| System prompt | 1,640 | 897 | -743 |
+| 11 tool schemas | 2,077 | 1,797 | -280 |
+| Total | 3,717 | 2,694 | -1,023 (27.5%) |
+
+Provider-reported first-round input fell from 4,707-4,716 tokens to 2,915-2,943 tokens, about
+38%. Five compressed-prompt cases initially matched the baseline. The reschedule case exposed a
+regression where the destination date was used as the search window; an explicit original-date
+rule fixed it, and the focused live rerun selected the correct original date. The final six semantic
+routes match the baseline. Repeated calls in each variant reported prompt-cache reads (4,608 before
+and 2,560 after), confirming that the smaller stable prefix remains cacheable.
+
+An independent live two-round write simulation used synthetic successful tool results and no
+database writes. Removing schemas from the final confirmation round reduced its actual input from
+4,908 to 3,501 tokens, a 1,407-token saving. Once the no-tools prefix warmed, it reported a 3,328
+token cache read. This supports terminal-only pruning without making initial semantic routing less
+capable.
+
 ## Required Diagnostics
 
 Northgate operator diagnostics should expose, without logging request content:

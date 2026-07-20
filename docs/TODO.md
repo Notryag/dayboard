@@ -4,21 +4,25 @@ Last reviewed: 2026-07-20
 
 ## Token Efficiency
 
-- [ ] Establish a programmatic token baseline for representative scheduling commands without
-  calling a live model. Track the system prompt, tool schemas, conversation messages, tool results,
-  protocol overhead, and each model round separately. The initial `o200k_base` offline estimate is
-  1,640 system-prompt tokens plus 2,077 tokens across 11 tool schemas; provider-reported usage
-  remains authoritative.
+- [x] Establish offline and live no-write token baselines for representative scheduling commands.
+  The compressed fixed estimate is 897 system-prompt tokens plus 1,797 tokens across 11 schemas;
+  live first-round input fell from roughly 4,710 to 2,920 tokens. Continue tracking conversation,
+  tool-result, protocol, and per-round growth from provider-reported usage.
 - [x] Keep the long-lived system instructions and tool definitions as a stable request prefix.
   Runtime date/time context must follow static instructions so it does not invalidate cross-Run
   provider prompt caching.
-- [ ] Reduce fixed prompt and tool-schema cost only with behavior-contract tests for create, search,
-  reschedule, cancel, clarification, multiple commands, and calendar-versus-task classification.
+- [x] Reduce fixed prompt and schema cost with behavior-contract tests plus real no-write model
+  checks for create, search, reschedule, cancel, multiple commands, and calendar-versus-task
+  classification. Add clarification and multi-step search-result cases before further compression.
 - [x] Replace message-count-only compaction with a token-aware context budget. Preserve complete
   active AI/tool-call pairs, but summarize or compact completed historical tool payloads before
   they grow into every subsequent model request.
-- [ ] Evaluate runtime-supported tool selection or tool-surface redesign. Do not introduce keyword
-  routing, hard-coded domain nouns, or a second ad-hoc Agent loop as a token shortcut.
+- [x] Remove tool schemas from the final confirmation round only after successful terminal writes.
+  Search/error/clarification rounds and every new user turn retain the complete tool surface. This
+  phase policy adds no classifier call, keyword routing, or parallel Agent loop.
+- [ ] Re-evaluate provider-native deferred tool loading when the OpenAI-compatible gateway path
+  proves the capability or the product grows beyond the current cohesive 11-tool scheduling set.
+  A skill alone does not remove executable schemas, and a model-based selector adds a call.
 - [ ] Use Northgate's recorded `cached_prompt_tokens` to measure prompt-cache effectiveness by
   Dayboard `run_id`, including the effect of Dayboard's 32-way stable `prompt_cache_key`
   partitioning. Revisit the shard count from measured per-key RPM and hit rates. Keep Northgate

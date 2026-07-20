@@ -46,29 +46,28 @@ class ListTaskItemsInput(BaseModel):
 
 class CheckCalendarConflictsInput(BaseModel):
     local_start: NaiveDatetime = Field(
-        description="Local ISO 8601 datetime without Z or a timezone offset."
+        description="Local ISO 8601 datetime without an offset."
     )
     local_end: NaiveDatetime | None = Field(
         default=None,
-        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
+        description="Optional local ISO 8601 datetime without an offset.",
     )
 
 
 class AgentCreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     local_start: NaiveDatetime = Field(
-        description="Local ISO 8601 datetime without Z or a timezone offset."
+        description="Local ISO 8601 datetime without an offset."
     )
     local_end: NaiveDatetime | None = Field(
         default=None,
-        description="Optional local ISO 8601 datetime without Z or a timezone offset.",
+        description="Optional local ISO 8601 datetime without an offset.",
     )
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = Field(
         default_factory=lambda: Reminder(offset="PT0M", anchor="start_time"),
         description=(
-            "Defaults to PT0M at the event start. Use the user's explicit advance offset when "
-            "provided, or null only when the user explicitly requests no reminder."
+            "Defaults to PT0M at start; use an explicit advance offset or null for no reminder."
         ),
     )
 
@@ -78,8 +77,7 @@ class AgentCreateTaskItemInput(BaseModel):
     due_local: NaiveDatetime | None = Field(
         default=None,
         description=(
-            "Optional exact local deadline without Z or a timezone offset. Omit it for an "
-            "undated task; vague words such as later or when free are not exact deadlines."
+            "Optional exact local deadline without an offset; omit for an undated task."
         ),
     )
     reminder: Reminder | None = None
@@ -406,8 +404,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_check_calendar_conflicts),
             name="check_calendar_conflicts",
             description=(
-                "Check whether a proposed local calendar time overlaps existing entries. "
-                "Do not include a timezone offset; the end defaults to one hour after the start."
+                "Check whether a proposed local calendar time overlaps existing entries."
             ),
             args_schema=CheckCalendarConflictsInput,
         ),
@@ -415,11 +412,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description=(
-                "Schedule an activity at a concrete local start time without a timezone offset. "
-                "This includes short personal routines such as taking medicine or making a call, "
-                "not only meetings or long time blocks. "
-                "Entries default to a PT0M reminder at their start; explicit advance offsets "
-                "override it, and an explicit no-reminder request must pass null."
+                "Create a calendar entry for an activity at a concrete local start time."
             ),
             args_schema=AgentCreateCalendarEntryInput,
         ),
@@ -433,8 +426,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_search_calendar_entries),
             name="search_calendar_entries",
             description=(
-                "Search the current user's calendar entries across an inclusive local-date range, "
-                "optionally filtering by title. Use this to identify an entry before changing it."
+                "Search calendar entries by inclusive local-date range and optional title."
             ),
             args_schema=AgentSearchCalendarEntriesInput,
         ),
@@ -442,32 +434,21 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_reschedule_calendar_entry),
             name="reschedule_calendar_entry",
             description=(
-                "Change one identified calendar entry's local date, start, and/or end time. "
-                "Local datetimes must not include a timezone offset. "
-                "An omitted start stays unchanged; changing only the date or start preserves "
-                "the original duration unless new_local_end is supplied. "
-                "Title, participants, reminder, and original timezone are always preserved."
+                "Change one identified calendar entry's local date, start, and/or end time."
             ),
             args_schema=AgentRescheduleCalendarEntryInput,
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_cancel_calendar_entry),
             name="cancel_calendar_entry",
-            description=(
-                "Cancel one identified calendar entry. The entry is retained for audit, "
-                "but disappears from active calendar queries."
-            ),
+            description="Cancel one identified calendar entry.",
             args_schema=CancelCalendarEntryInput,
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
             description=(
-                "Create an action or outcome that has no scheduled start time. Use due_local for a "
-                "deadline such as 'by 8 AM', but use create_calendar_entry when the user intends to "
-                "do the activity at 8 AM. due_local must be omitted when the user gives no exact "
-                "deadline or only a vague expression such as later or when free. Any "
-                "provided due_local value is local date/time without a timezone offset."
+                "Create an action or outcome without a scheduled start; due_local is a deadline."
             ),
             args_schema=AgentCreateTaskItemInput,
         ),
@@ -481,8 +462,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_search_task_items),
             name="search_task_items",
             description=(
-                "Search the current user's tasks by title and status before changing, "
-                "completing, or cancelling one."
+                "Search tasks by title and status before changing one."
             ),
             args_schema=SearchTaskItemsInput,
         ),
@@ -490,9 +470,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_update_task_item),
             name="update_task_item",
             description=(
-                "Update one identified task's title, local due time, or status. Local datetimes "
-                "must not include a timezone offset. Use status completed when work is done and "
-                "cancelled when the user drops it."
+                "Update one identified task's title, local due time, or status."
             ),
             args_schema=AgentUpdateTaskItemInput,
         ),

@@ -131,13 +131,21 @@ def test_clarification_state_uses_agent_suggested_choices_without_search_results
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del checkpointer, compaction_hooks
         captured["model_name"] = config.model_name
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
         captured["system_prompt"] = config.system_prompt
         captured["tools"] = tools
+        captured["additional_middlewares"] = additional_middlewares
         captured["summarization_enabled"] = config.summarization_enabled
         captured["summarization_summary_prompt"] = config.summarization_summary_prompt
         captured["summarization_trigger_tokens"] = config.summarization_trigger_tokens
@@ -154,6 +162,9 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert "scheduling assistant" in captured["system_prompt"]
     assert captured["tools"][0] == "tool"
     assert captured["tools"][1].name == "ask_clarification"
+    assert type(captured["additional_middlewares"][0]).__name__ == (
+        "TerminalWriteToolPruningMiddleware"
+    )
     assert captured["summarization_enabled"] is True
     assert captured["summarization_trigger_tokens"] == 1200
     assert "{messages}" in captured["summarization_summary_prompt"]
@@ -168,7 +179,14 @@ def test_build_dayboard_agent_attaches_trusted_northgate_metadata(
     captured = {}
     run_id = UUID("00000000-0000-0000-0000-000000000401")
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del tools, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         return {"agent": "fake"}
@@ -211,7 +229,14 @@ def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
     captured = {}
     run_id = UUID("00000000-0000-0000-0000-000000000402")
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del tools, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
@@ -248,7 +273,14 @@ def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
 ) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del tools, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
@@ -285,7 +317,14 @@ def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
 ) -> None:
     captured = []
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del tools, checkpointer, compaction_hooks
         captured.append(config.model_options["model_kwargs"]["prompt_cache_key"])
         return {"agent": "fake"}
@@ -307,7 +346,14 @@ def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
 ) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del tools, checkpointer, compaction_hooks
         captured.update(config.model_options)
         return {"agent": "fake"}
@@ -326,7 +372,14 @@ def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
     captured = {}
 
-    def fake_build_agent(config, *, tools=None, checkpointer=None, compaction_hooks=None):
+    def fake_build_agent(
+        config,
+        *,
+        tools=None,
+        checkpointer=None,
+        compaction_hooks=None,
+        additional_middlewares=None,
+    ):
         del checkpointer, compaction_hooks
         del config
         captured["tools"] = tools
