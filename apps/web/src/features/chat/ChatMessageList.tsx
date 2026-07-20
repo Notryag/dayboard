@@ -33,6 +33,7 @@ type ChatMessageListProps = {
   messages: ChatMessage[];
   onChanged: (change?: ScheduleChange) => void;
   onClarificationChoice: (optionKey: string) => void;
+  onScrollPositionChange: (scrollTop: number) => void;
   scrollRef: RefObject<HTMLElement | null>;
   timezone: string;
 };
@@ -58,6 +59,7 @@ export function ChatMessageList({
   messages,
   onChanged,
   onClarificationChoice,
+  onScrollPositionChange,
   scrollRef,
   timezone,
 }: ChatMessageListProps) {
@@ -176,7 +178,12 @@ export function ChatMessageList({
 
   return (
     <>
-      <section className={styles.messages} aria-label="对话记录" ref={scrollRef}>
+      <section
+        aria-label="对话记录"
+        className={styles.messages}
+        onScroll={(event) => onScrollPositionChange(event.currentTarget.scrollTop)}
+        ref={scrollRef}
+      >
         {messages.map((message) => {
           const isUser = message.role === "user";
           const scheduleItems = isUser ? [] : (message.parts ?? []).map((part) => part.item);

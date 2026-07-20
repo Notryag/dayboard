@@ -16,12 +16,11 @@ The current application shell is:
 
 ```text
 mobile (< 900px)
-  -> transparent full-width overlay header with a floating circular account control
+  -> transparent full-width overlay header with a floating circular view switch
   -> centered Dayboard wordmark without a container
   -> one active full-width view
   -> conversation is the default home view
-  -> centered voice composer above navigation
-  -> persistent floating-glass Conversation / Schedule tab bar
+  -> centered voice composer inside the bottom safe area
 
 desktop (>= 900px)
   -> full-height, full-width two-pane work surface
@@ -31,9 +30,11 @@ desktop (>= 900px)
 ```
 
 The desktop layout is a two-pane operational tool, not a dashboard of cards. On mobile, conversation
-is the home page and a bottom tab bar switches only between the two top-level sections. Tasks remain
+is the home page and the floating header control switches between the two top-level sections. Tasks remain
 inside Schedule. The Schedule header opens a right-side settings drawer for account information,
 timezone, logout, and future settings; these actions do not sit in the transparent global header.
+The global header overlays the conversation scroller: it moves out of view when conversation content
+scrolls upward, returns on reverse scrolling or at the top, and remains visible on Schedule.
 
 ## Design Direction
 
@@ -153,9 +154,8 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Switch to the persistent two-pane workspace at 900px; do not squeeze two panes onto tablets.
 - Use the full desktop viewport and give both panes independent scrolling.
 - Keep the input dock fixed or sticky at the bottom.
-- Keep the mobile tab bar below the input dock and inside the bottom safe area. It is a floating,
-  translucent system control with background blur, a light glass border, and restrained elevation.
-  Use icon-above-label tabs, selected tint, and no underline or selected background capsule.
+- Keep the mobile composer inside the bottom safe area. Do not duplicate the Conversation/Schedule
+  switch in a bottom tab bar while the header control owns that navigation.
 - Respect mobile safe-area insets.
 - Message bubbles should have stable max widths and must not shift layout while loading.
 - Assistant messages use a raised neutral surface and subtle border. A long press opens a compact,
@@ -173,7 +173,7 @@ fractions, and media-query conditions may remain literal when CSS variables cann
   must not move fixed-format navigation controls.
 
 Voice is the conversation home's default input mode rather than a modal, page, or navigation item.
-The primary voice control is a full-width hold-to-talk bar above the tab bar, following the familiar
+The primary voice control is a full-width hold-to-talk bar at the bottom, following the familiar
 WeChat interaction shape without copying its visual branding. Recording feedback stays inside the
 bar and the keyboard switch remains a compact icon on its right. Its stable states are:
 

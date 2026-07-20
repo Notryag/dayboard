@@ -28,8 +28,8 @@ The current direction is:
 - product name: Dayboard
 - frontend: Next.js, React, TypeScript; the server-hosted path is `/dayboard/`
 - primary UI surfaces: a voice-first conversation home and a date-selectable day view; mobile uses a
-  persistent bottom Conversation/Schedule tab bar and desktop keeps both visible in a two-pane
-  workspace
+  floating transparent-header control to switch between them, while desktop keeps both visible in a
+  two-pane workspace
 - voice status: browser recording, upload limits, release-to-transcribe-and-submit interaction, the
   provider-neutral API, and Cloudflare Workers AI plus Alibaba Cloud adapters are implemented;
   production uses Cloudflare `whisper-large-v3-turbo`, while browser sample-audio acceptance remains
@@ -74,7 +74,8 @@ The bullets below summarize decisions that affect current work; they do not repl
 - TanStack Query is the preferred first candidate for server state once API calls become non-trivial.
 - Zustand or Jotai are acceptable candidates for shared client state when plain React state is no longer enough.
 - Conversation and the day view are equal first-level product surfaces. Keep them separate on mobile
-  and visible together on desktop; do not return the day view to a hidden header dialog.
+  through the explicit header switch and visible together on desktop; do not return the day view to
+  a hidden header dialog or add a duplicate bottom tab bar.
 - Visual choices should use CSS variables or shadcn theme tokens rather than hard-coded component colors.
 - Real provider credentials must stay in `.env` or a secret store and must not be committed.
 - Application rate limiting belongs at the FastAPI boundary first, with provider-level budgets added before real LLM calls.
@@ -86,7 +87,7 @@ The bullets below summarize decisions that affect current work; they do not repl
 
 Phase 1 has proved the natural-language scheduling loop. Continue public product readiness from
 [phase-2-plan.md](./phase-2-plan.md). The application shell uses a conversation-first mobile home
-with a bottom Conversation/Schedule tab bar and a desktop conversation/day-view workspace. The
+with a transparent-header Conversation/Schedule switch and a desktop conversation/day-view workspace. The
 schedule panel has a
 swipeable date rail, a chronological calendar/task agenda, and a separate undated-task area. Run
 execution now reconnects after a page reload or a transient SSE

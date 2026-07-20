@@ -1,6 +1,6 @@
 "use client";
 
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   MessageCircle,
@@ -175,8 +175,10 @@ function ChatHome() {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [isThreadBootstrapping, setIsThreadBootstrapping] = useState(true);
   const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
+  const [chatHeaderHidden, setChatHeaderHidden] = useState(false);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
+  const lastChatScrollTopRef = useRef(0);
   const messagesRef = useRef<HTMLElement>(null);
 
   const apiUrl = useMemo(apiBaseUrl, []);
@@ -597,23 +599,32 @@ function ChatHome() {
   }
 
   function selectView(view: PrimaryView) {
+    setChatHeaderHidden(false);
     setActiveView(view);
     if (view === "schedule") setScheduleRevision((current) => current + 1);
   }
 
-  function handleViewTabKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const nextView: PrimaryView =
-      event.key === "ArrowLeft" || event.key === "Home" ? "chat" : "schedule";
-    selectView(nextView);
-    window.requestAnimationFrame(() => document.getElementById(`${nextView}-tab`)?.focus());
+  function handleChatScroll(scrollTop: number) {
+    const normalizedScrollTop = Math.max(0, scrollTop);
+    const previousScrollTop = lastChatScrollTopRef.current;
+    lastChatScrollTopRef.current = normalizedScrollTop;
+    if (normalizedScrollTop <= 8) {
+      setChatHeaderHidden(false);
+    } else if (normalizedScrollTop > previousScrollTop) {
+      setChatHeaderHidden(true);
+    } else if (normalizedScrollTop < previousScrollTop) {
+      setChatHeaderHidden(false);
+    }
   }
 
   return (
     <div className={styles.page}>
       <main className={styles.appShell}>
-        <header className={styles.appHeader}>
+        <header
+          className={`${styles.appHeader} ${
+            activeView === "chat" && chatHeaderHidden ? styles.appHeaderHidden : ""
+          }`}
+        >
           <div className={styles.headerLeading}>
             <button
               aria-label={activeView === "chat" ? "打开日程" : "返回对话"}
@@ -634,12 +645,12 @@ function ChatHome() {
 
         <div className={styles.workspace}>
           <section
-            aria-labelledby="chat-tab"
+            aria-label="对话"
             className={`${styles.chatPane} ${
               activeView === "chat" ? styles.paneActive : ""
             }`}
             id="chat-panel"
-            role="tabpanel"
+            role="region"
           >
             <ChatMessageList
               conversationState={conversationState}
@@ -647,6 +658,7 @@ function ChatHome() {
               messages={messages}
               onChanged={handleScheduleChanged}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
+              onScrollPositionChange={handleChatScroll}
               scrollRef={messagesRef}
               timezone={timezone}
             />
@@ -683,12 +695,12 @@ function ChatHome() {
           </section>
 
           <div
-            aria-labelledby="schedule-tab"
+            aria-label="日程"
             className={`${styles.schedulePane} ${
               activeView === "schedule" ? styles.paneActive : ""
             }`}
             id="schedule-panel"
-            role="tabpanel"
+            role="region"
           >
             <SchedulePanel
               accountName={account?.display_name || account?.username || "Dayboard 用户"}
@@ -701,49 +713,6 @@ function ChatHome() {
           </div>
         </div>
 
-        <nav
-          aria-label="主要视图"
-          aria-orientation="horizontal"
-          className={styles.tabBar}
-          role="tablist"
-        >
-          <button
-            aria-controls="chat-panel"
-            aria-selected={activeView === "chat"}
-            className={styles.tabItem}
-            id="chat-tab"
-            onClick={() => selectView("chat")}
-            onKeyDown={handleViewTabKeyDown}
-            role="tab"
-            tabIndex={activeView === "chat" ? 0 : -1}
-            type="button"
-          >
-            <MessageCircle
-              aria-hidden="true"
-              size={22}
-              strokeWidth={activeView === "chat" ? 2.5 : 1.9}
-            />
-            <span>对话</span>
-          </button>
-          <button
-            aria-controls="schedule-panel"
-            aria-selected={activeView === "schedule"}
-            className={styles.tabItem}
-            id="schedule-tab"
-            onClick={() => selectView("schedule")}
-            onKeyDown={handleViewTabKeyDown}
-            role="tab"
-            tabIndex={activeView === "schedule" ? 0 : -1}
-            type="button"
-          >
-            <CalendarDays
-              aria-hidden="true"
-              size={22}
-              strokeWidth={activeView === "schedule" ? 2.5 : 1.9}
-            />
-            <span>日程</span>
-          </button>
-        </nav>
         {undoNotice ? (
           <ScheduleUndoToast
             busy={undoNotice.busy}

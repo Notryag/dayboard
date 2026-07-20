@@ -69,7 +69,6 @@
   --control-size-compact: 40px;
   --control-size: 44px;
   --field-size: 46px;
-  --app-shell-max-width: 1280px;
   --border-width: 1px;
   --border-width-strong: 2px;
   --border-width-accent: 3px;
@@ -90,9 +89,6 @@
   --shadow-danger: 0 10px 28px color-mix(in srgb, var(--color-danger), transparent 72%);
   --shadow-focus: 0 0 0 var(--focus-ring-width) var(--color-primary-surface);
   --shadow-dialog: 0 24px 80px rgb(0 0 0 / 24%);
-  --shadow-tab-bar:
-    0 14px 36px rgb(37 49 61 / 16%),
-    inset 0 1px 0 rgb(255 255 255 / 72%);
   --shadow-message-menu: 0 12px 34px rgb(13 18 24 / 26%);
   --motion-fast: 160ms;
   --motion-standard: 220ms;

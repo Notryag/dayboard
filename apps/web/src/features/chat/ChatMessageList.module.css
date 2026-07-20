@@ -7,7 +7,7 @@
   gap: var(--space-5);
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding: var(--space-5) var(--space-4) var(--space-6);
+  padding: var(--app-floating-header-clearance) var(--space-4) var(--space-6);
   scrollbar-color: var(--color-border) transparent;
   scrollbar-width: thin;
 }

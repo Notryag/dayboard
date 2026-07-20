@@ -4,11 +4,6 @@
   --app-floating-header-clearance: calc(
     env(safe-area-inset-top) + var(--app-floating-header-height) + var(--space-6)
   );
-  --app-tab-bar-content-height: 58px;
-  --app-tab-bar-radius: 24px;
-  --app-tab-bar-blur: 24px;
-  --app-tab-bar-saturation: 165%;
-  --app-tab-item-gap: 2px;
   --app-composer-backdrop-blur: 16px;
 
   width: 100%;
@@ -27,7 +22,7 @@
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
   background: var(--color-surface);
 }
@@ -44,6 +39,15 @@
   align-items: center;
   padding-inline: var(--space-4);
   pointer-events: none;
+  transition:
+    opacity var(--motion-standard) ease,
+    transform var(--motion-standard) ease;
+  will-change: transform;
+}
+
+.appHeaderHidden {
+  opacity: 0;
+  transform: translateY(calc(-100% - env(safe-area-inset-top) - var(--space-3)));
 }
 
 .brand {
@@ -88,8 +92,7 @@
   background: var(--color-surface-muted);
 }
 
-.floatingHeaderButton:focus-visible,
-.tabItem:focus-visible {
+.floatingHeaderButton:focus-visible {
   outline: var(--focus-ring-width) solid var(--color-primary);
   outline-offset: var(--focus-ring-offset);
 }
@@ -108,7 +111,6 @@
   min-width: 0;
   min-height: 0;
   display: none;
-  padding-top: var(--app-floating-header-clearance);
 }
 
 .chatPane {
@@ -118,6 +120,10 @@
   background: var(--color-surface);
 }
 
+.schedulePane {
+  padding-top: var(--app-floating-header-clearance);
+}
+
 .paneActive {
   display: grid;
 }
@@ -125,64 +131,9 @@
 .composerDock {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-2) var(--space-4) var(--space-3);
+  padding: var(--space-2) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
   background: color-mix(in srgb, var(--color-surface), transparent 3%);
   backdrop-filter: blur(var(--app-composer-backdrop-blur));
-}
-
-.tabBar {
-  position: relative;
-  min-height: var(--app-tab-bar-content-height);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: stretch;
-  margin: var(--space-2) var(--space-3) max(var(--space-2), env(safe-area-inset-bottom));
-  padding: var(--space-1) var(--space-5);
-  overflow: hidden;
-  border: var(--border-width) solid var(--color-glass-border);
-  border-radius: var(--app-tab-bar-radius);
-  background: var(--color-glass-surface);
-  box-shadow: var(--shadow-tab-bar);
-  -webkit-backdrop-filter: saturate(var(--app-tab-bar-saturation))
-    blur(var(--app-tab-bar-blur));
-  backdrop-filter: saturate(var(--app-tab-bar-saturation)) blur(var(--app-tab-bar-blur));
-  isolation: isolate;
-  z-index: 4;
-}
-
-.tabItem {
-  min-width: 0;
-  min-height: calc(var(--app-tab-bar-content-height) - var(--space-2));
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--app-tab-item-gap);
-  border: 0;
-  color: var(--color-text-muted);
-  background: transparent;
-  cursor: pointer;
-  font-size: var(--font-size-micro);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-none);
-  transition:
-    color var(--motion-fast) ease,
-    opacity var(--motion-fast) ease,
-    transform var(--motion-fast) ease;
-}
-
-.tabItem:active {
-  opacity: 0.72;
-  transform: scale(0.96);
-}
-
-.tabItem[aria-selected="true"] {
-  color: var(--color-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.tabItem[aria-selected="true"] svg {
-  transform: translateY(-1px);
 }
 
 @media (min-width: 900px) {
@@ -218,14 +169,11 @@
     padding-left: var(--space-6);
   }
 
-  .tabBar {
-    display: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .floatingHeaderButton,
-  .tabItem {
+  .appHeader,
+  .floatingHeaderButton {
     transition: none;
   }
 }
