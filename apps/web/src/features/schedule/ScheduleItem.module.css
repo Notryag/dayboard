@@ -412,6 +412,31 @@
   outline-offset: 0;
 }
 
+.timingMode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.timingMode button {
+  min-height: var(--control-size);
+  border: 0;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-weight: var(--font-weight-semibold);
+}
+
+.timingMode button[aria-pressed="true"] {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
 .formError {
   color: var(--color-danger);
   font-size: var(--font-size-caption);

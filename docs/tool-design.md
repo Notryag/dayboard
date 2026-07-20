@@ -53,9 +53,18 @@ New task status is not model-selectable. `create_task_item` always creates `open
 `update_task_item`.
 
 Classification is intentionally mechanical: any resolvable date, clock, or daypart creates a
-calendar entry, even when the wording describes completion or a deadline. Date-only calendar intent
-uses 09:00; dayparts use the documented deterministic clock. Tasks have no model-visible date or
-time fields and are reserved for actions with no resolvable temporal anchor.
+calendar entry, even when the wording describes completion or a deadline. Calendar entries have
+two explicit timing modes:
+
+- `timed` stores a local clock time resolved to an instant. A daypart without a clock uses its
+  deterministic default only after the action has been classified as a calendar entry.
+- `anytime` stores only a local calendar date. Date-only expressions such as `明天提交报告` use
+  this mode; the system must not invent `00:00`, `09:00`, or another hidden clock time.
+
+An anytime entry has no start/end instant or reminder and does not participate in clock-overlap
+conflict checks. It is included in calendar searches by its local date and rendered as `随时`.
+Tasks have no model-visible date or time fields and are reserved for actions with no resolvable
+temporal anchor, including vague expressions such as `晚点`, `有空`, and `抽空`.
 
 ## Input And Result Shape
 
@@ -108,3 +117,5 @@ Tests must prove:
    remove tools, and failures restore the full surface once.
 8. Stream projection and conversation cards render authoritative entities without duplicate IDs or
    `requires_follow_up` fields.
+9. Date-only actions create searchable `anytime` entries with no start/end instant, reminder, or
+   clock conflict; daypart actions remain timed.

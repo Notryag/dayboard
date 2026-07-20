@@ -5,8 +5,9 @@ Last reviewed: 2026-07-20
 ## Token Efficiency
 
 - [x] Establish offline and live no-write token baselines for representative scheduling commands.
-  The current fixed estimate is 861 system-prompt tokens plus 1,341 tokens across seven scheduling
-  schemas and `ask_clarification`. Live first-round input is now 2,566-2,573 tokens, down from about
+  The current fixed estimate is 666 system-prompt tokens plus 1,406 tokens across seven scheduling
+  schemas and `ask_clarification`. The last pre-anytime live first-round sample was 2,566-2,573
+  tokens, down from about
   4,710 initially, 2,915-2,943 after prompt compression, and 2,805-2,814 after tool unification.
   Continue tracking conversation, tool-result, protocol, and per-round growth from provider usage.
 - [x] Keep the long-lived system instructions and tool definitions as a stable request prefix.

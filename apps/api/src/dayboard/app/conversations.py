@@ -257,7 +257,7 @@ class ConversationService:
 
         trusted_candidate = {
             key: selected[key]
-            for key in ("id", "title", "start_time", "end_time", "timezone", "updated_at")
+            for key in ("id", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone", "updated_at")
             if key in selected
         }
         title = str(trusted_candidate.get("title") or "所选日程")
@@ -273,6 +273,8 @@ class ConversationService:
             except (ValueError, TypeError):
                 display_time = start_time
             display_message = f"选择“{title} · {display_time}”"
+        elif isinstance(trusted_candidate.get("scheduled_date"), str):
+            display_message = f"选择“{title} · {trusted_candidate['scheduled_date']} · 随时”"
         agent_message = (
             "The user selected this server-validated calendar candidate for the pending "
             f"clarification: {json.dumps(trusted_candidate, ensure_ascii=False)}. "

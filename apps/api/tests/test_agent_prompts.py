@@ -6,7 +6,7 @@ from dayboard.agent.prompts import build_dayboard_system_prompt
 from dayboard.context import TenantContext
 
 
-def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> None:
+def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:
     context = TenantContext(
         tenant_id=UUID("00000000-0000-0000-0000-000000000001"),
         user_id=UUID("00000000-0000-0000-0000-000000000002"),
@@ -22,21 +22,18 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "today: 2026-07-13" in prompt
     assert "tomorrow: 2026-07-14" in prompt
     assert "day after tomorrow: 2026-07-15" in prompt
-    assert "a reminder at its start (PT0M)" in prompt
-    assert "pass reminder=null only when the user explicitly requests no reminder" in prompt
-    assert "Never append Z, +08:00, or any timezone offset" in prompt
+    assert "Local date/time fields never include an offset" in prompt
     assert "Explicit foreign timezones are not supported" in prompt
-    assert "new_local_end changes end/duration" in prompt
+    assert "new_date preserves the existing timing mode" in prompt
     assert "the original entry's local interval (not its requested destination interval)" in prompt
-    assert "Only actions with no resolvable date/time are tasks" in prompt
-    assert '"明天提交报告" is a calendar entry tomorrow at 09:00' in prompt
-    assert '"明天早上 8 点前吃药" is a calendar entry at 08:00' in prompt
-    assert '"明天早上吃药" is a calendar entry at the deterministic 08:00 morning default' in prompt
-    assert "any action with a resolvable date, clock time, or daypart is a calendar entry" in prompt
-    assert "date only defaults to 09:00" in prompt
+    assert "Only actions without a concrete temporal anchor are tasks" in prompt
+    assert '"明天提交报告" uses tomorrow\'s local_date' in prompt
+    assert "Date without a clock or daypart is an anytime calendar entry" in prompt
+    assert "Any concrete date, clock, or daypart makes the action a calendar entry" in prompt
+    assert "do not invent a clock" in prompt
     assert "早上 08:00" in prompt
     assert "晚上 20:00" in prompt
-    assert "Create tasks for those actions and never invent a date or clock time" in prompt
+    assert "Create an undated task and never invent a date" in prompt
     assert "never state a date, start time, end time, or status" in prompt
     assert "Use plain text only: do not use Markdown" in prompt
     assert "separate cards" in prompt

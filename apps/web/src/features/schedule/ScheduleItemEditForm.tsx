@@ -65,7 +65,7 @@ function localInputToIso(value: string, timezone: string) {
 }
 
 function initialDuration(item: ScheduleDisplayItem) {
-  if (item.kind !== "calendar" || !item.value.end_time) return 60;
+  if (item.kind !== "calendar" || !item.value.start_time || !item.value.end_time) return 60;
   return Math.max(
     5,
     Math.round((Date.parse(item.value.end_time) - Date.parse(item.value.start_time)) / 60000),
@@ -79,6 +79,12 @@ export function ScheduleItemEditForm({
   timezone,
 }: ScheduleItemEditFormProps) {
   const [title, setTitle] = useState(item.value.title);
+  const [timingKind, setTimingKind] = useState<"timed" | "anytime">(
+    item.kind === "calendar" ? item.value.timing_kind : "timed",
+  );
+  const [scheduledDate, setScheduledDate] = useState(
+    item.kind === "calendar" ? (item.value.scheduled_date ?? "") : "",
+  );
   const [dateTime, setDateTime] = useState(
     toLocalInput(item.kind === "calendar" ? item.value.start_time : item.value.due_at, timezone),
   );
@@ -89,16 +95,26 @@ export function ScheduleItemEditForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedTitle = title.trim();
-    if (!trimmedTitle || (item.kind === "calendar" && !dateTime)) return;
+    if (
+      !trimmedTitle ||
+      (item.kind === "calendar" && timingKind === "timed" && !dateTime) ||
+      (item.kind === "calendar" && timingKind === "anytime" && !scheduledDate)
+    ) return;
     setBusy(true);
     setError(null);
     try {
       if (item.kind === "calendar") {
-        await updateCalendarEntry(item.value, {
-          title: trimmedTitle,
-          startTime: localInputToIso(dateTime, timezone),
-          durationMinutes,
-        });
+        await updateCalendarEntry(
+          item.value,
+          timingKind === "anytime"
+            ? { title: trimmedTitle, timingKind, scheduledDate }
+            : {
+                title: trimmedTitle,
+                timingKind,
+                startTime: localInputToIso(dateTime, timezone),
+                durationMinutes,
+              },
+        );
       } else {
         await updateTaskItem(item.value, {
           title: trimmedTitle,
@@ -127,17 +143,23 @@ export function ScheduleItemEditForm({
           value={title}
         />
       </label>
+      {item.kind === "calendar" ? (
+        <div className={styles.timingMode} role="group" aria-label="日程时间类型">
+          <button aria-pressed={timingKind === "anytime"} disabled={busy} onClick={() => setTimingKind("anytime")} type="button">随时</button>
+          <button aria-pressed={timingKind === "timed"} disabled={busy} onClick={() => setTimingKind("timed")} type="button">定时</button>
+        </div>
+      ) : null}
       <label>
-        <span>{item.kind === "calendar" ? "开始时间" : "截止时间"}</span>
+        <span>{item.kind === "calendar" ? (timingKind === "anytime" ? "日期" : "开始时间") : "截止时间"}</span>
         <input
           disabled={busy}
-          onChange={(event) => setDateTime(event.target.value)}
+          onChange={(event) => timingKind === "anytime" ? setScheduledDate(event.target.value) : setDateTime(event.target.value)}
           required={item.kind === "calendar"}
-          type="datetime-local"
-          value={dateTime}
+          type={item.kind === "calendar" && timingKind === "anytime" ? "date" : "datetime-local"}
+          value={item.kind === "calendar" && timingKind === "anytime" ? scheduledDate : dateTime}
         />
       </label>
-      {item.kind === "calendar" ? (
+      {item.kind === "calendar" && timingKind === "timed" ? (
         <label>
           <span>持续分钟</span>
           <input

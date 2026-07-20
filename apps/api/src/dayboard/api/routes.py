@@ -61,7 +61,7 @@ from dayboard.domain.conversations import (
     ConversationState,
     ConversationThread,
 )
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -90,8 +90,19 @@ class ScheduleMutationRequest(BaseModel):
 
 class CalendarEntryUpdateRequest(ScheduleMutationRequest):
     title: str = Field(min_length=1, max_length=240)
-    start_time: AwareDatetime
-    duration_minutes: int = Field(ge=5, le=10080)
+    timing_kind: Literal["timed", "anytime"]
+    scheduled_date: date | None = None
+    start_time: AwareDatetime | None = None
+    duration_minutes: int | None = Field(default=None, ge=5, le=10080)
+
+    @model_validator(mode="after")
+    def validate_timing(self) -> CalendarEntryUpdateRequest:
+        if self.timing_kind == "anytime":
+            if self.scheduled_date is None or self.start_time is not None or self.duration_minutes is not None:
+                raise ValueError("anytime entries require only scheduled_date")
+        elif self.start_time is None or self.duration_minutes is None or self.scheduled_date is not None:
+            raise ValueError("timed entries require start_time and duration_minutes")
+        return self
 
 
 class TaskItemUpdateRequest(ScheduleMutationRequest):
@@ -407,8 +418,14 @@ async def update_calendar_entry_from_ui(
         tenant_context,
         entry_id=entry_id,
         title=body.title,
+        timing_kind=body.timing_kind,
+        scheduled_date=body.scheduled_date,
         start_time=body.start_time,
-        end_time=body.start_time + timedelta(minutes=body.duration_minutes),
+        end_time=(
+            body.start_time + timedelta(minutes=body.duration_minutes)
+            if body.start_time is not None and body.duration_minutes is not None
+            else None
+        ),
         expected_updated_at=body.expected_updated_at,
     )
     if entry is None:

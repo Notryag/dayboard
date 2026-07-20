@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import DateTime, and_, cast, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
@@ -25,6 +25,8 @@ class CalendarEntryRepository:
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
             title=data.title,
+            timing_kind=data.timing_kind.value,
+            scheduled_date=data.scheduled_date,
             start_time=data.start_time,
             end_time=data.end_time,
             timezone=data.timezone,
@@ -56,6 +58,8 @@ class CalendarEntryRepository:
         *,
         start_time: datetime | None,
         end_time: datetime | None,
+        start_date: date | None,
+        end_date: date | None,
         cursor_start_time: datetime | None,
         cursor_id: UUID | None,
         limit: int,
@@ -65,16 +69,27 @@ class CalendarEntryRepository:
             CalendarEntryRow.owner_user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
         ]
+        timed_conditions = [CalendarEntryRow.timing_kind == "timed"]
+        anytime_conditions = [CalendarEntryRow.timing_kind == "anytime"]
         if start_time is not None:
-            conditions.append(CalendarEntryRow.start_time >= start_time)
+            timed_conditions.append(CalendarEntryRow.start_time >= start_time)
         if end_time is not None:
-            conditions.append(CalendarEntryRow.start_time < end_time)
+            timed_conditions.append(CalendarEntryRow.start_time < end_time)
+        if start_date is not None:
+            anytime_conditions.append(CalendarEntryRow.scheduled_date >= start_date)
+        if end_date is not None:
+            anytime_conditions.append(CalendarEntryRow.scheduled_date < end_date)
+        conditions.append(or_(and_(*timed_conditions), and_(*anytime_conditions)))
+        sort_time = func.coalesce(
+            CalendarEntryRow.start_time,
+            cast(CalendarEntryRow.scheduled_date, DateTime(timezone=True)),
+        )
         if cursor_start_time is not None and cursor_id is not None:
             conditions.append(
                 or_(
-                    CalendarEntryRow.start_time > cursor_start_time,
+                    sort_time > cursor_start_time,
                     and_(
-                        CalendarEntryRow.start_time == cursor_start_time,
+                        sort_time == cursor_start_time,
                         CalendarEntryRow.id > cursor_id,
                     ),
                 )
@@ -82,7 +97,7 @@ class CalendarEntryRepository:
         result = await self.session.scalars(
             select(CalendarEntryRow)
             .where(*conditions)
-            .order_by(CalendarEntryRow.start_time.asc(), CalendarEntryRow.id.asc())
+            .order_by(sort_time.asc(), CalendarEntryRow.id.asc())
             .limit(limit)
         )
         return list(result)
@@ -93,6 +108,8 @@ class CalendarEntryRepository:
         *,
         start_time: datetime,
         end_time: datetime,
+        start_date: date,
+        end_date: date,
         title_query: str | None = None,
     ) -> list[CalendarEntryRow]:
         conditions = [
@@ -100,19 +117,33 @@ class CalendarEntryRepository:
             CalendarEntryRow.owner_user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
             CalendarEntryRow.completed_at.is_(None),
-            CalendarEntryRow.start_time < end_time,
-            func.coalesce(
-                CalendarEntryRow.end_time,
-                CalendarEntryRow.start_time + timedelta(hours=1),
-            )
-            > start_time,
+            or_(
+                and_(
+                    CalendarEntryRow.timing_kind == "timed",
+                    CalendarEntryRow.start_time < end_time,
+                    func.coalesce(
+                        CalendarEntryRow.end_time,
+                        CalendarEntryRow.start_time + timedelta(hours=1),
+                    ) > start_time,
+                ),
+                and_(
+                    CalendarEntryRow.timing_kind == "anytime",
+                    CalendarEntryRow.scheduled_date >= start_date,
+                    CalendarEntryRow.scheduled_date < end_date,
+                ),
+            ),
         ]
         if title_query:
             conditions.append(CalendarEntryRow.title.ilike(f"%{title_query}%"))
         result = await self.session.scalars(
             select(CalendarEntryRow)
             .where(*conditions)
-            .order_by(CalendarEntryRow.start_time.asc())
+            .order_by(
+                func.coalesce(
+                    CalendarEntryRow.start_time,
+                    cast(CalendarEntryRow.scheduled_date, DateTime(timezone=True)),
+                ).asc()
+            )
             .limit(SEARCH_RESULT_LIMIT)
         )
         return list(result)
@@ -161,8 +192,10 @@ class CalendarEntryRepository:
         context: TenantContext,
         *,
         entry_id: UUID,
-        start_time: datetime,
-        end_time: datetime,
+        timing_kind: str,
+        scheduled_date: date | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
         expected_updated_at: datetime,
         updated_by_run_id: UUID,
         operation_key: str,
@@ -178,8 +211,11 @@ class CalendarEntryRepository:
                 CalendarEntryRow.completed_at.is_(None),
             )
             .values(
+                timing_kind=timing_kind,
+                scheduled_date=scheduled_date,
                 start_time=start_time,
                 end_time=end_time,
+                reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
                 updated_by_run_id=updated_by_run_id,
                 updated_operation_key=operation_key,
                 updated_at=func.now(),
@@ -193,8 +229,10 @@ class CalendarEntryRepository:
         *,
         entry_id: UUID,
         title: str,
-        start_time: datetime,
-        end_time: datetime,
+        timing_kind: str,
+        scheduled_date: date | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
         expected_updated_at: datetime,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
@@ -209,8 +247,11 @@ class CalendarEntryRepository:
             )
             .values(
                 title=title,
+                timing_kind=timing_kind,
+                scheduled_date=scheduled_date,
                 start_time=start_time,
                 end_time=end_time,
+                reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
                 updated_by_run_id=None,
                 updated_operation_key=None,
                 updated_at=func.now(),
@@ -372,6 +413,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.owner_user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
+                CalendarEntryRow.timing_kind == "timed",
                 CalendarEntryRow.start_time < end_time,
                 effective_end > start_time,
         ]

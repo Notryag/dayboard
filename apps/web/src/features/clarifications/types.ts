@@ -1,7 +1,9 @@
 export type CalendarEntryChoiceOption = {
   key: string;
   title: string;
-  start_time: string;
+  timing_kind?: "timed" | "anytime";
+  scheduled_date?: string;
+  start_time?: string;
   end_time?: string;
   timezone?: string;
 };

@@ -21,6 +21,15 @@ class ReminderService:
         self.deliveries = ReminderDeliveryRepository(session)
 
     async def sync_calendar_entry(self, context: TenantContext, row: CalendarEntryRow) -> None:
+        if row.start_time is None:
+            await self.deliveries.replace_pending(
+                context,
+                source_type=ReminderSourceType.calendar_entry,
+                source_id=row.id,
+                scheduled_for=None,
+                payload=None,
+            )
+            return
         reminder = Reminder.model_validate(row.reminder) if row.reminder else None
         scheduled_for = row.start_time - reminder.as_timedelta() if reminder else None
         payload = (

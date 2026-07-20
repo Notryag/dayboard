@@ -9,17 +9,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.scheduling import SchedulingService
 from dayboard.context import TenantContext
-from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Reminder
+from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
 class CreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    start_time: AwareDatetime
+    scheduled_date: date | None = None
+    start_time: AwareDatetime | None = None
     end_time: AwareDatetime | None = None
     timezone: str = Field(min_length=1, max_length=64)
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = None
+
+    @model_validator(mode="after")
+    def validate_timing(self) -> CreateCalendarEntryInput:
+        if (self.scheduled_date is None) == (self.start_time is None):
+            raise ValueError("provide exactly one of scheduled_date or start_time")
+        if self.scheduled_date is not None and (self.end_time is not None or self.reminder is not None):
+            raise ValueError("date-only entries cannot have end_time or reminder")
+        return self
 
 
 class CalendarEntryToolResult(BaseModel):
@@ -59,7 +68,8 @@ class RescheduleCalendarEntryInput(BaseModel):
 
 class CalendarEntryRescheduleResult(BaseModel):
     type: str = "calendar_entry_rescheduled"
-    previous_start_time: AwareDatetime
+    previous_scheduled_date: date | None = None
+    previous_start_time: AwareDatetime | None
     previous_end_time: AwareDatetime | None
     calendar_entry: CalendarEntry
     conflicts: list[CalendarEntry] = Field(default_factory=list)
@@ -140,20 +150,33 @@ async def create_calendar_entry(
         )
         if existing is not None:
             return CalendarEntryToolResult(
-                summary=f"{existing.title} at {existing.start_time.isoformat()}",
+                summary=(
+                    f"{existing.title} on {existing.scheduled_date.isoformat()}"
+                    if existing.scheduled_date
+                    else f"{existing.title} at {existing.start_time.isoformat()}"
+                ),
                 calendar_entry=existing,
             )
-    end_time = data.end_time or data.start_time + timedelta(hours=1)
-    conflicts = await service.list_calendar_conflicts(
-        context,
-        start_time=data.start_time,
-        end_time=end_time,
-        default_duration=timedelta(hours=1),
+    end_time = data.end_time or (data.start_time + timedelta(hours=1) if data.start_time else None)
+    conflicts = (
+        await service.list_calendar_conflicts(
+            context,
+            start_time=data.start_time,
+            end_time=end_time,
+            default_duration=timedelta(hours=1),
+        )
+        if data.start_time is not None and end_time is not None
+        else []
     )
     entry = await service.create_calendar_entry(
         context,
         CalendarEntryCreate(
             **data.model_dump(exclude={"end_time"}),
+            timing_kind=(
+                CalendarTimingKind.anytime
+                if data.scheduled_date is not None
+                else CalendarTimingKind.timed
+            ),
             end_time=end_time,
             created_by_run_id=created_by_run_id,
             created_operation_key=operation_key,
@@ -164,7 +187,11 @@ async def create_calendar_entry(
             f"{entry.title} at {entry.start_time.isoformat()}; created with "
             f"{len(conflicts)} calendar conflict(s)."
             if conflicts
-            else f"{entry.title} at {entry.start_time.isoformat()}"
+            else (
+                f"{entry.title} on {entry.scheduled_date.isoformat()}"
+                if entry.scheduled_date
+                else f"{entry.title} at {entry.start_time.isoformat()}"
+            )
         ),
         calendar_entry=entry,
         conflicts=list(conflicts),
@@ -200,10 +227,11 @@ async def reschedule_calendar_entry(
     )
     if repeated is not None:
         return CalendarEntryRescheduleResult(
+            previous_scheduled_date=repeated.scheduled_date,
             previous_start_time=repeated.start_time,
             previous_end_time=repeated.end_time,
             calendar_entry=repeated,
-            summary=f"{repeated.title} is already at {repeated.start_time.isoformat()}",
+            summary=f"{repeated.title} is already updated",
         )
 
     existing = await service.get_calendar_entry(context, data.calendar_entry_id)
@@ -213,11 +241,36 @@ async def reschedule_calendar_entry(
         raise CalendarEntryChangedError(
             "Calendar entry changed after it was selected; search again before updating"
         )
-    duration = (
-        existing.end_time - existing.start_time
-        if existing.end_time is not None
-        else timedelta(hours=1)
-    )
+    if existing.start_time is None:
+        if data.new_start_time is None and data.new_end_time is not None:
+            raise ValueError("new_end_time requires a clock time")
+        if data.new_start_time is None:
+            assert data.new_date is not None
+            if data.new_date == existing.scheduled_date:
+                raise ValueError("calendar entry already has the requested date")
+            updated = await service.reschedule_calendar_entry(
+                context,
+                entry_id=existing.id,
+                timing_kind=CalendarTimingKind.anytime,
+                scheduled_date=data.new_date,
+                start_time=None,
+                end_time=None,
+                expected_updated_at=data.expected_updated_at,
+                updated_by_run_id=updated_by_run_id,
+                operation_key=operation_key,
+            )
+            if updated is None:
+                raise CalendarEntryChangedError("Calendar entry changed before it could be updated")
+            return CalendarEntryRescheduleResult(
+                previous_scheduled_date=existing.scheduled_date,
+                previous_start_time=None,
+                previous_end_time=None,
+                calendar_entry=updated,
+                summary=f"{updated.title} moved to {updated.scheduled_date.isoformat()}",
+            )
+        duration = timedelta(hours=1)
+    else:
+        duration = existing.end_time - existing.start_time if existing.end_time else timedelta(hours=1)
     if data.new_start_time is not None:
         resolved_start_time = data.new_start_time
     elif data.new_date is not None:
@@ -247,6 +300,8 @@ async def reschedule_calendar_entry(
     updated = await service.reschedule_calendar_entry(
         context,
         entry_id=existing.id,
+        timing_kind=CalendarTimingKind.timed,
+        scheduled_date=None,
         start_time=resolved_start_time,
         end_time=resolved_end_time,
         expected_updated_at=data.expected_updated_at,
@@ -258,6 +313,7 @@ async def reschedule_calendar_entry(
             "Calendar entry changed after it was selected; search again before updating"
         )
     return CalendarEntryRescheduleResult(
+        previous_scheduled_date=existing.scheduled_date,
         previous_start_time=existing.start_time,
         previous_end_time=existing.end_time,
         calendar_entry=updated,

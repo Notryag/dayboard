@@ -17,9 +17,10 @@ stable system prompt and serialized model-visible tool schemas.
 | Stable-prefix and prompt compression | 897 | 1,797 | 2,694 | -27.5% | 2,915-2,943 |
 | Unified 7+1 tool surface | 903 | 1,556 | 2,459 | -33.8% | 2,805-2,814 |
 | Absolute temporal classification | 861 | 1,341 | 2,202 | -40.8% | 2,566-2,573 |
+| Native anytime calendar entries | 666 | 1,406 | 2,072 | -44.3% | pending deployment sample |
 
-The current fixed surface is 1,515 tokens smaller than the initial baseline and 257 tokens smaller
-than the previous 7+1 version. Live input includes provider protocol overhead and user
+The current fixed surface is 1,645 tokens smaller than the initial baseline and 130 tokens smaller
+than the preceding version. Live input includes provider protocol overhead and user
 messages, so it will not equal the offline fixed count.
 
 ## 2026-07-20: Incident Baseline
@@ -91,6 +92,19 @@ initial baseline. Six real no-write cases used 2,566-2,573 input tokens. They ve
 "明天提交报告", "明天早上8点前吃药", and "明天买牛奶" create calendar entries; "提交报告" and
 "晚点整理资料" create tasks; and a mixed message emits both calls. Warm requests reported 2,048
 cached input tokens. No write tool was executed.
+
+## 2026-07-20: Native Anytime Calendar Entries
+
+Date-only calendar actions now use a first-class `anytime` shape with `scheduled_date`, rather than
+inventing a 09:00 clock. Clock/daypart actions remain `timed`; vague expressions still become
+undated tasks. Anytime entries have no clock reminder and do not participate in overlap conflicts.
+
+The prompt was reduced to semantic classification, execution, search-before-change, clarification,
+and response rules. Persistence defaults and invariants remain in schemas and services. The prompt
+fell from 861 to 666 tokens. The create schema gained the explicit date/time union, increasing the
+model-visible schemas by an estimated 65 tokens to 1,406. Fixed input therefore fell from 2,202 to
+2,072 tokens, a 5.9% reduction for this step and 44.3% from the initial baseline. Provider input and
+cache-read measurements remain to be recorded after deployment.
 
 ## Entry Template
 

@@ -43,8 +43,19 @@ SCENARIOS = (
         description="Create distinct calendar and task objects from one command.",
         turns=(
             Turn(
-                "明天上午 9 点创建标题为「验收{tag}项目晨会」的日程，并创建标题为「验收{tag}提交验收报告」、后天下午 6 点截止的任务",
+                "明天上午 9 点创建标题为「验收{tag}项目晨会」的日程，并创建一个不安排日期、标题为「验收{tag}提交验收报告」的任务",
                 {"create_calendar_entry": 1, "create_task_item": 1},
+            ),
+        ),
+    ),
+    Scenario(
+        name="anytime-calendar",
+        description="Create a date-only action as an anytime calendar entry.",
+        turns=(
+            Turn(
+                "明天提交标题为「验收{tag}随时报告」的报告",
+                {"create_calendar_entry": 1},
+                forbidden_tools=("create_task_item", "ask_clarification"),
             ),
         ),
     ),

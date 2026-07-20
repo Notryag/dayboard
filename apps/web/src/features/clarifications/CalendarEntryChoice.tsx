@@ -7,7 +7,8 @@ type CalendarEntryChoiceProps = {
   onSelect: (optionKey: string) => void;
 };
 
-function formatOptionTime(startTime: string, timezone?: string) {
+function formatOptionTime(startTime?: string, timezone?: string, scheduledDate?: string) {
+  if (!startTime) return scheduledDate ? `${scheduledDate} · 随时` : "随时";
   return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
@@ -36,7 +37,7 @@ export function CalendarEntryChoice({
         >
           <span className={styles.optionTitle}>{option.title}</span>
           <span className={styles.optionTime}>
-            {formatOptionTime(option.start_time, option.timezone)}
+            {formatOptionTime(option.start_time, option.timezone, option.scheduled_date)}
           </span>
         </button>
       ))}

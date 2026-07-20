@@ -296,7 +296,7 @@ Current semantic policy examples:
 | --- | --- |
 | "明天下午三点游泳一小时" | `create_calendar_entry`: concrete time block |
 | "等会儿拿快递" | `create_task_item`: undated completion action |
-| "明天提交报告" | `create_calendar_entry`: date-only action at the 09:00 default |
+| "明天提交报告" | `create_calendar_entry`: date-only `anytime` action |
 | "明天下午五点前交报告" | `create_calendar_entry`: resolvable time at 17:00 |
 | "把游泳改到下午四点" | search calendar first, then reschedule one match |
 | "买菜做完了" | search task first, then update one match to completed |
@@ -739,6 +739,7 @@ Useful initial indexes:
 
 ```text
 calendar_entries(tenant_id, owner_user_id, start_time)
+calendar_entries(tenant_id, owner_user_id, scheduled_date)
 calendar_entries(tenant_id, start_time)
 calendar_entries(tenant_id, created_by_run_id)
 task_items(tenant_id, owner_user_id, status, due_at)

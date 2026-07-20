@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.context import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
-from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Reminder
+from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 from dayboard.app.reminders import ReminderService
 
@@ -20,6 +21,8 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         tenant_id=row.tenant_id,
         owner_user_id=row.owner_user_id,
         title=row.title,
+        timing_kind=row.timing_kind,
+        scheduled_date=row.scheduled_date,
         start_time=row.start_time,
         end_time=row.end_time,
         timezone=row.timezone,
@@ -83,10 +86,18 @@ class SchedulingService:
         end_time: datetime,
         title_query: str | None = None,
     ) -> Sequence[CalendarEntry]:
+        local_zone = ZoneInfo(context.timezone)
+        local_end = end_time.astimezone(local_zone)
         rows = await self.calendar_entries.search_active(
             context,
             start_time=start_time,
             end_time=end_time,
+            start_date=start_time.astimezone(local_zone).date(),
+            end_date=(
+                local_end.date()
+                if local_end.timetz().replace(tzinfo=None) == time.min
+                else local_end.date() + timedelta(days=1)
+            ),
             title_query=title_query,
         )
         return [calendar_entry_from_row(row) for row in rows]
@@ -121,8 +132,10 @@ class SchedulingService:
         context: TenantContext,
         *,
         entry_id: UUID,
-        start_time: datetime,
-        end_time: datetime,
+        timing_kind: CalendarTimingKind,
+        scheduled_date: date | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
         expected_updated_at: datetime,
         updated_by_run_id: UUID,
         operation_key: str,
@@ -130,6 +143,8 @@ class SchedulingService:
         row = await self.calendar_entries.reschedule(
             context,
             entry_id=entry_id,
+            timing_kind=timing_kind.value,
+            scheduled_date=scheduled_date,
             start_time=start_time,
             end_time=end_time,
             expected_updated_at=expected_updated_at,
@@ -249,14 +264,18 @@ class SchedulingService:
         *,
         entry_id: UUID,
         title: str,
-        start_time: datetime,
-        end_time: datetime,
+        timing_kind: str,
+        scheduled_date: date | None,
+        start_time: datetime | None,
+        end_time: datetime | None,
         expected_updated_at: datetime,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.update_from_ui(
             context,
             entry_id=entry_id,
             title=title,
+            timing_kind=timing_kind,
+            scheduled_date=scheduled_date,
             start_time=start_time,
             end_time=end_time,
             expected_updated_at=expected_updated_at,

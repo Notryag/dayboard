@@ -36,8 +36,13 @@ from dayboard.tools import (
 
 class AgentCreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    local_start: NaiveDatetime = Field(
-        description="Local ISO 8601 datetime without an offset."
+    local_date: date | None = Field(
+        default=None,
+        description="Local date for an anytime entry with no clock time."
+    )
+    local_start: NaiveDatetime | None = Field(
+        default=None,
+        description="Local datetime for a timed entry, without an offset."
     )
     local_end: NaiveDatetime | None = Field(
         default=None,
@@ -50,6 +55,14 @@ class AgentCreateCalendarEntryInput(BaseModel):
             "Defaults to PT0M at start; use an explicit advance offset or null for no reminder."
         ),
     )
+
+    @model_validator(mode="after")
+    def validate_timing(self) -> AgentCreateCalendarEntryInput:
+        if (self.local_date is None) == (self.local_start is None):
+            raise ValueError("provide exactly one of local_date or local_start")
+        if self.local_date is not None and self.local_end is not None:
+            raise ValueError("local_end requires local_start")
+        return self
 
 
 class AgentCreateTaskItemInput(BaseModel):
@@ -117,7 +130,9 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
     return {
         "id": str(entry.id),
         "title": entry.title,
-        "start_time": entry.start_time.isoformat(),
+        "timing_kind": entry.timing_kind.value,
+        "scheduled_date": entry.scheduled_date.isoformat() if entry.scheduled_date else None,
+        "start_time": entry.start_time.isoformat() if entry.start_time else None,
         "end_time": entry.end_time.isoformat() if entry.end_time else None,
         "timezone": entry.timezone,
         "participants": entry.participants,
@@ -177,7 +192,12 @@ def build_scheduling_tools(
         input_data = AgentCreateCalendarEntryInput.model_validate(kwargs)
         data = CreateCalendarEntryInput(
             title=input_data.title,
-            start_time=resolve_local_datetime(input_data.local_start, context.timezone),
+            scheduled_date=input_data.local_date,
+            start_time=(
+                resolve_local_datetime(input_data.local_start, context.timezone)
+                if input_data.local_start
+                else None
+            ),
             end_time=(
                 resolve_local_datetime(input_data.local_end, context.timezone)
                 if input_data.local_end
@@ -185,7 +205,7 @@ def build_scheduling_tools(
             ),
             timezone=context.timezone,
             participants=input_data.participants,
-            reminder=input_data.reminder,
+            reminder=input_data.reminder if input_data.local_start else None,
         )
         result = await create_calendar_entry(
             session,
@@ -253,7 +273,14 @@ def build_scheduling_tools(
         await session.commit()
         return {
             "type": result.type,
-            "previous_start_time": result.previous_start_time.isoformat(),
+            "previous_scheduled_date": (
+                result.previous_scheduled_date.isoformat()
+                if result.previous_scheduled_date
+                else None
+            ),
+            "previous_start_time": (
+                result.previous_start_time.isoformat() if result.previous_start_time else None
+            ),
             "previous_end_time": (
                 result.previous_end_time.isoformat() if result.previous_end_time else None
             ),
@@ -330,7 +357,7 @@ def build_scheduling_tools(
             coroutine=serialize_tool(agent_create_calendar_entry),
             name="create_calendar_entry",
             description=(
-                "Create a calendar entry for an activity at a concrete local start time."
+                "Create a calendar entry on a concrete local date, with or without a clock time."
             ),
             args_schema=AgentCreateCalendarEntryInput,
         ),

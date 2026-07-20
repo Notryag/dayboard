@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.reminders import ReminderService
 from dayboard.app.scheduling import SchedulingService
 from dayboard.context import TenantContext
-from dayboard.domain.calendar import CalendarEntryCreate, Reminder
+from dayboard.domain.calendar import CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.reminders import ReminderDeliveryStatus
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
 
@@ -49,8 +49,10 @@ async def test_calendar_reminder_reschedule_replaces_pending_delivery(
     moved_start = start + timedelta(days=1)
     moved = await scheduling.reschedule_calendar_entry(
         tenant_context,
-        entry_id=entry.id,
-        start_time=moved_start,
+            entry_id=entry.id,
+            timing_kind=CalendarTimingKind.timed,
+            scheduled_date=None,
+            start_time=moved_start,
         end_time=moved_start + timedelta(hours=1),
         expected_updated_at=entry.updated_at,
         updated_by_run_id=uuid4(),

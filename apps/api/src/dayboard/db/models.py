@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
+from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, ForeignKey, Index, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -180,6 +180,13 @@ class CalendarEntryRow(TimestampMixin, Base):
     __table_args__ = (
         Index("ix_calendar_entries_tenant_owner_start", "tenant_id", "owner_user_id", "start_time"),
         Index("ix_calendar_entries_tenant_start", "tenant_id", "start_time"),
+        Index("ix_calendar_entries_tenant_owner_date", "tenant_id", "owner_user_id", "scheduled_date"),
+        CheckConstraint(
+            "(timing_kind = 'timed' AND scheduled_date IS NULL AND start_time IS NOT NULL) OR "
+            "(timing_kind = 'anytime' AND scheduled_date IS NOT NULL AND start_time IS NULL "
+            "AND end_time IS NULL AND reminder IS NULL)",
+            name="ck_calendar_entries_timing_shape",
+        ),
         Index("ix_calendar_entries_tenant_created_by_run", "tenant_id", "created_by_run_id"),
         Index("ix_calendar_entries_tenant_cancelled_by_run", "tenant_id", "cancelled_by_run_id"),
         Index(
@@ -218,11 +225,15 @@ class CalendarEntryRow(TimestampMixin, Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
-    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timing_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="timed")
+    scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False)
     participants: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
-    reminder: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    reminder: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
+    )
     created_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     created_operation_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     updated_by_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

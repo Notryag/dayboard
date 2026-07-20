@@ -6,7 +6,9 @@ export type Reminder = {
 export type CalendarEntry = {
   id: string;
   title: string;
-  start_time: string;
+  timing_kind: "timed" | "anytime";
+  scheduled_date: string | null;
+  start_time: string | null;
   end_time: string | null;
   timezone: string;
   participants: string[];

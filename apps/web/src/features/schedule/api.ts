@@ -87,7 +87,9 @@ export function cancelTaskItem(task: TaskItem): Promise<TaskItem> {
 
 export async function updateCalendarEntry(
   entry: CalendarEntry,
-  input: { title: string; startTime: string; durationMinutes: number },
+  input:
+    | { title: string; timingKind: "anytime"; scheduledDate: string }
+    | { title: string; timingKind: "timed"; startTime: string; durationMinutes: number },
 ): Promise<CalendarEntry> {
   const response = await apiFetch(`/api/calendar-entries/${entry.id}`, {
     method: "PUT",
@@ -95,8 +97,10 @@ export async function updateCalendarEntry(
     body: JSON.stringify({
       expected_updated_at: entry.updated_at,
       title: input.title,
-      start_time: input.startTime,
-      duration_minutes: input.durationMinutes,
+      timing_kind: input.timingKind,
+      scheduled_date: input.timingKind === "anytime" ? input.scheduledDate : null,
+      start_time: input.timingKind === "timed" ? input.startTime : null,
+      duration_minutes: input.timingKind === "timed" ? input.durationMinutes : null,
     }),
   });
   return response.json() as Promise<CalendarEntry>;

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from enum import StrEnum
 import re
 from typing import Literal
 from uuid import UUID
@@ -52,9 +53,16 @@ class Reminder(BaseModel):
         return duration
 
 
+class CalendarTimingKind(StrEnum):
+    timed = "timed"
+    anytime = "anytime"
+
+
 class CalendarEntryCreate(BaseModel):
     title: str = Field(min_length=1, max_length=240)
-    start_time: AwareDatetime
+    timing_kind: CalendarTimingKind = CalendarTimingKind.timed
+    scheduled_date: date | None = None
+    start_time: AwareDatetime | None = None
     end_time: AwareDatetime | None = None
     timezone: str = Field(min_length=1, max_length=64)
     participants: list[str] = Field(default_factory=list)
@@ -64,6 +72,14 @@ class CalendarEntryCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_time_range(self) -> CalendarEntryCreate:
+        if self.timing_kind is CalendarTimingKind.anytime:
+            if self.scheduled_date is None:
+                raise ValueError("anytime entries require scheduled_date")
+            if self.start_time is not None or self.end_time is not None or self.reminder is not None:
+                raise ValueError("anytime entries cannot have clock times or reminders")
+            return self
+        if self.scheduled_date is not None or self.start_time is None:
+            raise ValueError("timed entries require start_time and cannot have scheduled_date")
         if self.end_time is not None and self.end_time <= self.start_time:
             raise ValueError("end_time must be after start_time")
         if self.reminder is not None and self.reminder.anchor != "start_time":
@@ -76,7 +92,9 @@ class CalendarEntry(BaseModel):
     tenant_id: UUID
     owner_user_id: UUID
     title: str
-    start_time: AwareDatetime
+    timing_kind: CalendarTimingKind
+    scheduled_date: date | None
+    start_time: AwareDatetime | None
     end_time: AwareDatetime | None
     timezone: str
     participants: list[str]

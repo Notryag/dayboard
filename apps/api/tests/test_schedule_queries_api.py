@@ -347,6 +347,7 @@ async def test_direct_schedule_item_updates(
             json={
                 "expected_updated_at": entry_version,
                 "title": "新日程",
+                "timing_kind": "timed",
                 "start_time": "2026-07-21T14:30:00+08:00",
                 "duration_minutes": 90,
             },
@@ -356,8 +357,18 @@ async def test_direct_schedule_item_updates(
             json={
                 "expected_updated_at": entry_version,
                 "title": "覆盖更新",
+                "timing_kind": "timed",
                 "start_time": "2026-07-21T15:00:00+08:00",
                 "duration_minutes": 60,
+            },
+        )
+        anytime_entry = await client.put(
+            f"/api/calendar-entries/{entry.id}",
+            json={
+                "expected_updated_at": updated_entry.json()["updated_at"],
+                "title": "随时日程",
+                "timing_kind": "anytime",
+                "scheduled_date": "2026-07-22",
             },
         )
         updated_task = await client.put(
@@ -376,6 +387,11 @@ async def test_direct_schedule_item_updates(
     ) == timedelta(minutes=90)
     assert stale_entry.status_code == 409
     assert stale_entry.json()["error"]["code"] == "SCHEDULE_ITEM_CONFLICT"
+    assert anytime_entry.status_code == 200
+    assert anytime_entry.json()["timing_kind"] == "anytime"
+    assert anytime_entry.json()["scheduled_date"] == "2026-07-22"
+    assert anytime_entry.json()["start_time"] is None
+    assert anytime_entry.json()["reminder"] is None
     assert updated_task.status_code == 200
     assert updated_task.json()["title"] == "新待办"
     assert updated_task.json()["due_at"] is None

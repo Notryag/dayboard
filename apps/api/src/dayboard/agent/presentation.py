@@ -100,7 +100,7 @@ def _project_tool_message(
 
 
 def _safe_calendar_item(item: dict[str, Any]) -> dict[str, Any] | None:
-    required = ("id", "title", "start_time", "timezone", "status", "updated_at")
+    required = ("id", "title", "timing_kind", "timezone", "status", "updated_at")
     if not all(key in item for key in required):
         return None
     return {
@@ -108,6 +108,8 @@ def _safe_calendar_item(item: dict[str, Any]) -> dict[str, Any] | None:
         for key in (
             "id",
             "title",
+            "timing_kind",
+            "scheduled_date",
             "start_time",
             "end_time",
             "timezone",

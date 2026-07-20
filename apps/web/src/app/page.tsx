@@ -102,14 +102,14 @@ function clarificationChoiceLabel(interaction: Interaction, optionKey: string) {
   }
   const option = interaction.options.find((candidate) => candidate.key === optionKey);
   if (!option) return null;
-  const time = new Intl.DateTimeFormat("zh-CN", {
+  const time = option.start_time ? new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone: option.timezone,
-  }).format(new Date(option.start_time));
+  }).format(new Date(option.start_time)) : `${option.scheduled_date} · 随时`;
   return `选择“${option.title} · ${time}”`;
 }
 

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import base64
 import binascii
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta
 import json
 from typing import Generic, Literal, TypeVar
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.scheduling import calendar_entry_from_row, task_item_from_row
 from dayboard.context import TenantContext
 from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
-from dayboard.domain.calendar import CalendarEntry, Reminder
+from dayboard.domain.calendar import CalendarEntry, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskStatus
 
 
@@ -24,7 +25,9 @@ class InvalidScheduleCursor(ValueError):
 class CalendarEntryView(BaseModel):
     id: UUID
     title: str
-    start_time: datetime
+    timing_kind: CalendarTimingKind
+    scheduled_date: date | None
+    start_time: datetime | None
     end_time: datetime | None
     timezone: str
     participants: list[str]
@@ -102,6 +105,13 @@ def _cursor_datetime(value: object) -> datetime:
     return parsed
 
 
+def _exclusive_local_end_date(value: datetime, timezone: str) -> date:
+    local = value.astimezone(ZoneInfo(timezone))
+    if local.timetz().replace(tzinfo=None) == time.min:
+        return local.date()
+    return local.date() + timedelta(days=1)
+
+
 class ScheduleQueryService:
     def __init__(self, session: AsyncSession) -> None:
         self.calendar_entries = CalendarEntryRepository(session)
@@ -129,6 +139,12 @@ class ScheduleQueryService:
             context,
             start_time=start_time,
             end_time=end_time,
+            start_date=(
+                start_time.astimezone(ZoneInfo(context.timezone)).date() if start_time else None
+            ),
+            end_date=(
+                _exclusive_local_end_date(end_time, context.timezone) if end_time else None
+            ),
             cursor_start_time=cursor_start,
             cursor_id=cursor_id,
             limit=limit + 1,
@@ -138,14 +154,16 @@ class ScheduleQueryService:
         next_cursor = None
         if has_more:
             last = page_rows[-1]
+            cursor_time = last.start_time or datetime.combine(
+                last.scheduled_date, time.min, tzinfo=UTC
+            )
             next_cursor = _encode_cursor(
-                {"kind": "calendar", "start_time": last.start_time.isoformat(), "id": str(last.id)}
+                {"kind": "calendar", "start_time": cursor_time.isoformat(), "id": str(last.id)}
             )
         return SchedulePage(
             items=[CalendarEntryView.from_domain(calendar_entry_from_row(row)) for row in page_rows],
             next_cursor=next_cursor,
         )
-
     async def list_task_items(
         self,
         context: TenantContext,

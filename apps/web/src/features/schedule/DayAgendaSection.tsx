@@ -16,8 +16,8 @@ type DayAgendaSectionProps = {
 };
 
 type AgendaItem =
-  | { entry: CalendarEntry; id: string; kind: "calendar"; timestamp: string }
-  | { id: string; kind: "task"; task: TaskItem; timestamp: string };
+  | { entry: CalendarEntry; id: string; kind: "calendar"; label: string; sortKey: string }
+  | { id: string; kind: "task"; label: string; sortKey: string; task: TaskItem };
 
 function RetryNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
@@ -36,19 +36,20 @@ export function DayAgendaSection({ calendar, onChanged, tasks, timezone }: DayAg
       entry,
       id: `calendar-${entry.id}`,
       kind: "calendar",
-      timestamp: entry.start_time,
+      label: entry.start_time ? formatScheduleTime(entry.start_time, timezone) : "随时",
+      sortKey: entry.start_time ?? `${entry.scheduled_date}T00:00:00`,
     }));
     const taskItems: AgendaItem[] = tasks.items.flatMap((task) =>
       task.due_at
-        ? [{ id: `task-${task.id}`, kind: "task" as const, task, timestamp: task.due_at }]
+        ? [{ id: `task-${task.id}`, kind: "task" as const, label: formatScheduleTime(task.due_at, timezone), sortKey: task.due_at, task }]
         : [],
     );
     return [...calendarItems, ...taskItems].sort((left, right) => {
-      const timeDifference = Date.parse(left.timestamp) - Date.parse(right.timestamp);
+      const timeDifference = Date.parse(left.sortKey) - Date.parse(right.sortKey);
       if (timeDifference !== 0) return timeDifference;
       return left.kind.localeCompare(right.kind);
     });
-  }, [calendar.items, tasks.items]);
+  }, [calendar.items, tasks.items, timezone]);
 
   const loadingWithoutItems = !items.length && (calendar.loading || tasks.loading);
   const hasErrors = Boolean(calendar.error || tasks.error);
@@ -85,7 +86,7 @@ export function DayAgendaSection({ calendar, onChanged, tasks, timezone }: DayAg
         <ol className={styles.agendaList}>
           {items.map((item) => (
             <li key={item.id}>
-              <time dateTime={item.timestamp}>{formatScheduleTime(item.timestamp, timezone)}</time>
+              <time dateTime={item.sortKey}>{item.label}</time>
               <ScheduleItem
                 item={
                   item.kind === "calendar"

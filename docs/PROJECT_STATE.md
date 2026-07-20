@@ -123,8 +123,8 @@ paths.
   The server owns trusted-timezone day boundaries; each source has independent loading, error,
   retry, stale-request cancellation, and cursor-pagination states.
 - Calendar/task intent: any action with a resolvable date, clock, or daypart is calendar intent,
-  including completion and deadline wording. A date or broad daypart without a clock uses the
-  documented deterministic default. Only actions with no resolvable temporal anchor, including
+  including completion and deadline wording. A date without a clock/daypart is a native `anytime`
+  entry and does not invent a clock; dayparts use documented deterministic clocks. Only actions with no resolvable temporal anchor, including
   vague expressions such as "later", become tasks. Independent actions in one message are split
   into separate tool calls.
 - Observability: request IDs plus tenant, user, thread, Run, runtime/tool, and created-object
@@ -159,12 +159,13 @@ Implementation notes:
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
 - The Run SSE endpoint joins the cross-process Redis message stream and falls back to PostgreSQL
   terminal state on reconnect or missed live delivery.
-- The current release resolves Agent-provided local calendar/task times with server-configured
+- The current release resolves Agent-provided local calendar times with server-configured
   `Asia/Shanghai`. Agent schemas reject `Z` and numeric offsets, browser registration no longer
   supplies scheduling timezone, and stored objects retain aware timestamps plus the IANA name.
   Explicit natural-language timezones such as "9 AM New York time" are not supported.
 - Relative date references are rendered as exact trusted-product-local dates in every agent system prompt.
-  Agent-created calendar entries deterministically default to an at-start `PT0M` reminder; explicit
+  Agent-created timed calendar entries deterministically default to an at-start `PT0M` reminder;
+  anytime entries have no clock reminder. Explicit
   advance offsets override it and an explicit no-reminder request can pass `null`. Final
   confirmations are instructed to use returned object values. Relative-date and confirmation model
   behavior still requires live acceptance; reminder defaults, end-time updates, and no-op rejection

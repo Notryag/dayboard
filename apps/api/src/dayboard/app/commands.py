@@ -739,7 +739,7 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
     if not isinstance(content, list):
         return state_data
 
-    allowed = ("id", "title", "start_time", "end_time", "timezone", "updated_at")
+    allowed = ("id", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone", "updated_at")
     candidates = [
         {"key": f"candidate_{index}", **{key: item[key] for key in allowed if key in item}}
         for index, item in enumerate(
@@ -756,7 +756,7 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
             "options": [
                 {
                     key: candidate[key]
-                    for key in ("key", "title", "start_time", "end_time", "timezone")
+                    for key in ("key", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone")
                     if key in candidate
                 }
                 for candidate in candidates

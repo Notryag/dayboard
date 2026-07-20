@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -47,6 +47,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     fields = set(schema["properties"])
 
     assert "title" in fields
+    assert "local_date" in fields
     assert "local_start" in fields
     assert "local_end" in fields
     assert "start_time" not in fields
@@ -135,6 +136,8 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert set(entry_result["calendar_entry"]) == {
         "id",
         "title",
+        "timing_kind",
+        "scheduled_date",
         "start_time",
         "end_time",
         "timezone",
@@ -223,6 +226,43 @@ async def test_empty_agent_searches_replace_list_tools(
 
     assert [entry["id"] for entry in entries] == [created_entry["calendar_entry"]["id"]]
     assert [task["id"] for task in tasks] == [created_task["task_item"]["id"]]
+
+
+async def test_agent_creates_and_searches_anytime_calendar_entry(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    tools = build_scheduling_tools(
+        session=db_session,
+        context=tenant_context,
+        run_id=uuid4(),
+    )
+    create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
+    search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
+
+    created = await create_entry.ainvoke(
+        {"title": "提交报告", "local_date": "2026-07-21"}
+    )
+    entry = created["calendar_entry"]
+
+    assert entry["timing_kind"] == "anytime"
+    assert entry["scheduled_date"] == "2026-07-21"
+    assert entry["start_time"] is None
+    assert entry["end_time"] is None
+    assert entry["reminder"] is None
+    assert created["conflicts"] == []
+
+    found = await search_entries.ainvoke(
+        {"local_start": "2026-07-21T00:00:00", "local_end": "2026-07-22T00:00:00"}
+    )
+    assert [candidate["id"] for candidate in found] == [entry["id"]]
+
+    with pytest.raises(ValidationError, match="exactly one"):
+        AgentCreateCalendarEntryInput(
+            title="冲突形状",
+            local_date=date(2026, 7, 21),
+            local_start=datetime(2026, 7, 21, 9, 0),
+        )
 
 
 def test_agent_local_datetime_inputs_reject_timezone_offsets() -> None:
