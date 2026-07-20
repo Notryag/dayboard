@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from fake_runtime import fake_executor_factory
 
 from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, estimate_prompt_tokens
 from dayboard.app.command_schemas import CommandRequest
@@ -22,6 +23,10 @@ class FakeConversationService:
         return SimpleNamespace(id=thread_id)
 
     async def append_message(self, context, **kwargs):
+        del context, kwargs
+        return None
+
+    async def upsert_assistant_message(self, context, **kwargs):
         del context, kwargs
         return None
 
@@ -149,7 +154,7 @@ async def test_command_service_checks_budget_before_model_execution(
         FakeSession(),
         settings=guard.settings,
         budget_guard=guard,
-            invoker=fake_invoker,
+            executor_factory=fake_executor_factory(fake_invoker),
             conversation_service=FakeConversationService(),
     )
 

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from fake_runtime import fake_executor_factory
 from langchain_core.messages import AIMessage, ToolMessage
 
 from dayboard.agent.factory import build_dayboard_agent
@@ -24,6 +25,10 @@ class FakeConversationService:
         return SimpleNamespace(id=thread_id)
 
     async def append_message(self, context, **kwargs):
+        del context, kwargs
+        return None
+
+    async def upsert_assistant_message(self, context, **kwargs):
         del context, kwargs
         return None
 
@@ -370,7 +375,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-            invoker=fake_invoker,
+            executor_factory=fake_executor_factory(fake_invoker),
             conversation_service=FakeConversationService(),
     )
 
@@ -442,7 +447,7 @@ async def test_command_service_logs_and_marks_failed_run(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-            invoker=failing_invoker,
+            executor_factory=fake_executor_factory(failing_invoker),
             conversation_service=FakeConversationService(),
     )
 

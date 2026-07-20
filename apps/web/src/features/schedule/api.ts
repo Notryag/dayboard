@@ -1,7 +1,6 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
   CalendarEntry,
-  RunScheduleItemGroup,
   SchedulePage,
   TaskItem,
 } from "./types";
@@ -51,17 +50,6 @@ export function getDatedTaskPage(
     cursor,
     signal,
   );
-}
-
-export async function getScheduleItemsByRunIds(
-  runIds: string[],
-  signal?: AbortSignal,
-): Promise<RunScheduleItemGroup[]> {
-  if (!runIds.length) return [];
-  const params = new URLSearchParams();
-  runIds.forEach((runId) => params.append("run_id", runId));
-  const response = await apiFetch(`/api/schedule-items/by-runs?${params}`, { signal });
-  return response.json() as Promise<RunScheduleItemGroup[]>;
 }
 
 async function mutateScheduleItem<T>(path: string, updatedAt: string): Promise<T> {

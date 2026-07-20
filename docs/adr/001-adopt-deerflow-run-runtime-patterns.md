@@ -35,6 +35,8 @@ Adopt these principles:
 6. Natural-language interpretation has one production path through `north`.
 7. `north` owns reusable model factories, provider adapters, middleware contracts, run primitives, and stream abstractions.
 8. Dayboard owns FastAPI routes, tenant and authorization policy, PostgreSQL product persistence, provider budgets, and scheduling tools.
+9. North's asynchronous Run executor is the only production owner of `agent.astream`; products
+   must not bypass it with direct invocation or callback-only streaming helpers.
 
 Do not adopt DeerFlow application features merely because they exist. A DeerFlow component is moved into `north` only when it is product-neutral and needed by a concrete Dayboard runtime requirement.
 

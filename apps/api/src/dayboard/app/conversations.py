@@ -138,6 +138,32 @@ class ConversationService:
         rows = await self.messages.list_for_thread(context, thread_id)
         return [conversation_message_from_row(row) for row in rows]
 
+    async def upsert_assistant_message(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        run_id: UUID,
+        content: str,
+        message_metadata: dict,
+    ) -> ConversationMessage:
+        row = await self.messages.upsert_assistant(
+            context,
+            thread_id=thread_id,
+            run_id=run_id,
+            content=content,
+            message_metadata=message_metadata,
+        )
+        return conversation_message_from_row(row)
+
+    async def get_assistant_message_for_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> ConversationMessage | None:
+        row = await self.messages.get_assistant_for_run(context, run_id)
+        return conversation_message_from_row(row) if row else None
+
     async def update_summary(
         self,
         context: TenantContext,

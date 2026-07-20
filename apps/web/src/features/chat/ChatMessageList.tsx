@@ -6,7 +6,6 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -15,9 +14,8 @@ import { Copy, ScanText, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import type { ConversationState } from "@/features/clarifications/types";
-import { getScheduleItemsByRunIds } from "@/features/schedule/api";
 import { ScheduleItem } from "@/features/schedule/ScheduleItem";
-import type { RunScheduleItemGroup, ScheduleChange } from "@/features/schedule/types";
+import type { ScheduleChange, ScheduleResultPart } from "@/features/schedule/types";
 import styles from "./ChatMessageList.module.css";
 
 export type ChatMessage = {
@@ -26,6 +24,7 @@ export type ChatMessage = {
   text: string;
   time: string;
   runId?: string;
+  parts?: ScheduleResultPart[];
 };
 
 type ChatMessageListProps = {
@@ -34,7 +33,6 @@ type ChatMessageListProps = {
   messages: ChatMessage[];
   onChanged: (change?: ScheduleChange) => void;
   onClarificationChoice: (optionKey: string) => void;
-  refreshKey: number;
   scrollRef: RefObject<HTMLElement | null>;
   timezone: string;
 };
@@ -49,7 +47,6 @@ type MessageActionMenu = {
 
 const longPressDurationMs = 450;
 const longPressMoveTolerancePx = 10;
-const autoScrollThresholdPx = 80;
 
 function messageTextId(messageId: string) {
   return `chat-message-text-${messageId}`;
@@ -61,43 +58,12 @@ export function ChatMessageList({
   messages,
   onChanged,
   onClarificationChoice,
-  refreshKey,
   scrollRef,
   timezone,
 }: ChatMessageListProps) {
   const [messageMenu, setMessageMenu] = useState<MessageActionMenu | null>(null);
-  const [scheduleGroups, setScheduleGroups] = useState<Record<string, RunScheduleItemGroup>>({});
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const pressTimerRef = useRef<number | null>(null);
-  const assistantRunIds = useMemo(
-    () => Array.from(new Set(messages.flatMap((message) =>
-      message.role === "assistant" && message.runId ? [message.runId] : [],
-    ))).slice(-50),
-    [messages],
-  );
-  const assistantRunKey = assistantRunIds.join(",");
-
-  useEffect(() => {
-    const controller = new AbortController();
-    if (!assistantRunIds.length) return () => controller.abort();
-    const container = scrollRef.current;
-    const shouldKeepBottom = container
-      ? container.scrollHeight - container.scrollTop - container.clientHeight < autoScrollThresholdPx
-      : false;
-    void getScheduleItemsByRunIds(assistantRunIds, controller.signal)
-      .then((groups) => {
-        setScheduleGroups(Object.fromEntries(groups.map((group) => [group.run_id, group])));
-        if (shouldKeepBottom) {
-          window.requestAnimationFrame(() => {
-            const currentContainer = scrollRef.current;
-            if (currentContainer) currentContainer.scrollTop = currentContainer.scrollHeight;
-          });
-        }
-      })
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [assistantRunKey, assistantRunIds, refreshKey, scrollRef]);
-
   function clearLongPress() {
     if (pressTimerRef.current !== null) {
       window.clearTimeout(pressTimerRef.current);
@@ -213,21 +179,7 @@ export function ChatMessageList({
       <section className={styles.messages} aria-label="对话记录" ref={scrollRef}>
         {messages.map((message) => {
           const isUser = message.role === "user";
-          const scheduleGroup = !isUser && message.runId
-            ? scheduleGroups[message.runId]
-            : undefined;
-          const scheduleItems = scheduleGroup
-            ? [
-                ...scheduleGroup.calendar_entries.map((entry) => ({
-                  kind: "calendar" as const,
-                  value: entry,
-                })),
-                ...scheduleGroup.task_items.map((task) => ({
-                  kind: "task" as const,
-                  value: task,
-                })),
-              ]
-            : [];
+          const scheduleItems = isUser ? [] : (message.parts ?? []).map((part) => part.item);
           const messageArticle = (
             <article
               className={`${styles.message} ${
@@ -285,7 +237,7 @@ export function ChatMessageList({
                       ))}
                     </div>
                   ) : null}
-                  {messageArticle}
+                  {message.text ? messageArticle : null}
                 </div>
               )}
             </div>

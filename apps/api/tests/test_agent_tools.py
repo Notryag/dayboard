@@ -139,16 +139,23 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "start_time",
         "end_time",
         "timezone",
+        "participants",
+        "reminder",
+        "status",
+        "created_by_run_id",
+        "created_at",
         "updated_at",
     }
     assert "tenant_id" not in str(entry_result)
-    assert "created_by_run_id" not in str(entry_result)
     assert set(task_result["task_item"]) == {
         "id",
         "title",
         "due_at",
         "timezone",
+        "reminder",
         "status",
+        "created_by_run_id",
+        "created_at",
         "updated_at",
     }
 

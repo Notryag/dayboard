@@ -74,12 +74,6 @@ class SchedulePage(BaseModel, Generic[ItemT]):
     next_cursor: str | None = None
 
 
-class RunScheduleItemGroup(BaseModel):
-    run_id: UUID
-    calendar_entries: list[CalendarEntryView]
-    task_items: list[TaskItemView]
-
-
 def _encode_cursor(payload: dict[str, str | bool | None]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
@@ -210,37 +204,3 @@ class ScheduleQueryService:
             items=[TaskItemView.from_domain(task_item_from_row(row)) for row in page_rows],
             next_cursor=next_cursor,
         )
-
-    async def list_created_by_runs(
-        self,
-        context: TenantContext,
-        run_ids: list[UUID],
-    ) -> list[RunScheduleItemGroup]:
-        unique_run_ids = list(dict.fromkeys(run_ids))
-        calendar_rows = await self.calendar_entries.list_created_by_runs(context, unique_run_ids)
-        task_rows = await self.task_items.list_created_by_runs(context, unique_run_ids)
-        calendars_by_run: dict[UUID, list[CalendarEntryView]] = {
-            run_id: [] for run_id in unique_run_ids
-        }
-        tasks_by_run: dict[UUID, list[TaskItemView]] = {
-            run_id: [] for run_id in unique_run_ids
-        }
-        for row in calendar_rows:
-            if row.created_by_run_id in calendars_by_run:
-                calendars_by_run[row.created_by_run_id].append(
-                    CalendarEntryView.from_domain(calendar_entry_from_row(row))
-                )
-        for row in task_rows:
-            if row.created_by_run_id in tasks_by_run:
-                tasks_by_run[row.created_by_run_id].append(
-                    TaskItemView.from_domain(task_item_from_row(row))
-                )
-        return [
-            RunScheduleItemGroup(
-                run_id=run_id,
-                calendar_entries=calendars_by_run[run_id],
-                task_items=tasks_by_run[run_id],
-            )
-            for run_id in unique_run_ids
-            if calendars_by_run[run_id] or tasks_by_run[run_id]
-        ]

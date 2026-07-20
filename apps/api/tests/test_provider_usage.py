@@ -6,6 +6,7 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, HumanMessage
 from north import RuntimeEvent
 import pytest
+from fake_runtime import fake_executor_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.command_schemas import CommandRequest
@@ -61,7 +62,7 @@ async def test_command_service_records_provider_usage(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=fake_invoker,
+        executor_factory=fake_executor_factory(fake_invoker),
     )
 
     request = CommandRequest(message="安排会议")
@@ -113,7 +114,7 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=fake_invoker,
+        executor_factory=fake_executor_factory(fake_invoker),
     )
     request = CommandRequest(message="创建两个任务")
     run_id = await service.create_command_run(tenant_context, request)
@@ -141,7 +142,7 @@ async def test_command_service_does_not_invent_missing_provider_usage(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=fake_invoker,
+        executor_factory=fake_executor_factory(fake_invoker),
     )
 
     request = CommandRequest(message="安排会议")
@@ -176,7 +177,7 @@ async def test_command_service_settles_usage_when_invocation_does_not_return(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
-        invoker=fake_invoker,
+        executor_factory=fake_executor_factory(fake_invoker),
     )
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)

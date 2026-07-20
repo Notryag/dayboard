@@ -199,7 +199,6 @@ async def test_run_schedule_items_and_direct_actions(
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     run_id = UUID("00000000-0000-0000-0000-000000000201")
-    other_run_id = UUID("00000000-0000-0000-0000-000000000202")
     entry = CalendarEntryRow(
         tenant_id=tenant_context.tenant_id,
         owner_user_id=tenant_context.user_id,
@@ -252,10 +251,6 @@ async def test_run_schedule_items_and_direct_actions(
     original_task_updated_at = task.updated_at.isoformat()
 
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
-        grouped = await client.get(
-            "/api/schedule-items/by-runs",
-            params=[("run_id", str(run_id)), ("run_id", str(other_run_id))],
-        )
         completed = await client.post(
             f"/api/task-items/{task.id}/complete",
             json={"expected_updated_at": original_task_updated_at},
@@ -297,12 +292,6 @@ async def test_run_schedule_items_and_direct_actions(
             json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
         )
 
-    assert grouped.status_code == 200
-    assert len(grouped.json()) == 1
-    assert grouped.json()[0]["run_id"] == str(run_id)
-    assert [item["title"] for item in grouped.json()[0]["calendar_entries"]] == ["游泳", "开会"]
-    assert grouped.json()[0]["calendar_entries"][0]["status"] == "scheduled"
-    assert [item["title"] for item in grouped.json()[0]["task_items"]] == ["拿快递"]
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
     assert stale_cancel.status_code == 409

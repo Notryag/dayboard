@@ -9,13 +9,21 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, ToolMessage
-from north import CompactionEvent, RuntimeUsageAccumulator, invoke_agent_once
+from north import (
+    CompactionEvent,
+    RunExecutor,
+    RunLifecycleHooks,
+    RuntimeStreamEvent,
+    RuntimeUsageAccumulator,
+)
+from north.runtime import MemoryStreamBridge, RunManager, StreamBridge
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
+from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversations import ConversationService
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.runs import AgentRunService
@@ -55,20 +63,22 @@ class CommandService:
         *,
         settings: Settings | None = None,
         budget_guard: ProviderBudgetGuard | None = None,
-        invoker=invoke_agent_once,
         checkpointer=None,
         conversation_service: ConversationService | None = None,
         usage_session_factory=SessionLocal,
         runtime_event_session_factory=SessionLocal,
+        stream_bridge: StreamBridge | None = None,
+        executor_factory=RunExecutor,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
-        self.invoker = invoker
         self.checkpointer = checkpointer
         self.conversations = conversation_service or ConversationService(session)
         self.usage_session_factory = usage_session_factory
         self.runtime_event_session_factory = runtime_event_session_factory
+        self.stream_bridge = stream_bridge or MemoryStreamBridge()
+        self.executor_factory = executor_factory
 
     async def create_command_run(
         self,
@@ -165,7 +175,10 @@ class CommandService:
             return
         usage_accumulator = RuntimeUsageAccumulator()
         runtime_event_lock = asyncio.Lock()
+        presentation_parts: list[dict[str, Any]] = []
+        seen_tool_calls: set[str] = set()
         budget_estimate = None
+        failure_hook_called = False
         try:
             if status == AgentRunStatus.queued:
                 if not await runs.mark_running(context, run):
@@ -223,6 +236,11 @@ class CommandService:
                     event_metadata=event_metadata,
                 )
                 await self.session.commit()
+                await self._publish_run_event(
+                    run.id,
+                    event_type,
+                    {"content": content, "event_metadata": event_metadata},
+                )
 
             async def record_runtime_event(event) -> None:
                 await usage_accumulator(event)
@@ -247,6 +265,44 @@ class CommandService:
                             category=projected.category,
                         )
                         await event_session.commit()
+                await self._publish_run_event(
+                    run.id,
+                    projected.event_type,
+                    {
+                        "content": projected.content,
+                        "event_metadata": projected.metadata,
+                    },
+                )
+
+            async def record_stream_event(event: RuntimeStreamEvent) -> None:
+                projected = project_runtime_stream_event(event)
+                if projected is None:
+                    return
+                if projected.event_type == "schedule_item_result":
+                    latest = await runs.get_run_row_for_update(context, run.id)
+                    if (
+                        latest is None
+                        or AgentRunStatus(latest.status) != AgentRunStatus.running
+                    ):
+                        await self.session.commit()
+                        raise asyncio.CancelledError()
+                    tool_call_id = projected.data["tool_call_id"]
+                    if tool_call_id in seen_tool_calls:
+                        return
+                    seen_tool_calls.add(tool_call_id)
+                    presentation_parts.append(projected.data)
+                    await self.conversations.upsert_assistant_message(
+                        context,
+                        thread_id=run.thread_id,
+                        run_id=run.id,
+                        content="",
+                        message_metadata={
+                            "status": "running",
+                            "parts": presentation_parts,
+                        },
+                    )
+                    await self.session.commit()
+                # Live presentation is projected from the canonical bridge event by the API.
 
             async def record_compaction(event: CompactionEvent) -> None:
                 await self.conversations.update_summary(
@@ -263,7 +319,116 @@ class CommandService:
                     preserved_message_count=len(event.preserved_messages),
                 )
 
-            result = await self.invoker(
+            async def complete_run(result: Any) -> None:
+                latest = await runs.get_run_row(context, run.id)
+                if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
+                    raise asyncio.CancelledError()
+
+                clarification_question = _extract_clarification_question(result)
+                if clarification_question:
+                    pending = await self.conversations.set_pending_clarification(
+                        context,
+                        thread_id=run.thread_id,
+                        run_id=run.id,
+                        question=clarification_question,
+                        state_data=_extract_clarification_state_data(result),
+                    )
+                    if not await runs.mark_needs_clarification(
+                        context,
+                        run,
+                        question=clarification_question,
+                        event_metadata={
+                            "state_version": pending.version,
+                            "interaction": pending.state_data.get("interaction"),
+                        },
+                    ):
+                        await self.session.rollback()
+                        raise asyncio.CancelledError()
+                    await self.conversations.upsert_assistant_message(
+                        context,
+                        thread_id=run.thread_id,
+                        run_id=run.id,
+                        content=clarification_question,
+                        message_metadata={
+                            "status": "needs_clarification",
+                            "parts": presentation_parts,
+                        },
+                    )
+                    await self.session.commit()
+                    await self._publish_run_event(
+                        run.id,
+                        "clarification_requested",
+                        {"content": clarification_question, "parts": presentation_parts},
+                    )
+                    logger.info(
+                        "dayboard.command.needs_clarification",
+                        run_id=str(run.id),
+                        tenant_id=str(context.tenant_id),
+                        user_id=str(context.user_id),
+                    )
+                    return
+
+                message = _extract_final_message(result)
+                if not await runs.mark_completed(
+                    context,
+                    run,
+                    result_message=message,
+                    event_metadata={"runtime": "north"},
+                ):
+                    await self.session.rollback()
+                    raise asyncio.CancelledError()
+                await self.conversations.upsert_assistant_message(
+                    context,
+                    thread_id=run.thread_id,
+                    run_id=run.id,
+                    content=message,
+                    message_metadata={"status": "completed", "parts": presentation_parts},
+                )
+                await self.conversations.clear_pending(context, run.thread_id)
+                await self.session.commit()
+                await self._publish_run_event(
+                    run.id,
+                    "run_completed",
+                    {"content": message, "parts": presentation_parts},
+                )
+                logger.info(
+                    "dayboard.command.completed",
+                    run_id=str(run.id),
+                    tenant_id=str(context.tenant_id),
+                    user_id=str(context.user_id),
+                    result_length=len(message),
+                )
+
+            async def fail_run(exc: Exception) -> None:
+                nonlocal failure_hook_called
+                failure_hook_called = True
+                transitioned = await _mark_run_failed(
+                    runs,
+                    self.conversations,
+                    self.session,
+                    context,
+                    run_id,
+                    exc,
+                    presentation_parts=presentation_parts,
+                )
+                if transitioned:
+                    await self._publish_run_event(
+                        run_id,
+                        "run_failed",
+                        {
+                            "content": _safe_error_message(exc),
+                            "parts": presentation_parts,
+                        },
+                    )
+
+            north_runs = RunManager()
+            north_record = north_runs.create(
+                thread_id=str(run.thread_id),
+                run_id=str(run.id),
+            )
+            executor = self.executor_factory(self.stream_bridge, north_runs)
+            await executor.execute(
+                north_record,
                 agent_factory=lambda: build_dayboard_agent(
                     self.settings,
                     session=self.session,
@@ -286,83 +451,36 @@ class CommandService:
                     "run_id": str(run.id),
                 },
                 event_sink=record_runtime_event,
-            )
-
-            latest = await runs.get_run_row(context, run.id)
-            if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
-                return
-
-            clarification_question = _extract_clarification_question(result)
-            if clarification_question:
-                pending = await self.conversations.set_pending_clarification(
-                    context,
-                    thread_id=run.thread_id,
-                    run_id=run.id,
-                    question=clarification_question,
-                    state_data=_extract_clarification_state_data(result),
-                )
-                if not await runs.mark_needs_clarification(
-                    context,
-                    run,
-                    question=clarification_question,
-                    event_metadata={
-                        "state_version": pending.version,
-                        "interaction": pending.state_data.get("interaction"),
-                    },
-                ):
-                    await self.session.rollback()
-                    return
-                await self.conversations.append_message(
-                    context,
-                    thread_id=run.thread_id,
-                    run_id=run.id,
-                    role=ConversationRole.assistant,
-                    content=clarification_question,
-                    message_metadata={"status": "needs_clarification"},
-                )
-                await self.session.commit()
-                logger.info(
-                    "dayboard.command.needs_clarification",
-                    run_id=str(run.id),
-                    tenant_id=str(context.tenant_id),
-                    user_id=str(context.user_id),
-                )
-                return
-
-            message = _extract_final_message(result)
-            if not await runs.mark_completed(
-                context,
-                run,
-                result_message=message,
-                event_metadata={"runtime": "north"},
-            ):
-                await self.session.rollback()
-                return
-            await self.conversations.append_message(
-                context,
-                thread_id=run.thread_id,
-                run_id=run.id,
-                role=ConversationRole.assistant,
-                content=message,
-                message_metadata={"status": "completed"},
-            )
-            await self.conversations.clear_pending(context, run.thread_id)
-            await self.session.commit()
-            logger.info(
-                "dayboard.command.completed",
-                run_id=str(run.id),
-                tenant_id=str(context.tenant_id),
-                user_id=str(context.user_id),
-                result_length=len(message),
+                stream_observer=record_stream_event,
+                lifecycle_hooks=RunLifecycleHooks(
+                    on_completed=complete_run,
+                    on_error=fail_run,
+                ),
             )
         except Exception as exc:
-            if run is not None:
-                await _mark_run_failed(
-                    runs, self.conversations, self.session, context, run.id, exc
+            transitioned_to_failed = False
+            if not failure_hook_called:
+                transitioned_to_failed = await _mark_run_failed(
+                    runs,
+                    self.conversations,
+                    self.session,
+                    context,
+                    run_id,
+                    exc,
+                    presentation_parts=presentation_parts,
+                )
+            if transitioned_to_failed:
+                await self._publish_run_event(
+                    run_id,
+                    "run_failed",
+                    {
+                        "content": _safe_error_message(exc),
+                        "parts": presentation_parts,
+                    },
                 )
             logger.exception(
                 "dayboard.command.failed",
-                run_id=str(run.id) if run is not None else None,
+                run_id=str(run_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
@@ -436,6 +554,22 @@ class CommandService:
                 model=self.settings.agent_model_name,
             )
 
+    async def _publish_run_event(
+        self,
+        run_id: UUID,
+        event_type: str,
+        data: dict[str, Any],
+    ) -> None:
+        try:
+            await self.stream_bridge.publish(str(run_id), event_type, data)
+        except Exception:
+            logger.warning(
+                "dayboard.command.run_stream_publish_failed",
+                run_id=str(run_id),
+                event_type=event_type,
+                exc_info=True,
+            )
+
     async def fail_command_run(
         self,
         context: TenantContext,
@@ -473,12 +607,14 @@ async def _mark_run_failed(
     context: TenantContext,
     run_id: UUID,
     exc: Exception,
-) -> None:
+    *,
+    presentation_parts: list[dict[str, Any]] | None = None,
+) -> bool:
     try:
         await session.rollback()
         run = await runs.get_run_row(context, run_id)
         if run is None:
-            return
+            return False
         transitioned = await runs.mark_failed(
             context,
             run,
@@ -487,16 +623,19 @@ async def _mark_run_failed(
         )
         if not transitioned:
             await session.rollback()
-            return
-        await conversations.append_message(
+            return False
+        await conversations.upsert_assistant_message(
             context,
             thread_id=run.thread_id,
             run_id=run.id,
-            role=ConversationRole.assistant,
             content=_safe_error_message(exc),
-            message_metadata={"status": "failed"},
+            message_metadata={
+                "status": "failed",
+                "parts": presentation_parts or [],
+            },
         )
         await session.commit()
+        return True
     except Exception:
         logger.exception(
             "dayboard.command.failed_status_update_failed",
@@ -504,6 +643,7 @@ async def _mark_run_failed(
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
         )
+        return False
 
 
 def _safe_error_message(exc: Exception) -> str:

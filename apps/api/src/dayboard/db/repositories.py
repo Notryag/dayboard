@@ -275,24 +275,6 @@ class CalendarEntryRepository:
             select(CalendarEntryRow).where(*conditions)
         )
 
-    async def list_created_by_runs(
-        self,
-        context: TenantContext,
-        run_ids: list[UUID],
-    ) -> list[CalendarEntryRow]:
-        if not run_ids:
-            return []
-        result = await self.session.scalars(
-            select(CalendarEntryRow)
-            .where(
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.created_by_run_id.in_(run_ids),
-            )
-            .order_by(CalendarEntryRow.start_time.asc(), CalendarEntryRow.id.asc())
-        )
-        return list(result)
-
     async def cancel_from_ui(
         self,
         context: TenantContext,
@@ -609,29 +591,6 @@ class TaskItemRepository:
         return await self.session.scalar(
             select(TaskItemRow).where(*conditions)
         )
-
-    async def list_created_by_runs(
-        self,
-        context: TenantContext,
-        run_ids: list[UUID],
-    ) -> list[TaskItemRow]:
-        if not run_ids:
-            return []
-        result = await self.session.scalars(
-            select(TaskItemRow)
-            .where(
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.created_by_run_id.in_(run_ids),
-                TaskItemRow.deleted_at.is_(None),
-            )
-            .order_by(
-                TaskItemRow.due_at.asc().nulls_last(),
-                TaskItemRow.created_at.asc(),
-                TaskItemRow.id.asc(),
-            )
-        )
-        return list(result)
 
     async def set_status_from_ui(
         self,

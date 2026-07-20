@@ -32,9 +32,10 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
             )
 
     class FakeCommandService:
-        def __init__(self, session, *, checkpointer=None):
+        def __init__(self, session, *, checkpointer=None, stream_bridge=None):
             captured["session"] = session
             captured["checkpointer"] = checkpointer
+            captured["stream_bridge"] = stream_bridge
 
         async def execute_command_run(self, context, request, requested_run_id):
             captured["context"] = context
@@ -55,7 +56,7 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     )
 
     await execute_command_run(
-        {"checkpointer": "checkpoint"},
+        {"checkpointer": "checkpoint", "redis": object()},
         str(run_id),
         {"tenant_id": str(uuid4()), "user_id": str(uuid4())},
         {"message": "队列中伪造的消息"},

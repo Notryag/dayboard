@@ -29,7 +29,7 @@ import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
 import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
 import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
-import type { ScheduleChange } from "@/features/schedule/types";
+import type { ScheduleChange, ScheduleResultPart } from "@/features/schedule/types";
 import styles from "./page.module.css";
 
 type PrimaryView = "chat" | "schedule";
@@ -48,12 +48,18 @@ type ConversationMessage = {
   content: string;
   created_at: string;
   run_id: string;
+  message_metadata: {
+    parts?: ScheduleResultPart[];
+  };
 };
 
-type RunEvent = {
-  seq: number;
-  event_type: string;
-  content: string | null;
+type RunStreamPayload = {
+  content?: string | null;
+  delta?: string;
+  tool_call_id?: string;
+  operation?: string;
+  item?: ScheduleResultPart["item"];
+  parts?: ScheduleResultPart[];
 };
 
 type AgentRun = {
@@ -114,6 +120,7 @@ function createMessage(
   role: ChatMessage["role"],
   text: string,
   runId?: string,
+  parts?: ScheduleResultPart[],
 ): ChatMessage {
   return {
     id: crypto.randomUUID(),
@@ -121,6 +128,7 @@ function createMessage(
     text,
     time: currentTimeLabel(),
     runId,
+    parts,
   };
 }
 
@@ -135,7 +143,24 @@ function persistedMessage(message: ConversationMessage): ChatMessage {
       hour12: false,
     }).format(new Date(message.created_at)),
     runId: message.run_id,
+    parts: message.message_metadata.parts ?? [],
   };
+}
+
+function upsertAssistantMessage(
+  messages: ChatMessage[],
+  runId: string,
+  update: (message: ChatMessage) => ChatMessage,
+): ChatMessage[] {
+  const index = messages.findIndex(
+    (message) => message.role === "assistant" && message.runId === runId,
+  );
+  if (index === -1) {
+    return [...messages, update(createMessage("assistant", "", runId, []))];
+  }
+  const next = [...messages];
+  next[index] = update(next[index]);
+  return next;
 }
 
 function ChatHome() {
@@ -231,15 +256,14 @@ function ChatHome() {
         setActiveProgress([]);
         setActiveRunId(activeRun.id);
         try {
-          const result = await followRun(activeRun.id);
+          const result = await followRun(activeRun.id, resolvedThreadId);
           await refreshConversationState(resolvedThreadId);
           setScheduleRevision((current) => current + 1);
           setMessages((current) =>
-            current.some(
-              (message) => message.role === "assistant" && message.runId === activeRun.id,
-            )
-              ? current
-              : [...current, createMessage("assistant", result, activeRun.id)],
+            upsertAssistantMessage(current, activeRun.id, (message) => ({
+              ...message,
+              text: result,
+            })),
           );
         } finally {
           setIsSubmitting(false);
@@ -258,12 +282,13 @@ function ChatHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrapAttempt]);
 
-  function followRun(runId: string): Promise<string> {
+  function followRun(runId: string, runThreadId: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const progress: RunActivityStep[] = [];
-      let cursor = 0;
       let retries = 0;
       let settled = false;
+      let terminalReconnectAttempted = false;
+      let replayIncomplete = false;
 
       function finish(stream: EventSource, text: string) {
         if (settled) return;
@@ -283,73 +308,153 @@ function ChatHome() {
         tool_call_error: "操作失败",
         conflict_check_started: "正在检查日程冲突",
         conflict_check_completed: "日程冲突检查完成",
-        calendar_entry_created: "日程已创建",
-        task_creation_started: "正在创建任务",
-        task_item_created: "任务已创建",
       };
 
       function connect() {
         const stream = new EventSource(
-          `${apiUrl}/api/runs/${runId}/events/stream?after_seq=${cursor}`,
+          `${apiUrl}/api/runs/${runId}/events/stream`,
           { withCredentials: true },
         );
         activeStreamRef.current = stream;
+        stream.onopen = () => {
+          retries = 0;
+        };
 
         function parseEvent(event: Event) {
-          const runEvent = JSON.parse((event as MessageEvent<string>).data) as RunEvent;
-          cursor = Math.max(cursor, runEvent.seq);
-          return runEvent;
+          const messageEvent = event as MessageEvent<string>;
+          return JSON.parse(messageEvent.data) as RunStreamPayload;
         }
 
         for (const [eventType, fallbackText] of Object.entries(progressLabels)) {
           stream.addEventListener(eventType, (event) => {
-            const runEvent = parseEvent(event);
+            const payload = parseEvent(event);
             const useEventContent = eventType !== "run_created" && eventType !== "run_started";
             const step = {
               eventType,
-              text: useEventContent ? (runEvent.content ?? fallbackText) : fallbackText,
+              text: useEventContent ? (payload.content ?? fallbackText) : fallbackText,
             };
             progress.push(step);
             setActiveProgress([...progress]);
           });
         }
 
+        stream.addEventListener("assistant_text_delta", (event) => {
+          const payload = parseEvent(event);
+          if (!payload.delta || replayIncomplete) return;
+          setMessages((current) =>
+            upsertAssistantMessage(current, runId, (message) => ({
+              ...message,
+              text: message.text + payload.delta,
+            })),
+          );
+        });
+
+        stream.addEventListener("stream_replay_gap", () => {
+          replayIncomplete = true;
+          void apiFetch(`/api/threads/${runThreadId}/messages`)
+            .then((response) => response.json() as Promise<ConversationMessage[]>)
+            .then((history) => {
+              const persisted = history.find(
+                (message) => message.role === "assistant" && message.run_id === runId,
+              );
+              setMessages((current) =>
+                upsertAssistantMessage(current, runId, (message) => ({
+                  ...message,
+                  text: persisted?.content ?? "",
+                  parts: persisted?.message_metadata.parts ?? message.parts,
+                })),
+              );
+            })
+            .catch(() => undefined);
+        });
+
+        stream.addEventListener("schedule_item_result", (event) => {
+          const payload = parseEvent(event);
+          if (!payload.tool_call_id || !payload.operation || !payload.item) return;
+          const part: ScheduleResultPart = {
+            tool_call_id: payload.tool_call_id,
+            operation: payload.operation,
+            item: payload.item,
+          };
+          setMessages((current) =>
+            upsertAssistantMessage(current, runId, (message) => ({
+              ...message,
+              parts: message.parts?.some(
+                (candidate) => candidate.tool_call_id === part.tool_call_id,
+              )
+                ? message.parts
+                : [...(message.parts ?? []), part],
+            })),
+          );
+          setScheduleRevision((current) => current + 1);
+        });
+
         for (const eventType of ["run_completed", "clarification_requested"] as const) {
           stream.addEventListener(eventType, (event) => {
-            const runEvent = parseEvent(event);
-            finish(stream, runEvent.content ?? "已处理完成。");
+            const payload = parseEvent(event);
+            if (payload.parts) {
+              setMessages((current) =>
+                upsertAssistantMessage(current, runId, (message) => ({
+                  ...message,
+                  parts: payload.parts,
+                })),
+              );
+            }
+            finish(stream, payload.content ?? "已处理完成。");
           });
         }
 
         stream.addEventListener("run_failed", (event) => {
-          const runEvent = parseEvent(event);
-          finish(stream, runEvent.content ?? "请求没有成功。请稍后再试。");
+          const payload = parseEvent(event);
+          if (payload.parts) {
+            setMessages((current) =>
+              upsertAssistantMessage(current, runId, (message) => ({
+                ...message,
+                parts: payload.parts,
+              })),
+            );
+          }
+          finish(stream, payload.content ?? "请求没有成功。请稍后再试。");
         });
         stream.addEventListener("run_cancelled", (event) => {
-          const runEvent = parseEvent(event);
-          finish(stream, runEvent.content ?? "请求已取消。");
+          const payload = parseEvent(event);
+          if (payload.parts) {
+            setMessages((current) =>
+              upsertAssistantMessage(current, runId, (message) => ({
+                ...message,
+                parts: payload.parts,
+              })),
+            );
+          }
+          finish(stream, payload.content ?? "请求已取消。");
         });
 
         stream.onerror = () => {
-          stream.close();
           if (settled) return;
-          activeStreamRef.current = null;
           void apiFetch(`/api/runs/${runId}`)
             .then((response) => response.json() as Promise<AgentRun>)
             .then((run) => {
               if (terminalRunStatuses.has(run.status)) {
+                if (!terminalReconnectAttempted) {
+                  terminalReconnectAttempted = true;
+                  stream.close();
+                  connect();
+                  return;
+                }
                 finish(stream, run.result_message ?? "请求已结束。");
                 return;
               }
               retries += 1;
               if (retries > 4) {
+                stream.close();
+                activeStreamRef.current = null;
                 settled = true;
                 reject(new Error("Run event stream disconnected"));
-                return;
               }
-              window.setTimeout(connect, Math.min(500 * 2 ** retries, 4000));
             })
             .catch((error: unknown) => {
+              stream.close();
+              activeStreamRef.current = null;
               settled = true;
               reject(error);
             });
@@ -388,15 +493,17 @@ function ChatHome() {
 
       const command: CommandRunResponse = await response.json();
       setActiveRunId(command.run_id);
-      const result = await followRun(command.run_id);
+      const result = await followRun(command.run_id, threadId);
 
       await refreshConversationState(threadId);
       setScheduleRevision((current) => current + 1);
 
-      setMessages((current) => [
-        ...current,
-        createMessage("assistant", result, command.run_id),
-      ]);
+      setMessages((current) =>
+        upsertAssistantMessage(current, command.run_id, (message) => ({
+          ...message,
+          text: result,
+        })),
+      );
     } catch (error) {
       setMessages((current) => [
         ...current,
@@ -430,13 +537,15 @@ function ChatHome() {
         option_key: optionKey,
       });
       setActiveRunId(command.run_id);
-      const result = await followRun(command.run_id);
+      const result = await followRun(command.run_id, threadId);
       await refreshConversationState(threadId);
       setScheduleRevision((current) => current + 1);
-      setMessages((current) => [
-        ...current,
-        createMessage("assistant", result, command.run_id),
-      ]);
+      setMessages((current) =>
+        upsertAssistantMessage(current, command.run_id, (message) => ({
+          ...message,
+          text: result,
+        })),
+      );
     } catch {
       await refreshConversationState(threadId).catch(() => undefined);
       setMessages((current) => [
@@ -559,7 +668,6 @@ function ChatHome() {
               messages={messages}
               onChanged={handleScheduleChanged}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
-              refreshKey={scheduleRevision}
               scrollRef={messagesRef}
               timezone={timezone}
             />

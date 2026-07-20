@@ -201,9 +201,11 @@ Client
   -> worker restores tenant, owner, and input text from agent_runs, then runs north
   -> north calls Dayboard tools
   -> tool calls Dayboard domain service
-  -> repository writes PostgreSQL
-  -> worker records run status and runtime events
-  -> client subscribes to the run SSE stream
+  -> repository commits PostgreSQL before a successful ToolMessage is exposed
+  -> north streams canonical message chunks to the Dayboard projector
+  -> worker publishes safe presentation events to a per-Run Redis Stream
+  -> worker persists typed parts in assistant conversation message metadata
+  -> client joins the Run SSE stream and reduces text deltas and ToolMessages
 ```
 
 Clarification flow:
@@ -370,6 +372,12 @@ dates with the authenticated account timezone. Responses expose UI-relevant sche
 correlation without exposing tenant ids or internal idempotency operation keys.
 
 `agent_runs` and `agent_run_events` are the source of truth for command execution state. Command creation and execution are separate operations: the request transaction commits the queued run before enqueueing an arq job. The Redis queue provides cross-process delivery, while each worker opens an independent database session. Jobs use the run id as their unique queue id and re-check PostgreSQL state before execution because arq uses at-least-once delivery.
+
+Redis Streams transport live canonical-message projections between Worker and API processes. They
+are bounded, expiring fanout infrastructure rather than product truth. The SSE cursor uses the Redis
+stream entry ID. If a live terminal event is unavailable, the endpoint emits the terminal state from
+PostgreSQL. Historical schedule cards are restored from typed assistant message metadata, not by
+querying mutable calendar or task rows using `created_by_run_id`.
 
 The worker periodically recovers abandoned active runs. A `running` run uses its last update time and a shorter execution timeout; a `queued` run uses its creation time and a longer queue-wait timeout. Recovery uses atomic, status-specific transitions (`queued -> failed` or `running -> failed`), so a job that starts while recovery is scanning cannot be mistaken for an abandoned queued job. A delayed Redis job that arrives after recovery exits immediately after observing the terminal PostgreSQL state.
 

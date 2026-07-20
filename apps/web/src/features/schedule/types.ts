@@ -34,15 +34,15 @@ export type SchedulePage<T> = {
   next_cursor: string | null;
 };
 
-export type RunScheduleItemGroup = {
-  run_id: string;
-  calendar_entries: CalendarEntry[];
-  task_items: TaskItem[];
-};
-
 export type ScheduleDisplayItem =
   | { kind: "calendar"; value: CalendarEntry }
   | { kind: "task"; value: TaskItem };
+
+export type ScheduleResultPart = {
+  tool_call_id: string;
+  operation: string;
+  item: ScheduleDisplayItem;
+};
 
 export type ScheduleChange = {
   undo?: {

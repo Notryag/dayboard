@@ -114,6 +114,48 @@ class ConversationMessageRepository:
             raise RuntimeError("Conversation message conflict was not persisted")
         return existing
 
+    async def upsert_assistant(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        run_id: UUID,
+        content: str,
+        message_metadata: dict,
+    ) -> ConversationMessageRow:
+        statement = (
+            insert(ConversationMessageRow)
+            .values(
+                tenant_id=context.tenant_id,
+                owner_user_id=context.user_id,
+                thread_id=thread_id,
+                run_id=run_id,
+                role=ConversationRole.assistant.value,
+                content=content,
+                message_metadata=message_metadata,
+            )
+            .on_conflict_do_update(
+                index_elements=["tenant_id", "run_id", "role"],
+                set_={"content": content, "message_metadata": message_metadata},
+            )
+            .returning(ConversationMessageRow)
+        )
+        return (await self.session.execute(statement)).scalar_one()
+
+    async def get_assistant_for_run(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+    ) -> ConversationMessageRow | None:
+        return await self.session.scalar(
+            select(ConversationMessageRow).where(
+                ConversationMessageRow.tenant_id == context.tenant_id,
+                ConversationMessageRow.owner_user_id == context.user_id,
+                ConversationMessageRow.run_id == run_id,
+                ConversationMessageRow.role == ConversationRole.assistant.value,
+            )
+        )
+
     async def list_for_thread(
         self,
         context: TenantContext,

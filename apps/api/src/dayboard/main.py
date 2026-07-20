@@ -7,6 +7,7 @@ from arq.connections import RedisSettings
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from north.runtime import RedisStreamBridge
 
 from dayboard.api.rate_limit import configure_rate_limiting
 from dayboard.api.errors import configure_error_handling
@@ -30,6 +31,10 @@ async def lifespan(app: FastAPI):
     app.state.command_dispatcher = RedisCommandDispatcher(
         redis,
         queue_name=settings.command_queue_name,
+    )
+    app.state.stream_bridge = RedisStreamBridge(
+        redis,
+        key_prefix="dayboard:run-stream",
     )
     speech_registry = SpeechProviderRegistry()
     aliyun_api_key = (

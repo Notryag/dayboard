@@ -142,12 +142,20 @@ Implementation notes:
 - A live Cloudflare Workers AI smoke test verified the production credential, request correlation,
   Chinese transcription, and equivalent results for MP3, WebM/Opus, M4A/AAC, and OGG/Opus input.
   Server-side transcoding is therefore not required for the current browser recording formats.
-- `CommandService` now calls `north.invoke_agent_once` directly; the old runtime placeholder path has been removed.
-- Tests can still inject a fake service or fake invoker to avoid live model calls.
+- North `RunExecutor` owns the only production `agent.astream` loop and publishes canonical
+  `messages-tuple` chunks through North's Redis `StreamBridge`; Dayboard provides durable lifecycle
+  hooks and never calls `agent.astream` directly. The old one-shot presentation path and
+  `/api/schedule-items/by-runs` inference endpoint have been removed.
+- Dayboard projects allowlisted scheduling ToolMessages into typed conversation parts, publishes
+  live chunks through a per-Run Redis Stream, and persists the same parts in assistant message
+  metadata for history recovery. RuntimeJournal events remain a separate audit and usage record.
+- Tests inject a deterministic fake RunExecutor to avoid live model calls while preserving the
+  lifecycle-hook contract.
 - Do not add natural-language interpretation outside the north-backed executor path.
 - Provider budget admission reserves a cheap prompt-size estimate. The first immutable usage settlement charges any positive difference between actual and estimated tokens; lower provider-reported usage does not trigger an unsafe cross-window refund.
 - A live `gpt-5.4-mini` smoke test has verified tool calling, clarification status mapping, and persisted provider usage through the configured OpenAI-compatible gateway.
-- A live cross-process arq smoke test returned a queued run in about 35 ms and then emitted created, started, and clarification events over SSE.
+- The Run SSE endpoint joins the cross-process Redis message stream and falls back to PostgreSQL
+  terminal state on reconnect or missed live delivery.
 - The current release resolves Agent-provided local calendar/task times with server-configured
   `Asia/Shanghai`. Agent schemas reject `Z` and numeric offsets, browser registration no longer
   supplies scheduling timezone, and stored objects retain aware timestamps plus the IANA name.

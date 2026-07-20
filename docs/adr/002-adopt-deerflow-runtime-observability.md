@@ -4,6 +4,9 @@
 
 Accepted
 
+The temporary decision to tail PostgreSQL for live delivery is superseded by ADR-007. The
+RuntimeJournal observability boundary remains accepted.
+
 ## Context
 
 Dayboard initially emitted progress text directly from scheduling tools. This made the
@@ -75,6 +78,5 @@ model usage without modifying every tool. Historical events remain replayable af
 disconnects and process restarts.
 
 The product adapter must be maintained whenever a new tool is introduced. Unknown tools
-receive generic text and no input fields until explicitly allowlisted. A future live
-Redis Stream bridge may reduce latency, but PostgreSQL remains the durable source of
-truth.
+receive generic text and no input fields until explicitly allowlisted. ADR-007 adds a Redis
+Stream for live canonical messages while PostgreSQL remains the durable source of truth.

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
 from datetime import date, datetime, timedelta
+import json
 from typing import Literal
 from zoneinfo import ZoneInfo
 
@@ -10,11 +10,15 @@ from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, s
 from fastapi import HTTPException
 from fastapi import Request
 from fastapi.responses import StreamingResponse
+from north import RuntimeStreamEvent
+from north.runtime import END_SENTINEL, HEARTBEAT_SENTINEL, REPLAY_GAP_EVENT, StreamBridge
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
 from uuid import UUID
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
+from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversations import (
     ClarificationStateError,
     ConversationService,
@@ -29,7 +33,6 @@ from dayboard.app.reminders import ReminderService
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
-    RunScheduleItemGroup,
     SchedulePage,
     ScheduleQueryService,
     TaskItemView,
@@ -55,13 +58,13 @@ from dayboard.timezones import resolve_local_date_window
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
     ConversationMessage,
-    ConversationRole,
     ConversationState,
     ConversationThread,
 )
 from pydantic import AwareDatetime, BaseModel, Field
 
 router = APIRouter()
+logger = structlog.get_logger(__name__)
 
 SUPPORTED_AUDIO_TYPES = {
     "audio/mpeg",
@@ -102,7 +105,35 @@ TERMINAL_RUN_EVENTS = {
     "run_cancelled",
     "clarification_requested",
 }
-TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
+EXPOSED_RUN_EVENTS = TERMINAL_RUN_EVENTS | {
+    "run_created",
+    "run_started",
+    "agent_model_started",
+    "agent_model_completed",
+    "tool_call_started",
+    "tool_call_completed",
+    "tool_call_error",
+    "conflict_check_started",
+    "conflict_check_completed",
+}
+
+
+def _terminal_stream_event(
+    run: AgentRun,
+    *,
+    parts: list[dict] | None = None,
+) -> tuple[str, dict] | None:
+    event_type = {
+        "completed": "run_completed",
+        "needs_clarification": "clarification_requested",
+        "failed": "run_failed",
+        "cancelled": "run_cancelled",
+    }.get(run.status.value)
+    return (
+        (event_type, {"content": run.result_message, "parts": parts or []})
+        if event_type
+        else None
+    )
 
 
 def _validate_aware_range(
@@ -120,6 +151,10 @@ def _validate_aware_range(
 
 def get_command_dispatcher(request: Request) -> RedisCommandDispatcher:
     return request.app.state.command_dispatcher
+
+
+def get_stream_bridge(request: Request) -> StreamBridge:
+    return request.app.state.stream_bridge
 
 
 def get_speech_provider(request: Request) -> SpeechToTextProvider:
@@ -260,17 +295,6 @@ async def list_task_items(
         )
     except InvalidScheduleCursor as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@router.get("/api/schedule-items/by-runs", response_model=list[RunScheduleItemGroup])
-async def list_schedule_items_by_runs(
-    run_ids: list[UUID] = Query(alias="run_id"),
-    session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
-) -> list[RunScheduleItemGroup]:
-    if len(run_ids) > 50:
-        raise HTTPException(status_code=422, detail="at most 50 run IDs are allowed")
-    return await ScheduleQueryService(session).list_created_by_runs(tenant_context, run_ids)
 
 
 @router.post("/api/calendar-entries/{entry_id}/cancel", response_model=CalendarEntryView)
@@ -901,24 +925,49 @@ async def get_active_thread_run(
 async def cancel_run(
     run_id: UUID,
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
+    stream_bridge: StreamBridge = Depends(get_stream_bridge),
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
     service = AgentRunService(session)
-    run = await service.get_run_row(tenant_context, run_id)
+    run = await service.get_run_row_for_update(tenant_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     transitioned = await service.mark_cancelled(tenant_context, run)
     if transitioned:
-        await ConversationService(session).append_message(
+        conversations = ConversationService(session)
+        existing_message = await conversations.get_assistant_message_for_run(
+            tenant_context, run.id
+        )
+        parts = (
+            existing_message.message_metadata.get("parts", [])
+            if existing_message is not None
+            else []
+        )
+        await conversations.upsert_assistant_message(
             tenant_context,
             thread_id=run.thread_id,
             run_id=run.id,
-            role=ConversationRole.assistant,
             content=run.result_message or "请求已取消",
-            message_metadata={"status": "cancelled"},
+            message_metadata={"status": "cancelled", "parts": parts},
         )
     await session.commit()
+    if transitioned:
+        try:
+            await stream_bridge.publish(
+                str(run.id),
+                "run_cancelled",
+                {
+                    "content": run.result_message or "请求已取消",
+                    "parts": parts,
+                },
+            )
+        except Exception:
+            logger.warning(
+                "dayboard.run_stream.cancel_publish_failed",
+                run_id=str(run.id),
+                exc_info=True,
+            )
     try:
         await dispatcher.cancel(run_id)
     except Exception:
@@ -945,7 +994,13 @@ async def get_run_events(
 async def stream_run_events(
     run_id: UUID,
     request: Request,
-    after_seq: int = 0,
+    last_event_id: str | None = Header(
+        default=None,
+        alias="Last-Event-ID",
+        pattern=r"^\d{1,20}-\d{1,20}$",
+        max_length=41,
+    ),
+    stream_bridge: StreamBridge = Depends(get_stream_bridge),
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> StreamingResponse:
@@ -955,29 +1010,93 @@ async def stream_run_events(
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
 
     async def event_stream() -> AsyncIterator[str]:
-        cursor = max(after_seq, 0)
-        idle_polls = 0
-        while not await request.is_disconnected():
-            events = await service.list_events(tenant_context, run_id, after_seq=cursor)
-            if events:
-                idle_polls = 0
-                for event in events:
-                    cursor = event.seq
+        async def terminal_event(current_run: AgentRun) -> tuple[str, dict] | None:
+            if current_run.status.value not in {
+                "completed",
+                "needs_clarification",
+                "failed",
+                "cancelled",
+            }:
+                return None
+            assistant = await ConversationService(session).get_assistant_message_for_run(
+                tenant_context, run_id
+            )
+            raw_parts = (
+                assistant.message_metadata.get("parts", [])
+                if assistant is not None
+                else []
+            )
+            parts = raw_parts if isinstance(raw_parts, list) else []
+            return _terminal_stream_event(current_run, parts=parts)
+
+        terminal = await terminal_event(run)
+        if terminal is not None:
+            event_type, data = terminal
+            yield (
+                f"event: {event_type}\n"
+                f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            )
+            return
+
+        async for entry in stream_bridge.subscribe(
+            str(run_id),
+            last_event_id=last_event_id,
+        ):
+            if await request.is_disconnected():
+                return
+            if entry == HEARTBEAT_SENTINEL:
+                session.expire_all()
+                latest = await service.get_run(tenant_context, run_id)
+                terminal = await terminal_event(latest) if latest is not None else None
+                if terminal is not None:
+                    event_type, data = terminal
                     yield (
-                        f"id: {event.seq}\n"
-                        f"event: {event.event_type}\n"
-                        f"data: {event.model_dump_json()}\n\n"
+                        f"event: {event_type}\n"
+                        f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
                     )
-                    if event.event_type in TERMINAL_RUN_EVENTS:
-                        return
-            else:
-                if run.status.value in TERMINAL_RUN_STATUSES:
                     return
-                idle_polls += 1
-                if idle_polls >= 30:
-                    yield ": keep-alive\n\n"
-                    idle_polls = 0
-            await asyncio.sleep(0.5)
+                yield ": keep-alive\n\n"
+                continue
+            if entry == END_SENTINEL:
+                yield "event: end\ndata: {}\n\n"
+                return
+            if entry.event == REPLAY_GAP_EVENT:
+                logger.warning(
+                    "dayboard.run_stream.replay_gap",
+                    run_id=str(run_id),
+                    first_available_event_id=entry.data.get("first_available_event_id"),
+                )
+                yield "event: stream_replay_gap\ndata: {}\n\n"
+                continue
+
+            projected = None
+            if entry.event == "messages-tuple":
+                projected = project_runtime_stream_event(
+                    RuntimeStreamEvent(
+                        mode="messages",
+                        data=entry.data,
+                        namespace=entry.namespace,
+                    )
+                )
+                if projected is None:
+                    continue
+                yield (
+                    f"id: {entry.id}\n"
+                    f"event: {projected.event_type}\n"
+                    "data: "
+                    f"{json.dumps(projected.data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+                )
+                continue
+            if entry.event not in EXPOSED_RUN_EVENTS:
+                continue
+            yield (
+                f"id: {entry.id}\n"
+                f"event: {entry.event}\n"
+                "data: "
+                f"{json.dumps(entry.data, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            )
+            if entry.event in TERMINAL_RUN_EVENTS:
+                return
 
     return StreamingResponse(
         event_stream(),

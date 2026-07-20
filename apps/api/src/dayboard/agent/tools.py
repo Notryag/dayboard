@@ -140,6 +140,19 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
         "start_time": entry.start_time.isoformat(),
         "end_time": entry.end_time.isoformat() if entry.end_time else None,
         "timezone": entry.timezone,
+        "participants": entry.participants,
+        "reminder": entry.reminder.model_dump() if entry.reminder else None,
+        "status": (
+            "cancelled"
+            if entry.cancelled_at is not None
+            else "completed"
+            if entry.completed_at is not None
+            else "scheduled"
+        ),
+        "created_by_run_id": (
+            str(entry.created_by_run_id) if entry.created_by_run_id else None
+        ),
+        "created_at": entry.created_at.isoformat(),
         "updated_at": entry.updated_at.isoformat(),
     }
 
@@ -150,7 +163,10 @@ def _task_item_view(task) -> dict[str, Any]:
         "title": task.title,
         "due_at": task.due_at.isoformat() if task.due_at else None,
         "timezone": task.timezone,
+        "reminder": task.reminder.model_dump() if task.reminder else None,
         "status": task.status.value,
+        "created_by_run_id": str(task.created_by_run_id) if task.created_by_run_id else None,
+        "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),
     }
 
@@ -202,6 +218,7 @@ def build_scheduling_tools(
             created_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry", input_data),
         )
+        await session.commit()
         return {
             "type": result.type,
             "calendar_entry_id": str(result.calendar_entry_id),
@@ -289,6 +306,7 @@ def build_scheduling_tools(
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry_reschedule", input_data),
         )
+        await session.commit()
         return {
             "type": result.type,
             "calendar_entry_id": str(result.calendar_entry_id),
@@ -311,6 +329,7 @@ def build_scheduling_tools(
             cancelled_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry_cancel", input_data),
         )
+        await session.commit()
         return {
             "type": result.type,
             "calendar_entry_id": str(result.calendar_entry_id),
@@ -337,6 +356,7 @@ def build_scheduling_tools(
             created_by_run_id=run_id,
             operation_key=_create_operation_key("task_item", input_data),
         )
+        await session.commit()
         return {
             "type": result.type,
             "task_item_id": str(result.task_item_id),
@@ -374,6 +394,7 @@ def build_scheduling_tools(
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("task_item_update", input_data),
         )
+        await session.commit()
         return {
             "type": result.type,
             "task_item_id": str(result.task_item_id),

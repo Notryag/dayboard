@@ -446,7 +446,7 @@ async def test_cancel_terminal_run_does_not_overwrite_status(
     ]
 
 
-async def test_stream_run_events_replays_events_and_closes_at_terminal_event(
+async def test_stream_run_events_returns_terminal_run_state(
     api_app: FastAPI,
     db_session: AsyncSession,
     tenant_context: TenantContext,
@@ -455,20 +455,29 @@ async def test_stream_run_events_replays_events_and_closes_at_terminal_event(
     run = await runs.create_run(tenant_context, input_message="安排会议")
     await runs.mark_running(tenant_context, run)
     await runs.mark_needs_clarification(tenant_context, run, question="几点开始？")
+    await ConversationService(db_session).upsert_assistant_message(
+        tenant_context,
+        thread_id=run.thread_id,
+        run_id=run.id,
+        content="几点开始？",
+        message_metadata={
+            "status": "needs_clarification",
+            "parts": [{"tool_call_id": "call-1", "operation": "task_item_created"}],
+        },
+    )
     await db_session.commit()
 
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
         base_url="http://test",
     ) as client:
-        response = await client.get(f"/api/runs/{run.id}/events/stream?after_seq=1")
+        response = await client.get(f"/api/runs/{run.id}/events/stream")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/event-stream")
-    assert "id: 2\nevent: run_started\n" in response.text
-    assert "id: 3\nevent: clarification_requested\n" in response.text
-    assert "id: 1\n" not in response.text
-    assert '"event_type":"clarification_requested"' in response.text
+    assert "event: clarification_requested\n" in response.text
+    assert '"content": "几点开始？"' in response.text
+    assert '"tool_call_id": "call-1"' in response.text
 
 
 async def test_stream_run_events_returns_not_found(api_app: FastAPI) -> None:
@@ -481,7 +490,154 @@ async def test_stream_run_events_returns_not_found(api_app: FastAPI) -> None:
     assert response.status_code == 404
 
 
-async def test_stream_run_events_closes_when_cursor_is_past_terminal_event(
+async def test_stream_run_events_forwards_live_structured_messages(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    runs = AgentRunService(db_session)
+    run = await runs.create_run(tenant_context, input_message="创建任务")
+    await runs.mark_running(tenant_context, run)
+    await db_session.commit()
+    stream_bridge = api_app.state.test_stream_bridge
+    await stream_bridge.publish(
+        str(run.id),
+        "messages-tuple",
+        [
+            {
+                "type": "tool",
+                "name": "create_task_item",
+                "tool_call_id": "call-1",
+                "content": {
+                    "type": "task_item_created",
+                    "task_item": {
+                        "id": "task-1",
+                        "title": "提交周报",
+                        "due_at": None,
+                        "timezone": "Asia/Shanghai",
+                        "reminder": None,
+                        "status": "open",
+                        "created_by_run_id": str(run.id),
+                        "created_at": "2026-07-20T10:00:00Z",
+                        "updated_at": "2026-07-20T10:00:00Z",
+                    },
+                },
+            },
+            {},
+        ],
+    )
+    await stream_bridge.publish(
+        str(run.id), "run_completed", {"content": "任务已创建。"}
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"/api/runs/{run.id}/events/stream")
+
+    assert response.status_code == 200
+    assert "id: 1-0\nevent: schedule_item_result\n" in response.text
+    assert '"tool_call_id":"call-1"' in response.text
+    assert "id: 2-0\nevent: run_completed\n" in response.text
+
+
+async def test_stream_run_events_drops_unprojected_canonical_and_raw_errors(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    runs = AgentRunService(db_session)
+    run = await runs.create_run(tenant_context, input_message="执行内部工具")
+    await runs.mark_running(tenant_context, run)
+    await db_session.commit()
+    stream_bridge = api_app.state.test_stream_bridge
+    await stream_bridge.publish(
+        str(run.id),
+        "messages-tuple",
+        [
+            {
+                "type": "tool",
+                "name": "internal_admin_tool",
+                "tool_call_id": "secret-call",
+                "content": {"credential": "must-not-leak"},
+            },
+            {},
+        ],
+    )
+    await stream_bridge.publish(
+        str(run.id),
+        "error",
+        {"message": "provider secret", "error_type": "InternalError"},
+    )
+    await stream_bridge.publish(
+        str(run.id), "run_failed", {"content": "请求没有成功。"}
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(f"/api/runs/{run.id}/events/stream")
+
+    assert response.status_code == 200
+    assert "must-not-leak" not in response.text
+    assert "provider secret" not in response.text
+    assert "event: run_failed\n" in response.text
+
+
+async def test_stream_run_events_resumes_from_last_event_id_header(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    runs = AgentRunService(db_session)
+    run = await runs.create_run(tenant_context, input_message="继续事件流")
+    await runs.mark_running(tenant_context, run)
+    await db_session.commit()
+    stream_bridge = api_app.state.test_stream_bridge
+    await stream_bridge.publish(str(run.id), "run_started", {"content": "开始"})
+    await stream_bridge.publish(
+        str(run.id), "run_completed", {"content": "完成"}
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/runs/{run.id}/events/stream",
+            headers={"Last-Event-ID": "1-0"},
+        )
+
+    assert response.status_code == 200
+    assert "event: run_started\n" not in response.text
+    assert "id: 2-0\nevent: run_completed\n" in response.text
+
+
+async def test_stream_run_events_rejects_invalid_last_event_id(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    run = await AgentRunService(db_session).create_run(
+        tenant_context, input_message="无效游标"
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get(
+            f"/api/runs/{run.id}/events/stream",
+            headers={"Last-Event-ID": "not-a-redis-id"},
+        )
+
+    assert response.status_code == 422
+
+
+async def test_stream_run_events_ignores_live_cursor_for_terminal_run(
     api_app: FastAPI,
     db_session: AsyncSession,
     tenant_context: TenantContext,
@@ -496,7 +652,8 @@ async def test_stream_run_events_closes_when_cursor_is_past_terminal_event(
         transport=ASGITransport(app=api_app),
         base_url="http://test",
     ) as client:
-        response = await client.get(f"/api/runs/{run.id}/events/stream?after_seq=99")
+        response = await client.get(f"/api/runs/{run.id}/events/stream?after=99-0")
 
     assert response.status_code == 200
-    assert response.text == ""
+    assert "event: run_completed\n" in response.text
+    assert '"content": "已安排"' in response.text

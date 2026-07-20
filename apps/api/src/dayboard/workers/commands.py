@@ -8,6 +8,7 @@ from arq import cron
 from arq.connections import RedisSettings
 from arq.worker import func
 from north import CheckpointerConfig, make_checkpointer
+from north.runtime import RedisStreamBridge
 import structlog
 
 from dayboard.app.command_schemas import CommandRequest
@@ -42,6 +43,10 @@ async def execute_command_run(
         await CommandService(
             session,
             checkpointer=ctx.get("checkpointer"),
+            stream_bridge=RedisStreamBridge(
+                ctx["redis"],
+                key_prefix="dayboard:run-stream",
+            ),
         ).execute_command_run(context, request, resolved_run_id)
 
 

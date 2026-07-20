@@ -21,9 +21,10 @@ if not (make_url(test_database_url).database or "").endswith("_test"):
 os.environ["DATABASE_URL"] = test_database_url
 
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.api.routes import get_command_dispatcher
+from dayboard.api.routes import get_command_dispatcher, get_stream_bridge
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.app.runs import AgentRunService
+from north.runtime import END_SENTINEL, StreamEvent
 from dayboard.context import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.models import (
@@ -121,6 +122,45 @@ class TestCommandDispatcher:
         return {"redis": True, "worker": True}
 
 
+class TestStreamBridge:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str, dict]] = []
+
+    async def publish(
+        self,
+        run_id: str,
+        event_type: str,
+        data: dict,
+        *,
+        namespace: tuple[str, ...] = (),
+    ) -> None:
+        del namespace
+        self.events.append((run_id, event_type, data))
+
+    async def publish_end(self, run_id: str) -> None:
+        self.events.append((run_id, "__end__", {}))
+
+    async def subscribe(self, run_id: str, *, last_event_id=None, heartbeat_interval=15):
+        del heartbeat_interval
+        after_index = int((last_event_id or "0-0").split("-", 1)[0])
+        for index, (candidate_run_id, event_type, data) in enumerate(
+            self.events, start=1
+        ):
+            if candidate_run_id != run_id or index <= after_index:
+                continue
+            if event_type == "__end__":
+                yield END_SENTINEL
+                return
+            yield StreamEvent(
+                id=f"{index}-0",
+                event=event_type,
+                data=data,
+            )
+
+    async def cleanup(self, run_id: str, *, delay: float = 0) -> None:
+        del run_id, delay
+
+
 @pytest.fixture
 def tenant_context() -> TenantContext:
     return TenantContext(
@@ -186,11 +226,14 @@ async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
         return tenant_context
 
     dispatcher = TestCommandDispatcher()
+    stream_bridge = TestStreamBridge()
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_tenant_context] = override_tenant_context
     app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
+    app.dependency_overrides[get_stream_bridge] = lambda: stream_bridge
     app.state.test_command_dispatcher = dispatcher
+    app.state.test_stream_bridge = stream_bridge
     try:
         yield app
     finally:

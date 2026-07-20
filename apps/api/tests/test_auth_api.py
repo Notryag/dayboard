@@ -295,6 +295,10 @@ async def test_password_sessions_isolate_run_status_events_stream_and_cancel(
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
+    from north.runtime import MemoryStreamBridge
+    from dayboard.api.routes import get_stream_bridge
+
+    app.dependency_overrides[get_stream_bridge] = MemoryStreamBridge
     try:
         transport = ASGITransport(app=app)
         async with (
