@@ -228,6 +228,25 @@ class SchedulingService:
         await self.session.refresh(row)
         return calendar_entry_from_row(row)
 
+    async def reopen_calendar_entry_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.reopen_from_ui(
+            context,
+            entry_id=entry_id,
+            expected_updated_at=expected_updated_at,
+        )
+        if row is None:
+            return None
+        await ReminderService(self.session).sync_calendar_entry(context, row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
+
     async def update_calendar_entry_from_ui(
         self,
         context: TenantContext,

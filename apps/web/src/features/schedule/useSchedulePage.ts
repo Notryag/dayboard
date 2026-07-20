@@ -42,11 +42,6 @@ export function useSchedulePage<T>({
       requestRef.current = controller;
       setLoading(true);
       setError(null);
-      if (!append) {
-        setItems([]);
-        setCursor(null);
-      }
-
       try {
         const page = await loadPage(nextCursor, controller.signal);
         setItems((current) => (append ? [...current, ...page.items] : page.items));

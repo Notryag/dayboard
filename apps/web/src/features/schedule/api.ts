@@ -81,8 +81,16 @@ export function completeCalendarEntry(entry: CalendarEntry): Promise<CalendarEnt
   return mutateScheduleItem(`/api/calendar-entries/${entry.id}/complete`, entry.updated_at);
 }
 
+export function reopenCalendarEntry(entry: CalendarEntry): Promise<CalendarEntry> {
+  return mutateScheduleItem(`/api/calendar-entries/${entry.id}/reopen`, entry.updated_at);
+}
+
 export function completeTaskItem(task: TaskItem): Promise<TaskItem> {
   return mutateScheduleItem(`/api/task-items/${task.id}/complete`, task.updated_at);
+}
+
+export function reopenTaskItem(task: TaskItem): Promise<TaskItem> {
+  return mutateScheduleItem(`/api/task-items/${task.id}/reopen`, task.updated_at);
 }
 
 export function cancelTaskItem(task: TaskItem): Promise<TaskItem> {

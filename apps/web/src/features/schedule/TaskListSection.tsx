@@ -2,14 +2,14 @@
 
 import { ChevronDown, ListTodo, LoaderCircle, RotateCw } from "lucide-react";
 import { ScheduleItem } from "./ScheduleItem";
-import type { TaskItem } from "./types";
+import type { ScheduleChange, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type TaskListSectionProps = {
   emptyText: string;
   id: string;
-  onChanged: () => void;
+  onChanged: (change?: ScheduleChange) => void;
   resource: SchedulePageResource<TaskItem>;
   title: string;
 };

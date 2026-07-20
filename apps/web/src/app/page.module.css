@@ -21,6 +21,7 @@
 }
 
 .appShell {
+  position: relative;
   width: 100%;
   max-width: var(--app-shell-max-width);
   height: 100%;
@@ -30,6 +31,7 @@
   overflow: hidden;
   background: var(--color-surface);
 }
+
 
 .appHeader {
   min-height: var(--app-header-min-height);
@@ -259,6 +261,7 @@
   .tabBar {
     display: none;
   }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

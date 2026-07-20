@@ -7,13 +7,13 @@ import { ScheduleHeader } from "./ScheduleHeader";
 import { TaskListSection } from "./TaskListSection";
 import { getCalendarEntryPage, getDatedTaskPage, getUndatedTaskPage } from "./api";
 import { dateKeyInTimezone } from "./date";
-import type { CalendarEntry, TaskItem } from "./types";
+import type { CalendarEntry, ScheduleChange, TaskItem } from "./types";
 import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type SchedulePanelProps = {
   active: boolean;
-  onChanged: () => void;
+  onChanged: (change?: ScheduleChange) => void;
   refreshKey: number;
   timezone: string;
 };

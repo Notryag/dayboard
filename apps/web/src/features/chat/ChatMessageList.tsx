@@ -16,7 +16,7 @@ import { ClarificationInteraction } from "@/features/clarifications/Clarificatio
 import type { ConversationState } from "@/features/clarifications/types";
 import { getScheduleItemsByRunIds } from "@/features/schedule/api";
 import { ScheduleItem } from "@/features/schedule/ScheduleItem";
-import type { RunScheduleItemGroup } from "@/features/schedule/types";
+import type { RunScheduleItemGroup, ScheduleChange } from "@/features/schedule/types";
 import styles from "./ChatMessageList.module.css";
 
 export type ChatMessage = {
@@ -31,7 +31,7 @@ type ChatMessageListProps = {
   conversationState: ConversationState | null;
   isSubmitting: boolean;
   messages: ChatMessage[];
-  onChanged: () => void;
+  onChanged: (change?: ScheduleChange) => void;
   onClarificationChoice: (optionKey: string) => void;
   refreshKey: number;
   scrollRef: RefObject<HTMLElement | null>;
@@ -243,7 +243,7 @@ export function ChatMessageList({
                     onSelect={onClarificationChoice}
                   />
                 ) : null}
-                <time>{message.time}</time>
+                {message.time ? <time>{message.time}</time> : null}
                 {!isUser && message.runId && scheduleGroups[message.runId]
                   ? [
                       ...scheduleGroups[message.runId].calendar_entries.map((entry) => ({

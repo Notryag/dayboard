@@ -276,6 +276,14 @@ async def test_run_schedule_items_and_direct_actions(
             f"/api/calendar-entries/{entry.id}/cancel",
             json={"expected_updated_at": entry.updated_at.isoformat()},
         )
+        reopened_task = await client.post(
+            f"/api/task-items/{task.id}/reopen",
+            json={"expected_updated_at": completed.json()["updated_at"]},
+        )
+        reopened_entry = await client.post(
+            f"/api/calendar-entries/{entry.id}/reopen",
+            json={"expected_updated_at": completed_entry.json()["updated_at"]},
+        )
         cancelled = await client.post(
             f"/api/calendar-entries/{cancelled_entry.id}/cancel",
             json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
@@ -304,9 +312,13 @@ async def test_run_schedule_items_and_direct_actions(
     assert repeated_completion.status_code == 200
     assert repeated_completion.json()["status"] == "completed"
     assert completed_entry_cancel.status_code == 409
+    assert reopened_task.status_code == 200
+    assert reopened_task.json()["status"] == "open"
+    assert reopened_entry.status_code == 200
+    assert reopened_entry.json()["status"] == "scheduled"
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
-    assert [item["status"] for item in selected_date.json()["items"]] == ["completed"]
+    assert [item["status"] for item in selected_date.json()["items"]] == ["scheduled"]
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "CALENDAR_ENTRY_NOT_FOUND"
 

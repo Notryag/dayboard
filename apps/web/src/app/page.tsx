@@ -22,10 +22,13 @@ import {
   RunActivityTicker,
   type RunActivityStep,
 } from "@/features/chat/RunActivityTicker";
+import { ConversationBootstrapNotice } from "@/features/chat/ConversationBootstrapNotice";
 import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageList";
 import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
+import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
 import { dateKeyInTimezone, formatAccessibleDate } from "@/features/schedule/date";
+import type { ScheduleChange } from "@/features/schedule/types";
 import styles from "./page.module.css";
 
 type PrimaryView = "chat" | "schedule";
@@ -70,9 +73,15 @@ const initialMessages: ChatMessage[] = [
     id: "welcome",
     role: "assistant",
     text: "今天想安排什么？你可以直接说“明天下午三点提醒我开产品会”。",
-    time: "09:20",
+    time: "",
   },
 ];
+
+type UndoNotice = NonNullable<ScheduleChange["undo"]> & {
+  id: string;
+  busy: boolean;
+  error: string | null;
+};
 
 function currentTimeLabel() {
   return new Intl.DateTimeFormat("zh-CN", {
@@ -140,6 +149,10 @@ function ChatHome() {
   const [activeView, setActiveView] = useState<PrimaryView>("chat");
   const [scheduleRevision, setScheduleRevision] = useState(0);
   const [inputMode, setInputMode] = useState<InputMode>("voice");
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [isThreadBootstrapping, setIsThreadBootstrapping] = useState(true);
+  const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
   const activeStreamRef = useRef<EventSource | null>(null);
   const initializingThreadRef = useRef(false);
   const messagesRef = useRef<HTMLElement>(null);
@@ -156,6 +169,12 @@ function ChatHome() {
   }, []);
 
   useEffect(() => {
+    if (!undoNotice || undoNotice.busy) return;
+    const timeout = window.setTimeout(() => setUndoNotice(null), 6000);
+    return () => window.clearTimeout(timeout);
+  }, [undoNotice]);
+
+  useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const container = messagesRef.current;
       if (container) container.scrollTop = container.scrollHeight;
@@ -166,6 +185,8 @@ function ChatHome() {
   useEffect(() => {
     if (initializingThreadRef.current) return;
     initializingThreadRef.current = true;
+    setBootstrapError(null);
+    setIsThreadBootstrapping(true);
 
     async function createThread(): Promise<string> {
       const response = await apiFetch("/api/threads", {
@@ -227,15 +248,14 @@ function ChatHome() {
       }
     }
 
-    void initializeThread().catch((error: unknown) => {
-      initializingThreadRef.current = false;
-      setMessages([
-        createMessage("assistant", userFacingApiError(error, "无法加载对话，请稍后重试。")),
-      ]);
-    });
-    // Session thread bootstrap must run once per authenticated mount.
+    void initializeThread()
+      .catch((error: unknown) => {
+        initializingThreadRef.current = false;
+        setBootstrapError(userFacingApiError(error, "无法加载对话，请稍后重试。"));
+      })
+      .finally(() => setIsThreadBootstrapping(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [bootstrapAttempt]);
 
   function followRun(runId: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -433,7 +453,45 @@ function ChatHome() {
     if (!activeRunId) {
       return;
     }
-    await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
+    try {
+      await apiFetch(`/api/runs/${activeRunId}/cancel`, { method: "POST" });
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        createMessage("assistant", userFacingApiError(error, "暂时无法停止，请稍后重试。")),
+      ]);
+    }
+  }
+
+  function handleScheduleChanged(change?: ScheduleChange) {
+    setScheduleRevision((current) => current + 1);
+    if (change?.undo) {
+      setUndoNotice({
+        ...change.undo,
+        id: crypto.randomUUID(),
+        busy: false,
+        error: null,
+      });
+    }
+  }
+
+  async function handleUndo() {
+    const notice = undoNotice;
+    if (!notice || notice.busy) return;
+    setUndoNotice({ ...notice, busy: true, error: null });
+    try {
+      await notice.run();
+      setScheduleRevision((current) => current + 1);
+      setUndoNotice(null);
+    } catch (error) {
+      setUndoNotice((current) => current?.id === notice.id
+        ? {
+            ...current,
+            busy: false,
+            error: userFacingApiError(error, "撤销失败，请刷新后重试。"),
+          }
+        : current);
+    }
   }
 
   function selectView(view: PrimaryView) {
@@ -492,7 +550,7 @@ function ChatHome() {
               conversationState={conversationState}
               isSubmitting={isSubmitting}
               messages={messages}
-              onChanged={() => setScheduleRevision((current) => current + 1)}
+              onChanged={handleScheduleChanged}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
               refreshKey={scheduleRevision}
               scrollRef={messagesRef}
@@ -500,6 +558,13 @@ function ChatHome() {
             />
 
             <div className={styles.composerDock}>
+              {bootstrapError ? (
+                <ConversationBootstrapNotice
+                  busy={isThreadBootstrapping}
+                  error={bootstrapError}
+                  onRetry={() => setBootstrapAttempt((current) => current + 1)}
+                />
+              ) : null}
               {isSubmitting ? (
                 <RunActivityTicker
                   steps={
@@ -511,7 +576,7 @@ function ChatHome() {
               ) : null}
               <Composer
                 activeRunId={activeRunId}
-                disabled={!threadId}
+                disabled={!threadId || isThreadBootstrapping}
                 inputMode={inputMode}
                 isSubmitting={isSubmitting}
                 onCancelRun={() => void handleCancel()}
@@ -533,7 +598,7 @@ function ChatHome() {
           >
             <SchedulePanel
               active={activeView === "schedule"}
-              onChanged={() => setScheduleRevision((current) => current + 1)}
+              onChanged={handleScheduleChanged}
               refreshKey={scheduleRevision}
               timezone={timezone}
             />
@@ -583,6 +648,14 @@ function ChatHome() {
             <span>日程</span>
           </button>
         </nav>
+        {undoNotice ? (
+          <ScheduleUndoToast
+            busy={undoNotice.busy}
+            error={undoNotice.error}
+            label={undoNotice.label}
+            onUndo={() => void handleUndo()}
+          />
+        ) : null}
       </main>
     </div>
   );

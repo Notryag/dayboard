@@ -4,13 +4,13 @@ import { useMemo } from "react";
 import { ChevronDown, Clock3, LoaderCircle, RotateCw } from "lucide-react";
 import { formatScheduleTime } from "./date";
 import { ScheduleItem } from "./ScheduleItem";
-import type { CalendarEntry, TaskItem } from "./types";
+import type { CalendarEntry, ScheduleChange, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type DayAgendaSectionProps = {
   calendar: SchedulePageResource<CalendarEntry>;
-  onChanged: () => void;
+  onChanged: (change?: ScheduleChange) => void;
   tasks: SchedulePageResource<TaskItem>;
   timezone: string;
 };

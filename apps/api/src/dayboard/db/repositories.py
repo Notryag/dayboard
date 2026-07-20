@@ -343,6 +343,27 @@ class CalendarEntryRepository:
             .returning(CalendarEntryRow)
         )
 
+    async def reopen_from_ui(
+        self,
+        context: TenantContext,
+        *,
+        entry_id: UUID,
+        expected_updated_at: datetime,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            update(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.deleted_at.is_(None),
+                CalendarEntryRow.completed_at.is_not(None),
+            )
+            .values(completed_at=None, updated_at=func.now())
+            .returning(CalendarEntryRow)
+        )
+
     async def list_overlapping(
         self,
         context: TenantContext,

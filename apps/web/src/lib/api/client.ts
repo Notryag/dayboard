@@ -11,6 +11,8 @@ export class ApiError extends Error {
   }
 }
 
+export const authenticationRequiredEvent = "dayboard:authentication-required";
+
 type ApiErrorEnvelope = {
   error?: {
     code?: string;
@@ -60,6 +62,9 @@ export async function apiFetch(
     credentials: "include",
   });
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined") {
+      window.dispatchEvent(new Event(authenticationRequiredEvent));
+    }
     let body: ApiErrorEnvelope = {};
     try {
       body = (await response.json()) as ApiErrorEnvelope;

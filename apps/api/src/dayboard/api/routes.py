@@ -333,6 +333,37 @@ async def complete_calendar_entry_from_ui(
     return CalendarEntryView.from_domain(entry)
 
 
+@router.post("/api/calendar-entries/{entry_id}/reopen", response_model=CalendarEntryView)
+async def reopen_calendar_entry_from_ui(
+    entry_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> CalendarEntryView:
+    service = SchedulingService(session)
+    current = await service.get_calendar_entry(tenant_context, entry_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="CALENDAR_ENTRY_NOT_FOUND",
+            message="Calendar entry not found",
+        )
+    if current.completed_at is None:
+        return CalendarEntryView.from_domain(current)
+    entry = await service.reopen_calendar_entry_from_ui(
+        tenant_context,
+        entry_id=entry_id,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if entry is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Calendar entry changed before this operation",
+        )
+    return CalendarEntryView.from_domain(entry)
+
+
 @router.put("/api/calendar-entries/{entry_id}", response_model=CalendarEntryView)
 async def update_calendar_entry_from_ui(
     entry_id: UUID,
@@ -411,6 +442,44 @@ async def complete_task_item_from_ui(
         session,
         tenant_context,
     )
+
+
+@router.post("/api/task-items/{task_id}/reopen", response_model=TaskItemView)
+async def reopen_task_item_from_ui(
+    task_id: UUID,
+    body: ScheduleMutationRequest,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> TaskItemView:
+    service = SchedulingService(session)
+    current = await service.get_task_item(tenant_context, task_id)
+    if current is None:
+        raise ApiProblem(
+            status_code=404,
+            code="TASK_ITEM_NOT_FOUND",
+            message="Task item not found",
+        )
+    if current.status == TaskStatus.open:
+        return TaskItemView.from_domain(current)
+    if current.status != TaskStatus.completed:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Only completed task items can be reopened",
+        )
+    task = await service.set_task_status_from_ui(
+        tenant_context,
+        task_id=task_id,
+        status=TaskStatus.open,
+        expected_updated_at=body.expected_updated_at,
+    )
+    if task is None:
+        raise ApiProblem(
+            status_code=409,
+            code="SCHEDULE_ITEM_CONFLICT",
+            message="Task item changed before this operation",
+        )
+    return TaskItemView.from_domain(task)
 
 
 @router.put("/api/task-items/{task_id}", response_model=TaskItemView)

@@ -1,10 +1,11 @@
 .item {
   --schedule-item-icon-size: 32px;
+  --schedule-item-control-size: var(--control-size);
 
   min-width: 0;
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--schedule-item-icon-size);
+  grid-template-columns: minmax(0, 1fr) var(--schedule-item-control-size);
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
@@ -52,8 +53,8 @@
 }
 
 .completionControl {
-  width: var(--schedule-item-icon-size);
-  height: var(--schedule-item-icon-size);
+  width: var(--schedule-item-control-size);
+  height: var(--schedule-item-control-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -175,22 +176,26 @@
 }
 
 .dialogLayer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--color-message-menu-backdrop);
+}
+
+.dialog {
   --schedule-dialog-max-width: 520px;
   --schedule-dialog-max-height: 720px;
   --schedule-dialog-viewport-gap: 32px;
   --schedule-detail-icon-offset: 2px;
 
   position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: grid;
-  place-items: end center;
-  padding: var(--space-4) var(--space-4) 0;
-  background: var(--color-message-menu-backdrop);
-}
-
-.dialog {
-  width: min(100%, var(--schedule-dialog-max-width));
+  right: var(--space-4);
+  bottom: 0;
+  left: var(--space-4);
+  z-index: 41;
+  width: auto;
+  max-width: var(--schedule-dialog-max-width);
+  margin-inline: auto;
   max-height: min(
     var(--schedule-dialog-max-height),
     calc(100dvh - var(--schedule-dialog-viewport-gap))
@@ -204,6 +209,7 @@
   color: var(--color-text);
   background: var(--color-surface-raised);
   box-shadow: var(--shadow-dialog);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .dialogHeader {

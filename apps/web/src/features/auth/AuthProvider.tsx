@@ -1,7 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { ApiError, userFacingApiError } from "@/lib/api/client";
+import {
+  ApiError,
+  authenticationRequiredEvent,
+  userFacingApiError,
+} from "@/lib/api/client";
 import {
   getAccount,
   getAuthCapabilities,
@@ -31,6 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   useEffect(() => {
+    function invalidateSession() {
+      localStorage.removeItem("dayboard.thread_id");
+      setAccount(null);
+    }
+    window.addEventListener(authenticationRequiredEvent, invalidateSession);
+    return () => window.removeEventListener(authenticationRequiredEvent, invalidateSession);
+  }, []);
+
+  useEffect(() => {
     void getAccount()
       .then(setAccount)
       .catch((error: unknown) => {
@@ -55,9 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       passwordResetAvailable,
       recoveryError,
       async login(identifier, password) {
+        setRecoveryError(null);
         setAccount(await loginAccount(identifier, password));
       },
       async register(registration) {
+        setRecoveryError(null);
         setAccount(await registerAccount(registration));
       },
       async logout() {

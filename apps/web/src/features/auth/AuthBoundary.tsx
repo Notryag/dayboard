@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { userFacingApiError } from "@/lib/api/client";
 import { AuthProvider, useAuth } from "./AuthProvider";
+import { PasswordInput } from "./PasswordInput";
 import { PasswordRecoveryForm } from "./PasswordRecoveryForm";
 import styles from "./auth.module.css";
 
@@ -39,16 +40,21 @@ function AuthContent({ children }: { children: React.ReactNode }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const password = String(form.get("password"));
+    if (mode === "register" && password !== String(form.get("confirmPassword"))) {
+      setError("两次输入的密码不一致。");
+      return;
+    }
     setError(null);
     setNotice(null);
     setIsSubmitting(true);
     try {
       if (mode === "login") {
-        await login(String(form.get("identifier")), String(form.get("password")));
+        await login(String(form.get("identifier")), password);
       } else {
         await register({
           username: String(form.get("username")),
-          password: String(form.get("password")),
+          password,
           email: String(form.get("email") ?? "") || undefined,
           display_name: String(form.get("displayName") ?? "") || undefined,
           locale: navigator.language || "zh-CN",
@@ -158,16 +164,20 @@ function AuthContent({ children }: { children: React.ReactNode }) {
                 </label>
               </>
             )}
-            <label>
-              <span>密码</span>
-              <input
-                autoComplete={mode === "login" ? "current-password" : "new-password"}
-                minLength={mode === "register" ? 10 : 1}
-                name="password"
-                required
-                type="password"
+            <PasswordInput
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              label="密码"
+              minLength={mode === "register" ? 10 : 1}
+              name="password"
+            />
+            {mode === "register" ? (
+              <PasswordInput
+                autoComplete="new-password"
+                label="确认密码"
+                minLength={10}
+                name="confirmPassword"
               />
-            </label>
+            ) : null}
             {mode === "login" && passwordResetAvailable ? (
               <button
                 className={styles.linkButton}

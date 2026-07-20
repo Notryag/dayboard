@@ -43,3 +43,10 @@ export type RunScheduleItemGroup = {
 export type ScheduleDisplayItem =
   | { kind: "calendar"; value: CalendarEntry }
   | { kind: "task"; value: TaskItem };
+
+export type ScheduleChange = {
+  undo?: {
+    label: string;
+    run: () => Promise<void>;
+  };
+};
