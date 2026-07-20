@@ -32,3 +32,5 @@ def test_system_prompt_exposes_relative_dates_and_end_time_edit_contract() -> No
     assert "Create undated tasks for those actions and never invent a clock time" in prompt
     assert "Never ask for a due time merely because an ordinary task is undated" in prompt
     assert "Never state a date, start time, end time, or status" in prompt
+    assert "Use plain text only: do not use Markdown" in prompt
+    assert "separate cards" in prompt

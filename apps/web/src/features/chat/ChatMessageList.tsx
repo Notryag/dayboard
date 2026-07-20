@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { Copy, ScanText, Sparkles } from "lucide-react";
+import Markdown from "react-markdown";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import type { ConversationState } from "@/features/clarifications/types";
 import { getScheduleItemsByRunIds } from "@/features/schedule/api";
@@ -108,10 +109,11 @@ export function ChatMessageList({
   function openMessageMenu(message: ChatMessage, element: HTMLElement) {
     const rect = element.getBoundingClientRect();
     const placement = rect.top > 72 ? "above" : "below";
+    const renderedText = document.getElementById(messageTextId(message.id))?.innerText;
     setMessageMenu({
       messageId: message.id,
       placement,
-      text: message.text,
+      text: renderedText || message.text,
       x: rect.left + rect.width / 2,
       y: placement === "above" ? rect.top : rect.bottom,
     });
@@ -211,6 +213,53 @@ export function ChatMessageList({
       <section className={styles.messages} aria-label="对话记录" ref={scrollRef}>
         {messages.map((message) => {
           const isUser = message.role === "user";
+          const scheduleGroup = !isUser && message.runId
+            ? scheduleGroups[message.runId]
+            : undefined;
+          const scheduleItems = scheduleGroup
+            ? [
+                ...scheduleGroup.calendar_entries.map((entry) => ({
+                  kind: "calendar" as const,
+                  value: entry,
+                })),
+                ...scheduleGroup.task_items.map((task) => ({
+                  kind: "task" as const,
+                  value: task,
+                })),
+              ]
+            : [];
+          const messageArticle = (
+            <article
+              className={`${styles.message} ${
+                isUser ? styles.userMessage : styles.assistantMessage
+              }`}
+              onContextMenu={(event) => handleContextMenu(event, message)}
+              onPointerCancel={clearLongPress}
+              onPointerDown={(event) => handlePointerDown(event, message)}
+              onPointerLeave={clearLongPress}
+              onPointerMove={handlePointerMove}
+              onPointerUp={clearLongPress}
+            >
+              {isUser ? (
+                <p id={messageTextId(message.id)}>{message.text}</p>
+              ) : (
+                <div className={styles.messageText} id={messageTextId(message.id)}>
+                  <Markdown>{message.text}</Markdown>
+                </div>
+              )}
+              {conversationState &&
+              !isUser &&
+              message.runId === conversationState.state_data.source_run_id &&
+              conversationState.state_data.interaction ? (
+                <ClarificationInteraction
+                  disabled={isSubmitting}
+                  interaction={conversationState.state_data.interaction}
+                  onSelect={onClarificationChoice}
+                />
+              ) : null}
+              {message.time ? <time>{message.time}</time> : null}
+            </article>
+          );
           return (
             <div
               className={`${styles.messageRow} ${isUser ? styles.userRow : styles.assistantRow}`}
@@ -221,40 +270,11 @@ export function ChatMessageList({
                   <Sparkles size={15} strokeWidth={2.2} />
                 </span>
               ) : null}
-              <article
-                className={`${styles.message} ${
-                  isUser ? styles.userMessage : styles.assistantMessage
-                }`}
-                onContextMenu={(event) => handleContextMenu(event, message)}
-                onPointerCancel={clearLongPress}
-                onPointerDown={(event) => handlePointerDown(event, message)}
-                onPointerLeave={clearLongPress}
-                onPointerMove={handlePointerMove}
-                onPointerUp={clearLongPress}
-              >
-                <p id={messageTextId(message.id)}>{message.text}</p>
-                {conversationState &&
-                !isUser &&
-                message.runId === conversationState.state_data.source_run_id &&
-                conversationState.state_data.interaction ? (
-                  <ClarificationInteraction
-                    disabled={isSubmitting}
-                    interaction={conversationState.state_data.interaction}
-                    onSelect={onClarificationChoice}
-                  />
-                ) : null}
-                {message.time ? <time>{message.time}</time> : null}
-                {!isUser && message.runId && scheduleGroups[message.runId]
-                  ? [
-                      ...scheduleGroups[message.runId].calendar_entries.map((entry) => ({
-                        kind: "calendar" as const,
-                        value: entry,
-                      })),
-                      ...scheduleGroups[message.runId].task_items.map((task) => ({
-                        kind: "task" as const,
-                        value: task,
-                      })),
-                    ].map((item) => (
+              {isUser ? messageArticle : (
+                <div className={styles.assistantContent}>
+                  {scheduleItems.length ? (
+                    <div aria-label="本次安排" className={styles.scheduleResults}>
+                      {scheduleItems.map((item) => (
                       <ScheduleItem
                         item={item}
                         key={`${item.kind}-${item.value.id}`}
@@ -262,9 +282,12 @@ export function ChatMessageList({
                         timezone={timezone}
                         variant="chat"
                       />
-                    ))
-                  : null}
-              </article>
+                      ))}
+                    </div>
+                  ) : null}
+                  {messageArticle}
+                </div>
+              )}
             </div>
           );
         })}

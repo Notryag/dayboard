@@ -25,6 +25,28 @@
   justify-content: flex-start;
 }
 
+.assistantContent {
+  width: min(86%, var(--chat-message-max-width));
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.scheduleResults {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-message);
+}
+
+.scheduleResults > :first-child {
+  border-top: 0;
+}
+
 .userRow {
   justify-content: flex-end;
 }
@@ -50,10 +72,40 @@
   -webkit-touch-callout: none;
 }
 
-.message p {
+.message p,
+.messageText li {
   overflow-wrap: anywhere;
   font-size: var(--font-size-body);
   line-height: var(--line-height-relaxed);
+}
+
+.messageText > :first-child {
+  margin-top: 0;
+}
+
+.messageText > :last-child {
+  margin-bottom: 0;
+}
+
+.messageText > * + * {
+  margin-top: var(--space-2);
+}
+
+.messageText ul,
+.messageText ol {
+  padding-left: var(--space-5);
+}
+
+.messageText a {
+  color: var(--color-primary);
+  text-underline-offset: 2px;
+}
+
+.messageText code {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  font-size: var(--font-size-ui);
 }
 
 .message time {
@@ -66,7 +118,7 @@
 }
 
 .assistantMessage {
-  max-width: min(86%, var(--chat-message-max-width));
+  max-width: 100%;
   border: var(--border-width) solid var(--message-assistant-border);
   border-bottom-left-radius: var(--radius-sm);
   color: var(--message-assistant-text);
