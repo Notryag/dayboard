@@ -12,10 +12,8 @@ import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type SchedulePanelProps = {
-  accountName: string;
   active: boolean;
   onChanged: (change?: ScheduleChange) => void;
-  onLogout: () => void;
   refreshKey: number;
   timezone: string;
 };
@@ -23,10 +21,8 @@ type SchedulePanelProps = {
 const headingId = "schedule-heading";
 
 export function SchedulePanel({
-  accountName,
   active,
   onChanged,
-  onLogout,
   refreshKey,
   timezone,
 }: SchedulePanelProps) {
@@ -76,12 +72,9 @@ export function SchedulePanel({
   return (
     <section aria-labelledby={headingId} className={styles.panel}>
       <ScheduleHeader
-        accountName={accountName}
         headingId={headingId}
         onJumpToDate={jumpToDate}
-        onLogout={onLogout}
         selectedDate={selectedDate}
-        timezone={timezone}
       />
       <DateRail
         active={active}

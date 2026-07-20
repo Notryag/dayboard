@@ -31,8 +31,9 @@ desktop (>= 900px)
 
 The desktop layout is a two-pane operational tool, not a dashboard of cards. On mobile, conversation
 is the home page and the floating header control switches between the two top-level sections. Tasks remain
-inside Schedule. The Schedule header opens a right-side settings drawer for account information,
-timezone, logout, and future settings; these actions do not sit in the transparent global header.
+inside Schedule. The global header's right control opens a settings drawer for account information,
+timezone, appearance, logout, and future settings. Appearance supports system, light, and dark themes.
+The centered wordmark uses a restrained animated gradient glow behind the text.
 The global header overlays the conversation scroller: it moves out of view when conversation content
 scrolls upward, returns on reverse scrolling or at the top, and remains visible on Schedule.
 

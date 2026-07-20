@@ -24,6 +24,7 @@ import { ConversationBootstrapNotice } from "@/features/chat/ConversationBootstr
 import { ChatMessageList, type ChatMessage } from "@/features/chat/ChatMessageList";
 import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
+import { ScheduleSettingsDrawer } from "@/features/schedule/ScheduleSettingsDrawer";
 import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
 import type { ScheduleChange, ScheduleResultPart } from "@/features/schedule/types";
 import styles from "./page.module.css";
@@ -641,6 +642,13 @@ function ChatHome() {
             </button>
           </div>
           <h1 className={styles.brand}>Dayboard</h1>
+          <div className={styles.headerTrailing}>
+            <ScheduleSettingsDrawer
+              accountName={account?.display_name || account?.username || "Dayboard 用户"}
+              onLogout={() => void logout()}
+              timezone={timezone}
+            />
+          </div>
         </header>
 
         <div className={styles.workspace}>
@@ -703,10 +711,8 @@ function ChatHome() {
             role="region"
           >
             <SchedulePanel
-              accountName={account?.display_name || account?.username || "Dayboard 用户"}
               active={activeView === "schedule"}
               onChanged={handleScheduleChanged}
-              onLogout={() => void logout()}
               refreshKey={scheduleRevision}
               timezone={timezone}
             />

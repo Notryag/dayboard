@@ -20,7 +20,7 @@ from north.runtime import MemoryStreamBridge, RunManager, StreamBridge
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
+from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetExceeded, ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
@@ -647,6 +647,12 @@ async def _mark_run_failed(
 
 
 def _safe_error_message(exc: Exception) -> str:
+    if isinstance(exc, ProviderBudgetExceeded):
+        if exc.budget_type == "request":
+            return "请求有点频繁，请稍等一分钟后再试。"
+        return "今天的 AI 使用额度已用完，请明天再试。"
+    if getattr(exc, "status_code", None) == 429:
+        return "AI 服务当前有点繁忙，请稍等几分钟后再试。"
     message = str(exc).strip() or type(exc).__name__
     return message[:4000]
 

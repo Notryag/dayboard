@@ -35,9 +35,56 @@
 
 .trigger:focus-visible,
 .closeButton:focus-visible,
+.themeOption:focus-visible,
+.themeOptionActive:focus-visible,
 .logoutButton:focus-visible {
   outline: var(--focus-ring-width) solid var(--color-primary);
   outline-offset: var(--focus-ring-offset);
+}
+
+.preferenceSection {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.preferenceLabel {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+}
+
+.themeControl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-muted);
+}
+
+.themeOption,
+.themeOptionActive {
+  min-width: 0;
+  min-height: var(--control-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--font-size-caption);
+}
+
+.themeOptionActive {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-message);
 }
 
 .overlay {

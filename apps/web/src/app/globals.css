@@ -98,8 +98,57 @@
   --foreground: var(--color-text);
 }
 
+:root[data-theme="dark"] {
+  --color-bg: #101215;
+  --color-surface: #15181c;
+  --color-surface-raised: #1c2025;
+  --color-surface-muted: #22272d;
+  --color-surface-hover: #2a3037;
+  --color-text: #f4f7f4;
+  --color-text-muted: #a7b0ba;
+  --color-border: #353c45;
+  --color-primary: #38b8a8;
+  --color-primary-hover: #51cabb;
+  --color-primary-foreground: #071512;
+  --color-primary-surface: #173a34;
+  --color-accent: #ff5ca8;
+  --color-accent-foreground: #1a0710;
+  --color-accent-surface: #3a1b2d;
+  --color-warning: #f2b84b;
+  --color-danger: #ff7b72;
+  --color-danger-foreground: #111111;
+  --color-danger-surface: #301a1a;
+  --color-calendar: #8294ff;
+  --color-calendar-surface: #252d52;
+  --color-task: #f2b84b;
+  --color-task-surface: #3d321b;
+  --color-success: #52d39a;
+  --color-success-surface: #17382a;
+  --color-selection: var(--color-primary);
+  --color-selection-foreground: #071512;
+  --color-today-surface: #2a323b;
+  --color-glass-surface: rgb(28 32 37 / 76%);
+  --color-glass-border: rgb(255 255 255 / 12%);
+  --color-message-menu: rgb(242 244 247 / 96%);
+  --color-message-menu-foreground: #202327;
+  --color-message-menu-border: rgb(0 0 0 / 8%);
+  --color-message-menu-backdrop: rgb(0 0 0 / 24%);
+  --message-user-bg: #117d73;
+  --message-user-text: #ffffff;
+  --message-assistant-bg: #1c2025;
+  --message-assistant-text: var(--color-text);
+  --message-assistant-border: #39414a;
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --color-bg: #101215;
     --color-surface: #15181c;
     --color-surface-raised: #1c2025;
@@ -181,7 +230,7 @@ button {
 }
 
 @media (prefers-color-scheme: dark) {
-  html {
+  html:not([data-theme]) {
     color-scheme: dark;
   }
 }

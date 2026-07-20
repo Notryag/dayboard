@@ -8,7 +8,7 @@ from fake_runtime import fake_executor_factory
 
 from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, estimate_prompt_tokens
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService
+from dayboard.app.commands import CommandService, _safe_error_message
 from dayboard.config import Settings
 from dayboard.context import TenantContext
 
@@ -46,6 +46,27 @@ class FakeConversationService:
 def test_estimate_prompt_tokens_is_nonzero() -> None:
     assert estimate_prompt_tokens("") == 1
     assert estimate_prompt_tokens("安排明天上午十点开会") >= 1
+
+
+@pytest.mark.parametrize(
+    ("budget_type", "expected"),
+    [
+        ("request", "请求有点频繁，请稍等一分钟后再试。"),
+        ("token", "今天的 AI 使用额度已用完，请明天再试。"),
+    ],
+)
+def test_provider_budget_errors_are_user_friendly(budget_type: str, expected: str) -> None:
+    assert _safe_error_message(ProviderBudgetExceeded(budget_type, "test-limit")) == expected
+
+
+def test_upstream_rate_limit_is_user_friendly() -> None:
+    class UpstreamRateLimitError(RuntimeError):
+        status_code = 429
+
+    assert (
+        _safe_error_message(UpstreamRateLimitError("Token limit exceeded"))
+        == "AI 服务当前有点繁忙，请稍等几分钟后再试。"
+    )
 
 
 def test_provider_budget_guard_rejects_request_over_limit(tenant_context: TenantContext) -> None:
