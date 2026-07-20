@@ -128,6 +128,7 @@ def build_dayboard_agent(
         summarization_enabled=resolved_settings.agent_summarization_enabled,
         summarization_model_name=resolved_settings.agent_summarization_model_name,
         summarization_summary_prompt=DAYBOARD_SUMMARY_PROMPT,
+        summarization_trigger_tokens=resolved_settings.agent_summarization_trigger_tokens,
         summarization_trigger_messages=resolved_settings.agent_summarization_trigger_messages,
         summarization_keep_messages=resolved_settings.agent_summarization_keep_messages,
     )

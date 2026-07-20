@@ -81,9 +81,13 @@ including 986 characters of historical tool results, plus approximately 300
 characters of historical tool-call arguments. The current write then added 64
 characters of tool arguments and a 426-character tool result before the second
 model call. This confirms that completed tool payloads are the fastest-growing
-part of thread history. The current summarization trigger is 40 messages, which
-does not account for large differences in message size; context compaction
-should be governed by a token budget while preserving active AI/tool pairs.
+part of thread history. North now combines Dayboard's 1,200-token history
+threshold with its 40-message hard ceiling using OR semantics. Compaction still
+preserves recent complete AI/tool pairs and Dayboard's visible conversation
+history remains independent from runtime checkpoints. Summary generation is a
+real model call, not free preprocessing; North tags it as
+`middleware:summarization` so its usage remains attributable to the same Run
+and the threshold can be tuned from measured net savings.
 
 The provider gateway recorded `cached_tokens=0` for both successful calls.
 Northgate exact-response caching was also disabled for the Dayboard gateway.

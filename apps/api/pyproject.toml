@@ -30,7 +30,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-north = { git = "https://github.com/Notryag/north-agent.git", rev = "7517e8daf016cbc54caeb855e83a204de3297c36", subdirectory = "packages/harness" }
+north = { git = "https://github.com/Notryag/north-agent.git", rev = "34b84fe6418bc8ed1928a9c6806952579c1b8158", subdirectory = "packages/harness" }
 
 [project.scripts]
 dayboard-api = "dayboard.main:main"

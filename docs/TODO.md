@@ -14,7 +14,7 @@ Last reviewed: 2026-07-20
   provider prompt caching.
 - [ ] Reduce fixed prompt and tool-schema cost only with behavior-contract tests for create, search,
   reschedule, cancel, clarification, multiple commands, and calendar-versus-task classification.
-- [ ] Replace message-count-only compaction with a token-aware context budget. Preserve complete
+- [x] Replace message-count-only compaction with a token-aware context budget. Preserve complete
   active AI/tool-call pairs, but summarize or compact completed historical tool payloads before
   they grow into every subsequent model request.
 - [ ] Evaluate runtime-supported tool selection or tool-surface redesign. Do not introduce keyword

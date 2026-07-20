@@ -26,6 +26,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAYBOARD_STALE_RUN_SECONDS", "900")
     monkeypatch.setenv("DAYBOARD_QUEUED_RUN_TIMEOUT_SECONDS", "2400")
     monkeypatch.setenv("DAYBOARD_IDEMPOTENCY_RETENTION_SECONDS", "86400")
+    monkeypatch.setenv("DAYBOARD_SUMMARIZATION_TRIGGER_TOKENS", "1600")
     monkeypatch.setenv("DAYBOARD_ASR_PROVIDER", "aliyun")
     monkeypatch.setenv("DAYBOARD_ASR_MAX_AUDIO_SECONDS", "90")
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "account-1")
@@ -54,6 +55,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.stale_run_seconds == 900
     assert settings.queued_run_timeout_seconds == 2400
     assert settings.idempotency_retention_seconds == 86400
+    assert settings.agent_summarization_trigger_tokens == 1600
     assert settings.asr_provider == "aliyun"
     assert settings.asr_max_audio_seconds == 90
     assert settings.cloudflare_account_id == "account-1"
