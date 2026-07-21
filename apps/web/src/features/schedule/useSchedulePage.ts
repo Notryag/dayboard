@@ -45,7 +45,7 @@ export function useSchedulePage<T>({
       try {
         const page = await loadPage(nextCursor, controller.signal);
         setItems((current) => (append ? [...current, ...page.items] : page.items));
-        setCursor(page.next_cursor);
+        setCursor(page.next_cursor ?? null);
       } catch (caught: unknown) {
         if (!controller.signal.aborted) {
           setError(userFacingApiError(caught, append ? loadMoreErrorMessage : loadErrorMessage));

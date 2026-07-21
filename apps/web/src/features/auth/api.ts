@@ -1,26 +1,14 @@
 import { apiFetch } from "@/lib/api/client";
+import type {
+  Account,
+  AuthCapabilities,
+  Login,
+  PasswordReset,
+  PasswordResetConfirm,
+  Registration,
+} from "@/lib/api/types";
 
-export type Account = {
-  user_id: string;
-  tenant_id: string;
-  username: string;
-  email: string | null;
-  display_name: string | null;
-  timezone: string;
-  locale: string;
-};
-
-export type Registration = {
-  username: string;
-  password: string;
-  email?: string;
-  display_name?: string;
-  locale: string;
-};
-
-export type AuthCapabilities = {
-  password_reset_available: boolean;
-};
+export type { Account, AuthCapabilities, Registration } from "@/lib/api/types";
 
 export async function getAccount(): Promise<Account> {
   return (await (await apiFetch("/api/auth/me")).json()) as Account;
@@ -45,7 +33,7 @@ export async function loginAccount(identifier: string, password: string): Promis
     await apiFetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier, password }),
+      body: JSON.stringify({ identifier, password } satisfies Login),
     })
   ).json()) as Account;
 }
@@ -54,7 +42,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   await apiFetch("/api/auth/password-reset/request", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email } satisfies PasswordReset),
   });
 }
 
@@ -62,7 +50,7 @@ export async function confirmPasswordReset(token: string, password: string): Pro
   await apiFetch("/api/auth/password-reset/confirm", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, password } satisfies PasswordResetConfirm),
   });
 }
 

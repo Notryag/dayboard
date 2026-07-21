@@ -1,7 +1,6 @@
 "use client";
 
 import { createElement, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   AlertCircle,
   Bell,
@@ -14,6 +13,12 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { userFacingApiError } from "@/lib/api/client";
 import { cancelCalendarEntry, cancelTaskItem } from "./api";
 import { completeScheduleItem } from "./scheduleItemActions";
@@ -32,6 +37,7 @@ type ScheduleItemDialogProps = {
   initialError: string | null;
   item: ScheduleDisplayItem;
   timezone: string;
+  onBusyChange: (busy: boolean) => void;
   onChanged: (change?: ScheduleChange) => void;
   onClose: () => void;
 };
@@ -40,6 +46,7 @@ export function ScheduleItemDialog({
   initialError,
   item,
   timezone,
+  onBusyChange,
   onChanged,
   onClose,
 }: ScheduleItemDialogProps) {
@@ -53,6 +60,7 @@ export function ScheduleItemDialog({
 
   async function complete() {
     setBusy(true);
+    onBusyChange(true);
     setError(null);
     try {
       onChanged(await completeScheduleItem(item));
@@ -61,11 +69,13 @@ export function ScheduleItemDialog({
       setError(userFacingApiError(caught, "完成失败，请刷新后重试。"));
     } finally {
       setBusy(false);
+      onBusyChange(false);
     }
   }
 
   async function cancel() {
     setBusy(true);
+    onBusyChange(true);
     setError(null);
     try {
       if (item.kind === "calendar") await cancelCalendarEntry(item.value);
@@ -76,19 +86,18 @@ export function ScheduleItemDialog({
       setError(userFacingApiError(caught, "取消失败，请刷新后重试。"));
     } finally {
       setBusy(false);
+      onBusyChange(false);
     }
   }
 
   return (
-    <Dialog.Portal>
-      <Dialog.Overlay className={styles.dialogLayer} />
-      <Dialog.Content
-        aria-label="安排详情"
-        aria-describedby={undefined}
-        className={styles.dialog}
-        onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
-        onPointerDownOutside={(event) => { if (busy) event.preventDefault(); }}
-      >
+    <DialogContent
+      aria-label="安排详情"
+      aria-describedby={undefined}
+      className={styles.dialog}
+      overlayClassName={styles.dialogLayer}
+      showCloseButton={false}
+    >
         <header className={styles.dialogHeader}>
           <span
             aria-hidden="true"
@@ -98,13 +107,23 @@ export function ScheduleItemDialog({
           </span>
           <div className={styles.dialogHeading}>
             <span>{editing ? "编辑" : item.kind === "calendar" ? "日程" : "待办"}</span>
-            <Dialog.Title asChild><h2>{scheduleItemTitle(item)}</h2></Dialog.Title>
+            <DialogTitle>{scheduleItemTitle(item)}</DialogTitle>
           </div>
-          <Dialog.Close asChild>
-            <button aria-label="关闭详情" className={styles.closeButton} disabled={busy} title="关闭" type="button">
+          <DialogClose
+            disabled={busy}
+            render={
+              <Button
+                aria-label="关闭详情"
+                className={styles.closeButton}
+                size="icon"
+                title="关闭"
+                type="button"
+                variant="ghost"
+              />
+            }
+          >
               <X size={19} />
-            </button>
-          </Dialog.Close>
+          </DialogClose>
         </header>
 
         {editing ? (
@@ -168,7 +187,6 @@ export function ScheduleItemDialog({
             </button>
           </footer>
         ) : null}
-      </Dialog.Content>
-    </Dialog.Portal>
+    </DialogContent>
   );
 }

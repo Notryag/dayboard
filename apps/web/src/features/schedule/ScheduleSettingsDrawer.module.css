@@ -6,10 +6,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: var(--border-width) solid var(--color-glass-border);
+  border: var(--border-width) solid var(--dayboard-color-glass-border);
   border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  background: var(--color-glass-surface);
+  color: var(--dayboard-color-text-muted);
+  background: var(--dayboard-color-glass-surface);
   box-shadow: var(--shadow-message);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
@@ -21,8 +21,8 @@
 
 .trigger:hover,
 .closeButton:hover {
-  color: var(--color-text);
-  background: var(--color-surface-muted);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-muted);
 }
 
 .closeButton {
@@ -38,7 +38,7 @@
 .themeOption:focus-visible,
 .themeOptionActive:focus-visible,
 .logoutButton:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -46,11 +46,11 @@
   display: grid;
   gap: var(--space-2);
   padding: var(--space-4);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .preferenceLabel {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-label);
 }
@@ -61,7 +61,7 @@
   gap: var(--space-1);
   padding: var(--space-1);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--dayboard-color-surface-muted);
 }
 
 .themeOption,
@@ -75,15 +75,15 @@
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   background: transparent;
   cursor: pointer;
   font-size: var(--font-size-caption);
 }
 
 .themeOptionActive {
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: var(--shadow-message);
 }
 
@@ -91,7 +91,7 @@
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: var(--color-backdrop);
+  background: var(--dayboard-color-backdrop);
   animation: overlay-in var(--motion-standard) ease-out;
 }
 
@@ -106,9 +106,9 @@
   width: min(var(--schedule-settings-drawer-width), calc(100vw - var(--space-4)));
   display: flex;
   flex-direction: column;
-  border-left: var(--border-width) solid var(--color-border);
-  color: var(--color-text);
-  background: var(--color-surface);
+  border-left: var(--border-width) solid var(--dayboard-color-border);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface);
   box-shadow: var(--shadow-dialog);
   animation: drawer-in var(--motion-standard) ease-out;
 }
@@ -120,7 +120,7 @@
   justify-content: space-between;
   gap: var(--space-4);
   padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-4);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .drawerHeader h2 {
@@ -135,7 +135,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-4);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .accountIcon {
@@ -145,8 +145,8 @@
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-pill);
-  color: var(--color-primary);
-  background: var(--color-primary-surface);
+  color: var(--dayboard-color-primary);
+  background: var(--dayboard-color-primary-surface);
 }
 
 .accountCopy {
@@ -171,14 +171,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
 }
 
 .drawerActions {
   margin-top: auto;
   padding: var(--space-4) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
-  border-top: var(--border-width) solid var(--color-border);
+  border-top: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .logoutButton {
@@ -189,10 +189,10 @@
   justify-content: flex-start;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  border: var(--border-width) solid color-mix(in srgb, var(--color-danger), var(--color-border) 55%);
+  border: var(--border-width) solid color-mix(in srgb, var(--dayboard-color-danger), var(--dayboard-color-border) 55%);
   border-radius: var(--radius-md);
-  color: var(--color-danger);
-  background: var(--color-danger-surface);
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-surface);
   cursor: pointer;
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-medium);

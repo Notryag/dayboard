@@ -133,7 +133,8 @@ tenants retain the original model connection and receive no Northgate header.
 ## Technology Choices
 
 - Frontend: Next.js, React, TypeScript
-- UI primitives/components: shadcn/ui on Radix UI as the first candidate
+- UI primitives/components: shadcn/ui local components, initialized by the official CLI; feature
+  CSS Modules consume the same semantic theme tokens
 - Frontend server state: TanStack Query as the first candidate when API usage grows
 - Frontend shared client state: Zustand or Jotai when local React state is insufficient
 - Icons: lucide-react
@@ -186,6 +187,21 @@ Backend package responsibilities:
 - `dayboard.db`: SQLAlchemy models, repositories, sessions, migrations
 - `dayboard.workers`: agent run jobs and future ASR jobs
 - `dayboard.integrations`: ASR, object storage, external calendar sync later
+
+Frontend boundaries:
+
+- `app/page.tsx` is a route entry only; it mounts the authenticated Dayboard workspace.
+- `features/workspace` composes conversation and schedule surfaces and owns page-level interaction
+  state. It does not parse SSE protocol payloads.
+- `features/chat/useRunStream.ts` owns EventSource lifecycle, reconnection, event decoding, and a
+  single reducer for streamed text, progress, projected schedule items, replay recovery, and the
+  schedule revision signal. Named SSE events share one handler instead of mutating React state in
+  independent listeners.
+- `components/ui` contains CLI-managed shadcn/ui primitives. Product layout and visual semantics
+  remain in feature components and shared theme variables.
+- `lib/api/schema.d.ts` is generated from FastAPI OpenAPI with `npm run api:types`; handwritten code
+  imports stable aliases from `lib/api/types.ts`. The generated file is isolated from the 600-line
+  source limit and must not be edited manually.
 
 ## Network To Database Flow
 

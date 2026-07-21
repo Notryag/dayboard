@@ -90,7 +90,9 @@ red      -> errors and destructive/cancel states only
 
 ## Tokens
 
-Use CSS variables as the first design-token layer. If shadcn/ui is installed, map these concepts to the shadcn theme variables instead of inventing a parallel theme.
+Use CSS variables as the first design-token layer. Map Dayboard's `--dayboard-color-*` product
+tokens into shadcn theme variables so feature CSS Modules and shared UI primitives consume one
+theme rather than parallel palettes.
 
 Initial token groups include semantic colors, spacing, typography, control sizing, radii, focus,
 opacity, shadows, and motion:

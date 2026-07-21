@@ -8,20 +8,20 @@
   display: grid;
   place-items: center;
   padding: var(--space-5);
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--dayboard-color-bg);
+  color: var(--dayboard-color-text);
 }
 
 .loading {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
 }
 
 .authPanel {
   width: min(100%, var(--auth-panel-width));
   padding: var(--auth-panel-padding);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: var(--shadow-soft);
 }
 
@@ -39,8 +39,8 @@
   height: var(--control-size-compact);
   padding: var(--space-2);
   border-radius: var(--radius-md);
-  color: var(--color-primary);
-  background: var(--color-primary-surface);
+  color: var(--dayboard-color-primary);
+  background: var(--dayboard-color-primary-surface);
 }
 
 .authPanel h1 {
@@ -52,21 +52,21 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   margin-bottom: var(--space-5);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .tabs button {
   min-height: var(--control-size);
   border: 0;
   border-bottom: var(--auth-tab-indicator-width) solid transparent;
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   background: transparent;
   cursor: pointer;
 }
 
 .tabs button[aria-pressed="true"] {
-  border-bottom-color: var(--color-primary);
-  color: var(--color-text);
+  border-bottom-color: var(--dayboard-color-primary);
+  color: var(--dayboard-color-text);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -78,7 +78,7 @@
 .form label {
   display: grid;
   gap: var(--space-2);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-label);
   font-weight: var(--font-weight-label);
 }
@@ -86,30 +86,30 @@
 .form input {
   width: 100%;
   min-height: var(--field-size);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
   padding: 0 var(--space-3);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   outline: 0;
 }
 
 .form input:focus {
-  border-color: var(--color-primary);
+  border-color: var(--dayboard-color-primary);
   box-shadow: var(--shadow-focus);
 }
 
 .error {
-  color: var(--color-danger);
+  color: var(--dayboard-color-danger);
   font-size: var(--font-size-label);
 }
 
 .notice {
   padding: var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-muted);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-muted);
   font-size: var(--font-size-ui);
   line-height: 1.5;
 }
@@ -119,7 +119,7 @@
   width: fit-content;
   border: 0;
   padding: 0;
-  color: var(--color-primary);
+  color: var(--dayboard-color-primary);
   background: transparent;
   cursor: pointer;
   font-size: var(--font-size-ui);
@@ -139,22 +139,22 @@
 
 .linkButton:hover,
 .backButton:hover {
-  color: var(--color-primary-hover);
+  color: var(--dayboard-color-primary-hover);
 }
 
 .submit {
   min-height: var(--field-size);
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--color-primary-foreground);
-  background: var(--color-primary);
+  color: var(--dayboard-color-primary-foreground);
+  background: var(--dayboard-color-primary);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
   transition: background var(--motion-fast) ease;
 }
 
 .submit:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--dayboard-color-primary-hover);
 }
 
 .submit:disabled {

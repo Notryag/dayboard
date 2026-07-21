@@ -13,7 +13,7 @@
   overflow: hidden;
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--color-text);
+  color: var(--dayboard-color-text);
   background: transparent;
   text-align: left;
   transition:
@@ -32,15 +32,15 @@
 }
 
 .kindCalendar::before {
-  background: var(--color-calendar);
+  background: var(--dayboard-color-calendar);
 }
 
 .kindTask::before {
-  background: var(--color-task);
+  background: var(--dayboard-color-task);
 }
 
 .item:hover {
-  background: var(--color-surface-hover);
+  background: var(--dayboard-color-surface-hover);
 }
 
 .item:active {
@@ -53,7 +53,7 @@
 .closeButton:focus-visible,
 .actions button:focus-visible,
 .confirmation button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -78,9 +78,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid color-mix(in srgb, var(--color-text-muted), transparent 28%);
+  border: 2px solid color-mix(in srgb, var(--dayboard-color-text-muted), transparent 28%);
   border-radius: var(--radius-pill);
-  color: var(--color-primary-foreground);
+  color: var(--dayboard-color-primary-foreground);
   background: transparent;
   cursor: pointer;
   transition:
@@ -91,13 +91,13 @@
 }
 
 .completionControl:hover:not(:disabled) {
-  border-color: var(--color-success);
+  border-color: var(--dayboard-color-success);
   transform: scale(1.05);
 }
 
 .completionControl[aria-pressed="true"] {
-  border-color: var(--color-success);
-  background: var(--color-success);
+  border-color: var(--dayboard-color-success);
+  background: var(--dayboard-color-success);
 }
 
 .completionControl:disabled {
@@ -108,9 +108,9 @@
   min-height: var(--schedule-agenda-card-min-height);
   align-self: stretch;
   padding-left: var(--space-4);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: none;
 }
 
@@ -118,16 +118,16 @@
   min-height: var(--schedule-task-row-min-height);
   padding-right: 0;
   padding-left: var(--space-3);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
   border-radius: 0;
 }
 
 .chat {
   min-height: 64px;
   padding-left: var(--space-4);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  background: var(--dayboard-color-surface-raised);
 }
 
 .icon,
@@ -135,8 +135,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-calendar);
-  background: var(--color-calendar-surface);
+  color: var(--dayboard-color-calendar);
+  background: var(--dayboard-color-calendar-surface);
 }
 
 .icon {
@@ -146,8 +146,8 @@
 }
 
 .taskIcon {
-  color: var(--color-task);
-  background: var(--color-task-surface);
+  color: var(--dayboard-color-task);
+  background: var(--dayboard-color-task-surface);
 }
 
 .copy {
@@ -171,7 +171,7 @@
 }
 
 .copy > span {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-tight);
 }
@@ -201,7 +201,7 @@
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: var(--color-message-menu-backdrop);
+  background: var(--dayboard-color-message-menu-backdrop);
 }
 
 .dialog {
@@ -223,13 +223,13 @@
     calc(100dvh - var(--schedule-dialog-viewport-gap))
   );
   overflow-y: auto;
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-bottom: 0;
   border-radius: var(--radius-lg);
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: var(--shadow-dialog);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -240,7 +240,7 @@
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-5) var(--space-5) var(--space-4);
-  border-bottom: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .dialogIcon {
@@ -254,7 +254,7 @@
 }
 
 .dialogHeading > span {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
 }
 
@@ -275,8 +275,8 @@
   justify-content: center;
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--color-text-muted);
-  background: var(--color-surface-muted);
+  color: var(--dayboard-color-text-muted);
+  background: var(--dayboard-color-surface-muted);
   cursor: pointer;
 }
 
@@ -291,7 +291,7 @@
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-ui);
   line-height: var(--line-height-body);
 }
@@ -299,28 +299,28 @@
 .detailLine svg {
   flex: 0 0 auto;
   margin-top: var(--schedule-detail-icon-offset);
-  color: var(--color-primary);
+  color: var(--dayboard-color-primary);
 }
 
 .status {
   width: fit-content;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-sm);
-  color: var(--color-success);
-  background: var(--color-success-surface);
+  color: var(--dayboard-color-success);
+  background: var(--dayboard-color-success-surface);
   font-size: var(--font-size-caption);
 }
 
 .error {
-  color: var(--color-danger);
+  color: var(--dayboard-color-danger);
 }
 
 .confirmation {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5) var(--space-5);
-  border-top: var(--border-width) solid var(--color-border);
-  color: var(--color-text);
+  border-top: var(--border-width) solid var(--dayboard-color-border);
+  color: var(--dayboard-color-text);
   font-size: var(--font-size-ui);
 }
 
@@ -338,10 +338,10 @@
   justify-content: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   cursor: pointer;
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-medium);
@@ -359,21 +359,21 @@
 }
 
 .actions .editButton {
-  color: var(--color-primary);
-  background: var(--color-primary-surface);
+  color: var(--dayboard-color-primary);
+  background: var(--dayboard-color-primary-surface);
 }
 
 .actions .completeButton {
-  color: var(--color-success);
-  border-color: var(--color-success);
-  background: var(--color-success-surface);
+  color: var(--dayboard-color-success);
+  border-color: var(--dayboard-color-success);
+  background: var(--dayboard-color-success-surface);
 }
 
 .actions .cancelButton,
 .confirmation .dangerButton {
-  color: var(--color-danger);
-  border-color: color-mix(in srgb, var(--color-danger), var(--color-border) 55%);
-  background: var(--color-danger-surface);
+  color: var(--dayboard-color-danger);
+  border-color: color-mix(in srgb, var(--dayboard-color-danger), var(--dayboard-color-border) 55%);
+  background: var(--dayboard-color-danger-surface);
 }
 
 .editForm {
@@ -389,7 +389,7 @@
 }
 
 .editForm label > span {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
 }
@@ -399,16 +399,16 @@
   min-width: 0;
   min-height: var(--field-size);
   padding: 0 var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface);
   font: inherit;
 }
 
 .editForm input:focus-visible {
-  border-color: var(--color-primary);
-  outline: var(--focus-ring-width) solid var(--color-primary-surface);
+  border-color: var(--dayboard-color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary-surface);
   outline-offset: 0;
 }
 
@@ -416,29 +416,29 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 3px;
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface-muted);
+  background: var(--dayboard-color-surface-muted);
 }
 
 .timingMode button {
   min-height: var(--control-size);
   border: 0;
   border-radius: calc(var(--radius-md) - 2px);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   background: transparent;
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
 }
 
 .timingMode button[aria-pressed="true"] {
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: var(--shadow-sm);
 }
 
 .formError {
-  color: var(--color-danger);
+  color: var(--dayboard-color-danger);
   font-size: var(--font-size-caption);
 }
 
@@ -454,18 +454,18 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
 }
 
 .formActions .saveButton {
-  border-color: var(--color-primary);
-  color: var(--color-primary-foreground);
-  background: var(--color-primary);
+  border-color: var(--dayboard-color-primary);
+  color: var(--dayboard-color-primary-foreground);
+  background: var(--dayboard-color-primary);
 }
 
 .formActions button:disabled {

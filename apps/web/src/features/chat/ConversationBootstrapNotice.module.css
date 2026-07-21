@@ -5,10 +5,10 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  border: var(--border-width) solid color-mix(in srgb, var(--color-danger), transparent 55%);
+  border: var(--border-width) solid color-mix(in srgb, var(--dayboard-color-danger), transparent 55%);
   border-radius: var(--radius-md);
-  color: var(--color-danger);
-  background: var(--color-danger-surface);
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-surface);
   font-size: var(--font-size-caption);
 }
 
@@ -21,8 +21,8 @@
   padding-inline: var(--space-3);
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--color-primary-foreground);
-  background: var(--color-primary);
+  color: var(--dayboard-color-primary-foreground);
+  background: var(--dayboard-color-primary);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;

@@ -27,19 +27,15 @@ export type ClarificationInteraction =
   | CalendarEntryChoiceInteraction
   | SuggestedChoiceInteraction;
 
-export type ConversationState = {
-  thread_id: string;
-  pending_action: string | null;
-  pending_question: string | null;
+export type ConversationState = Omit<ApiConversationState, "state_data"> & {
   state_data: {
     source_run_id?: string;
     interaction?: ClarificationInteraction;
   };
-  version: number;
-  expires_at: string | null;
 };
 
-export type ClarificationChoiceResponse = {
-  state_version: number;
-  option_key: string;
-};
+export type ClarificationChoiceResponse = ClarificationChoice;
+import type {
+  ClarificationChoice,
+  ConversationState as ApiConversationState,
+} from "@/lib/api/types";

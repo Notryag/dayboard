@@ -19,10 +19,10 @@
   min-height: var(--composer-min-height);
   align-items: center;
   gap: var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-1);
-  background: var(--color-surface-raised);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: var(--shadow-message);
 }
 
@@ -72,8 +72,8 @@
 }
 
 .iconButton {
-  color: var(--color-text-muted);
-  background: var(--color-surface-muted);
+  color: var(--dayboard-color-text-muted);
+  background: var(--dayboard-color-surface-muted);
 }
 
 .voiceComposer > .iconButton {
@@ -82,24 +82,24 @@
 }
 
 .iconButton:hover:not(:disabled) {
-  color: var(--color-text);
-  background: var(--color-surface-hover);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-hover);
 }
 
 .sendButton {
-  color: var(--color-primary-foreground);
-  background: var(--color-primary);
+  color: var(--dayboard-color-primary-foreground);
+  background: var(--dayboard-color-primary);
   box-shadow: var(--shadow-primary);
 }
 
 .sendButton:hover:not(:disabled) {
-  background: var(--color-primary-hover);
+  background: var(--dayboard-color-primary-hover);
   transform: translateY(-1px);
 }
 
 .stopButton {
-  color: var(--color-danger);
-  background: var(--color-danger-surface);
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-surface);
 }
 
 .sendButton:disabled,
@@ -118,12 +118,12 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--color-text);
+  color: var(--dayboard-color-text);
   font-size: var(--font-size-body);
 }
 
 .inputWrap input::placeholder {
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
 }
 
 .inputWrap input:disabled {
@@ -141,10 +141,10 @@
   gap: var(--space-2);
   overflow: hidden;
   padding: 0 var(--space-4);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   box-shadow: none;
   cursor: pointer;
   font-size: var(--font-size-body);
@@ -159,7 +159,7 @@
 }
 
 .voiceHoldButton:hover:not(:disabled) {
-  background: var(--color-surface-hover);
+  background: var(--dayboard-color-surface-hover);
 }
 
 .voiceHoldButton:disabled:not(.voiceHoldButtonProcessing) {
@@ -173,23 +173,23 @@
 }
 
 .voiceHoldButtonActive {
-  color: var(--color-accent-foreground);
-  border-color: var(--color-accent);
-  background: var(--color-accent);
+  color: var(--dayboard-color-accent-foreground);
+  border-color: var(--dayboard-color-accent);
+  background: var(--dayboard-color-accent);
   box-shadow: none;
 }
 
 .voiceHoldButtonProcessing {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background: var(--color-primary-surface);
+  color: var(--dayboard-color-primary);
+  border-color: var(--dayboard-color-primary);
+  background: var(--dayboard-color-primary-surface);
   box-shadow: none;
 }
 
 .voiceHoldButtonCancel {
-  color: var(--color-danger-foreground);
-  border-color: var(--color-danger);
-  background: var(--color-danger);
+  color: var(--dayboard-color-danger-foreground);
+  border-color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger);
   box-shadow: none;
 }
 
@@ -230,7 +230,7 @@
 .sendButton:focus-visible,
 .stopButton:focus-visible,
 .dismissButton:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -264,9 +264,9 @@
   align-items: center;
   gap: var(--space-2);
   padding-left: var(--space-3);
-  border-left: var(--border-width-accent) solid var(--color-danger);
-  color: var(--color-danger);
-  background: var(--color-danger-surface);
+  border-left: var(--border-width-accent) solid var(--dayboard-color-danger);
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-surface);
   font-size: var(--font-size-label);
   line-height: var(--line-height-compact);
 }

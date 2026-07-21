@@ -8,7 +8,7 @@
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding: var(--app-floating-header-clearance) var(--space-4) var(--space-6);
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--dayboard-color-border) transparent;
   scrollbar-width: thin;
 }
 
@@ -52,7 +52,7 @@
   align-items: center;
   justify-content: center;
   margin-top: var(--space-1);
-  color: var(--color-accent);
+  color: var(--dayboard-color-accent);
   background: transparent;
 }
 
@@ -90,14 +90,14 @@
 }
 
 .messageText a {
-  color: var(--color-primary);
+  color: var(--dayboard-color-primary);
   text-underline-offset: 2px;
 }
 
 .messageText code {
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
+  background: var(--dayboard-color-surface-muted);
   font-size: var(--font-size-ui);
 }
 
@@ -136,7 +136,7 @@
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: var(--color-message-menu-backdrop);
+  background: var(--dayboard-color-message-menu-backdrop);
 }
 
 .messageMenu {
@@ -152,10 +152,10 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   overflow: hidden;
-  border: var(--border-width) solid var(--color-message-menu-border);
+  border: var(--border-width) solid var(--dayboard-color-message-menu-border);
   border-radius: var(--radius-lg);
-  color: var(--color-message-menu-foreground);
-  background: var(--color-message-menu);
+  color: var(--dayboard-color-message-menu-foreground);
+  background: var(--dayboard-color-message-menu);
   box-shadow: var(--shadow-message-menu);
   transform: translateX(-50%);
 }
@@ -185,7 +185,7 @@
 }
 
 .messageMenu button + button {
-  border-left: var(--border-width) solid var(--color-message-menu-border);
+  border-left: var(--border-width) solid var(--dayboard-color-message-menu-border);
 }
 
 .messageMenu button:active {
@@ -193,7 +193,7 @@
 }
 
 .messageMenu button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: calc(-1 * var(--focus-ring-width));
 }
 

@@ -1,8 +1,15 @@
 "use client";
 
-import * as Dialog from "@radix-ui/react-dialog";
 import { useSyncExternalStore } from "react";
 import { Globe2, LogOut, Monitor, Moon, Settings2, Sun, UserRound, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import styles from "./ScheduleSettingsDrawer.module.css";
 
 type ScheduleSettingsDrawerProps = {
@@ -62,22 +69,43 @@ export function ScheduleSettingsDrawer({
   );
 
   return (
-    <Dialog.Root>
-      <Dialog.Trigger asChild>
-        <button aria-label="打开设置" className={styles.trigger} title="设置" type="button">
+    <Sheet>
+      <SheetTrigger
+        render={
+          <Button
+            aria-label="打开设置"
+            className={styles.trigger}
+            size="icon"
+            title="设置"
+            type="button"
+            variant="ghost"
+          />
+        }
+      >
           <Settings2 aria-hidden="true" size={18} />
-        </button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className={styles.overlay} />
-        <Dialog.Content aria-describedby={undefined} className={styles.drawer}>
+      </SheetTrigger>
+      <SheetContent
+        aria-describedby={undefined}
+        className={styles.drawer}
+        overlayClassName={styles.overlay}
+        showCloseButton={false}
+      >
           <header className={styles.drawerHeader}>
-            <Dialog.Title>设置</Dialog.Title>
-            <Dialog.Close asChild>
-              <button aria-label="关闭设置" className={styles.closeButton} title="关闭" type="button">
+            <SheetTitle>设置</SheetTitle>
+            <SheetClose
+              render={
+                <Button
+                  aria-label="关闭设置"
+                  className={styles.closeButton}
+                  size="icon"
+                  title="关闭"
+                  type="button"
+                  variant="ghost"
+                />
+              }
+            >
                 <X aria-hidden="true" size={20} />
-              </button>
-            </Dialog.Close>
+            </SheetClose>
           </header>
 
           <div className={styles.accountSection}>
@@ -99,30 +127,30 @@ export function ScheduleSettingsDrawer({
               {themeOptions.map((option) => {
                 const Icon = option.icon;
                 return (
-                  <button
+                  <Button
                     aria-pressed={theme === option.value}
                     className={theme === option.value ? styles.themeOptionActive : styles.themeOption}
                     key={option.value}
                     onClick={() => applyThemePreference(option.value)}
                     title={option.label}
                     type="button"
+                    variant="ghost"
                   >
                     <Icon aria-hidden="true" size={17} />
                     <span>{option.label}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
           </section>
 
           <div className={styles.drawerActions}>
-            <button className={styles.logoutButton} onClick={onLogout} type="button">
+            <Button className={styles.logoutButton} onClick={onLogout} type="button" variant="destructive">
               <LogOut aria-hidden="true" size={18} />
               退出登录
-            </button>
+            </Button>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+      </SheetContent>
+    </Sheet>
   );
 }

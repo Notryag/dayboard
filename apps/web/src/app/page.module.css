@@ -12,8 +12,8 @@
   display: flex;
   justify-content: center;
   overflow: hidden;
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-bg);
 }
 
 .appShell {
@@ -24,7 +24,7 @@
   display: grid;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
-  background: var(--color-surface);
+  background: var(--dayboard-color-surface);
 }
 
 .appHeader {
@@ -71,8 +71,8 @@
   background: linear-gradient(
     100deg,
     transparent 8%,
-    color-mix(in srgb, var(--color-primary), transparent 80%) 38%,
-    color-mix(in srgb, var(--color-accent), transparent 82%) 58%,
+    color-mix(in srgb, var(--dayboard-color-primary), transparent 80%) 38%,
+    color-mix(in srgb, var(--dayboard-color-accent), transparent 82%) 58%,
     transparent 92%
   );
   background-size: 220% 100%;
@@ -113,10 +113,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: var(--border-width) solid var(--color-glass-border);
+  border: var(--border-width) solid var(--dayboard-color-glass-border);
   border-radius: var(--radius-pill);
-  color: var(--color-text-muted);
-  background: var(--color-glass-surface);
+  color: var(--dayboard-color-text-muted);
+  background: var(--dayboard-color-glass-surface);
   box-shadow: var(--shadow-message);
   -webkit-backdrop-filter: blur(var(--app-floating-header-blur));
   backdrop-filter: blur(var(--app-floating-header-blur));
@@ -127,12 +127,12 @@
 }
 
 .floatingHeaderButton:hover {
-  color: var(--color-text);
-  background: var(--color-surface-muted);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-muted);
 }
 
 .floatingHeaderButton:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -156,7 +156,7 @@
   --chat-message-max-width: 340px;
 
   grid-template-rows: minmax(0, 1fr) auto;
-  background: var(--color-surface);
+  background: var(--dayboard-color-surface);
 }
 
 .schedulePane {
@@ -171,7 +171,7 @@
   display: grid;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
-  background: color-mix(in srgb, var(--color-surface), transparent 3%);
+  background: color-mix(in srgb, var(--dayboard-color-surface), transparent 3%);
   backdrop-filter: blur(var(--app-composer-backdrop-blur));
 }
 
@@ -200,7 +200,7 @@
   }
 
   .schedulePane {
-    border-left: var(--border-width) solid var(--color-border);
+    border-left: var(--border-width) solid var(--dayboard-color-border);
   }
 
   .composerDock {

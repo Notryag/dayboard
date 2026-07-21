@@ -70,7 +70,8 @@ The bullets below summarize decisions that affect current work; they do not repl
 - Voice recognition is a Dayboard input-layer integration. It should produce transcript text that enters the normal command flow.
 - Next.js is the first UI. React Native can be revisited later.
 - Mature third-party libraries are allowed and encouraged when they reduce implementation risk.
-- shadcn/ui is the preferred first UI component-system candidate; use its CLI when selected.
+- shadcn/ui is the installed UI component system. Add primitives through its CLI and keep product
+  styling connected to Dayboard's shared semantic theme tokens.
 - TanStack Query is the preferred first candidate for server state once API calls become non-trivial.
 - Zustand or Jotai are acceptable candidates for shared client state when plain React state is no longer enough.
 - Conversation and the day view are equal first-level product surfaces. Keep them separate on mobile
@@ -122,6 +123,10 @@ paths.
   direct editing, completion, and calendar/task cancellation with optimistic concurrency.
   The server owns trusted-timezone day boundaries; each source has independent loading, error,
   retry, stale-request cancellation, and cursor-pagination states.
+- Frontend architecture: the Next.js route entry only mounts the workspace; page orchestration,
+  chat stream handling, and message conversion are separate modules. Run SSE events enter one
+  reducer, API transport types are generated from FastAPI OpenAPI, and ESLint rejects handwritten
+  TypeScript/React source files over 600 lines.
 - Calendar/task intent: any action with a resolvable date, clock, or daypart is calendar intent,
   including completion and deadline wording. A date without a clock/daypart is a native `anytime`
   entry and does not invent a clock; dayparts use documented deterministic clocks. Only actions with no resolvable temporal anchor, including
@@ -195,7 +200,9 @@ Reference verification commands are listed below. Follow the test policy in
 normal slice and reserve full regression or live-model runs for release and high-risk changes.
 
 ```bash
+cd apps/web && npm run api:types:check
 cd apps/web && npm run lint
+cd apps/web && npm run typecheck
 cd apps/web && npm run build
 cd apps/api && uv sync
 cd apps/api && uv run ruff check .

@@ -20,8 +20,8 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   overflow: hidden;
-  color: var(--color-text);
-  background: var(--color-surface);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface);
 }
 
 .header {
@@ -32,7 +32,7 @@
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-2);
-  background: var(--color-surface);
+  background: var(--dayboard-color-surface);
 }
 
 .header h2 {
@@ -60,7 +60,7 @@
   gap: var(--space-1);
   padding: 0 var(--space-2);
   border-radius: var(--radius-md);
-  color: var(--color-primary);
+  color: var(--dayboard-color-primary);
   background: transparent;
   cursor: pointer;
   font-size: var(--font-size-ui);
@@ -70,7 +70,7 @@
 }
 
 .monthPicker:hover {
-  background: var(--color-primary-surface);
+  background: var(--dayboard-color-primary-surface);
 }
 
 .monthPicker input {
@@ -84,7 +84,7 @@
 }
 
 .monthPicker:has(input:focus-visible) {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -94,8 +94,8 @@
   gap: var(--schedule-date-gap);
   overflow-x: auto;
   padding: var(--space-2) var(--space-4) var(--space-3);
-  border-bottom: var(--border-width) solid var(--color-border);
-  background: var(--color-surface);
+  border-bottom: var(--border-width) solid var(--dayboard-color-border);
+  background: var(--dayboard-color-surface);
   scroll-padding-inline: var(--space-4);
   scroll-snap-type: x proximity;
   scrollbar-width: none;
@@ -117,7 +117,7 @@
   gap: var(--space-1);
   border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   background: transparent;
   cursor: pointer;
   scroll-snap-align: center;
@@ -129,8 +129,8 @@
 }
 
 .dateCell:hover {
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-surface-raised), transparent 18%);
+  color: var(--dayboard-color-text);
+  background: color-mix(in srgb, var(--dayboard-color-surface-raised), transparent 18%);
 }
 
 .dateCell > span {
@@ -147,16 +147,16 @@
 }
 
 .dateCellToday {
-  border-color: color-mix(in srgb, var(--color-primary), transparent 62%);
-  color: var(--color-text);
-  background: var(--color-today-surface);
+  border-color: color-mix(in srgb, var(--dayboard-color-primary), transparent 62%);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-today-surface);
 }
 
 .dateCellSelected,
 .dateCellSelected:hover {
-  border-color: var(--color-selection);
-  color: var(--color-selection-foreground);
-  background: var(--color-selection);
+  border-color: var(--dayboard-color-selection);
+  color: var(--dayboard-color-selection-foreground);
+  background: var(--dayboard-color-selection);
   box-shadow: none;
 }
 
@@ -172,7 +172,7 @@
 .moreButton:focus-visible,
 .sourceError button:focus-visible,
 .notice button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--color-primary);
+  outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
 }
 
@@ -181,7 +181,7 @@
   overflow-y: auto;
   padding: 0 var(--space-4) max(var(--space-5), env(safe-area-inset-bottom));
   overscroll-behavior: contain;
-  scrollbar-color: var(--color-border) transparent;
+  scrollbar-color: var(--dayboard-color-border) transparent;
   scrollbar-width: thin;
 }
 
@@ -190,7 +190,7 @@
 }
 
 .section + .section {
-  border-top: var(--border-width) solid var(--color-border);
+  border-top: var(--border-width) solid var(--dayboard-color-border);
 }
 
 .sectionHeader {
@@ -204,7 +204,7 @@
 
 .sectionHeader > span {
   flex: 0 0 auto;
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   font-variant-numeric: tabular-nums;
 }
@@ -217,18 +217,18 @@
 }
 
 .sectionTitle h3 {
-  color: var(--color-text);
+  color: var(--dayboard-color-text);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
 }
 
 .agendaSectionTitle {
-  color: var(--color-calendar);
+  color: var(--dayboard-color-calendar);
 }
 
 .taskSectionTitle {
-  color: var(--color-task);
+  color: var(--dayboard-color-task);
 }
 
 .agendaList,
@@ -252,7 +252,7 @@
 .agendaList > li > time {
   width: 100%;
   padding-top: var(--space-3);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
   font-variant-numeric: tabular-nums;
@@ -267,7 +267,7 @@
 .notice,
 .empty {
   min-height: var(--schedule-empty-min-height);
-  color: var(--color-text-muted);
+  color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-label);
 }
 
@@ -281,7 +281,7 @@
 }
 
 .notice .spinner {
-  color: var(--color-primary);
+  color: var(--dayboard-color-primary);
 }
 
 .notice button,
@@ -291,10 +291,10 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--dayboard-color-border);
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   cursor: pointer;
   transition:
     border-color var(--motion-fast) ease,
@@ -307,8 +307,8 @@
 
 .notice button:hover,
 .moreButton:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-primary), transparent 45%);
-  background: var(--color-primary-surface);
+  border-color: color-mix(in srgb, var(--dayboard-color-primary), transparent 45%);
+  background: var(--dayboard-color-primary-surface);
 }
 
 .empty {
@@ -324,7 +324,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   margin-top: var(--space-2);
-  color: var(--color-danger);
+  color: var(--dayboard-color-danger);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-body);
 }
@@ -345,7 +345,7 @@
 
 .inlineError {
   margin-top: var(--space-2);
-  color: var(--color-danger);
+  color: var(--dayboard-color-danger);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-body);
 }

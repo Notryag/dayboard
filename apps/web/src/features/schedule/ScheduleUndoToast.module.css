@@ -12,10 +12,10 @@
   max-width: 420px;
   margin-inline: auto;
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
-  border: var(--border-width) solid var(--color-glass-border);
+  border: var(--border-width) solid var(--dayboard-color-glass-border);
   border-radius: var(--radius-lg);
-  color: var(--color-primary-foreground);
-  background: color-mix(in srgb, var(--color-text), transparent 8%);
+  color: var(--dayboard-color-primary-foreground);
+  background: color-mix(in srgb, var(--dayboard-color-text), transparent 8%);
   box-shadow: var(--shadow-dialog);
   font-size: var(--font-size-label);
 }
@@ -29,8 +29,8 @@
   padding-inline: var(--space-3);
   border: 0;
   border-radius: var(--radius-md);
-  color: var(--color-text);
-  background: var(--color-surface-raised);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
   cursor: pointer;
   font-weight: var(--font-weight-semibold);
   white-space: nowrap;

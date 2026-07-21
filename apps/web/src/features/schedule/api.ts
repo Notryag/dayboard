@@ -1,5 +1,10 @@
 import { apiFetch } from "@/lib/api/client";
 import type {
+  CalendarEntryUpdate,
+  ScheduleMutation,
+  TaskItemUpdate,
+} from "@/lib/api/types";
+import type {
   CalendarEntry,
   SchedulePage,
   TaskItem,
@@ -56,7 +61,7 @@ async function mutateScheduleItem<T>(path: string, updatedAt: string): Promise<T
   const response = await apiFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expected_updated_at: updatedAt }),
+    body: JSON.stringify({ expected_updated_at: updatedAt } satisfies ScheduleMutation),
   });
   return response.json() as Promise<T>;
 }
@@ -101,7 +106,7 @@ export async function updateCalendarEntry(
       scheduled_date: input.timingKind === "anytime" ? input.scheduledDate : null,
       start_time: input.timingKind === "timed" ? input.startTime : null,
       duration_minutes: input.timingKind === "timed" ? input.durationMinutes : null,
-    }),
+    } satisfies CalendarEntryUpdate),
   });
   return response.json() as Promise<CalendarEntry>;
 }
@@ -117,7 +122,7 @@ export async function updateTaskItem(
       expected_updated_at: task.updated_at,
       title: input.title,
       due_at: input.dueAt,
-    }),
+    } satisfies TaskItemUpdate),
   });
   return response.json() as Promise<TaskItem>;
 }

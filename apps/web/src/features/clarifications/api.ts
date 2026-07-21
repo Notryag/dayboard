@@ -3,12 +3,9 @@ import type {
   ConversationState,
 } from "./types";
 import { apiFetch } from "@/lib/api/client";
+import type { CommandRun } from "@/lib/api/types";
 
-export type QueuedCommandRun = {
-  run_id: string;
-  status: "queued";
-  thread_id: string;
-};
+export type QueuedCommandRun = CommandRun;
 
 export async function getConversationState(
   threadId: string,

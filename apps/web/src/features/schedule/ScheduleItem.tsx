@@ -1,8 +1,8 @@
 "use client";
 
 import { createElement, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
 import { Check, LoaderCircle } from "lucide-react";
+import { Dialog } from "@/components/ui/dialog";
 import { userFacingApiError } from "@/lib/api/client";
 import { completeScheduleItem } from "./scheduleItemActions";
 import {
@@ -30,6 +30,7 @@ export function ScheduleItem({
 }: ScheduleItemProps) {
   const [open, setOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
+  const [dialogBusy, setDialogBusy] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
   const Icon = iconForScheduleItem(item.kind);
   const status = scheduleItemStatus(item);
@@ -50,7 +51,13 @@ export function ScheduleItem({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog
+      disablePointerDismissal={dialogBusy}
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!dialogBusy) setOpen(nextOpen);
+      }}
+    >
       <div
         className={`${styles.item} ${styles[variant]} ${
           status !== "open" ? styles[status] : ""
@@ -100,11 +107,12 @@ export function ScheduleItem({
         <ScheduleItemDialog
           initialError={directError}
           item={item}
+          onBusyChange={setDialogBusy}
           onChanged={onChanged}
           onClose={() => setOpen(false)}
           timezone={timezone}
         />
       ) : null}
-    </Dialog.Root>
+    </Dialog>
   );
 }
