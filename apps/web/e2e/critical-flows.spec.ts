@@ -56,6 +56,38 @@ test("multiple arrangements stream into separate schedule cards", async ({ page 
   await expect(results.getByRole("button", { name: /完成/ })).toHaveCount(0);
 });
 
+test("mobile viewport keeps the transparent header visible while chat scrolls", async ({ page }) => {
+  const messages = Array.from({ length: 24 }, (_, index) => ({
+    id: `history-${index}`,
+    thread_id: "thread-existing",
+    run_id: `run-${index}`,
+    role: "user" as const,
+    content: `历史安排 ${index + 1}：这是一条用于验证移动端滚动区域的较长消息。`,
+    message_metadata: {},
+    created_at: `2026-07-20T${String(index).padStart(2, "0")}:00:00Z`,
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installApiFixture(page, { messages, threadId: "thread-existing" });
+  await page.addInitScript(() => localStorage.setItem("dayboard.thread_id", "thread-existing"));
+  await page.goto("/dayboard");
+
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    /viewport-fit=cover/,
+  );
+  const header = page.locator("header").first();
+  await expect(header).toBeVisible();
+  const messagesRegion = page.getByRole("region", { name: "对话记录" });
+  await messagesRegion.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect.poll(() => header.evaluate((element) => ({
+    opacity: getComputedStyle(element).opacity,
+    transform: getComputedStyle(element).transform,
+  }))).toEqual({ opacity: "1", transform: "none" });
+});
+
 test("reload restores history and rejoins an active Run", async ({ page }) => {
   const entry = calendarEntry({ id: "calendar-active", title: "恢复后的日程" });
   const part = schedulePart(entry, "tool-active");

@@ -37,17 +37,9 @@
   display: grid;
   grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
-  padding-inline: var(--space-4);
+  padding-left: max(var(--space-4), env(safe-area-inset-left));
+  padding-right: max(var(--space-4), env(safe-area-inset-right));
   pointer-events: none;
-  transition:
-    opacity var(--motion-standard) ease,
-    transform var(--motion-standard) ease;
-  will-change: transform;
-}
-
-.appHeaderHidden {
-  opacity: 0;
-  transform: translateY(calc(-100% - env(safe-area-inset-top) - var(--space-3)));
 }
 
 .brand {
@@ -173,14 +165,18 @@
 .composerDock {
   display: grid;
   gap: var(--space-1);
-  padding: var(--space-2) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  padding-top: var(--space-2);
+  padding-right: max(var(--space-4), env(safe-area-inset-right));
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  padding-left: max(var(--space-4), env(safe-area-inset-left));
   background: color-mix(in srgb, var(--dayboard-color-surface), transparent 3%);
   backdrop-filter: blur(var(--app-composer-backdrop-blur));
 }
 
 @media (min-width: 900px) {
   .appHeader {
-    padding-inline: var(--space-6);
+    padding-right: max(var(--space-6), env(safe-area-inset-right));
+    padding-left: max(var(--space-6), env(safe-area-inset-left));
   }
 
   .headerLeading {
@@ -207,14 +203,13 @@
   }
 
   .composerDock {
-    padding-right: var(--space-6);
-    padding-left: var(--space-6);
+    padding-right: max(var(--space-6), env(safe-area-inset-right));
+    padding-left: max(var(--space-6), env(safe-area-inset-left));
   }
 
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .appHeader,
   .floatingHeaderButton {
     transition: none;
   }

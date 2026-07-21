@@ -90,10 +90,8 @@ function ChatHome() {
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
   const [isThreadBootstrapping, setIsThreadBootstrapping] = useState(true);
   const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
-  const [chatHeaderHidden, setChatHeaderHidden] = useState(false);
   const [reminderFocus, setReminderFocus] = useState<ReminderFocusTarget | null>(null);
   const initializingThreadRef = useRef(false);
-  const lastChatScrollTopRef = useRef(0);
   const messagesRef = useRef<HTMLElement>(null);
 
   const timezone = account?.timezone ?? "Asia/Shanghai";
@@ -293,7 +291,6 @@ function ChatHome() {
   function openReminderSource(target: Omit<ReminderFocusTarget, "requestId">) {
     setReminderFocus({ ...target, requestId: Date.now() });
     setActiveView("schedule");
-    setChatHeaderHidden(false);
   }
 
   async function handleUndo() {
@@ -316,32 +313,14 @@ function ChatHome() {
   }
 
   function selectView(view: PrimaryView) {
-    setChatHeaderHidden(false);
     setActiveView(view);
     if (view === "schedule") dispatch({ type: "schedule_changed" });
-  }
-
-  function handleChatScroll(scrollTop: number) {
-    const normalizedScrollTop = Math.max(0, scrollTop);
-    const previousScrollTop = lastChatScrollTopRef.current;
-    lastChatScrollTopRef.current = normalizedScrollTop;
-    if (normalizedScrollTop <= 8) {
-      setChatHeaderHidden(false);
-    } else if (normalizedScrollTop > previousScrollTop) {
-      setChatHeaderHidden(true);
-    } else if (normalizedScrollTop < previousScrollTop) {
-      setChatHeaderHidden(false);
-    }
   }
 
   return (
     <div className={styles.page}>
       <main className={styles.appShell}>
-        <header
-          className={`${styles.appHeader} ${
-            activeView === "chat" && chatHeaderHidden ? styles.appHeaderHidden : ""
-          }`}
-        >
+        <header className={styles.appHeader}>
           <div className={styles.headerLeading}>
             <Button
               aria-label={activeView === "chat" ? "打开日程" : "返回对话"}
@@ -385,7 +364,6 @@ function ChatHome() {
               messages={messages}
               onChanged={handleScheduleChanged}
               onClarificationChoice={(optionKey) => void handleClarificationChoice(optionKey)}
-              onScrollPositionChange={handleChatScroll}
               scrollRef={messagesRef}
               timezone={timezone}
             />

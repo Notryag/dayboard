@@ -34,8 +34,9 @@ is the home page and the floating header control switches between the two top-le
 inside Schedule. The global header's right control opens a settings drawer for account information,
 timezone, appearance, logout, and future settings. Appearance supports system, light, and dark themes.
 The centered wordmark uses a restrained animated gradient glow behind the text.
-The global header overlays the conversation scroller: it moves out of view when conversation content
-scrolls upward, returns on reverse scrolling or at the top, and remains visible on Schedule.
+The global header overlays the conversation scroller and remains visible while Conversation or Schedule
+content scrolls. Its transparent treatment preserves the full-screen surface without introducing a
+separate header band.
 
 ## Design Direction
 
@@ -159,7 +160,8 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Keep the input dock fixed or sticky at the bottom.
 - Keep the mobile composer inside the bottom safe area. Do not duplicate the Conversation/Schedule
   switch in a bottom tab bar while the header control owns that navigation.
-- Respect mobile safe-area insets.
+- Respect all mobile safe-area insets. The viewport uses `viewport-fit=cover`; the floating header,
+  scrollable content, composer, and drawers keep interactive content clear of notches and home indicators.
 - Message bubbles should have stable max widths and must not shift layout while loading.
 - Assistant messages use a raised neutral surface and subtle border. A long press opens a compact,
   WeChat-style action menu for real local actions only: copy and select text. Moving the pointer
