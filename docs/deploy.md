@@ -130,8 +130,8 @@ FastAPI、arq 或 Next.js 进程。
 
 推送语义化版本标签后，[GitHub Actions workflow](../.github/workflows/deploy.yml) 自动执行：
 
-1. API Ruff 检查和聚焦配置测试；
-2. Web ESLint 和生产构建；
+1. API Ruff 检查、Alembic 升级和完整 PostgreSQL 测试；
+2. Web ESLint、TypeScript、生产构建和关键 Playwright E2E；
 3. 构建 API、Web 镜像并以 Git commit SHA 和版本号为标签推送到 GHCR；
 4. 通过 SSH 连接服务器，拉取对应镜像；
 5. 备份 PostgreSQL，使用新 API 镜像执行迁移；

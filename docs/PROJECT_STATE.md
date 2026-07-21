@@ -17,6 +17,11 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Completed
 
+- Added the critical Playwright browser gate, including deterministic SSE, active-Run recovery,
+  clarification resume, optimistic edit/undo, and fixed-audio voice coverage.
+- Expanded CI and release quality jobs to run the complete PostgreSQL API suite and browser E2E.
+- Added a versioned 128-case Chinese scheduling Agent Eval with quantitative quality, safety,
+  latency, and token metrics.
 - Password registration/login, server sessions, password recovery, tenant/owner isolation, and
   endpoint-specific abuse limits.
 - Natural-language create, search, reschedule, cancel, complete, multi-command execution, and
@@ -63,7 +68,8 @@ Before tagging or deploying a release:
 - [ ] Confirm `main` contains the intended migration and generated OpenAPI schema.
 - [ ] Run `npm run api:types:check`, `npm run lint`, `npm run typecheck`, and `npm run build` in
   `apps/web`.
-- [ ] Run Ruff and the affected PostgreSQL-backed API tests against a database ending in `_test`.
+- [ ] Run Ruff and the complete PostgreSQL-backed API suite against a database ending in `_test`.
+- [ ] Run the critical Playwright E2E suite without screenshots or real microphone access.
 - [ ] Run Alembic upgrade against the test database and review generated SQL for new migrations.
 - [ ] Run the targeted Agent acceptance program when the change affects prompt/tool behavior.
 - [ ] Build replacement Docker images before recreating containers.

@@ -4,6 +4,9 @@ Agent acceptance scenarios are explicit live checks, not part of the normal test
 exercise the deployed HTTP, queue, worker, North runtime, tool, Run-event, and persistence path
 with real model calls.
 
+Keep this catalog small and release-oriented. Broad model quality, safety, latency, and token
+metrics belong to the versioned [Agent Eval](./agent-eval.md), not to this runner.
+
 The runner is safe by default: without `--execute` it only lists scenarios. Execution also
 requires `--allow-writes` because it creates persistent threads, calendar entries, tasks, Runs,
 events, and provider usage records. Test titles include a per-thread `验收<tag>` prefix as

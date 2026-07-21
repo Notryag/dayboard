@@ -379,6 +379,13 @@ Priority order:
 
 LLM-dependent tests should be limited and optional in normal local runs. Most correctness should be covered without calling a model.
 
+The browser release gate uses Playwright for the critical user journeys: authentication and Thread
+creation, multi-item SSE rendering, refresh and active-Run recovery, optimistic edit plus undo, and
+clarification resume. Browser tests run the real Next.js UI against a deterministic stateful API
+and SSE contract fixture. Voice interaction uses fixed audio bytes through a test MediaRecorder;
+it must not require microphone hardware or permission. Real backend semantics remain covered by
+PostgreSQL API/service tests, while live model quality is measured by Agent Eval.
+
 Unit tests for application orchestration may use fakes for database sessions, model invokers, and provider gateways when the behavior under test is routing, budgeting, logging, or status mapping. Repository tests, API persistence tests, and tool tests must still run against PostgreSQL because PostgreSQL is the source of truth and its constraints, JSONB behavior, timestamps, and transaction behavior are part of the product contract.
 
 For Dayboard, verify completed substantial slices before moving far ahead; do not turn

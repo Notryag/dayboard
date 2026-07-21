@@ -30,6 +30,7 @@ implementation that changes them.
 ## Acceptance And Diagnostics
 
 - [agent-acceptance.md](./agent-acceptance.md): targeted live-model acceptance program.
+- [agent-eval.md](./agent-eval.md): 128-case quantitative Chinese scheduling benchmark.
 - [token-usage-diagnostics.md](./token-usage-diagnostics.md): provider usage and cache diagnosis.
 - [agent-token-optimization-history.md](./agent-token-optimization-history.md): append-only token
   optimization measurements.

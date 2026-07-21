@@ -4,13 +4,14 @@ import { type FormEvent, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { userFacingApiError } from "@/lib/api/client";
 import { updateCalendarEntry, updateTaskItem } from "./api";
-import type { ScheduleDisplayItem } from "./types";
+import { scheduleItemTitle } from "./scheduleItemPresentation";
+import type { ScheduleChange, ScheduleDisplayItem } from "./types";
 import styles from "./ScheduleItem.module.css";
 
 type ScheduleItemEditFormProps = {
   item: ScheduleDisplayItem;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (change: ScheduleChange) => void;
   timezone: string;
 };
 
@@ -72,6 +73,22 @@ function initialDuration(item: ScheduleDisplayItem) {
   );
 }
 
+function calendarInputFromItem(item: Extract<ScheduleDisplayItem, { kind: "calendar" }>) {
+  if (item.value.timing_kind === "anytime") {
+    return {
+      title: item.value.title,
+      timingKind: "anytime" as const,
+      scheduledDate: item.value.scheduled_date ?? "",
+    };
+  }
+  return {
+    title: item.value.title,
+    timingKind: "timed" as const,
+    startTime: item.value.start_time ?? "",
+    durationMinutes: initialDuration(item),
+  };
+}
+
 export function ScheduleItemEditForm({
   item,
   onCancel,
@@ -104,7 +121,7 @@ export function ScheduleItemEditForm({
     setError(null);
     try {
       if (item.kind === "calendar") {
-        await updateCalendarEntry(
+        const updated = await updateCalendarEntry(
           item.value,
           timingKind === "anytime"
             ? { title: trimmedTitle, timingKind, scheduledDate }
@@ -115,13 +132,31 @@ export function ScheduleItemEditForm({
                 durationMinutes,
               },
         );
+        onSaved({
+          undo: {
+            label: `已修改“${scheduleItemTitle(item)}”`,
+            run: async () => {
+              await updateCalendarEntry(updated, calendarInputFromItem(item));
+            },
+          },
+        });
       } else {
-        await updateTaskItem(item.value, {
+        const updated = await updateTaskItem(item.value, {
           title: trimmedTitle,
           dueAt: dateTime ? localInputToIso(dateTime, timezone) : null,
         });
+        onSaved({
+          undo: {
+            label: `已修改“${scheduleItemTitle(item)}”`,
+            run: async () => {
+              await updateTaskItem(updated, {
+                title: item.value.title,
+                dueAt: item.value.due_at,
+              });
+            },
+          },
+        });
       }
-      onSaved();
     } catch (caught) {
       setError(userFacingApiError(caught, "保存失败，请刷新后重试。"));
     } finally {

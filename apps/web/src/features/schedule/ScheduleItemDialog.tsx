@@ -130,7 +130,7 @@ export function ScheduleItemDialog({
           <ScheduleItemEditForm
             item={item}
             onCancel={() => setEditing(false)}
-            onSaved={() => { onChanged(); onClose(); }}
+            onSaved={(change) => { onChanged(change); onClose(); }}
             timezone={timezone}
           />
         ) : (
