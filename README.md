@@ -169,7 +169,9 @@ docker-compose.yml        PostgreSQL、Redis、API、Worker、Web
 开始修改前建议按任务阅读文档：
 
 - [工程规范](./docs/engineering-guidelines.md)
-- [架构说明](./docs/architecture.md)
+- [当前架构](./docs/current/architecture.md)
+- [产品模型](./docs/current/product-model.md)
+- [Run 生命周期](./docs/current/run-lifecycle.md)
 - [UI 设计基线](./docs/ui-design.md)
 - [Agent 验收说明](./docs/agent-acceptance.md)
 - [架构决策记录](./docs/adr/README.md)

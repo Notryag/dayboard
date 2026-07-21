@@ -1,7 +1,9 @@
 # Phase 1 Plan
 
-Status: completed. This document is retained as historical foundation context; current work is in
-[phase-2-plan.md](./phase-2-plan.md).
+> Archived: this plan is historical and does not describe the current implementation. Use
+> [current documentation](../current/README.md) and [Project State](../PROJECT_STATE.md).
+
+Status: completed.
 
 ## Goal
 
@@ -33,7 +35,7 @@ PostgreSQL is the Phase 1 storage choice. Dayboard is intended to grow into a co
 
 Redis or Valkey should be introduced when background agent jobs and run streaming need queue/fanout support. It should not be the source of truth.
 
-Engineering work should follow [engineering-guidelines.md](./engineering-guidelines.md).
+Historical implementation followed [engineering-guidelines.md](../engineering-guidelines.md).
 
 ## Suggested First Milestones
 

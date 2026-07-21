@@ -1,90 +1,68 @@
-# Dayboard Docs
-
-Use this page as the documentation entry point. Do not load every document at once unless you need the full context.
+# Dayboard Documentation
 
 ## Start Here
 
-For a new session, read only:
+Read only what the task needs:
 
-1. [../README.md](../README.md)
-2. [PROJECT_STATE.md](./PROJECT_STATE.md)
-3. the task-specific section below
+1. [PROJECT_STATE.md](./PROJECT_STATE.md) for version, completed work, next milestone, known issues,
+   and release checks.
+2. [current/README.md](./current/README.md) for implemented product facts.
+3. one task-specific guide below.
 
-## Task-Based Reading
+## Canonical Current Facts
 
-Backend implementation:
+- [current/architecture.md](./current/architecture.md): system and ownership boundaries.
+- [current/product-model.md](./current/product-model.md): schedule/task semantics and product scope.
+- [current/run-lifecycle.md](./current/run-lifecycle.md): Run states, Redis Streams, SSE, and recovery.
 
-- [architecture.md](./architecture.md)
-- [api-errors.md](./api-errors.md) for the HTTP error response contract
-- [engineering-guidelines.md](./engineering-guidelines.md)
-- [phase-2-plan.md](./phase-2-plan.md) for current milestone work
-- [phase-1-plan.md](./phase-1-plan.md) for the completed foundation plan
+These are the only documents that should describe the whole current system. Update them with the
+implementation that changes them.
 
-Authentication and account ownership:
+## Engineering Guides
 
-- [adr/005-authenticated-identity-boundary.md](./adr/005-authenticated-identity-boundary.md)
-- [architecture.md](./architecture.md), sections "Account Recovery", "Tenant Extensibility", and "API Surface"
-- [engineering-guidelines.md](./engineering-guidelines.md), sections "Tenant Context", "Database Rules", and "API Rules"
-- [phase-2-plan.md](./phase-2-plan.md), section "P2.1 Real Identity And Ownership"
+- [engineering-guidelines.md](./engineering-guidelines.md): coding, layering, testing, and safety.
+- [ui-design.md](./ui-design.md): current visual and interaction rules.
+- [tool-design.md](./tool-design.md): model-visible tools and dynamic binding.
+- [api-errors.md](./api-errors.md): HTTP error envelope.
+- [deploy.md](./deploy.md): production build, deployment, rollback, and health checks.
+- [postgres-backup.md](./postgres-backup.md): backup and restore operations.
 
-Reminder delivery:
+## Acceptance And Diagnostics
 
-- [architecture.md](./architecture.md), section "Reminder Delivery"
-- [phase-2-plan.md](./phase-2-plan.md), section "P2.2 Reminder Delivery"
-- [engineering-guidelines.md](./engineering-guidelines.md), sections "Database Rules" and "Backend Layers"
+- [agent-acceptance.md](./agent-acceptance.md): targeted live-model acceptance program.
+- [token-usage-diagnostics.md](./token-usage-diagnostics.md): provider usage and cache diagnosis.
+- [agent-token-optimization-history.md](./agent-token-optimization-history.md): append-only token
+  optimization measurements.
+- [TODO.md](./TODO.md): active token-efficiency and Northgate budget work.
 
-Agent and tools:
+## Decisions And History
 
-- [tool-design.md](./tool-design.md) for the model-visible tool contract and dynamic binding policy
-- [architecture.md](./architecture.md), sections "System Overview", "Intent Recognition And Tool Selection",
-  "Command Execution Sequence", "Agent Assembly Boundary", and "Product Tools"
-- [engineering-guidelines.md](./engineering-guidelines.md), sections "Tool Design" and "Agent And LLM Rules"
-- [product-and-scope.md](./product-and-scope.md), section "Minimum Data Contract"
-- [agent-acceptance.md](./agent-acceptance.md) for explicit live model acceptance runs
-- [agent-token-optimization-history.md](./agent-token-optimization-history.md) for the append-only
-  optimization baseline and measured product highlights
+- [adr/README.md](./adr/README.md): architectural decisions and rationale.
+- [archive/README.md](./archive/README.md): expired phase plans; never use them as current guidance.
 
-Frontend:
+## Task Routing
 
-- [architecture.md](./architecture.md), sections "Technology Choices", "Project Shape", and "API Surface"
-- [engineering-guidelines.md](./engineering-guidelines.md), section "Frontend Rules"
-- [ui-design.md](./ui-design.md)
+Backend or database changes:
 
-Database:
+- current architecture and product model;
+- engineering guidelines;
+- API errors or backup runbook when relevant.
 
-- [architecture.md](./architecture.md), sections "Database Model", "Tenant Extensibility", and "Concurrency And Reliability"
-- [engineering-guidelines.md](./engineering-guidelines.md), section "Database Rules"
-- [postgres-backup.md](./postgres-backup.md) for production backup, restore rehearsal, and recovery
+Agent, tool, or Run changes:
 
-Product scope:
+- current run lifecycle and product model;
+- tool design;
+- relevant ADRs;
+- acceptance and token diagnostics when applicable.
 
-- [product-and-scope.md](./product-and-scope.md)
+Frontend changes:
 
-Current milestone planning:
+- current architecture and product model;
+- UI design;
+- engineering guidelines.
 
-- [TODO.md](./TODO.md) for active engineering work and acceptance conditions
-- [phase-2-plan.md](./phase-2-plan.md)
-- [phase-1-plan.md](./phase-1-plan.md) as completed historical context
+Deployment changes:
 
-Architecture decisions:
-
-- [adr/README.md](./adr/README.md)
-
-Deployment:
-
-- [deploy.md](./deploy.md) for the Docker Compose production runbook
-- [postgres-backup.md](./postgres-backup.md) before changing production PostgreSQL data or volumes
-
-## Loading Guidance
-
-- Start with [PROJECT_STATE.md](./PROJECT_STATE.md) to understand the current direction.
-- Read [architecture.md](./architecture.md) when changing backend, agent, storage, API, or infrastructure boundaries.
-- Read [engineering-guidelines.md](./engineering-guidelines.md) before adding code.
-- Read [ui-design.md](./ui-design.md) before changing the main chat UI, theme variables, or component system.
-- Read [deploy.md](./deploy.md) before changing Docker Compose, Nginx, production services, or
-  deployment secrets.
-- Read [token-usage-diagnostics.md](./token-usage-diagnostics.md) when investigating provider
-  usage, Northgate reservations, prompt caching, or token-limit incidents.
-- Read [TODO.md](./TODO.md) before starting active token-efficiency or gateway-budget work.
-- Read ADRs only when making or revisiting a major technical decision.
-- Avoid pulling all docs into context for small edits.
+- deploy runbook;
+- PostgreSQL backup runbook before storage operations;
+- PROJECT_STATE release checklist.

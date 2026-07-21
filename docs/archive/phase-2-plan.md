@@ -1,5 +1,8 @@
 # Phase 2 Plan: Public Product Readiness
 
+> Archived: milestone statuses and next-work lists below are historical and must not guide current
+> implementation. Use [Project State](../PROJECT_STATE.md) for the active milestone.
+
 ## Product Goal
 
 Move Dayboard from a shared-user technical MVP to a releasable product where anyone can create an

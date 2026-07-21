@@ -5,9 +5,12 @@ These notes are for coding agents working on Dayboard.
 ## Documentation Routing
 
 - Start implementation tasks at `docs/README.md` and follow its task-based reading list.
+- Treat `docs/current/` as the only canonical whole-system description. ADRs explain decisions;
+  `docs/archive/` is historical and must not guide implementation.
 - Read `docs/engineering-guidelines.md` before adding code.
 - Before changing the frontend, also read the frontend sections routed by `docs/README.md`, including `docs/ui-design.md`.
-- Treat `docs/PROJECT_STATE.md` as a current-status summary, not the canonical source for engineering or UI rules.
+- Keep `docs/PROJECT_STATE.md` limited to version, completed work, next milestone, known issues, and
+  release checks.
 
 ## Production Checkout And Runtime
 

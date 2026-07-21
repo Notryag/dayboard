@@ -9,6 +9,18 @@
 - Make tenant and user context explicit from the first implementation.
 - Prefer mature existing libraries over custom implementations for infrastructure, protocol, parsing, UI primitives, and generated clients.
 
+## Documentation Boundaries
+
+- `docs/current/` is the only canonical whole-system description. Change the relevant current
+  document in the same commit as an implementation contract change.
+- Keep `PROJECT_STATE.md` limited to current version, completed work, next milestone, known issues,
+  and release checks. Do not append implementation chronology.
+- ADR context is historical by design. Add or supersede an ADR when a costly decision changes; do
+  not continuously rewrite accepted decisions to resemble current-state documentation.
+- Files under `docs/archive/` never guide implementation and must identify themselves as archived.
+- Specialized guides may own procedures or detailed contracts, but should link to current facts
+  instead of repeating the system architecture.
+
 ## Scaffolding First
 
 Use official or mature scaffolding when it exists.
@@ -149,7 +161,8 @@ The LLM response is not a source of truth. A database row created through a tool
 
 ## Tenant Context
 
-Even when Phase 1 uses a single development tenant, service and tool boundaries should accept a `TenantContext`.
+Service and tool boundaries must accept a `TenantContext` even while the product uses a shared
+database deployment.
 
 ```text
 TenantContext:
@@ -170,7 +183,7 @@ Rules:
 
 ## Database Rules
 
-- Use PostgreSQL and Alembic from Phase 1.
+- Use PostgreSQL and Alembic for product persistence.
 - Use SQLAlchemy models for persistence and Pydantic models for API/tool schemas.
 - Keep SQLAlchemy models separate from API response schemas.
 - Use transactions for writes.
@@ -286,7 +299,7 @@ Rules:
 - Do not spread raw fetch logic across components.
 - Do not duplicate API types by hand once OpenAPI generation is available.
 - Keep time display behind shared formatting helpers.
-- Keep components mobile-aware, but optimize Phase 1 for web.
+- Keep components mobile-aware while treating the responsive web application as the current client.
 - The first page should be a mobile-first conversation surface: message history on top, text input and voice action at the bottom.
 - shadcn/ui is an acceptable first component system because it gives editable local components on top of Radix primitives.
 - Use lucide-react icons where available instead of hand-drawn SVG icons.
@@ -368,7 +381,7 @@ LLM-dependent tests should be limited and optional in normal local runs. Most co
 
 Unit tests for application orchestration may use fakes for database sessions, model invokers, and provider gateways when the behavior under test is routing, budgeting, logging, or status mapping. Repository tests, API persistence tests, and tool tests must still run against PostgreSQL because PostgreSQL is the source of truth and its constraints, JSONB behavior, timestamps, and transaction behavior are part of the product contract.
 
-For Dayboard Phase 1, verify completed substantial slices before moving far ahead; do not turn
+For Dayboard, verify completed substantial slices before moving far ahead; do not turn
 every incremental edit into a test execution checkpoint.
 
 ## Dependency Decisions
