@@ -205,3 +205,42 @@ test("fixed audio is transcribed and submitted without a real microphone", async
   expect(upload?.method).toBe("POST");
   expect(String(upload?.body)).toContain("command-");
 });
+
+test("unread reminder opens and focuses its schedule item", async ({ page }) => {
+  const entry = calendarEntry({ title: "产品评审" });
+  const state = await installApiFixture(page, {
+    calendars: [entry],
+    reminders: [{
+      id: "reminder-1",
+      tenant_id: "tenant-1",
+      owner_user_id: "user-1",
+      source_type: "calendar_entry",
+      source_id: entry.id,
+      channel: "in_app",
+      scheduled_for: "2026-07-21T09:50:00+08:00",
+      status: "delivered",
+      attempt_count: 1,
+      next_attempt_at: null,
+      delivered_at: "2026-07-21T09:50:00+08:00",
+      read_at: null,
+      provider_message_id: "in_app:reminder-1",
+      last_error: null,
+      payload: {
+        title: entry.title,
+        occurs_at: entry.start_time,
+        timezone: entry.timezone,
+      },
+      created_at: "2026-07-21T09:00:00+08:00",
+      updated_at: "2026-07-21T09:50:00+08:00",
+    }],
+  });
+
+  await page.goto("/dayboard");
+  await page.getByRole("button", { name: "提醒，1 条未读" }).click();
+  const drawer = page.getByRole("dialog");
+  await expect(drawer.getByText("1 条未读")).toBeVisible();
+  await drawer.getByRole("button", { name: /产品评审/ }).click();
+  await expect(page.locator("[data-reminder-highlighted='true']")).toContainText("产品评审");
+  await expect(page.getByRole("button", { name: "提醒", exact: true })).toBeVisible();
+  expect(state.requests.some((request) => request.path === "/api/reminders/reminder-1/read")).toBeTruthy();
+});

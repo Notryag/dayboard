@@ -18,6 +18,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Completed
 
+- Added the authenticated reminder center with durable unread state, unread count, schedule-source
+  navigation, failed-delivery retry, foreground browser Notifications, and tenant-isolated
+  Reminder APIs.
 - Added automatic FastAPI-to-Web OpenAPI drift enforcement, typed schedule transport, TanStack
   Query pagination/invalidation, and a validated discriminated SSE event boundary.
 - Added the critical Playwright browser gate, including deterministic SSE, active-Run recovery,
@@ -43,7 +46,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Public-release completion:
 
-1. Render the in-app reminder inbox and verify due-delivery behavior in the authenticated web flow.
+1. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
 2. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
 3. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
    provider budget window allows it.
@@ -55,7 +58,8 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 
 ## Known Issues
 
-- The in-app reminder delivery backend exists, but users cannot inspect notifications in the web UI.
+- Installed-PWA background notifications are not implemented; browser Notifications currently
+  require the authenticated Web app to be active.
 - The last reference one-write Agent Run used 10,362 tokens over two model calls; cache-hit and
   per-round growth measurements are still incomplete.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model

@@ -66,7 +66,11 @@ invent clock reminders.
 
 Application services synchronize schedule changes with durable reminder-delivery rows. The current
 delivery channel is `in_app`. Delivery attempts, status, provider identifiers, and errors are stored
-for inspection; the web reminder inbox is not implemented yet.
+for inspection. Delivered rows carry durable per-account `read_at` state. The Web header exposes an
+in-app reminder center with unread count, source-date navigation, read marking, delivery status,
+and failed-delivery retry. Users may opt into browser Notifications while the Web app is active;
+the same reminder ID is shown once per browser session. Retry returns the row to `pending`; the
+worker remains the only delivery executor.
 
 ## Conversation And Clarification
 

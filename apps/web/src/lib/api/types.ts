@@ -20,6 +20,7 @@ export type PasswordReset = Schemas["PasswordResetRequest"];
 export type PasswordResetConfirm = Schemas["PasswordResetConfirmRequest"];
 export type Registration = Schemas["RegisterRequest"];
 export type Reminder = Schemas["Reminder"];
+export type ReminderDelivery = Schemas["ReminderDelivery"];
 export type ScheduleMutation = Schemas["ScheduleMutationRequest"];
 export type TaskItem = Schemas["TaskItemView"];
 export type TaskItemUpdate = Schemas["TaskItemUpdateRequest"];

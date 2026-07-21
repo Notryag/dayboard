@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from dayboard.context import TenantContext
 from dayboard.domain.calendar import CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.reminders import ReminderDeliveryStatus
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
+from dayboard.db.models import ReminderDeliveryRow
 
 
 def test_reminder_accepts_zero_and_normalizes_short_fixed_duration() -> None:
@@ -154,3 +156,58 @@ async def test_zero_offset_reminder_is_scheduled_at_calendar_start(
     assert len(deliveries) == 1
     assert deliveries[0].scheduled_for == start
     assert deliveries[0].status == ReminderDeliveryStatus.pending
+
+
+async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant(
+    api_app,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    start = datetime.now(UTC) + timedelta(minutes=1)
+    await SchedulingService(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="提醒中心验收",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT10M"),
+        ),
+    )
+    await ReminderService(db_session).deliver_due_in_app()
+
+    foreign = ReminderDeliveryRow(
+        tenant_id=uuid4(),
+        owner_user_id=uuid4(),
+        source_type="calendar_entry",
+        source_id=uuid4(),
+        channel="in_app",
+        scheduled_for=datetime.now(UTC),
+        status=ReminderDeliveryStatus.delivered.value,
+        payload={"title": "其他租户"},
+    )
+    db_session.add(foreign)
+    await db_session.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
+        listed = await client.get("/api/reminders")
+        assert listed.status_code == 200
+        assert [item["payload"]["title"] for item in listed.json()] == ["提醒中心验收"]
+        reminder_id = listed.json()[0]["id"]
+        assert listed.json()[0]["read_at"] is None
+
+        marked = await client.post(f"/api/reminders/{reminder_id}/read")
+        assert marked.status_code == 200
+        assert marked.json()["read_at"] is not None
+        assert (await client.post(f"/api/reminders/{foreign.id}/read")).status_code == 404
+
+        row = await db_session.get(ReminderDeliveryRow, UUID(reminder_id))
+        assert row is not None
+        row.status = ReminderDeliveryStatus.failed.value
+        row.read_at = None
+        row.last_error = "temporary delivery failure"
+        await db_session.commit()
+
+        retried = await client.post(f"/api/reminders/{reminder_id}/retry")
+        assert retried.status_code == 200
+        assert retried.json()["status"] == ReminderDeliveryStatus.pending.value
+        assert retried.json()["last_error"] is None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +9,11 @@ from dayboard.context import TenantContext
 from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow, TaskItemRow
 from dayboard.db.reminder_repositories import ReminderDeliveryRepository
 from dayboard.domain.calendar import Reminder
-from dayboard.domain.reminders import ReminderDelivery, ReminderSourceType
+from dayboard.domain.reminders import (
+    ReminderDelivery,
+    ReminderDeliveryStatus,
+    ReminderSourceType,
+)
 
 
 def reminder_delivery_from_row(row: ReminderDeliveryRow) -> ReminderDelivery:
@@ -85,6 +90,40 @@ class ReminderService:
         return [
             reminder_delivery_from_row(row) for row in await self.deliveries.list_for_user(context)
         ]
+
+    async def mark_read(
+        self,
+        context: TenantContext,
+        delivery_id: UUID,
+    ) -> tuple[ReminderDelivery | None, bool]:
+        row = await self.deliveries.get_for_user(context, delivery_id, for_update=True)
+        if row is None:
+            return None, False
+        if row.status != ReminderDeliveryStatus.delivered.value:
+            return reminder_delivery_from_row(row), False
+        if row.read_at is None:
+            row.read_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return reminder_delivery_from_row(row), True
+
+    async def retry_failed(
+        self,
+        context: TenantContext,
+        delivery_id: UUID,
+    ) -> tuple[ReminderDelivery | None, bool]:
+        row = await self.deliveries.get_for_user(context, delivery_id, for_update=True)
+        if row is None:
+            return None, False
+        if row.status != ReminderDeliveryStatus.failed.value:
+            return reminder_delivery_from_row(row), False
+        row.status = ReminderDeliveryStatus.pending.value
+        row.next_attempt_at = datetime.now(UTC)
+        row.claimed_at = None
+        row.last_error = None
+        await self.session.commit()
+        await self.session.refresh(row)
+        return reminder_delivery_from_row(row), True
 
     async def deliver_due_in_app(self, *, limit: int = 100) -> list[str]:
         now = datetime.now(UTC)

@@ -9,11 +9,13 @@ import { TaskListSection } from "./TaskListSection";
 import { getCalendarEntryPage, getDatedTaskPage, getUndatedTaskPage } from "./api";
 import { dateKeyInTimezone } from "./date";
 import type { CalendarEntry, ScheduleChange, TaskItem } from "./types";
+import type { ReminderFocusTarget } from "@/features/reminders/types";
 import { useSchedulePage } from "./useSchedulePage";
 import styles from "./schedule.module.css";
 
 type SchedulePanelProps = {
   active: boolean;
+  focusTarget: ReminderFocusTarget | null;
   onChanged: (change?: ScheduleChange) => void;
   refreshKey: number;
   timezone: string;
@@ -23,6 +25,7 @@ const headingId = "schedule-heading";
 
 export function SchedulePanel({
   active,
+  focusTarget,
   onChanged,
   refreshKey,
   timezone,
@@ -30,8 +33,9 @@ export function SchedulePanel({
   const today = dateKeyInTimezone(new Date(), timezone);
   const queryClient = useQueryClient();
   const previousRefreshKey = useRef(refreshKey);
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [dateRailCenter, setDateRailCenter] = useState(today);
+  const initialDate = focusTarget?.date ?? today;
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const [dateRailCenter, setDateRailCenter] = useState(initialDate);
 
   const loadCalendarPage = useCallback(
     (cursor?: string, signal?: AbortSignal) =>
@@ -97,6 +101,7 @@ export function SchedulePanel({
       <div className={styles.content} aria-live="polite">
         <DayAgendaSection
           calendar={calendar}
+          focusTarget={focusTarget}
           onChanged={onChanged}
           tasks={datedTasks}
           timezone={timezone}

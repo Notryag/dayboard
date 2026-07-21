@@ -35,6 +35,8 @@ const errorMessages: Record<string, string> = {
   CALENDAR_ENTRY_NOT_FOUND: "这个日程已不存在。",
   TASK_ITEM_NOT_FOUND: "这个待办已不存在。",
   SCHEDULE_ITEM_CONFLICT: "安排已被更新，请刷新后重试。",
+  REMINDER_NOT_FOUND: "这条提醒已不存在。",
+  REMINDER_STATE_CONFLICT: "提醒状态已经变化，请刷新后重试。",
   COMMAND_QUEUE_UNAVAILABLE: "服务暂时繁忙，请稍后重试。",
   RATE_LIMIT_EXCEEDED: "操作过于频繁，请稍后再试。",
   VALIDATION_ERROR: "提交的信息不完整或格式不正确。",

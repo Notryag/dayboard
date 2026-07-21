@@ -33,6 +33,8 @@ import { Composer, type InputMode } from "@/features/chat/Composer";
 import { SchedulePanel } from "@/features/schedule/SchedulePanel";
 import { ScheduleSettingsDrawer } from "@/features/schedule/ScheduleSettingsDrawer";
 import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
+import { ReminderCenter } from "@/features/reminders/ReminderCenter";
+import type { ReminderFocusTarget } from "@/features/reminders/types";
 import type { ScheduleChange } from "@/features/schedule/types";
 import type {
   AgentRun,
@@ -89,6 +91,7 @@ function ChatHome() {
   const [isThreadBootstrapping, setIsThreadBootstrapping] = useState(true);
   const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
   const [chatHeaderHidden, setChatHeaderHidden] = useState(false);
+  const [reminderFocus, setReminderFocus] = useState<ReminderFocusTarget | null>(null);
   const initializingThreadRef = useRef(false);
   const lastChatScrollTopRef = useRef(0);
   const messagesRef = useRef<HTMLElement>(null);
@@ -287,6 +290,12 @@ function ChatHome() {
     }
   }
 
+  function openReminderSource(target: Omit<ReminderFocusTarget, "requestId">) {
+    setReminderFocus({ ...target, requestId: Date.now() });
+    setActiveView("schedule");
+    setChatHeaderHidden(false);
+  }
+
   async function handleUndo() {
     const notice = undoNotice;
     if (!notice || notice.busy) return;
@@ -352,6 +361,7 @@ function ChatHome() {
           </div>
           <h1 className={styles.brand}>Dayboard</h1>
           <div className={styles.headerTrailing}>
+            <ReminderCenter onOpenSource={openReminderSource} timezone={timezone} />
             <ScheduleSettingsDrawer
               accountName={account?.display_name || account?.username || "Dayboard 用户"}
               onLogout={() => void logout()}
@@ -421,6 +431,8 @@ function ChatHome() {
           >
             <SchedulePanel
               active={activeView === "schedule"}
+              focusTarget={reminderFocus}
+              key={reminderFocus?.requestId ?? "schedule"}
               onChanged={handleScheduleChanged}
               refreshKey={scheduleRevision}
               timezone={timezone}

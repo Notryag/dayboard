@@ -33,6 +33,7 @@ class ReminderDelivery(BaseModel):
     attempt_count: int
     next_attempt_at: AwareDatetime | None
     delivered_at: AwareDatetime | None
+    read_at: AwareDatetime | None
     provider_message_id: str | None
     last_error: str | None
     payload: dict[str, Any]

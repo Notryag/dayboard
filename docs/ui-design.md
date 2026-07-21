@@ -281,16 +281,17 @@ DayAgendaSection.tsx   # merged chronological calendar/task display
 TaskListSection.tsx    # undated task display
 ScheduleItem.tsx       # shared semantic-icon card, details, direct actions
 ScheduleItemEditForm.tsx # direct editing and account-timezone conversion
-useSchedulePage.ts     # pagination, stale-request cancellation, retry
+useSchedulePage.ts     # TanStack Query pagination, cache, cancellation, retry
+features/reminders     # unread badge, reminder drawer, source navigation, retry
 date.ts                # cached display formatters and date-key arithmetic
 ```
 
-Circular visualization, month/week layouts, and reminder delivery UI are later product slices.
+Circular visualization, month/week layouts, and browser/PWA push delivery are later product slices.
 
 ## Interaction And Performance Acceptance
 
-- Do not add a carousel, date-picker, animation, or state-management dependency for the current
-  interactions. Native horizontal scrolling, native date input, CSS Grid, and local state are enough.
+- Do not add carousel or date-picker dependencies for the current interactions. Native horizontal
+  scrolling, native date input, CSS Grid, and TanStack Query server state are sufficient.
 - Keep the 31-day rail window stable when a date is tapped. Recenter only after an explicit distant
   date jump or keyboard navigation beyond the current window.
 - Cache date/time formatters and use tabular numerals for times and date cells.

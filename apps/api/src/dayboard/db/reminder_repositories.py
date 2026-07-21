@@ -83,6 +83,23 @@ class ReminderDeliveryRepository:
         )
         return list(result)
 
+    async def get_for_user(
+        self,
+        context: TenantContext,
+        delivery_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> ReminderDeliveryRow | None:
+        statement = select(ReminderDeliveryRow).where(
+            ReminderDeliveryRow.id == delivery_id,
+            ReminderDeliveryRow.tenant_id == context.tenant_id,
+            ReminderDeliveryRow.owner_user_id == context.user_id,
+            ReminderDeliveryRow.deleted_at.is_(None),
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return await self.session.scalar(statement)
+
     async def claim_due(
         self, *, now: datetime, limit: int, channel: str
     ) -> list[ReminderDeliveryRow]:

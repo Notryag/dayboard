@@ -6,10 +6,12 @@ import { formatScheduleTime } from "./date";
 import { ScheduleItem } from "./ScheduleItem";
 import type { CalendarEntry, ScheduleChange, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
+import type { ReminderFocusTarget } from "@/features/reminders/types";
 import styles from "./schedule.module.css";
 
 type DayAgendaSectionProps = {
   calendar: SchedulePageResource<CalendarEntry>;
+  focusTarget: ReminderFocusTarget | null;
   onChanged: (change?: ScheduleChange) => void;
   tasks: SchedulePageResource<TaskItem>;
   timezone: string;
@@ -30,7 +32,13 @@ function RetryNotice({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
-export function DayAgendaSection({ calendar, onChanged, tasks, timezone }: DayAgendaSectionProps) {
+export function DayAgendaSection({
+  calendar,
+  focusTarget,
+  onChanged,
+  tasks,
+  timezone,
+}: DayAgendaSectionProps) {
   const items = useMemo<AgendaItem[]>(() => {
     const calendarItems: AgendaItem[] = calendar.items.map((entry) => ({
       entry,
@@ -88,6 +96,9 @@ export function DayAgendaSection({ calendar, onChanged, tasks, timezone }: DayAg
             <li key={item.id}>
               <time dateTime={item.sortKey}>{item.label}</time>
               <ScheduleItem
+                highlighted={
+                  focusTarget?.sourceId === (item.kind === "calendar" ? item.entry.id : item.task.id)
+                }
                 item={
                   item.kind === "calendar"
                     ? { kind: "calendar", value: item.entry }

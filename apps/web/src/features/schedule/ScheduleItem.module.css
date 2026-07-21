@@ -47,6 +47,17 @@
   transform: scale(0.99);
 }
 
+.highlighted {
+  outline: 2px solid color-mix(in srgb, var(--dayboard-color-primary), transparent 18%);
+  outline-offset: 2px;
+  animation: reminder-focus 1.2s ease-out;
+}
+
+@keyframes reminder-focus {
+  from { background: color-mix(in srgb, var(--dayboard-color-primary), transparent 82%); }
+  to { background: transparent; }
+}
+
 .item:focus-visible,
 .itemMain:focus-visible,
 .completionControl:focus-visible,

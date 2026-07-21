@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useState } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle } from "lucide-react";
 import { Dialog } from "@/components/ui/dialog";
 import { userFacingApiError } from "@/lib/api/client";
@@ -16,6 +16,7 @@ import type { ScheduleChange, ScheduleDisplayItem } from "./types";
 import styles from "./ScheduleItem.module.css";
 
 type ScheduleItemProps = {
+  highlighted?: boolean;
   item: ScheduleDisplayItem;
   timezone: string;
   variant?: "agenda" | "chat" | "task";
@@ -23,11 +24,13 @@ type ScheduleItemProps = {
 };
 
 export function ScheduleItem({
+  highlighted = false,
   item,
   timezone,
   variant = "agenda",
   onChanged,
 }: ScheduleItemProps) {
+  const itemRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -35,6 +38,10 @@ export function ScheduleItem({
   const Icon = iconForScheduleItem(item.kind);
   const status = scheduleItemStatus(item);
   const showCompletionControl = variant !== "chat" && status !== "cancelled";
+
+  useEffect(() => {
+    if (highlighted) itemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlighted]);
 
   async function completeFromCard() {
     if (status !== "open" || completing) return;
@@ -63,7 +70,10 @@ export function ScheduleItem({
           status !== "open" ? styles[status] : ""
         } ${item.kind === "calendar" ? styles.kindCalendar : styles.kindTask} ${
           !showCompletionControl ? styles.withoutCompletion : ""
+        } ${highlighted ? styles.highlighted : ""
         }`}
+        ref={itemRef}
+        data-reminder-highlighted={highlighted ? "true" : undefined}
       >
         <button
           aria-label={`查看${item.kind === "calendar" ? "日程" : "待办"}：${scheduleItemTitle(item)}`}

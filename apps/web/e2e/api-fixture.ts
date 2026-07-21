@@ -25,6 +25,17 @@ export type RunSpec = {
   delayMs?: number;
 };
 
+export type ReminderDelivery = {
+  id: string;
+  source_type: "calendar_entry" | "task_item";
+  source_id: string;
+  scheduled_for: string;
+  status: "pending" | "processing" | "delivered" | "failed" | "cancelled";
+  read_at: string | null;
+  payload: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 type FixtureState = {
   account: Json | null;
   activeRun: Json | null;
@@ -32,6 +43,7 @@ type FixtureState = {
   clarification: Json | null;
   messages: Json[];
   requests: Array<{ method: string; path: string; body: unknown }>;
+  reminders: ReminderDelivery[];
   runs: Map<string, RunSpec>;
   threadId: string | null;
   voiceAvailable: boolean;
@@ -108,6 +120,7 @@ export async function installApiFixture(
     clarification: null,
     messages: [],
     requests: [],
+    reminders: [],
     runs: new Map(),
     threadId: null,
     voiceAvailable: false,
@@ -233,6 +246,21 @@ export async function installApiFixture(
     }
     const runMatch = path.match(/^\/api\/runs\/([^/]+)$/);
     if (runMatch) return json(route, state.activeRun ?? { id: runMatch[1], status: "completed", result_message: "已处理完成。" });
+    if (path === "/api/reminders" && method === "GET") return json(route, state.reminders);
+    const reminderRead = path.match(/^\/api\/reminders\/([^/]+)\/read$/);
+    if (reminderRead && method === "POST") {
+      const reminder = state.reminders.find((item) => item.id === reminderRead[1]);
+      if (!reminder) return json(route, { error: { code: "REMINDER_NOT_FOUND" } }, 404);
+      reminder.read_at = now;
+      return json(route, reminder);
+    }
+    const reminderRetry = path.match(/^\/api\/reminders\/([^/]+)\/retry$/);
+    if (reminderRetry && method === "POST") {
+      const reminder = state.reminders.find((item) => item.id === reminderRetry[1]);
+      if (!reminder) return json(route, { error: { code: "REMINDER_NOT_FOUND" } }, 404);
+      reminder.status = "pending";
+      return json(route, reminder);
+    }
     if (path === "/api/calendar-entries" && method === "GET") {
       return json(route, { items: state.calendars.filter((entry) => entry.status !== "cancelled"), next_cursor: null });
     }

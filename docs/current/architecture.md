@@ -146,8 +146,11 @@ text, and then enter the normal command path. Raw audio is not persisted. Produc
 Cloudflare `whisper-large-v3-turbo`; the Alibaba adapter remains available.
 
 Reminder intent is normalized into PostgreSQL delivery rows. Workers claim due in-app deliveries
-with `FOR UPDATE SKIP LOCKED`. The user-visible reminder inbox and an external notification adapter
-remain unfinished.
+with `FOR UPDATE SKIP LOCKED`. The authenticated Web reminder center polls the typed reminder API,
+persists read state, and can return failed rows to the Outbox queue. Browser/PWA background push
+requires a Service Worker, durable Push subscriptions, Web Push credentials, and a separate
+delivery channel; it remains unfinished. The current optional browser Notification is driven by
+authenticated foreground polling and is not represented as background delivery.
 
 ## Deployment
 

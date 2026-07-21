@@ -211,6 +211,42 @@ async def list_reminders(
     return await ReminderService(session).list_for_user(tenant_context)
 
 
+@router.post("/api/reminders/{delivery_id}/read", response_model=ReminderDelivery)
+async def mark_reminder_read(
+    delivery_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> ReminderDelivery:
+    reminder, changed = await ReminderService(session).mark_read(tenant_context, delivery_id)
+    if reminder is None:
+        raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
+    if not changed:
+        raise ApiProblem(
+            status_code=409,
+            code="REMINDER_STATE_CONFLICT",
+            message="Only delivered reminders can be marked read",
+        )
+    return reminder
+
+
+@router.post("/api/reminders/{delivery_id}/retry", response_model=ReminderDelivery)
+async def retry_failed_reminder(
+    delivery_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> ReminderDelivery:
+    reminder, changed = await ReminderService(session).retry_failed(tenant_context, delivery_id)
+    if reminder is None:
+        raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
+    if not changed:
+        raise ApiProblem(
+            status_code=409,
+            code="REMINDER_STATE_CONFLICT",
+            message="Only failed reminders can be retried",
+        )
+    return reminder
+
+
 @router.get("/api/calendar-entries", response_model=SchedulePage[CalendarEntryView])
 async def list_calendar_entries(
     period: Literal["today", "tomorrow"] | None = Query(default=None),

@@ -35,7 +35,7 @@
   z-index: 12;
   height: var(--app-floating-header-height);
   display: grid;
-  grid-template-columns: var(--app-floating-header-height) minmax(0, 1fr) var(--app-floating-header-height);
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
   padding-inline: var(--space-4);
   pointer-events: none;
@@ -84,12 +84,15 @@
 
 .headerLeading {
   grid-column: 1;
+  justify-self: start;
   pointer-events: auto;
 }
 
 .headerTrailing {
   grid-column: 3;
   justify-self: end;
+  display: flex;
+  gap: var(--space-2);
   pointer-events: auto;
 }
 
