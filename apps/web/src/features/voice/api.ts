@@ -1,9 +1,9 @@
-import { apiFetch } from "@/lib/api/client";
+import { apiClient, requireApiData } from "@/lib/api/typedClient";
 import type { RecordedAudio, VoiceCapabilities, VoiceTranscript } from "./types";
 
 export async function getVoiceCapabilities(signal?: AbortSignal): Promise<VoiceCapabilities> {
-  const response = await apiFetch("/api/voice/capabilities", { signal });
-  return response.json() as Promise<VoiceCapabilities>;
+  const { data } = await apiClient.GET("/api/voice/capabilities", { signal });
+  return requireApiData(data);
 }
 
 export async function transcribeVoice(
@@ -14,10 +14,10 @@ export async function transcribeVoice(
   const filename = `command-${Date.now()}.${recording.extension}`;
   form.append("audio", recording.blob, filename);
   form.append("language", "zh");
-  const response = await apiFetch("/api/voice/transcriptions", {
-    method: "POST",
-    body: form,
+  const { data } = await apiClient.POST("/api/voice/transcriptions", {
+    body: { audio: filename, language: "zh" },
+    bodySerializer: () => form,
     signal,
   });
-  return response.json() as Promise<VoiceTranscript>;
+  return requireApiData(data);
 }

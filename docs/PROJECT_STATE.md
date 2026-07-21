@@ -21,8 +21,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added the authenticated reminder center with durable unread state, unread count, schedule-source
   navigation, failed-delivery retry, foreground browser Notifications, and tenant-isolated
   Reminder APIs.
-- Added automatic FastAPI-to-Web OpenAPI drift enforcement, typed schedule transport, TanStack
-  Query pagination/invalidation, and a validated discriminated SSE event boundary.
+- Added automatic FastAPI-to-Web OpenAPI drift enforcement, typed REST transport across Auth, Voice,
+  Schedule, Reminder, Conversation, and Run recovery, TanStack Query pagination/invalidation, and a
+  validated discriminated SSE event boundary.
 - Added the critical Playwright browser gate, including deterministic SSE, active-Run recovery,
   clarification resume, optimistic edit/undo, and fixed-audio voice coverage.
 - Expanded CI and release quality jobs to run the complete PostgreSQL API suite and browser E2E.

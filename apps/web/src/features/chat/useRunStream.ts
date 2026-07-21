@@ -1,15 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
-import { apiFetch } from "@/lib/api/client";
-import type { AgentRun, AgentRunStatus } from "@/lib/api/types";
+import type { AgentRunStatus } from "@/lib/api/types";
 import type { ChatMessage } from "./ChatMessageList";
+import { getRun, getThreadMessages } from "./api";
 import {
   initialMessages,
   type ConversationMessage,
   upsertAssistantMessage,
 } from "./conversationMessages";
-import { isTerminalRunEvent, parseRunEvent, runEventNames, type RunEvent } from "./runEvents";
+import {
+  isTerminalRunEvent,
+  parseRunEvent,
+  parseScheduleResultParts,
+  runEventNames,
+  type RunEvent,
+} from "./runEvents";
 import type { RunActivityStep } from "./RunActivityTicker";
 
 type RunStreamState = {
@@ -103,7 +109,9 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
         messages: upsertAssistantMessage(state.messages, action.runId, (message) => ({
           ...message,
           text: action.message.content,
-          parts: action.message.message_metadata.parts ?? message.parts,
+          parts: action.message.message_metadata.parts === undefined
+            ? message.parts
+            : parseScheduleResultParts(action.message.message_metadata.parts),
         })),
       };
   }
@@ -149,8 +157,7 @@ export function useRunStream(apiUrl: string) {
 
       function recoverConversation() {
         replayIncomplete = true;
-        void apiFetch(`/api/threads/${threadId}/messages`)
-          .then((response) => response.json() as Promise<ConversationMessage[]>)
+        void getThreadMessages(threadId)
           .then((history) => {
             if (settled) return;
             const message = history.find(
@@ -190,8 +197,7 @@ export function useRunStream(apiUrl: string) {
 
         stream.onerror = () => {
           if (settled) return;
-          void apiFetch(`/api/runs/${runId}`)
-            .then((response) => response.json() as Promise<AgentRun>)
+          void getRun(runId)
             .then((run) => {
               if (terminalStatuses.has(run.status)) {
                 if (!terminalReconnectAttempted) {

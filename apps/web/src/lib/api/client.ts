@@ -75,20 +75,6 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   );
 }
 
-export async function apiFetch(
-  path: string,
-  init?: RequestInit,
-): Promise<Response> {
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
-    ...init,
-    credentials: "include",
-  });
-  if (!response.ok) {
-    throw await apiErrorFromResponse(response);
-  }
-  return response;
-}
-
 export function userFacingApiError(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     const message = errorMessages[error.code] ?? fallback;

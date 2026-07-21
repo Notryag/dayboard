@@ -1,10 +1,9 @@
 import type { ChatMessage } from "./ChatMessageList";
 import type { ScheduleResultPart } from "@/features/schedule/types";
 import type { ConversationMessage as ApiConversationMessage } from "@/lib/api/types";
+import { parseScheduleResultParts } from "./runEvents";
 
-export type ConversationMessage = Omit<ApiConversationMessage, "message_metadata"> & {
-  message_metadata: { parts?: ScheduleResultPart[] };
-};
+export type ConversationMessage = ApiConversationMessage;
 
 export const initialMessages: ChatMessage[] = [
   {
@@ -50,7 +49,7 @@ export function persistedMessage(message: ConversationMessage): ChatMessage {
       hour12: false,
     }).format(new Date(message.created_at)),
     runId: message.run_id,
-    parts: message.message_metadata.parts ?? [],
+    parts: parseScheduleResultParts(message.message_metadata.parts),
   };
 }
 

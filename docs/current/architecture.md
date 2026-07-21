@@ -100,6 +100,9 @@ The web application uses Next.js, React, TypeScript, and local shadcn/ui compone
 ```text
 app/page.tsx                         route entry only
 features/workspace/DayboardApp.tsx  page orchestration and layout
+features/chat/api.ts                typed Conversation and Run REST boundary
+features/chat/useConversationSession.ts
+                                   Thread, history, active Run, command, and clarification lifecycle
 features/chat/runEvents.ts          validated SSE-to-RunEvent decoder
 features/chat/useRunStream.ts       EventSource lifecycle and typed Run reducer
 features/schedule                   TanStack Query schedule cache and interactions
@@ -115,7 +118,10 @@ server-backed in TanStack Query; the reducer holds only conversation presentatio
 schedule invalidation revision.
 
 API transport types are generated with `npm run api:types`. Handwritten code consumes aliases from
-`lib/api/types.ts`, and typed endpoints use `openapi-fetch`. The API CI job exports OpenAPI directly
+`lib/api/types.ts`, and all ordinary Web REST endpoints use `openapi-fetch`, including Auth, Voice,
+Conversation, and Run recovery calls. EventSource framing and named Run-event payload validation
+remain a dedicated SSE protocol boundary rather than being forced through the REST client. The API
+CI job exports OpenAPI directly
 from the current FastAPI application; the Web CI job runs `npm run api:types:check` against that
 artifact, so schema drift fails before build or deployment. The generated file is not edited and
 is exempt from the 600-line ESLint limit. All handwritten TypeScript and TSX files are limited to

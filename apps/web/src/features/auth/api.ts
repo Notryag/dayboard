@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api/client";
+import { apiClient, requireApiData } from "@/lib/api/typedClient";
 import type {
   Account,
   AuthCapabilities,
@@ -11,49 +11,38 @@ import type {
 export type { Account, AuthCapabilities, Registration } from "@/lib/api/types";
 
 export async function getAccount(): Promise<Account> {
-  return (await (await apiFetch("/api/auth/me")).json()) as Account;
+  const { data } = await apiClient.GET("/api/auth/me");
+  return requireApiData(data);
 }
 
 export async function getAuthCapabilities(): Promise<AuthCapabilities> {
-  return (await (await apiFetch("/api/auth/capabilities")).json()) as AuthCapabilities;
+  const { data } = await apiClient.GET("/api/auth/capabilities");
+  return requireApiData(data);
 }
 
 export async function registerAccount(body: Registration): Promise<Account> {
-  return (await (
-    await apiFetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-  ).json()) as Account;
+  const { data } = await apiClient.POST("/api/auth/register", { body });
+  return requireApiData(data);
 }
 
 export async function loginAccount(identifier: string, password: string): Promise<Account> {
-  return (await (
-    await apiFetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ identifier, password } satisfies Login),
-    })
-  ).json()) as Account;
+  const body = { identifier, password } satisfies Login;
+  const { data } = await apiClient.POST("/api/auth/login", { body });
+  return requireApiData(data);
 }
 
 export async function requestPasswordReset(email: string): Promise<void> {
-  await apiFetch("/api/auth/password-reset/request", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email } satisfies PasswordReset),
+  await apiClient.POST("/api/auth/password-reset/request", {
+    body: { email } satisfies PasswordReset,
   });
 }
 
 export async function confirmPasswordReset(token: string, password: string): Promise<void> {
-  await apiFetch("/api/auth/password-reset/confirm", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token, password } satisfies PasswordResetConfirm),
+  await apiClient.POST("/api/auth/password-reset/confirm", {
+    body: { token, password } satisfies PasswordResetConfirm,
   });
 }
 
 export async function logoutAccount(): Promise<void> {
-  await apiFetch("/api/auth/logout", { method: "POST" });
+  await apiClient.POST("/api/auth/logout");
 }

@@ -56,6 +56,14 @@ function schedulePart(value: unknown): ScheduleResultPart | null {
   return { tool_call_id: value.tool_call_id, operation: value.operation, item };
 }
 
+export function parseScheduleResultParts(value: unknown): ScheduleResultPart[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((candidate) => {
+    const part = schedulePart(candidate);
+    return part ? [part] : [];
+  });
+}
+
 function terminalParts(payload: Record<string, unknown>): ScheduleResultPart[] | undefined {
   if (payload.parts === undefined) return undefined;
   if (!Array.isArray(payload.parts)) throw new Error("Run terminal parts must be an array");
