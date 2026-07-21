@@ -1,25 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { apiFetch } from "@/lib/api/client";
+import type { AgentRun, AgentRunStatus } from "@/lib/api/types";
 import type { ChatMessage } from "./ChatMessageList";
-import type { RunActivityStep } from "./RunActivityTicker";
 import {
   initialMessages,
   type ConversationMessage,
   upsertAssistantMessage,
 } from "./conversationMessages";
-import type { ScheduleResultPart } from "@/features/schedule/types";
-import { apiFetch } from "@/lib/api/client";
-import type { AgentRun, AgentRunStatus } from "@/lib/api/types";
-
-type RunStreamPayload = {
-  content?: string | null;
-  delta?: string;
-  tool_call_id?: string;
-  operation?: string;
-  item?: ScheduleResultPart["item"];
-  parts?: ScheduleResultPart[];
-};
+import { isTerminalRunEvent, parseRunEvent, runEventNames, type RunEvent } from "./runEvents";
+import type { RunActivityStep } from "./RunActivityTicker";
 
 type RunStreamState = {
   messages: ChatMessage[];
@@ -33,20 +24,8 @@ type RunStreamAction =
   | { type: "progress_reset" }
   | { type: "run_result_received"; runId: string; text: string }
   | { type: "schedule_changed" }
-  | { type: "stream_event"; eventType: string; payload: RunStreamPayload; runId: string }
+  | { type: "run_event"; event: RunEvent; runId: string }
   | { type: "stream_replayed"; runId: string; message: ConversationMessage };
-
-const progressLabels: Record<string, string> = {
-  run_created: "请求已进入队列",
-  run_started: "任务开始处理",
-  agent_model_started: "正在理解你的安排",
-  agent_model_completed: "已完成分析，正在执行下一步",
-  tool_call_started: "正在执行操作",
-  tool_call_completed: "操作完成",
-  tool_call_error: "操作失败",
-  conflict_check_started: "正在检查日程冲突",
-  conflict_check_completed: "日程冲突检查完成",
-};
 
 const terminalStatuses = new Set<AgentRunStatus>([
   "needs_clarification",
@@ -55,72 +34,47 @@ const terminalStatuses = new Set<AgentRunStatus>([
   "cancelled",
 ]);
 
-const terminalEvents = new Set([
-  "run_completed",
-  "clarification_requested",
-  "run_failed",
-  "run_cancelled",
-]);
-
-const streamEventTypes = [
-  ...Object.keys(progressLabels),
-  "assistant_text_delta",
-  "stream_replay_gap",
-  "schedule_item_result",
-  ...terminalEvents,
-];
-
-function reduceStreamEvent(
+function reduceRunEvent(
   state: RunStreamState,
-  action: Extract<RunStreamAction, { type: "stream_event" }>,
+  action: Extract<RunStreamAction, { type: "run_event" }>,
 ): RunStreamState {
-  const { eventType, payload, runId } = action;
-  if (eventType in progressLabels) {
-    const useContent = eventType !== "run_created" && eventType !== "run_started";
-    return {
-      ...state,
-      progress: [...state.progress, {
-        eventType,
-        text: useContent ? (payload.content ?? progressLabels[eventType]) : progressLabels[eventType],
-      }],
-    };
+  const { event, runId } = action;
+  switch (event.type) {
+    case "progress":
+      return { ...state, progress: [...state.progress, event.step] };
+    case "assistant_delta":
+      return {
+        ...state,
+        messages: upsertAssistantMessage(state.messages, runId, (message) => ({
+          ...message,
+          text: message.text + event.delta,
+        })),
+      };
+    case "schedule_result":
+      return {
+        ...state,
+        messages: upsertAssistantMessage(state.messages, runId, (message) => ({
+          ...message,
+          parts: message.parts?.some(
+            (candidate) => candidate.tool_call_id === event.part.tool_call_id,
+          ) ? message.parts : [...(message.parts ?? []), event.part],
+        })),
+        scheduleRevision: state.scheduleRevision + 1,
+      };
+    case "completed":
+    case "failed":
+    case "cancelled":
+    case "clarification":
+      return event.parts ? {
+        ...state,
+        messages: upsertAssistantMessage(state.messages, runId, (message) => ({
+          ...message,
+          parts: event.parts,
+        })),
+      } : state;
+    case "replay_gap":
+      return state;
   }
-  if (eventType === "assistant_text_delta" && payload.delta) {
-    return {
-      ...state,
-      messages: upsertAssistantMessage(state.messages, runId, (message) => ({
-        ...message,
-        text: message.text + payload.delta,
-      })),
-    };
-  }
-  if (eventType === "schedule_item_result" && payload.tool_call_id && payload.operation && payload.item) {
-    const part: ScheduleResultPart = {
-      tool_call_id: payload.tool_call_id,
-      operation: payload.operation,
-      item: payload.item,
-    };
-    return {
-      ...state,
-      messages: upsertAssistantMessage(state.messages, runId, (message) => ({
-        ...message,
-        parts: message.parts?.some((candidate) => candidate.tool_call_id === part.tool_call_id)
-          ? message.parts
-          : [...(message.parts ?? []), part],
-      })),
-      scheduleRevision: state.scheduleRevision + 1,
-    };
-  }
-  if (terminalEvents.has(eventType) && payload.parts) {
-    return {
-      ...state,
-      messages: upsertAssistantMessage(state.messages, runId, (message) => ({
-        ...message,
-        parts: payload.parts,
-      })),
-    };
-  }
-  return state;
 }
 
 function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunStreamState {
@@ -141,8 +95,8 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
       };
     case "schedule_changed":
       return { ...state, scheduleRevision: state.scheduleRevision + 1 };
-    case "stream_event":
-      return reduceStreamEvent(state, action);
+    case "run_event":
+      return reduceRunEvent(state, action);
     case "stream_replayed":
       return {
         ...state,
@@ -153,6 +107,12 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
         })),
       };
   }
+}
+
+function terminalFallback(event: RunEvent) {
+  if (event.type === "failed") return "请求没有成功。请稍后再试。";
+  if (event.type === "cancelled") return "请求已取消。";
+  return "已处理完成。";
 }
 
 export function useRunStream(apiUrl: string) {
@@ -180,6 +140,27 @@ export function useRunStream(apiUrl: string) {
         resolve(text);
       }
 
+      function fail(stream: EventSource, error: unknown) {
+        stream.close();
+        activeStreamRef.current = null;
+        settled = true;
+        reject(error);
+      }
+
+      function recoverConversation() {
+        replayIncomplete = true;
+        void apiFetch(`/api/threads/${threadId}/messages`)
+          .then((response) => response.json() as Promise<ConversationMessage[]>)
+          .then((history) => {
+            if (settled) return;
+            const message = history.find(
+              (candidate) => candidate.role === "assistant" && candidate.run_id === runId,
+            );
+            if (message) dispatch({ type: "stream_replayed", runId, message });
+          })
+          .catch(() => undefined);
+      }
+
       function connect() {
         const stream = new EventSource(`${apiUrl}/api/runs/${runId}/events/stream`, {
           withCredentials: true,
@@ -187,46 +168,25 @@ export function useRunStream(apiUrl: string) {
         activeStreamRef.current = stream;
         stream.onopen = () => { retries = 0; };
 
-        const handleEvent = (event: Event) => {
-          const eventType = event.type;
-          if (eventType === "stream_replay_gap") {
-            replayIncomplete = true;
-            void apiFetch(`/api/threads/${threadId}/messages`)
-              .then((response) => response.json() as Promise<ConversationMessage[]>)
-              .then((history) => {
-                if (settled) return;
-                const message = history.find(
-                  (candidate) => candidate.role === "assistant" && candidate.run_id === runId,
-                );
-                if (message) dispatch({ type: "stream_replayed", runId, message });
-              })
-              .catch(() => undefined);
-            return;
-          }
-          let payload: RunStreamPayload;
+        const handleEvent = (rawEvent: Event) => {
+          let event: RunEvent;
           try {
-            payload = JSON.parse((event as MessageEvent<string>).data) as RunStreamPayload;
-          } catch {
-            stream.close();
-            activeStreamRef.current = null;
-            settled = true;
-            reject(new Error(`Invalid payload for Run event: ${eventType}`));
+            event = parseRunEvent(rawEvent.type, (rawEvent as MessageEvent<string>).data);
+          } catch (error) {
+            fail(stream, error);
             return;
           }
-          if (eventType !== "assistant_text_delta" || !replayIncomplete) {
-            dispatch({ type: "stream_event", eventType, payload, runId });
+          if (event.type === "replay_gap") {
+            recoverConversation();
+            return;
           }
-          if (terminalEvents.has(eventType)) {
-            const fallback = eventType === "run_failed"
-              ? "请求没有成功。请稍后再试。"
-              : eventType === "run_cancelled" ? "请求已取消。" : "已处理完成。";
-            finish(stream, payload.content ?? fallback);
+          if (event.type !== "assistant_delta" || !replayIncomplete) {
+            dispatch({ type: "run_event", event, runId });
           }
+          if (isTerminalRunEvent(event)) finish(stream, event.content ?? terminalFallback(event));
         };
 
-        for (const eventType of streamEventTypes) {
-          stream.addEventListener(eventType, handleEvent);
-        }
+        for (const eventName of runEventNames) stream.addEventListener(eventName, handleEvent);
 
         stream.onerror = () => {
           if (settled) return;
@@ -244,19 +204,9 @@ export function useRunStream(apiUrl: string) {
                 return;
               }
               retries += 1;
-              if (retries > 4) {
-                stream.close();
-                activeStreamRef.current = null;
-                settled = true;
-                reject(new Error("Run event stream disconnected"));
-              }
+              if (retries > 4) fail(stream, new Error("Run event stream disconnected"));
             })
-            .catch((error: unknown) => {
-              stream.close();
-              activeStreamRef.current = null;
-              settled = true;
-              reject(error);
-            });
+            .catch((error: unknown) => fail(stream, error));
         };
       }
 

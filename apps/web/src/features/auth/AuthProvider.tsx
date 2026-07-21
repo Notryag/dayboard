@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
   authenticationRequiredEvent,
@@ -29,6 +30,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [account, setAccount] = useState<Account | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [passwordResetAvailable, setPasswordResetAvailable] = useState(false);
@@ -37,11 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function invalidateSession() {
       localStorage.removeItem("dayboard.thread_id");
+      queryClient.clear();
       setAccount(null);
     }
     window.addEventListener(authenticationRequiredEvent, invalidateSession);
     return () => window.removeEventListener(authenticationRequiredEvent, invalidateSession);
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void getAccount()
@@ -69,19 +72,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       recoveryError,
       async login(identifier, password) {
         setRecoveryError(null);
-        setAccount(await loginAccount(identifier, password));
+        const nextAccount = await loginAccount(identifier, password);
+        queryClient.clear();
+        setAccount(nextAccount);
       },
       async register(registration) {
         setRecoveryError(null);
-        setAccount(await registerAccount(registration));
+        const nextAccount = await registerAccount(registration);
+        queryClient.clear();
+        setAccount(nextAccount);
       },
       async logout() {
         await logoutAccount();
         localStorage.removeItem("dayboard.thread_id");
+        queryClient.clear();
         setAccount(null);
       },
     }),
-    [account, isLoading, passwordResetAvailable, recoveryError],
+    [account, isLoading, passwordResetAvailable, queryClient, recoveryError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

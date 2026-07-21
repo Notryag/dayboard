@@ -100,19 +100,26 @@ The web application uses Next.js, React, TypeScript, and local shadcn/ui compone
 ```text
 app/page.tsx                         route entry only
 features/workspace/DayboardApp.tsx  page orchestration and layout
-features/chat/useRunStream.ts       EventSource lifecycle and Run reducer
-features/schedule                   schedule queries and interactions
+features/chat/runEvents.ts          validated SSE-to-RunEvent decoder
+features/chat/useRunStream.ts       EventSource lifecycle and typed Run reducer
+features/schedule                   TanStack Query schedule cache and interactions
 components/ui                       CLI-managed shadcn primitives
 lib/api/schema.d.ts                 generated FastAPI OpenAPI types
+lib/api/typedClient.ts              openapi-fetch client and shared error middleware
 ```
 
-Named SSE events share one decoder and reducer. Stream callbacks do not independently assemble
-message, progress, and schedule state. Persisted schedule data remains server-backed; the reducer
-holds only presentation state and a refresh revision.
+Named SSE events are validated and converted to a discriminated `RunEvent` union before entering
+one reducer. EventSource transport callbacks do not inspect arbitrary payload fields or
+independently assemble message, progress, and schedule state. Persisted schedule data remains
+server-backed in TanStack Query; the reducer holds only conversation presentation state and a
+schedule invalidation revision.
 
 API transport types are generated with `npm run api:types`. Handwritten code consumes aliases from
-`lib/api/types.ts`; the generated file is not edited and is exempt from the 600-line ESLint limit.
-All handwritten TypeScript and TSX files are limited to 600 lines.
+`lib/api/types.ts`, and typed endpoints use `openapi-fetch`. The API CI job exports OpenAPI directly
+from the current FastAPI application; the Web CI job runs `npm run api:types:check` against that
+artifact, so schema drift fails before build or deployment. The generated file is not edited and
+is exempt from the 600-line ESLint limit. All handwritten TypeScript and TSX files are limited to
+600 lines.
 
 Dayboard theme colors originate in `--dayboard-color-*` variables and map into shadcn theme tokens.
 Feature CSS Modules and shared components therefore use the same light/dark theme source.

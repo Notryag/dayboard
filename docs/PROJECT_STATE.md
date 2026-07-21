@@ -13,10 +13,13 @@ implementation chronology. Current facts live under [current](./current/README.m
   native `anytime` shape; actions without a temporal anchor create tasks.
 - Live execution: North `RunExecutor` publishes canonical chunks through Redis Streams; FastAPI
   exposes projected SSE events; PostgreSQL stores authoritative Run and conversation state.
-- Frontend: Next.js, generated OpenAPI types, shadcn/ui primitives, and a reducer-based Run stream.
+- Frontend: Next.js, OpenAPI-generated `openapi-fetch`, TanStack Query, shadcn/ui primitives, and a
+  validated discriminated Run-event reducer.
 
 ## Completed
 
+- Added automatic FastAPI-to-Web OpenAPI drift enforcement, typed schedule transport, TanStack
+  Query pagination/invalidation, and a validated discriminated SSE event boundary.
 - Added the critical Playwright browser gate, including deterministic SSE, active-Run recovery,
   clarification resume, optimistic edit/undo, and fixed-audio voice coverage.
 - Expanded CI and release quality jobs to run the complete PostgreSQL API suite and browser E2E.

@@ -53,6 +53,26 @@ export function apiBaseUrl() {
   return process.env.NEXT_PUBLIC_DAYBOARD_API_BASE_URL ?? "http://127.0.0.1:8000";
 }
 
+export async function apiErrorFromResponse(response: Response): Promise<ApiError> {
+  if (response.status === 401 && typeof window !== "undefined") {
+    window.dispatchEvent(new Event(authenticationRequiredEvent));
+  }
+  let body: ApiErrorEnvelope = {};
+  try {
+    body = (await response.clone().json()) as ApiErrorEnvelope;
+  } catch {
+    // Non-JSON proxy errors still retain their status and request ID.
+  }
+  const error = body.error;
+  return new ApiError(
+    error?.message ?? `API request failed with ${response.status}`,
+    response.status,
+    error?.request_id ?? response.headers.get("x-request-id"),
+    error?.code ?? `HTTP_${response.status}`,
+    error?.details,
+  );
+}
+
 export async function apiFetch(
   path: string,
   init?: RequestInit,
@@ -62,23 +82,7 @@ export async function apiFetch(
     credentials: "include",
   });
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined") {
-      window.dispatchEvent(new Event(authenticationRequiredEvent));
-    }
-    let body: ApiErrorEnvelope = {};
-    try {
-      body = (await response.json()) as ApiErrorEnvelope;
-    } catch {
-      // Non-JSON proxy errors still retain their status and request ID.
-    }
-    const error = body.error;
-    throw new ApiError(
-      error?.message ?? `API request failed with ${response.status}`,
-      response.status,
-      error?.request_id ?? response.headers.get("x-request-id"),
-      error?.code ?? `HTTP_${response.status}`,
-      error?.details,
-    );
+    throw await apiErrorFromResponse(response);
   }
   return response;
 }

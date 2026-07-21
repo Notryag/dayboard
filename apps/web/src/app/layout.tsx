@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { QueryProvider } from "./QueryProvider";
 import "./globals.css";
 
 const themeInitializer = `
@@ -25,7 +26,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitializer }} />
       </head>
-      <body>{children}</body>
+      <body><QueryProvider>{children}</QueryProvider></body>
     </html>
   );
 }

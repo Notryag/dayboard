@@ -49,8 +49,15 @@ jobs:
       - run: uv run ruff check .
       - run: uv run alembic upgrade head
       - run: uv run pytest -q
+      - run: uv run python scripts/export_openapi.py openapi.json
+      - uses: actions/upload-artifact@v6
+        with:
+          name: dayboard-openapi
+          path: apps/api/openapi.json
+          retention-days: 1
 
   web-quality:
+    needs: api-quality
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,6 +70,13 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      - uses: actions/download-artifact@v7
+        with:
+          name: dayboard-openapi
+          path: /tmp/dayboard-openapi
+      - run: npm run api:types:check
+        env:
+          OPENAPI_URL: /tmp/dayboard-openapi/openapi.json
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build

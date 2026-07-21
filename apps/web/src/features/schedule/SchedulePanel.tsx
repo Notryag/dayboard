@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DateRail } from "./DateRail";
 import { DayAgendaSection } from "./DayAgendaSection";
 import { ScheduleHeader } from "./ScheduleHeader";
@@ -27,6 +28,8 @@ export function SchedulePanel({
   timezone,
 }: SchedulePanelProps) {
   const today = dateKeyInTimezone(new Date(), timezone);
+  const queryClient = useQueryClient();
+  const previousRefreshKey = useRef(refreshKey);
   const [selectedDate, setSelectedDate] = useState(today);
   const [dateRailCenter, setDateRailCenter] = useState(today);
 
@@ -49,20 +52,26 @@ export function SchedulePanel({
     loadErrorMessage: "暂时无法加载日程",
     loadMoreErrorMessage: "暂时无法加载更多日程",
     loadPage: loadCalendarPage,
-    reloadKey: refreshKey,
+    queryKey: ["schedule", "calendar", selectedDate],
   });
   const datedTasks = useSchedulePage<TaskItem>({
     loadErrorMessage: "暂时无法加载当天待办",
     loadMoreErrorMessage: "暂时无法加载更多当天待办",
     loadPage: loadDatedTaskPage,
-    reloadKey: refreshKey,
+    queryKey: ["schedule", "tasks", "dated", selectedDate],
   });
   const undatedTasks = useSchedulePage<TaskItem>({
     loadErrorMessage: "暂时无法加载待办",
     loadMoreErrorMessage: "暂时无法加载更多待办",
     loadPage: loadUndatedTaskPage,
-    reloadKey: refreshKey,
+    queryKey: ["schedule", "tasks", "undated"],
   });
+
+  useEffect(() => {
+    if (previousRefreshKey.current === refreshKey) return;
+    previousRefreshKey.current = refreshKey;
+    void queryClient.invalidateQueries({ queryKey: ["schedule"] });
+  }, [queryClient, refreshKey]);
 
   const jumpToDate = useCallback((date: string) => {
     setSelectedDate(date);

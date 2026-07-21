@@ -386,6 +386,12 @@ and SSE contract fixture. Voice interaction uses fixed audio bytes through a tes
 it must not require microphone hardware or permission. Real backend semantics remain covered by
 PostgreSQL API/service tests, while live model quality is measured by Agent Eval.
 
+FastAPI OpenAPI is the HTTP schema source of truth. CI exports it from the API job and checks the
+committed `schema.d.ts` in the Web job. Use `openapi-fetch` for typed endpoints and TanStack Query
+for server-backed query state; do not rebuild endpoint parameter types or pagination caches with
+component-local state. SSE is not an OpenAPI request/response shape, so validate its JSON at the
+transport boundary and reduce only the resulting discriminated `RunEvent` union.
+
 Unit tests for application orchestration may use fakes for database sessions, model invokers, and provider gateways when the behavior under test is routing, budgeting, logging, or status mapping. Repository tests, API persistence tests, and tool tests must still run against PostgreSQL because PostgreSQL is the source of truth and its constraints, JSONB behavior, timestamps, and transaction behavior are part of the product contract.
 
 For Dayboard, verify completed substantial slices before moving far ahead; do not turn
