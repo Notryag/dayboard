@@ -234,10 +234,17 @@ test("completed task remains visible in the schedule", async ({ page }) => {
   await page.getByRole("button", { name: "打开日程" }).click();
 
   await page.getByRole("button", { name: "完成待办：整理资料" }).click();
-  const completed = page.getByRole("button", { name: "已完成待办：整理资料" });
+  const completed = page.getByRole("button", { name: "标记未完成待办：整理资料" });
   await expect(completed).toBeVisible();
   await expect(completed).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("已完成", { exact: true })).toBeVisible();
   await expect.poll(() => state.tasks[0]?.status).toBe("completed");
+
+  await page.getByRole("button", { name: "标记未完成待办：整理资料" }).click();
+  const reopened = page.getByRole("button", { name: "完成待办：整理资料" });
+  await expect(reopened).toBeVisible();
+  await expect(reopened).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => state.tasks[0]?.status).toBe("open");
 
   const listRequests = state.requests.filter(
     (request) => request.method === "GET" && request.path === "/api/task-items",

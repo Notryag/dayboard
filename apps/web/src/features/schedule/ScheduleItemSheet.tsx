@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
 import { cancelCalendarEntry, cancelTaskItem } from "./api";
-import { completeScheduleItem } from "./scheduleItemActions";
+import { completeScheduleItem, reopenScheduleItem } from "./scheduleItemActions";
 import {
   formatScheduleReminder,
   iconForScheduleItem,
@@ -58,15 +58,15 @@ export function ScheduleItemSheet({
   const reminder = formatScheduleReminder(item.value.reminder);
   const status = scheduleItemStatus(item);
 
-  async function complete() {
+  async function toggleCompletion() {
     setBusy(true);
     onBusyChange(true);
     setError(null);
     try {
-      onChanged(await completeScheduleItem(item));
+      onChanged(await (status === "completed" ? reopenScheduleItem(item) : completeScheduleItem(item)));
       onClose();
     } catch (caught) {
-      setError(userFacingApiError(caught, "完成失败，请刷新后重试。"));
+      setError(userFacingApiError(caught, "状态更新失败，请刷新后重试。"));
     } finally {
       setBusy(false);
       onBusyChange(false);
@@ -175,17 +175,22 @@ export function ScheduleItemSheet({
           </div>
         ) : null}
 
-        {!editing && !confirmCancel && status === "open" ? (
+        {!editing && !confirmCancel && (status === "open" || status === "completed") ? (
           <footer className={styles.actions}>
-            <button className={styles.editButton} disabled={busy} onClick={() => setEditing(true)} type="button">
-              <Pencil aria-hidden="true" size={16} />修改
+            {status === "open" ? (
+              <button className={styles.editButton} disabled={busy} onClick={() => setEditing(true)} type="button">
+                <Pencil aria-hidden="true" size={16} />修改
+              </button>
+            ) : null}
+            <button className={styles.completeButton} disabled={busy} onClick={() => void toggleCompletion()} type="button">
+              {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Check size={16} />}
+              {status === "completed" ? "标记未完成" : "标记完成"}
             </button>
-            <button className={styles.completeButton} disabled={busy} onClick={() => void complete()} type="button">
-              {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Check size={16} />}标记完成
-            </button>
-            <button className={styles.cancelButton} disabled={busy} onClick={() => setConfirmCancel(true)} type="button">
-              <Trash2 aria-hidden="true" size={16} />取消
-            </button>
+            {status === "open" ? (
+              <button className={styles.cancelButton} disabled={busy} onClick={() => setConfirmCancel(true)} type="button">
+                <Trash2 aria-hidden="true" size={16} />取消
+              </button>
+            ) : null}
           </footer>
         ) : null}
     </SheetContent>

@@ -195,7 +195,7 @@
 }
 
 .copy strong,
-.copy > span {
+.metaText {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,9 +208,28 @@
   line-height: var(--line-height-body);
 }
 
-.copy > span {
+.metaRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.metaText {
+  flex: 0 1 auto;
   color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
+  line-height: var(--line-height-tight);
+}
+
+.completedBadge {
+  flex: 0 0 auto;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  color: var(--dayboard-color-success);
+  background: var(--dayboard-color-success-surface);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
 }
 
@@ -219,15 +238,20 @@
 }
 
 .completed .copy strong {
+  color: var(--dayboard-color-text-muted);
   text-decoration: line-through;
 }
 
-.completed,
-.cancelled {
-  opacity: 0.68;
+.completed {
+  background: color-mix(in srgb, var(--dayboard-color-success-surface), transparent 28%);
+}
+
+.completed::before {
+  background: var(--dayboard-color-success);
 }
 
 .cancelled {
+  opacity: 0.68;
   grid-template-columns: minmax(0, 1fr);
 }
 

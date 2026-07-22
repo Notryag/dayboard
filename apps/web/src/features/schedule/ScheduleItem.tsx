@@ -4,7 +4,7 @@ import { createElement, useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle } from "lucide-react";
 import { Sheet } from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
-import { completeScheduleItem } from "./scheduleItemActions";
+import { completeScheduleItem, reopenScheduleItem } from "./scheduleItemActions";
 import {
   iconForScheduleItem,
   scheduleItemMeta,
@@ -43,14 +43,14 @@ export function ScheduleItem({
     if (highlighted) itemRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlighted]);
 
-  async function completeFromCard() {
-    if (status !== "open" || completing) return;
+  async function toggleCompletionFromCard() {
+    if ((status !== "open" && status !== "completed") || completing) return;
     setCompleting(true);
     setDirectError(null);
     try {
-      onChanged(await completeScheduleItem(item));
+      onChanged(await (status === "completed" ? reopenScheduleItem(item) : completeScheduleItem(item)));
     } catch (caught) {
-      setDirectError(userFacingApiError(caught, "完成失败，请刷新后重试。"));
+      setDirectError(userFacingApiError(caught, "状态更新失败，请刷新后重试。"));
       setOpen(true);
     } finally {
       setCompleting(false);
@@ -92,17 +92,20 @@ export function ScheduleItem({
           </span>
           <span className={styles.copy}>
             <strong>{scheduleItemTitle(item)}</strong>
-            <span>{scheduleItemMeta(item, timezone, variant)}</span>
+            <span className={styles.metaRow}>
+              <span className={styles.metaText}>{scheduleItemMeta(item, timezone, variant)}</span>
+              {status === "completed" ? <span className={styles.completedBadge}>已完成</span> : null}
+            </span>
           </span>
         </button>
         {showCompletionControl ? (
           <button
-            aria-label={`${status === "completed" ? "已完成" : "完成"}${item.kind === "calendar" ? "日程" : "待办"}：${scheduleItemTitle(item)}`}
+            aria-label={`${status === "completed" ? "标记未完成" : "完成"}${item.kind === "calendar" ? "日程" : "待办"}：${scheduleItemTitle(item)}`}
             aria-pressed={status === "completed"}
             className={styles.completionControl}
-            disabled={status === "completed" || completing}
-            onClick={() => void completeFromCard()}
-            title={status === "completed" ? "已完成" : "标记完成"}
+            disabled={completing}
+            onClick={() => void toggleCompletionFromCard()}
+            title={status === "completed" ? "标记未完成" : "标记完成"}
             type="button"
           >
             {completing ? (

@@ -317,6 +317,21 @@ export async function installApiFixture(
       state.tasks[index] = completed;
       return json(route, completed);
     }
+    const taskReopen = path.match(/^\/api\/task-items\/([^/]+)\/reopen$/);
+    if (taskReopen && method === "POST") {
+      const index = state.tasks.findIndex((task) => task.id === taskReopen[1]);
+      const current = state.tasks[index];
+      if (!current || (body as Json).expected_updated_at !== current.updated_at) {
+        return json(route, { error: { code: "SCHEDULE_ITEM_CONFLICT", message: "Conflict" } }, 409);
+      }
+      const reopened = {
+        ...current,
+        status: "open" as const,
+        updated_at: `2026-07-21T08:00:0${sequence++}Z`,
+      };
+      state.tasks[index] = reopened;
+      return json(route, reopened);
+    }
     const calendarUpdate = path.match(/^\/api\/calendar-entries\/([^/]+)$/);
     if (calendarUpdate && method === "PUT") {
       const index = state.calendars.findIndex((entry) => entry.id === calendarUpdate[1]);
