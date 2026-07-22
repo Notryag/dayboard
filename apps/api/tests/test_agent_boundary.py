@@ -148,9 +148,18 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
         captured["additional_middlewares"] = additional_middlewares
         captured["summarization_enabled"] = config.summarization_enabled
         captured["summarization_summary_prompt"] = config.summarization_summary_prompt
-        captured["summarization_trigger_tokens"] = config.summarization_trigger_tokens
-        captured["summarization_trigger_messages"] = config.summarization_trigger_messages
-        captured["summarization_keep_messages"] = config.summarization_keep_messages
+        captured["summarization_normal_trigger_tokens"] = (
+            config.summarization_normal_trigger_tokens
+        )
+        captured["summarization_emergency_trigger_tokens"] = (
+            config.summarization_emergency_trigger_tokens
+        )
+        captured["summarization_message_ceiling"] = config.summarization_message_ceiling
+        captured["summarization_target_tokens"] = config.summarization_target_tokens
+        captured["summarization_min_growth_tokens"] = config.summarization_min_growth_tokens
+        captured["summarization_max_emergency_compactions"] = (
+            config.summarization_max_emergency_compactions
+        )
         return {"agent": "fake"}
 
     monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
@@ -168,9 +177,12 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
         "SchedulingToolBindingMiddleware"
     )
     assert captured["summarization_enabled"] is True
-    assert captured["summarization_trigger_tokens"] == 6000
-    assert captured["summarization_trigger_messages"] == 60
-    assert captured["summarization_keep_messages"] == 12
+    assert captured["summarization_normal_trigger_tokens"] == 6000
+    assert captured["summarization_emergency_trigger_tokens"] == 12000
+    assert captured["summarization_message_ceiling"] == 60
+    assert captured["summarization_target_tokens"] == 2000
+    assert captured["summarization_min_growth_tokens"] == 3000
+    assert captured["summarization_max_emergency_compactions"] == 2
     assert "{messages}" in captured["summarization_summary_prompt"]
     assert "no more than 250 words" in captured["summarization_summary_prompt"]
     assert len(captured["summarization_summary_prompt"]) < 800
@@ -475,6 +487,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
         assert kwargs["agent_factory"]() == {"agent": "fake"}
         assert kwargs["config"]["configurable"]["thread_id"] != str(run_id)
         assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard"
+        assert kwargs["context"]["run_id"] == str(run_id)
         assert len(built["compaction_hooks"]) == 1
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 

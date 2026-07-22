@@ -18,10 +18,12 @@ stable system prompt and serialized model-visible tool schemas.
 | Unified 7+1 tool surface | 903 | 1,556 | 2,459 | -33.8% | 2,805-2,814 |
 | Absolute temporal classification | 861 | 1,341 | 2,202 | -40.8% | 2,566-2,573 |
 | Native anytime calendar entries | 666 | 1,406 | 2,072 | -44.3% | pending deployment sample |
+| Compact tool receipts + sequence anchors | 772 | 1,487 | 2,259 | -39.2% | pending deployment sample |
 
-The current fixed surface is 1,645 tokens smaller than the initial baseline and 130 tokens smaller
-than the preceding version. Live input includes provider protocol overhead and user
-messages, so it will not equal the offline fixed count.
+The current fixed surface is 1,458 tokens smaller than the initial baseline. It is 187 tokens larger
+than the preceding version because concurrency-safe sequence anchors add two create fields and an
+explicit cross-turn policy. Live input includes provider protocol overhead and user messages, so it
+will not equal the offline fixed count.
 
 ## 2026-07-20: Incident Baseline
 
@@ -105,6 +107,24 @@ fell from 861 to 666 tokens. The create schema gained the explicit date/time uni
 model-visible schemas by an estimated 65 tokens to 1,406. Fixed input therefore fell from 2,202 to
 2,072 tokens, a 5.9% reduction for this step and 44.3% from the initial baseline. Provider input and
 cache-read measurements remain to be recorded after deployment.
+
+## 2026-07-22: Compact Tool Results And Sequence Anchors
+
+Scheduling tools now split each result into compact model-visible content and a complete validated
+presentation artifact. Fixed prompt/schema cost is unchanged by this transport split. A
+representative production calendar-create payload fell from 181 to 136 `o200k_base` tokens (24.9%)
+without removing the ID, timing, status, version, or reminder data needed for later reasoning. The
+complete entity remains available to live SSE and refresh recovery without entering model context.
+The broader 50% ToolMessage-history target is measured after Run-aware compaction, not claimed for
+every individual receipt shape.
+
+Cross-turn sequence semantics then added `anchor_entry_id` and `expected_anchor_updated_at` to
+calendar creation. The server locks and validates the selected entry and derives the new start from
+its authoritative end time. Prompt cost rose from 666 to 772 tokens and the eight model-visible
+schemas rose from 1,406 to 1,487, for a fixed total of 2,259. This is a 9.0% increase over the
+previous fixed surface but still 39.2% below the initial 3,717-token baseline. The added cost buys
+correct handling of cases such as `跳完舞蹈去唱歌` without copying a stale end time through the
+model. Provider input, cached tokens, and compaction counts remain to be measured after deployment.
 
 ## Entry Template
 

@@ -140,20 +140,35 @@ class Settings(BaseSettings):
         default=None,
         alias="DAYBOARD_SUMMARIZATION_MODEL_NAME",
     )
-    agent_summarization_trigger_tokens: int = Field(
+    agent_summarization_normal_trigger_tokens: int = Field(
         default=6000,
-        alias="DAYBOARD_SUMMARIZATION_TRIGGER_TOKENS",
+        alias="DAYBOARD_SUMMARIZATION_NORMAL_TRIGGER_TOKENS",
         ge=256,
     )
-    agent_summarization_trigger_messages: int = Field(
+    agent_summarization_emergency_trigger_tokens: int = Field(
+        default=12000,
+        alias="DAYBOARD_SUMMARIZATION_EMERGENCY_TRIGGER_TOKENS",
+        ge=512,
+    )
+    agent_summarization_message_ceiling: int = Field(
         default=60,
-        alias="DAYBOARD_SUMMARIZATION_TRIGGER_MESSAGES",
+        alias="DAYBOARD_SUMMARIZATION_MESSAGE_CEILING",
         ge=4,
     )
-    agent_summarization_keep_messages: int = Field(
-        default=12,
-        alias="DAYBOARD_SUMMARIZATION_KEEP_MESSAGES",
-        ge=2,
+    agent_summarization_target_tokens: int = Field(
+        default=2000,
+        alias="DAYBOARD_SUMMARIZATION_TARGET_TOKENS",
+        ge=128,
+    )
+    agent_summarization_min_growth_tokens: int = Field(
+        default=3000,
+        alias="DAYBOARD_SUMMARIZATION_MIN_GROWTH_TOKENS",
+        ge=128,
+    )
+    agent_summarization_max_emergency_compactions: int = Field(
+        default=2,
+        alias="DAYBOARD_SUMMARIZATION_MAX_EMERGENCY_COMPACTIONS",
+        ge=1,
     )
     openai_base_url: str | None = Field(default=None, alias="OPENAI_BASE_URL")
     openai_api_key: SecretStr | None = Field(default=None, alias="OPENAI_API_KEY")

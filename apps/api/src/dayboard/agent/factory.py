@@ -129,9 +129,22 @@ def build_dayboard_agent(
         summarization_enabled=resolved_settings.agent_summarization_enabled,
         summarization_model_name=resolved_settings.agent_summarization_model_name,
         summarization_summary_prompt=DAYBOARD_SUMMARY_PROMPT,
-        summarization_trigger_tokens=resolved_settings.agent_summarization_trigger_tokens,
-        summarization_trigger_messages=resolved_settings.agent_summarization_trigger_messages,
-        summarization_keep_messages=resolved_settings.agent_summarization_keep_messages,
+        summarization_normal_trigger_tokens=(
+            resolved_settings.agent_summarization_normal_trigger_tokens
+        ),
+        summarization_emergency_trigger_tokens=(
+            resolved_settings.agent_summarization_emergency_trigger_tokens
+        ),
+        summarization_message_ceiling=(
+            resolved_settings.agent_summarization_message_ceiling
+        ),
+        summarization_target_tokens=resolved_settings.agent_summarization_target_tokens,
+        summarization_min_growth_tokens=(
+            resolved_settings.agent_summarization_min_growth_tokens
+        ),
+        summarization_max_emergency_compactions=(
+            resolved_settings.agent_summarization_max_emergency_compactions
+        ),
     )
     return build_agent(
         config,

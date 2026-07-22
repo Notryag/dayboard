@@ -23,7 +23,7 @@ context or infer compaction calls from provider traffic.
 
 ## Immediate Production Guardrail
 
-Dayboard uses the following host configuration:
+Dayboard first stopped the production incident with the following temporary host configuration:
 
 ```env
 DAYBOARD_SUMMARIZATION_TRIGGER_TOKENS=6000
@@ -31,8 +31,20 @@ DAYBOARD_SUMMARIZATION_TRIGGER_MESSAGES=60
 DAYBOARD_SUMMARIZATION_KEEP_MESSAGES=12
 ```
 
-The message-count keep value remains only until North supports a token-targeted
-retention window. Summary and model lifecycle events remain durable audit and
+The message-count keep value remained only until North supported a token-targeted
+retention window. This guardrail has now been superseded by the Run-aware settings below; it stays
+here as implementation history rather than an active configuration contract.
+
+```env
+DAYBOARD_SUMMARIZATION_NORMAL_TRIGGER_TOKENS=6000
+DAYBOARD_SUMMARIZATION_EMERGENCY_TRIGGER_TOKENS=12000
+DAYBOARD_SUMMARIZATION_MESSAGE_CEILING=60
+DAYBOARD_SUMMARIZATION_TARGET_TOKENS=2000
+DAYBOARD_SUMMARIZATION_MIN_GROWTH_TOKENS=3000
+DAYBOARD_SUMMARIZATION_MAX_EMERGENCY_COMPACTIONS=2
+```
+
+Summary and model lifecycle events remain durable audit and
 usage records, but Dayboard does not publish them to the user-facing SSE stream.
 The product shows lifecycle and tool-level states such as processing, searching,
 saving, and failure.
