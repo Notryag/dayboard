@@ -49,12 +49,6 @@
   to { transform: rotate(360deg); }
 }
 
-@media (min-width: 900px) {
-  .toast {
-    bottom: var(--space-6);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: var(--motion-spinner-reduced);

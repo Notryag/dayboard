@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DialogClose,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
 import { cancelCalendarEntry, cancelTaskItem } from "./api";
 import { completeScheduleItem } from "./scheduleItemActions";
@@ -33,7 +33,7 @@ import { ScheduleItemEditForm } from "./ScheduleItemEditForm";
 import type { ScheduleChange, ScheduleDisplayItem } from "./types";
 import styles from "./ScheduleItem.module.css";
 
-type ScheduleItemDialogProps = {
+type ScheduleItemSheetProps = {
   initialError: string | null;
   item: ScheduleDisplayItem;
   timezone: string;
@@ -42,14 +42,14 @@ type ScheduleItemDialogProps = {
   onClose: () => void;
 };
 
-export function ScheduleItemDialog({
+export function ScheduleItemSheet({
   initialError,
   item,
   timezone,
   onBusyChange,
   onChanged,
   onClose,
-}: ScheduleItemDialogProps) {
+}: ScheduleItemSheetProps) {
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -91,25 +91,26 @@ export function ScheduleItemDialog({
   }
 
   return (
-    <DialogContent
+    <SheetContent
       aria-label="安排详情"
       aria-describedby={undefined}
-      className={styles.dialog}
-      overlayClassName={styles.dialogLayer}
+      className={styles.sheet}
+      overlayClassName={styles.sheetLayer}
+      side="bottom"
       showCloseButton={false}
     >
-        <header className={styles.dialogHeader}>
+        <header className={styles.sheetHeader}>
           <span
             aria-hidden="true"
-            className={`${styles.dialogIcon} ${item.kind === "task" ? styles.taskIcon : ""}`}
+            className={`${styles.sheetIcon} ${item.kind === "task" ? styles.taskIcon : ""}`}
           >
             {createElement(Icon, { size: 21 })}
           </span>
-          <div className={styles.dialogHeading}>
+          <div className={styles.sheetHeading}>
             <span>{editing ? "编辑" : item.kind === "calendar" ? "日程" : "待办"}</span>
-            <DialogTitle>{scheduleItemTitle(item)}</DialogTitle>
+            <SheetTitle>{scheduleItemTitle(item)}</SheetTitle>
           </div>
-          <DialogClose
+          <SheetClose
             disabled={busy}
             render={
               <Button
@@ -123,7 +124,7 @@ export function ScheduleItemDialog({
             }
           >
               <X size={19} />
-          </DialogClose>
+          </SheetClose>
         </header>
 
         {editing ? (
@@ -187,6 +188,6 @@ export function ScheduleItemDialog({
             </button>
           </footer>
         ) : null}
-    </DialogContent>
+    </SheetContent>
   );
 }

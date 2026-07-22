@@ -2,32 +2,25 @@
 
 ## Goal
 
-Dayboard is a voice-first scheduling workspace with two equal product surfaces: conversation and the
-day view. It must remain efficient on a phone while using desktop space as a real work area rather
-than rendering a phone-shaped demo in the center of the viewport.
+Dayboard is a mobile-only, voice-first scheduling workspace with two equal product surfaces:
+conversation and the day view. It does not maintain a separate desktop layout or desktop fallback.
 
 Visual decisions must not be scattered through components. Colors, spacing, radius, shadows,
 typography, control sizes, and motion belong in global semantic tokens. Geometry owned by one
 component belongs in custom properties on that component root.
 
-## Responsive App Shell
+## Mobile App Shell
 
 The current application shell is:
 
 ```text
-mobile (< 900px)
+mobile
   -> transparent full-width overlay header with a floating circular view switch
   -> centered Dayboard wordmark without a container
   -> one active full-width view
   -> horizontal content swipe between conversation and schedule
   -> conversation is the default home view
   -> centered voice composer inside the bottom safe area
-
-desktop (>= 900px)
-  -> full-height, full-width active view
-  -> the same transparent shared header
-  -> the same floating Conversation/Schedule switch
-  -> conversation and schedule each use the full viewport
 ```
 
 Conversation is the home page at every viewport width and the floating header control switches
@@ -167,10 +160,9 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 
 ## Layout Rules
 
-- Design mobile first, then expand carefully for desktop.
+- Design only for mobile H5 viewports; do not add desktop-specific branches or fallback layouts.
 - The conversation screen should be usable at 360px width.
-- Keep Conversation and Schedule as separate full-screen views at every width.
-- Use the full desktop viewport and preserve independent scroll position when switching views.
+- Keep Conversation and Schedule as separate full-screen mobile views.
 - Keep the input dock fixed or sticky at the bottom.
 - Keep the mobile composer inside the bottom safe area. Do not duplicate the Conversation/Schedule
   switch in a bottom tab bar while the header control owns that navigation.
@@ -184,6 +176,8 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 - Render schedule results as individual timeline-style rows, not as cards nested inside a result
   card. Use a narrow calendar/task color rail, a small semantic icon surface, a clear title, and one
   restrained metadata line. Keep completion controls out of conversation results.
+- Open schedule item details and editing in a full-width bottom sheet with bottom safe-area padding;
+  do not use a centered desktop dialog.
 - Keep touch targets at least 44px.
 - Avoid explanatory text in the product UI unless it is necessary for the current task.
 - Do not wrap page sections in decorative cards. Borders divide work regions; shadows are reserved

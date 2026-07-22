@@ -27,7 +27,6 @@ type MobileViewPagerProps = {
   trackClassName: string;
 };
 
-const mobileQuery = "(max-width: 899px)";
 const edgeInset = 24;
 const distanceThresholdRatio = 0.2;
 const velocityThreshold = 450;
@@ -60,7 +59,6 @@ export function MobileViewPager({
   const x = useMotionValue(0);
   const dragControls = useDragControls();
   const reduceMotion = useReducedMotion();
-  const [isMobile, setIsMobile] = useState(false);
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
@@ -85,14 +83,6 @@ export function MobileViewPager({
   );
 
   useEffect(() => {
-    const media = window.matchMedia(mobileQuery);
-    const update = () => setIsMobile(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -110,13 +100,12 @@ export function MobileViewPager({
       return;
     }
     settle(activeView);
-  }, [activeView, isMobile, settle, width, x]);
+  }, [activeView, settle, width, x]);
 
   function handlePointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     const supportsDirectDrag = event.pointerType === "touch" || event.pointerType === "mouse";
     if (
-      !isMobile
-      || reduceMotion
+      reduceMotion
       || width === 0
       || !supportsDirectDrag
       || event.clientX <= edgeInset
@@ -160,7 +149,7 @@ export function MobileViewPager({
       <motion.div
         className={trackClassName}
         data-view-track
-        drag={isMobile && !reduceMotion ? "x" : false}
+        drag={!reduceMotion ? "x" : false}
         dragConstraints={{ left: -width, right: 0 }}
         dragControls={dragControls}
         dragElastic={0.06}

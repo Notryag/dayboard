@@ -35,7 +35,7 @@ uv run python scripts/agent_eval.py \
 export DAYBOARD_EVAL_IDENTIFIER=eval-user
 export DAYBOARD_EVAL_PASSWORD='read-from-a-secret-store'
 uv run python scripts/agent_eval.py \
-  --base-url https://www.selfapi.art/dayboard-api \
+  --base-url https://dayboard.selfapi.art \
   --execute --allow-writes \
   --min-accuracy 0.85 \
   --output eval-report.json

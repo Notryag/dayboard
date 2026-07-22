@@ -398,24 +398,6 @@
   }
 }
 
-@media (min-width: 900px) {
-  .header {
-    padding-right: var(--space-5);
-    padding-left: var(--space-5);
-  }
-
-  .dateRail {
-    padding-right: var(--space-5);
-    padding-left: var(--space-5);
-    scroll-padding-inline: var(--space-5);
-  }
-
-  .content {
-    padding-right: var(--space-5);
-    padding-left: var(--space-5);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .dateCell,
   .monthPicker,

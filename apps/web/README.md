@@ -18,8 +18,7 @@ Open `http://localhost:3000`. Local API CORS configuration must include this ori
 ## Environment Variables
 
 - `NEXT_PUBLIC_DAYBOARD_API_BASE_URL`: browser-visible FastAPI base URL or same-site path.
-- `NEXT_PUBLIC_DAYBOARD_BASE_PATH`: Next.js mount path; empty locally and `/dayboard` on the
-  server-hosted deployment.
+- `NEXT_PUBLIC_DAYBOARD_BASE_PATH`: Next.js mount path; empty for local and production deployments.
 
 Both variables are compiled into the browser bundle. Production must set them while building the
 Web image; changing only the environment of an existing container cannot update its browser assets.

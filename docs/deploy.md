@@ -93,7 +93,7 @@ CLOUDFLARE_ASR_MODEL=@cf/openai/whisper-large-v3-turbo
 `DAYBOARD_MAIL_FROM_ADDRESS` 时，注册和登录不受影响，找回密码接口会明确返回暂不可用：
 
 ```dotenv
-DAYBOARD_PUBLIC_WEB_URL=https://your-host/dayboard
+DAYBOARD_PUBLIC_WEB_URL=https://dayboard.example.com
 DAYBOARD_PASSWORD_RESET_TTL_SECONDS=1800
 DAYBOARD_SMTP_HOST=smtp.example.com
 DAYBOARD_SMTP_PORT=587
@@ -211,14 +211,14 @@ cd /home/zx/dayboard
 docker compose ps
 curl -fsS http://127.0.0.1:8000/health
 curl -fsSL -o /dev/null -w 'Web HTTP %{http_code}\n' \
-  http://127.0.0.1:3001/dayboard/
+  http://127.0.0.1:3001/
 curl -fsSL -o /dev/null -w 'Public HTTP %{http_code}\n' \
-  https://your-host/dayboard/
+  https://dayboard.example.com/
 ```
 
 API 健康响应中的 `database`、`redis` 和 `worker` 都应为 `ok`，Web 最终响应应为 HTTP 200。
 还应在浏览器中验证登录、发送一条文字命令和打开日视图。启用语音后，再验证已登录请求
-`GET /dayboard-api/api/voice/capabilities` 返回 `available: true`。
+`GET /api/voice/capabilities` 返回 `available: true`。
 
 ## 查看日志
 
@@ -233,10 +233,10 @@ docker compose events
 
 ## Nginx
 
-仓库中的 [dayboard-locations.conf](../deploy/nginx/dayboard-locations.conf) 提供路径代理模板：
+仓库中的 [dayboard-subdomain.conf](../deploy/nginx/dayboard-subdomain.conf) 提供独立子域名代理模板：
 
-- `/dayboard-api/` -> `127.0.0.1:8000`
-- `/dayboard` 和 `/dayboard/` -> `127.0.0.1:3001`
+- `/api/` -> `127.0.0.1:8000`
+- `/` -> `127.0.0.1:3001`
 
 将模板包含到 HTTPS `server` 块后执行：
 
@@ -248,8 +248,8 @@ sudo systemctl reload nginx
 只有容器健康且本机端口验证通过后才能重载 Nginx。生产 Web 构建默认使用：
 
 ```text
-NEXT_PUBLIC_DAYBOARD_API_BASE_URL=/dayboard-api
-NEXT_PUBLIC_DAYBOARD_BASE_PATH=/dayboard
+NEXT_PUBLIC_DAYBOARD_API_BASE_URL=
+NEXT_PUBLIC_DAYBOARD_BASE_PATH=
 ```
 
 Web 和 API 保持同站点，才能稳定使用 `HttpOnly`、`SameSite=Lax` 的登录会话 Cookie。

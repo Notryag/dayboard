@@ -2,7 +2,7 @@
 
 import { createElement, useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle } from "lucide-react";
-import { Dialog } from "@/components/ui/dialog";
+import { Sheet } from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
 import { completeScheduleItem } from "./scheduleItemActions";
 import {
@@ -11,7 +11,7 @@ import {
   scheduleItemStatus,
   scheduleItemTitle,
 } from "./scheduleItemPresentation";
-import { ScheduleItemDialog } from "./ScheduleItemDialog";
+import { ScheduleItemSheet } from "./ScheduleItemSheet";
 import type { ScheduleChange, ScheduleDisplayItem } from "./types";
 import styles from "./ScheduleItem.module.css";
 
@@ -33,7 +33,7 @@ export function ScheduleItem({
   const itemRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [completing, setCompleting] = useState(false);
-  const [dialogBusy, setDialogBusy] = useState(false);
+  const [sheetBusy, setSheetBusy] = useState(false);
   const [directError, setDirectError] = useState<string | null>(null);
   const Icon = iconForScheduleItem(item.kind);
   const status = scheduleItemStatus(item);
@@ -58,11 +58,11 @@ export function ScheduleItem({
   }
 
   return (
-    <Dialog
-      disablePointerDismissal={dialogBusy}
+    <Sheet
+      disablePointerDismissal={sheetBusy}
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!dialogBusy) setOpen(nextOpen);
+        if (!sheetBusy) setOpen(nextOpen);
       }}
     >
       <div
@@ -114,15 +114,15 @@ export function ScheduleItem({
         ) : null}
       </div>
       {open ? (
-        <ScheduleItemDialog
+        <ScheduleItemSheet
           initialError={directError}
           item={item}
-          onBusyChange={setDialogBusy}
+          onBusyChange={setSheetBusy}
           onChanged={onChanged}
           onClose={() => setOpen(false)}
           timezone={timezone}
         />
       ) : null}
-    </Dialog>
+    </Sheet>
   );
 }

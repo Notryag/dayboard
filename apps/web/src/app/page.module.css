@@ -183,22 +183,6 @@
   backdrop-filter: blur(var(--app-composer-backdrop-blur));
 }
 
-@media (min-width: 900px) {
-  .appHeader {
-    padding-right: max(var(--space-6), env(safe-area-inset-right));
-    padding-left: max(var(--space-6), env(safe-area-inset-left));
-  }
-
-  .chatPane {
-    --chat-message-max-width: 470px;
-  }
-
-  .composerDock {
-    padding-right: max(var(--space-6), env(safe-area-inset-right));
-    padding-left: max(var(--space-6), env(safe-area-inset-left));
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .floatingHeaderButton {
     transition: none;

@@ -105,15 +105,15 @@ Scheduling currently resolves local time with the trusted account context, which
 
 ## Product Surfaces
 
-The responsive web application has two equal surfaces:
+The mobile H5 application has two equal surfaces:
 
 - conversation for voice/text capture, streaming progress, clarification, and result cards;
 - schedule for a date rail, chronological agenda, undated tasks, editing, completion, cancellation,
   settings, appearance, and logout.
 
-Mobile shows one full-width surface selected from the transparent header. Desktop shows the
-conversation and schedule side by side. Conversation schedule cards omit the completion checkbox;
-mutations are available from the detail interaction.
+One full-width surface is selected from the transparent header and horizontal swipe. Dayboard does
+not define a desktop layout or desktop fallback. Conversation schedule cards omit the completion
+checkbox; mutations are available from the detail interaction.
 
 ## Current Scope Limits
 

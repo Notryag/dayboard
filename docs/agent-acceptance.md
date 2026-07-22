@@ -26,7 +26,7 @@ uv run python scripts/agent_acceptance.py \
 export DAYBOARD_ACCEPTANCE_IDENTIFIER=acceptance-user
 export DAYBOARD_ACCEPTANCE_PASSWORD='read-from-a-secret-store'
 uv run python scripts/agent_acceptance.py \
-  --base-url https://www.selfapi.art/dayboard-api \
+  --base-url https://dayboard.selfapi.art \
   --execute --allow-writes
 ```
 

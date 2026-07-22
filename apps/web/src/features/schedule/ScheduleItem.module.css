@@ -235,31 +235,29 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.dialogLayer {
+.sheetLayer {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 60;
   background: var(--dayboard-color-message-menu-backdrop);
 }
 
-.dialog {
-  --schedule-dialog-max-width: 520px;
-  --schedule-dialog-max-height: 720px;
-  --schedule-dialog-viewport-gap: 32px;
+.sheet {
+  --schedule-sheet-max-height: 86dvh;
+  --schedule-sheet-viewport-gap: calc(env(safe-area-inset-top) + var(--space-4));
   --schedule-detail-icon-offset: 2px;
 
   position: fixed;
-  right: max(var(--space-4), env(safe-area-inset-right));
+  right: 0;
   bottom: 0;
-  left: max(var(--space-4), env(safe-area-inset-left));
-  z-index: 41;
-  width: auto;
-  max-width: var(--schedule-dialog-max-width);
-  margin-inline: auto;
+  left: 0;
+  z-index: 61;
+  width: 100%;
   max-height: min(
-    var(--schedule-dialog-max-height),
-    calc(100dvh - var(--schedule-dialog-viewport-gap))
+    var(--schedule-sheet-max-height),
+    calc(100dvh - var(--schedule-sheet-viewport-gap))
   );
+  gap: 0;
   overflow-y: auto;
   border: var(--border-width) solid var(--dayboard-color-border);
   border-bottom: 0;
@@ -272,7 +270,7 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.dialogHeader {
+.sheetHeader {
   display: grid;
   grid-template-columns: var(--control-size) minmax(0, 1fr) var(--control-size);
   align-items: center;
@@ -281,22 +279,22 @@
   border-bottom: var(--border-width) solid var(--dayboard-color-border);
 }
 
-.dialogIcon {
+.sheetIcon {
   width: var(--control-size);
   height: var(--control-size);
   border-radius: var(--radius-md);
 }
 
-.dialogHeading {
+.sheetHeading {
   min-width: 0;
 }
 
-.dialogHeading > span {
+.sheetHeading > span {
   color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
 }
 
-.dialogHeading h2 {
+.sheetHeading h2 {
   overflow: hidden;
   margin-top: var(--space-1);
   font-size: var(--font-size-subtitle);

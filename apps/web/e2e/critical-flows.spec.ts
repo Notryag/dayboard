@@ -173,31 +173,6 @@ test("mobile content swipe switches between conversation and schedule", async ({
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
 });
 
-test("desktop switches between full-screen conversation and schedule", async ({ page }) => {
-  await page.setViewportSize({ width: 1200, height: 800 });
-  await installApiFixture(page);
-  await page.goto("/dayboard");
-
-  const chatBox = await page.locator("#chat-panel").boundingBox();
-  const scheduleBox = await page.locator("#schedule-panel").boundingBox();
-  expect(chatBox).not.toBeNull();
-  expect(scheduleBox).not.toBeNull();
-  expect(chatBox!.width).toBeCloseTo(1200, 0);
-  expect(scheduleBox!.width).toBeCloseTo(1200, 0);
-  await expect.poll(async () => (await page.locator("#chat-panel").boundingBox())?.x).toBeCloseTo(0, 0);
-  await expect.poll(async () => {
-    const box = await page.locator("#schedule-panel").boundingBox();
-    return box ? box.x + box.width : Number.POSITIVE_INFINITY;
-  }).toBeLessThanOrEqual(1);
-  await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "日程", exact: true })).toHaveCount(0);
-
-  await page.getByRole("button", { name: "打开日程" }).click();
-  await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "对话", exact: true })).toHaveCount(0);
-  await expect.poll(async () => (await page.locator("#schedule-panel").boundingBox())?.x).toBeCloseTo(0, 0);
-});
-
 test("reload restores history and rejoins an active Run", async ({ page }) => {
   const entry = calendarEntry({ id: "calendar-active", title: "恢复后的日程" });
   const part = schedulePart(entry, "tool-active");
@@ -234,6 +209,9 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
   await page.goto("/dayboard");
   await page.getByRole("button", { name: "打开日程" }).click();
   await page.getByRole("button", { name: /查看日程：产品评审/ }).click();
+  const detailSheet = page.locator('[data-slot="sheet-content"]');
+  await expect(detailSheet).toHaveAttribute("data-side", "bottom");
+  await expect(detailSheet).toHaveCSS("bottom", "0px");
   await page.getByRole("button", { name: "修改" }).click();
   await page.getByLabel("标题").fill("产品终审");
   await page.getByRole("button", { name: "保存" }).click();
