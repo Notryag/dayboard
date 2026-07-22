@@ -7,8 +7,8 @@ Last reviewed: 2026-07-22
 - [x] Implement compact ToolMessage receipts, validated presentation artifacts, Run-aware
   compaction, atomic tool-batch retention, and concurrency-safe cross-turn anchors from
   `context-token-optimization.md`.
-- [ ] After deployment, measure input, cached, total tokens and compaction counts by Run through
-  Northgate; add the live comparison to `agent-token-optimization-history.md`.
+- [x] Measure the deployed sequence flow by Run through Northgate and record input, output, cached
+  lower bound, and zero compaction events in `agent-token-optimization-history.md`.
 
 - [x] Establish offline and live no-write token baselines for representative scheduling commands.
   The current fixed estimate is 772 system-prompt tokens plus 1,487 tokens across seven scheduling

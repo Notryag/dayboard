@@ -18,7 +18,7 @@ stable system prompt and serialized model-visible tool schemas.
 | Unified 7+1 tool surface | 903 | 1,556 | 2,459 | -33.8% | 2,805-2,814 |
 | Absolute temporal classification | 861 | 1,341 | 2,202 | -40.8% | 2,566-2,573 |
 | Native anytime calendar entries | 666 | 1,406 | 2,072 | -44.3% | pending deployment sample |
-| Compact tool receipts + sequence anchors | 772 | 1,487 | 2,259 | -39.2% | pending deployment sample |
+| Compact tool receipts + sequence anchors | 772 | 1,487 | 2,259 | -39.2% | 2,523 |
 
 The current fixed surface is 1,458 tokens smaller than the initial baseline. It is 187 tokens larger
 than the preceding version because concurrency-safe sequence anchors add two create fields and an
@@ -124,7 +124,19 @@ its authoritative end time. Prompt cost rose from 666 to 772 tokens and the eigh
 schemas rose from 1,406 to 1,487, for a fixed total of 2,259. This is a 9.0% increase over the
 previous fixed surface but still 39.2% below the initial 3,717-token baseline. The added cost buys
 correct handling of cases such as `跳完舞蹈去唱歌` without copying a stale end time through the
-model. Provider input, cached tokens, and compaction counts remain to be measured after deployment.
+model. The deployed provider and compaction measurements are recorded below.
+
+The deployed two-turn acceptance created a 09:00-10:00 dance entry, then searched it and created
+singing at exactly 10:00-11:00. The first Run used two model calls totaling 4,468 input and 63
+output tokens; its first round used 2,523 input tokens. The anchored second Run required three
+semantic calls (search, create, confirmation), totaling 8,370 input and 174 output tokens. It
+produced zero summarization events, eliminating the previous duplicate-compaction failure mode.
+
+Northgate correlated all five requests by Run. It reported 1,536 cached prompt tokens on the first
+call of the second Run. The provider omitted cached-token detail on the other four calls, which
+Northgate surfaced as `CACHED_USAGE_MISSING`; therefore 1,536 is a measured lower bound, not a zero
+cache result. `EXACT_CACHE_BYPASSED` was also expected because each semantic round had different
+messages or bound tools and was not an identical request replay.
 
 ## Entry Template
 
