@@ -20,7 +20,7 @@ export async function getCalendarEntryPage(
 
 export async function getUndatedTaskPage(cursor?: string, signal?: AbortSignal) {
   const { data } = await apiClient.GET("/api/task-items", {
-    params: { query: { status: "open", due_kind: "undated", cursor, limit: 20 } },
+    params: { query: { status: "all", due_kind: "undated", cursor, limit: 20 } },
     signal,
   });
   return requireApiData(data);
@@ -32,7 +32,7 @@ export async function getDatedTaskPage(
   signal?: AbortSignal,
 ) {
   const { data } = await apiClient.GET("/api/task-items", {
-    params: { query: { status: "open", due_kind: "dated", date, cursor, limit: 20 } },
+    params: { query: { status: "all", due_kind: "dated", date, cursor, limit: 20 } },
     signal,
   });
   return requireApiData(data);

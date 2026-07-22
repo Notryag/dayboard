@@ -18,6 +18,18 @@ export type CalendarEntry = {
   updated_at: string;
 };
 
+export type TaskItem = {
+  id: string;
+  title: string;
+  due_at: string | null;
+  timezone: string;
+  reminder: null;
+  status: "open" | "completed" | "cancelled";
+  created_by_run_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type RunSpec = {
   events: Array<{ type: string; data: Json }>;
   persistedText?: string;
@@ -45,6 +57,7 @@ type FixtureState = {
   requests: Array<{ method: string; path: string; body: unknown }>;
   reminders: ReminderDelivery[];
   runs: Map<string, RunSpec>;
+  tasks: TaskItem[];
   threadId: string | null;
   voiceAvailable: boolean;
   voiceTranscript: string;
@@ -69,6 +82,21 @@ export function calendarEntry(overrides: Partial<CalendarEntry> = {}): CalendarE
     created_by_run_id: "run-seed",
     created_at: now,
     updated_at: "2026-07-21T08:00:00Z",
+    ...overrides,
+  };
+}
+
+export function taskItem(overrides: Partial<TaskItem> = {}): TaskItem {
+  return {
+    id: "task-1",
+    title: "整理资料",
+    due_at: null,
+    timezone: "Asia/Shanghai",
+    reminder: null,
+    status: "open",
+    created_by_run_id: "run-seed",
+    created_at: now,
+    updated_at: now,
     ...overrides,
   };
 }
@@ -122,6 +150,7 @@ export async function installApiFixture(
     requests: [],
     reminders: [],
     runs: new Map(),
+    tasks: [],
     threadId: null,
     voiceAvailable: false,
     voiceTranscript: "明天上午九点开周会",
@@ -265,7 +294,28 @@ export async function installApiFixture(
       return json(route, { items: state.calendars.filter((entry) => entry.status !== "cancelled"), next_cursor: null });
     }
     if (path === "/api/task-items" && method === "GET") {
-      return json(route, { items: [], next_cursor: null });
+      const status = url.searchParams.get("status") ?? "open";
+      const dueKind = url.searchParams.get("due_kind") ?? "all";
+      const items = state.tasks.filter((task) => (
+        (status === "all" || task.status === status)
+        && (dueKind === "all" || (dueKind === "dated") === Boolean(task.due_at))
+      ));
+      return json(route, { items, next_cursor: null });
+    }
+    const taskComplete = path.match(/^\/api\/task-items\/([^/]+)\/complete$/);
+    if (taskComplete && method === "POST") {
+      const index = state.tasks.findIndex((task) => task.id === taskComplete[1]);
+      const current = state.tasks[index];
+      if (!current || (body as Json).expected_updated_at !== current.updated_at) {
+        return json(route, { error: { code: "SCHEDULE_ITEM_CONFLICT", message: "Conflict" } }, 409);
+      }
+      const completed = {
+        ...current,
+        status: "completed" as const,
+        updated_at: `2026-07-21T08:00:0${sequence++}Z`,
+      };
+      state.tasks[index] = completed;
+      return json(route, completed);
     }
     const calendarUpdate = path.match(/^\/api\/calendar-entries\/([^/]+)$/);
     if (calendarUpdate && method === "PUT") {

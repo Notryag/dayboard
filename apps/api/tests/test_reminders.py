@@ -158,6 +158,66 @@ async def test_zero_offset_reminder_is_scheduled_at_calendar_start(
     assert deliveries[0].status == ReminderDeliveryStatus.pending
 
 
+async def test_past_calendar_entry_does_not_enqueue_a_late_reminder(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    await SchedulingService(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="已经结束的日程",
+            start_time=datetime.now(UTC) - timedelta(hours=1),
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT0M"),
+        ),
+    )
+
+    assert await ReminderService(db_session).list_for_user(tenant_context) == []
+
+
+async def test_future_calendar_entry_with_missed_offset_reminds_immediately(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    start = datetime.now(UTC) + timedelta(minutes=5)
+    await SchedulingService(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="即将开始的日程",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT10M"),
+        ),
+    )
+
+    delivered = await ReminderService(db_session).deliver_due_in_app()
+    assert len(delivered) == 1
+
+
+async def test_worker_recovery_expires_reminder_after_calendar_start(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    scheduling = SchedulingService(db_session)
+    entry = await scheduling.create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="恢复时已经结束",
+            start_time=datetime.now(UTC) + timedelta(hours=1),
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT2H"),
+        ),
+    )
+    row = await scheduling.calendar_entries.get(tenant_context, entry.id)
+    assert row is not None
+    row.start_time = datetime.now(UTC) - timedelta(minutes=1)
+    await db_session.commit()
+
+    assert await ReminderService(db_session).deliver_due_in_app() == []
+    deliveries = await ReminderService(db_session).list_for_user(tenant_context)
+    assert [delivery.status for delivery in deliveries] == [ReminderDeliveryStatus.cancelled]
+
+
 async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant(
     api_app,
     db_session: AsyncSession,

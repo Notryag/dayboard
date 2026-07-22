@@ -72,6 +72,13 @@ and failed-delivery retry. Users may opt into browser Notifications while the We
 the same reminder ID is shown once per browser session. Retry returns the row to `pending`; the
 worker remains the only delivery executor.
 
+Only future timed calendar entries can own a pending reminder. Once an entry has started, its
+reminder is expired: Dayboard does not create or redeliver a late notification. A future entry whose
+configured reminder offset has just passed may still be delivered immediately. Completing or
+cancelling an entry cancels pending delivery, while already delivered rows remain as reminder
+history. Completed calendar entries and tasks remain visible in the schedule view so users can
+inspect or reopen them.
+
 ## Conversation And Clarification
 
 Conversation threads and messages are durable and owner-scoped. Bounded context and persisted

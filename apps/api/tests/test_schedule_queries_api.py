@@ -155,6 +155,63 @@ async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
     assert [item["title"] for item in selected_date.json()["items"]] == ["Due task"]
 
 
+async def test_completed_schedule_items_remain_queryable_for_the_day(
+    api_app,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    timezone = ZoneInfo("Asia/Shanghai")
+    selected_date = datetime.now(timezone).date() + timedelta(days=7)
+    start = datetime.combine(selected_date, datetime.min.time(), timezone) + timedelta(hours=9)
+    entry = CalendarEntryRow(
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        title="完成后保留的日程",
+        start_time=start,
+        timezone="Asia/Shanghai",
+        participants=[],
+    )
+    task = TaskItemRow(
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        title="完成后保留的待办",
+        due_at=start + timedelta(hours=1),
+        timezone="Asia/Shanghai",
+        status="open",
+    )
+    db_session.add_all([entry, task])
+    await db_session.commit()
+    await db_session.refresh(entry)
+    await db_session.refresh(task)
+
+    async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
+        completed_entry = await client.post(
+            f"/api/calendar-entries/{entry.id}/complete",
+            json={"expected_updated_at": entry.updated_at.isoformat()},
+        )
+        completed_task = await client.post(
+            f"/api/task-items/{task.id}/complete",
+            json={"expected_updated_at": task.updated_at.isoformat()},
+        )
+        calendar_page = await client.get(
+            "/api/calendar-entries",
+            params={"date": selected_date.isoformat()},
+        )
+        task_page = await client.get(
+            "/api/task-items",
+            params={"date": selected_date.isoformat(), "status": "all"},
+        )
+
+    assert completed_entry.status_code == 200
+    assert completed_task.status_code == 200
+    assert [(item["title"], item["status"]) for item in calendar_page.json()["items"]] == [
+        ("完成后保留的日程", "completed")
+    ]
+    assert [(item["title"], item["status"]) for item in task_page.json()["items"]] == [
+        ("完成后保留的待办", "completed")
+    ]
+
+
 async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> None:
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
         naive = await client.get("/api/calendar-entries", params={"from": "2026-07-13T08:00:00"})

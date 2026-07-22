@@ -3,6 +3,7 @@ import {
   calendarEntry,
   installApiFixture,
   schedulePart,
+  taskItem,
   terminalEvents,
 } from "./api-fixture";
 
@@ -254,6 +255,24 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
   expect(updates).toHaveLength(2);
   expect((updates[0].body as Record<string, unknown>).expected_updated_at).toBe(original.updated_at);
   expect((updates[1].body as Record<string, unknown>).expected_updated_at).not.toBe(original.updated_at);
+});
+
+test("completed task remains visible in the schedule", async ({ page }) => {
+  const task = taskItem();
+  const state = await installApiFixture(page, { tasks: [task] });
+  await page.goto("/dayboard");
+  await page.getByRole("button", { name: "打开日程" }).click();
+
+  await page.getByRole("button", { name: "完成待办：整理资料" }).click();
+  const completed = page.getByRole("button", { name: "已完成待办：整理资料" });
+  await expect(completed).toBeVisible();
+  await expect(completed).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(() => state.tasks[0]?.status).toBe("completed");
+
+  const listRequests = state.requests.filter(
+    (request) => request.method === "GET" && request.path === "/api/task-items",
+  );
+  expect(listRequests.length).toBeGreaterThan(0);
 });
 
 test("clarification choice resumes execution and writes the final item", async ({ page }) => {
