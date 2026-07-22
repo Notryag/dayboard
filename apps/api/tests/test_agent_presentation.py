@@ -3,7 +3,53 @@ from north import RuntimeStreamEvent
 from dayboard.agent.presentation import project_runtime_stream_event
 
 
-def test_projects_structured_tool_message_to_schedule_part() -> None:
+TASK_ID = "11111111-1111-4111-8111-111111111111"
+CALENDAR_ID_1 = "22222222-2222-4222-8222-222222222222"
+CALENDAR_ID_2 = "33333333-3333-4333-8333-333333333333"
+
+
+def _task_value(*, title: str = "提交周报") -> dict:
+    return {
+        "id": TASK_ID,
+        "title": title,
+        "due_at": None,
+        "timezone": "Asia/Shanghai",
+        "reminder": None,
+        "status": "open",
+        "created_by_run_id": None,
+        "created_at": "2026-07-20T10:00:00Z",
+        "updated_at": "2026-07-20T10:00:00Z",
+        "tenant_id": "must-not-leak",
+    }
+
+
+def _calendar_value(
+    *,
+    entry_id: str,
+    title: str,
+    timing_kind: str,
+    scheduled_date: str | None,
+    start_time: str | None,
+    end_time: str | None,
+) -> dict:
+    return {
+        "id": entry_id,
+        "title": title,
+        "timing_kind": timing_kind,
+        "scheduled_date": scheduled_date,
+        "start_time": start_time,
+        "end_time": end_time,
+        "timezone": "Asia/Shanghai",
+        "participants": [],
+        "reminder": None,
+        "status": "scheduled",
+        "created_by_run_id": None,
+        "created_at": "2026-07-22T01:00:00Z",
+        "updated_at": "2026-07-22T01:00:00Z",
+    }
+
+
+def test_projects_structured_tool_message_artifact_to_schedule_part() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(
             mode="messages",
@@ -14,12 +60,14 @@ def test_projects_structured_tool_message_to_schedule_part() -> None:
                     "tool_call_id": "call-1",
                     "content": (
                         '{"type":"task_item_created","task_item":{'
-                        '"id":"task-1","title":"提交周报","due_at":null,'
-                        '"timezone":"Asia/Shanghai","reminder":null,"status":"open",'
-                        '"created_by_run_id":"run-1","created_at":"2026-07-20T10:00:00Z",'
-                        '"updated_at":"2026-07-20T10:00:00Z",'
-                        '"tenant_id":"must-not-leak"}}'
+                        f'"id":"{TASK_ID}","title":"提交周报",'
+                        '"status":"open","updated_at":"2026-07-20T10:00:00Z"}}'
                     ),
+                    "artifact": {
+                        "type": "schedule_item_result",
+                        "operation": "task_item_created",
+                        "item": {"kind": "task", "value": _task_value()},
+                    },
                 },
                 {"langgraph_node": "tools"},
             ],
@@ -47,16 +95,16 @@ def test_projects_ai_message_chunk_to_text_delta() -> None:
     assert projected.data == {"message_id": "message-1", "delta": "已创建"}
 
 
-def test_rejects_unrecognized_tool_output() -> None:
+def test_rejects_tool_message_without_presentation_artifact() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(
             mode="messages",
             data=[
                 {
                     "type": "tool",
-                    "name": "search_task_items",
+                    "name": "create_task_item",
                     "tool_call_id": "call-1",
-                    "content": '{"type":"search_results","items":[]}',
+                    "content": '{"type":"task_item_created","task_item":{}}',
                 },
                 {},
             ],
@@ -66,7 +114,7 @@ def test_rejects_unrecognized_tool_output() -> None:
     assert projected is None
 
 
-def test_projects_calendar_search_results_to_schedule_parts() -> None:
+def test_projects_calendar_search_artifact_to_schedule_parts() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(
             mode="messages",
@@ -75,34 +123,35 @@ def test_projects_calendar_search_results_to_schedule_parts() -> None:
                     "type": "tool",
                     "name": "search_calendar_entries",
                     "tool_call_id": "call-search",
-                    "content": [
-                        {
-                            "id": "calendar-1",
-                            "title": "明日晨会",
-                            "timing_kind": "timed",
-                            "scheduled_date": None,
-                            "start_time": "2026-07-23T09:00:00+08:00",
-                            "end_time": "2026-07-23T10:00:00+08:00",
-                            "timezone": "Asia/Shanghai",
-                            "participants": [],
-                            "reminder": None,
-                            "status": "scheduled",
-                            "updated_at": "2026-07-22T01:00:00Z",
-                        },
-                        {
-                            "id": "calendar-2",
-                            "title": "提交材料",
-                            "timing_kind": "anytime",
-                            "scheduled_date": "2026-07-23",
-                            "start_time": None,
-                            "end_time": None,
-                            "timezone": "Asia/Shanghai",
-                            "participants": [],
-                            "reminder": None,
-                            "status": "scheduled",
-                            "updated_at": "2026-07-22T01:00:00Z",
-                        },
-                    ],
+                    "content": "[]",
+                    "artifact": {
+                        "type": "schedule_items_result",
+                        "operation": "calendar_entry_found",
+                        "items": [
+                            {
+                                "kind": "calendar",
+                                "value": _calendar_value(
+                                    entry_id=CALENDAR_ID_1,
+                                    title="明日晨会",
+                                    timing_kind="timed",
+                                    scheduled_date=None,
+                                    start_time="2026-07-23T09:00:00+08:00",
+                                    end_time="2026-07-23T10:00:00+08:00",
+                                ),
+                            },
+                            {
+                                "kind": "calendar",
+                                "value": _calendar_value(
+                                    entry_id=CALENDAR_ID_2,
+                                    title="提交材料",
+                                    timing_kind="anytime",
+                                    scheduled_date="2026-07-23",
+                                    start_time=None,
+                                    end_time=None,
+                                ),
+                            },
+                        ],
+                    },
                 },
                 {},
             ],
@@ -118,6 +167,30 @@ def test_projects_calendar_search_results_to_schedule_parts() -> None:
     assert all(part["operation"] == "calendar_entry_found" for part in projected.data["parts"])
 
 
+def test_rejects_malformed_presentation_artifact() -> None:
+    projected = project_runtime_stream_event(
+        RuntimeStreamEvent(
+            mode="messages",
+            data=[
+                {
+                    "type": "tool",
+                    "name": "create_task_item",
+                    "tool_call_id": "call-1",
+                    "content": "{}",
+                    "artifact": {
+                        "type": "schedule_item_result",
+                        "operation": "task_item_created",
+                        "item": {"kind": "task", "value": {"id": "invalid"}},
+                    },
+                },
+                {},
+            ],
+        )
+    )
+
+    assert projected is None
+
+
 def test_rejects_tool_messages_from_untrusted_subgraph_namespace() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(
@@ -128,15 +201,11 @@ def test_rejects_tool_messages_from_untrusted_subgraph_namespace() -> None:
                     "type": "tool",
                     "name": "create_task_item",
                     "tool_call_id": "call-1",
-                    "content": {
-                        "type": "task_item_created",
-                        "task_item": {
-                            "id": "task-1",
-                            "title": "不应显示",
-                            "timezone": "Asia/Shanghai",
-                            "status": "open",
-                            "updated_at": "2026-07-20T10:00:00Z",
-                        },
+                    "content": "{}",
+                    "artifact": {
+                        "type": "schedule_item_result",
+                        "operation": "task_item_created",
+                        "item": {"kind": "task", "value": _task_value(title="不应显示")},
                     },
                 },
                 {},

@@ -28,6 +28,27 @@ class RecordingRunStream:
         return f"{len(self.events)}-0"
 
 
+def _task_artifact(*, task_id: str, title: str) -> dict:
+    return {
+        "type": "schedule_item_result",
+        "operation": "task_item_created",
+        "item": {
+            "kind": "task",
+            "value": {
+                "id": task_id,
+                "title": title,
+                "due_at": None,
+                "timezone": "Asia/Shanghai",
+                "reminder": None,
+                "status": "open",
+                "created_by_run_id": None,
+                "created_at": "2026-07-20T10:00:00Z",
+                "updated_at": "2026-07-20T10:00:00Z",
+            },
+        },
+    }
+
+
 async def test_two_runs_persist_complete_thread_history(
     db_session: AsyncSession,
     tenant_context: TenantContext,
@@ -89,11 +110,13 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
                         "tool_call_id": "call-1",
                         "content": (
                             '{"type":"task_item_created","task_item":{'
-                            '"id":"task-1","title":"提交周报","due_at":null,'
-                            '"timezone":"Asia/Shanghai","reminder":null,"status":"open",'
-                            '"created_by_run_id":"run-1",'
-                            '"created_at":"2026-07-20T10:00:00Z",'
+                            '"id":"11111111-1111-4111-8111-111111111111",'
+                            '"title":"提交周报","status":"open",'
                             '"updated_at":"2026-07-20T10:00:00Z"}}'
+                        ),
+                        "artifact": _task_artifact(
+                            task_id="11111111-1111-4111-8111-111111111111",
+                            title="提交周报",
                         ),
                     },
                     {},
@@ -159,11 +182,13 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
                         "tool_call_id": "late-call",
                         "content": (
                             '{"type":"task_item_created","task_item":{'
-                            '"id":"task-late","title":"不应显示","due_at":null,'
-                            '"timezone":"Asia/Shanghai","reminder":null,"status":"open",'
-                            '"created_by_run_id":"run-1",'
-                            '"created_at":"2026-07-20T10:00:00Z",'
+                            '"id":"22222222-2222-4222-8222-222222222222",'
+                            '"title":"不应显示","status":"open",'
                             '"updated_at":"2026-07-20T10:00:00Z"}}'
+                        ),
+                        "artifact": _task_artifact(
+                            task_id="22222222-2222-4222-8222-222222222222",
+                            title="不应显示",
                         ),
                     },
                     {},

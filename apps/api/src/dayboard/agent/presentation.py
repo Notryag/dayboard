@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from typing import Any, Literal
 
 from north import RuntimeStreamEvent
+from pydantic import ValidationError
+
+from dayboard.app.schedule_queries import CalendarEntryView, TaskItemView
 
 
 ScheduleKind = Literal["calendar", "task"]
@@ -53,34 +55,41 @@ def _project_tool_message(
     message: dict[str, Any],
     tool_call_id: str,
 ) -> ProjectedStreamEvent | None:
-    content = message.get("content")
-    if isinstance(content, str):
-        try:
-            content = json.loads(content)
-        except json.JSONDecodeError:
-            return None
+    artifact = message.get("artifact")
+    if not isinstance(artifact, dict):
+        return None
     tool_name = message.get("name")
+    artifact_type = artifact.get("type")
     if tool_name in {"search_calendar_entries", "search_task_items"}:
-        if not isinstance(content, list):
+        if artifact_type != "schedule_items_result" or not isinstance(
+            artifact.get("items"), list
+        ):
             return None
         item_kind: ScheduleKind = "calendar" if tool_name == "search_calendar_entries" else "task"
+        expected_operation = (
+            "calendar_entry_found" if item_kind == "calendar" else "task_item_found"
+        )
+        if artifact.get("operation") != expected_operation:
+            return None
         parts: list[dict[str, Any]] = []
-        for raw_item in content:
-            if not isinstance(raw_item, dict):
+        for raw_item in artifact["items"]:
+            if (
+                not isinstance(raw_item, dict)
+                or raw_item.get("kind") != item_kind
+                or not isinstance(raw_item.get("value"), dict)
+            ):
                 continue
             item = (
-                _safe_calendar_item(raw_item)
+                _safe_calendar_item(raw_item["value"])
                 if item_kind == "calendar"
-                else _safe_task_item(raw_item)
+                else _safe_task_item(raw_item["value"])
             )
             if item is None:
                 continue
             parts.append(
                 {
                     "tool_call_id": tool_call_id,
-                    "operation": (
-                        "calendar_entry_found" if item_kind == "calendar" else "task_item_found"
-                    ),
+                    "operation": expected_operation,
                     "item": {"kind": item_kind, "value": item},
                 }
             )
@@ -89,10 +98,10 @@ def _project_tool_message(
             {"tool_call_id": tool_call_id, "parts": parts},
         )
 
-    if not isinstance(content, dict):
+    if artifact_type != "schedule_item_result":
         return None
 
-    operation = content.get("type")
+    operation = artifact.get("operation")
     item_kind: ScheduleKind
     raw_item: Any
     expected_tools = {
@@ -106,12 +115,14 @@ def _project_tool_message(
         return None
     if operation in expected_tools and operation.startswith("calendar_entry_"):
         item_kind = "calendar"
-        raw_item = content.get("calendar_entry")
     elif operation in expected_tools:
         item_kind = "task"
-        raw_item = content.get("task_item")
     else:
         return None
+    item_artifact = artifact.get("item")
+    if not isinstance(item_artifact, dict) or item_artifact.get("kind") != item_kind:
+        return None
+    raw_item = item_artifact.get("value")
     if not isinstance(raw_item, dict):
         return None
 
@@ -129,47 +140,19 @@ def _project_tool_message(
 
 
 def _safe_calendar_item(item: dict[str, Any]) -> dict[str, Any] | None:
-    required = ("id", "title", "timing_kind", "timezone", "status", "updated_at")
-    if not all(key in item for key in required):
+    try:
+        validated = CalendarEntryView.model_validate(item)
+    except ValidationError:
         return None
-    return {
-        key: item.get(key)
-        for key in (
-            "id",
-            "title",
-            "timing_kind",
-            "scheduled_date",
-            "start_time",
-            "end_time",
-            "timezone",
-            "participants",
-            "reminder",
-            "status",
-            "created_by_run_id",
-            "created_at",
-            "updated_at",
-        )
-    }
+    return validated.model_dump(mode="json")
 
 
 def _safe_task_item(item: dict[str, Any]) -> dict[str, Any] | None:
-    required = ("id", "title", "timezone", "status", "updated_at")
-    if not all(key in item for key in required):
+    try:
+        validated = TaskItemView.model_validate(item)
+    except ValidationError:
         return None
-    return {
-        key: item.get(key)
-        for key in (
-            "id",
-            "title",
-            "due_at",
-            "timezone",
-            "reminder",
-            "status",
-            "created_by_run_id",
-            "created_at",
-            "updated_at",
-        )
-    }
+    return validated.model_dump(mode="json")
 
 
 def _optional_text(value: Any) -> str | None:

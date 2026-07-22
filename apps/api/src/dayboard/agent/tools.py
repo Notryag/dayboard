@@ -144,6 +144,9 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
             if entry.completed_at is not None
             else "scheduled"
         ),
+        "created_by_run_id": (
+            str(entry.created_by_run_id) if entry.created_by_run_id else None
+        ),
         "created_at": entry.created_at.isoformat(),
         "updated_at": entry.updated_at.isoformat(),
     }
@@ -157,8 +160,68 @@ def _task_item_view(task) -> dict[str, Any]:
         "timezone": task.timezone,
         "reminder": task.reminder.model_dump() if task.reminder else None,
         "status": task.status.value,
+        "created_by_run_id": str(task.created_by_run_id) if task.created_by_run_id else None,
         "created_at": task.created_at.isoformat(),
         "updated_at": task.updated_at.isoformat(),
+    }
+
+
+def _calendar_entry_receipt(entry) -> dict[str, Any]:
+    receipt = {
+        "id": str(entry.id),
+        "title": entry.title,
+        "timing_kind": entry.timing_kind.value,
+        "status": (
+            "cancelled"
+            if entry.cancelled_at is not None
+            else "completed"
+            if entry.completed_at is not None
+            else "scheduled"
+        ),
+        "updated_at": entry.updated_at.isoformat(),
+    }
+    if entry.scheduled_date is not None:
+        receipt["scheduled_date"] = entry.scheduled_date.isoformat()
+    if entry.start_time is not None:
+        receipt["start_time"] = entry.start_time.isoformat()
+    if entry.end_time is not None:
+        receipt["end_time"] = entry.end_time.isoformat()
+    if entry.reminder is not None:
+        receipt["reminder"] = entry.reminder.model_dump()
+    return receipt
+
+
+def _task_item_receipt(task) -> dict[str, Any]:
+    receipt = {
+        "id": str(task.id),
+        "title": task.title,
+        "status": task.status.value,
+        "updated_at": task.updated_at.isoformat(),
+    }
+    if task.due_at is not None:
+        receipt["due_at"] = task.due_at.isoformat()
+    if task.reminder is not None:
+        receipt["reminder"] = task.reminder.model_dump()
+    return receipt
+
+
+def _schedule_item_artifact(operation: str, kind: str, value: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "schedule_item_result",
+        "operation": operation,
+        "item": {"kind": kind, "value": value},
+    }
+
+
+def _schedule_items_artifact(
+    operation: str,
+    kind: str,
+    values: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "type": "schedule_items_result",
+        "operation": operation,
+        "items": [{"kind": kind, "value": value} for value in values],
     }
 
 
@@ -215,11 +278,17 @@ def build_scheduling_tools(
             operation_key=_create_operation_key("calendar_entry", input_data),
         )
         await session.commit()
-        return {
+        content = {
             "type": result.type,
-            "calendar_entry": _calendar_entry_view(result.calendar_entry),
-            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
+            "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
+            "conflicts": [_calendar_entry_receipt(entry) for entry in result.conflicts],
         }
+        artifact = _schedule_item_artifact(
+            result.type,
+            "calendar",
+            _calendar_entry_view(result.calendar_entry),
+        )
+        return content, artifact
 
     async def agent_search_calendar_entries(**kwargs):
         input_data = AgentSearchCalendarEntriesInput.model_validate(kwargs)
@@ -242,7 +311,13 @@ def build_scheduling_tools(
                 title_query=input_data.title_query,
             ),
         )
-        return [_calendar_entry_view(entry) for entry in entries]
+        content = [_calendar_entry_receipt(entry) for entry in entries]
+        artifact = _schedule_items_artifact(
+            "calendar_entry_found",
+            "calendar",
+            [_calendar_entry_view(entry) for entry in entries],
+        )
+        return content, artifact
 
     async def agent_reschedule_calendar_entry(**kwargs):
         if run_id is None:
@@ -271,22 +346,17 @@ def build_scheduling_tools(
             operation_key=_create_operation_key("calendar_entry_reschedule", input_data),
         )
         await session.commit()
-        return {
+        content = {
             "type": result.type,
-            "previous_scheduled_date": (
-                result.previous_scheduled_date.isoformat()
-                if result.previous_scheduled_date
-                else None
-            ),
-            "previous_start_time": (
-                result.previous_start_time.isoformat() if result.previous_start_time else None
-            ),
-            "previous_end_time": (
-                result.previous_end_time.isoformat() if result.previous_end_time else None
-            ),
-            "calendar_entry": _calendar_entry_view(result.calendar_entry),
-            "conflicts": [_calendar_entry_view(entry) for entry in result.conflicts],
+            "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
+            "conflicts": [_calendar_entry_receipt(entry) for entry in result.conflicts],
         }
+        artifact = _schedule_item_artifact(
+            result.type,
+            "calendar",
+            _calendar_entry_view(result.calendar_entry),
+        )
+        return content, artifact
 
     async def agent_cancel_calendar_entry(**kwargs):
         if run_id is None:
@@ -300,10 +370,16 @@ def build_scheduling_tools(
             operation_key=_create_operation_key("calendar_entry_cancel", input_data),
         )
         await session.commit()
-        return {
+        content = {
             "type": result.type,
-            "calendar_entry": _calendar_entry_view(result.calendar_entry),
+            "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
         }
+        artifact = _schedule_item_artifact(
+            result.type,
+            "calendar",
+            _calendar_entry_view(result.calendar_entry),
+        )
+        return content, artifact
 
     async def agent_create_task_item(**kwargs):
         input_data = AgentCreateTaskItemInput.model_validate(kwargs)
@@ -319,15 +395,27 @@ def build_scheduling_tools(
             operation_key=_create_operation_key("task_item", input_data),
         )
         await session.commit()
-        return {
+        content = {
             "type": result.type,
-            "task_item": _task_item_view(result.task_item),
+            "task_item": _task_item_receipt(result.task_item),
         }
+        artifact = _schedule_item_artifact(
+            result.type,
+            "task",
+            _task_item_view(result.task_item),
+        )
+        return content, artifact
 
     async def agent_search_task_items(**kwargs):
         input_data = SearchTaskItemsInput.model_validate(kwargs)
         tasks = await search_task_items(session, context, input_data)
-        return [_task_item_view(task) for task in tasks]
+        content = [_task_item_receipt(task) for task in tasks]
+        artifact = _schedule_items_artifact(
+            "task_item_found",
+            "task",
+            [_task_item_view(task) for task in tasks],
+        )
+        return content, artifact
 
     async def agent_update_task_item(**kwargs):
         if run_id is None:
@@ -347,10 +435,16 @@ def build_scheduling_tools(
             operation_key=_create_operation_key("task_item_update", input_data),
         )
         await session.commit()
-        return {
+        content = {
             "type": result.type,
-            "task_item": _task_item_view(result.task_item),
+            "task_item": _task_item_receipt(result.task_item),
         }
+        artifact = _schedule_item_artifact(
+            result.type,
+            "task",
+            _task_item_view(result.task_item),
+        )
+        return content, artifact
 
     return [
         StructuredTool.from_function(
@@ -360,6 +454,7 @@ def build_scheduling_tools(
                 "Create a calendar entry on a concrete local date, with or without a clock time."
             ),
             args_schema=AgentCreateCalendarEntryInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_calendar_entries),
@@ -368,6 +463,7 @@ def build_scheduling_tools(
                 "List or search calendar entries overlapping an optional local interval."
             ),
             args_schema=AgentSearchCalendarEntriesInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_reschedule_calendar_entry),
@@ -376,12 +472,14 @@ def build_scheduling_tools(
                 "Change one identified calendar entry's local date, start, and/or end time."
             ),
             args_schema=AgentRescheduleCalendarEntryInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_cancel_calendar_entry),
             name="cancel_calendar_entry",
             description="Cancel one identified calendar entry.",
             args_schema=CancelCalendarEntryInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_task_item),
@@ -390,6 +488,7 @@ def build_scheduling_tools(
                 "Create an action with no resolvable date or time."
             ),
             args_schema=AgentCreateTaskItemInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_task_items),
@@ -398,6 +497,7 @@ def build_scheduling_tools(
                 "Search tasks by title and status before changing one."
             ),
             args_schema=SearchTaskItemsInput,
+            response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_update_task_item),
@@ -406,5 +506,6 @@ def build_scheduling_tools(
                 "Update one identified task's title or status."
             ),
             args_schema=AgentUpdateTaskItemInput,
+            response_format="content_and_artifact",
         ),
     ]

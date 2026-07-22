@@ -6,6 +6,8 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
+from langchain_core.messages import ToolMessage
+from langchain_core.messages.utils import count_tokens_approximately
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,14 +139,10 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "id",
         "title",
         "timing_kind",
-        "scheduled_date",
         "start_time",
         "end_time",
-        "timezone",
-        "participants",
         "reminder",
         "status",
-        "created_at",
         "updated_at",
     }
     assert "tenant_id" not in str(entry_result)
@@ -153,11 +151,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert set(task_result["task_item"]) == {
         "id",
         "title",
-        "due_at",
-        "timezone",
-        "reminder",
         "status",
-        "created_at",
         "updated_at",
     }
 
@@ -192,8 +186,49 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].owner_user_id == tenant_context.user_id
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
-    assert task_result["task_item"]["due_at"] is None
+    assert "due_at" not in task_result["task_item"]
     assert progress_events == []
+
+
+async def test_agent_tool_message_splits_compact_content_from_full_artifact(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    tools = build_scheduling_tools(
+        session=db_session,
+        context=tenant_context,
+        run_id=uuid4(),
+    )
+    create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
+
+    result = await create_entry.ainvoke(
+        {
+            "name": "create_calendar_entry",
+            "args": {
+                "title": "产品复盘",
+                "local_start": "2026-07-10T10:00:00",
+            },
+            "id": "call-create",
+            "type": "tool_call",
+        }
+    )
+
+    assert isinstance(result, ToolMessage)
+    assert result.response_metadata == {}
+    assert result.artifact["type"] == "schedule_item_result"
+    assert result.artifact["operation"] == "calendar_entry_created"
+    assert result.artifact["item"]["kind"] == "calendar"
+    presentation = result.artifact["item"]["value"]
+    assert presentation["timezone"] == tenant_context.timezone
+    assert presentation["participants"] == []
+    assert presentation["created_at"] is not None
+    assert presentation["created_by_run_id"] is not None
+
+    assert isinstance(result.content, str)
+    for omitted in ("timezone", "participants", "created_at", "created_by_run_id"):
+        assert omitted not in result.content
+    assert len(result.content.encode("utf-8")) <= 600
+    assert count_tokens_approximately([result]) <= 120
 
 
 async def test_empty_agent_searches_replace_list_tools(
@@ -247,9 +282,9 @@ async def test_agent_creates_and_searches_anytime_calendar_entry(
 
     assert entry["timing_kind"] == "anytime"
     assert entry["scheduled_date"] == "2026-07-21"
-    assert entry["start_time"] is None
-    assert entry["end_time"] is None
-    assert entry["reminder"] is None
+    assert "start_time" not in entry
+    assert "end_time" not in entry
+    assert "reminder" not in entry
     assert created["conflicts"] == []
 
     found = await search_entries.ainvoke(
@@ -346,7 +381,7 @@ async def test_agent_task_updates_status_without_time_fields(
 
     assert len(matches) == 1
     assert updated["task_item"]["status"] == "completed"
-    assert updated["task_item"]["due_at"] is None
+    assert "due_at" not in updated["task_item"]
 
 
 async def test_parallel_agent_tool_calls_are_serialized_on_shared_session(
