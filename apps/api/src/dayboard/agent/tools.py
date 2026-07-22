@@ -48,6 +48,14 @@ class AgentCreateCalendarEntryInput(BaseModel):
         default=None,
         description="Optional local ISO 8601 datetime without an offset.",
     )
+    anchor_entry_id: UUID | None = Field(
+        default=None,
+        description="Existing timed calendar entry whose end anchors this new entry.",
+    )
+    expected_anchor_updated_at: AwareDatetime | None = Field(
+        default=None,
+        description="The anchor's updated_at returned by search_calendar_entries.",
+    )
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = Field(
         default_factory=lambda: Reminder(offset="PT0M", anchor="start_time"),
@@ -58,10 +66,22 @@ class AgentCreateCalendarEntryInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_timing(self) -> AgentCreateCalendarEntryInput:
-        if (self.local_date is None) == (self.local_start is None):
-            raise ValueError("provide exactly one of local_date or local_start")
+        anchor_mode = self.anchor_entry_id is not None
+        if anchor_mode != (self.expected_anchor_updated_at is not None):
+            raise ValueError(
+                "anchor_entry_id and expected_anchor_updated_at must be provided together"
+            )
+        if sum(
+            value is not None
+            for value in (self.local_date, self.local_start, self.anchor_entry_id)
+        ) != 1:
+            raise ValueError(
+                "provide exactly one of local_date, local_start, or anchor_entry_id"
+            )
         if self.local_date is not None and self.local_end is not None:
             raise ValueError("local_end requires local_start")
+        if anchor_mode and self.local_end is not None:
+            raise ValueError("anchor-based entries cannot provide local_end")
         return self
 
 
@@ -268,7 +288,13 @@ def build_scheduling_tools(
             ),
             timezone=context.timezone,
             participants=input_data.participants,
-            reminder=input_data.reminder if input_data.local_start else None,
+            reminder=(
+                input_data.reminder
+                if input_data.local_start or input_data.anchor_entry_id
+                else None
+            ),
+            anchor_entry_id=input_data.anchor_entry_id,
+            expected_anchor_updated_at=input_data.expected_anchor_updated_at,
         )
         result = await create_calendar_entry(
             session,

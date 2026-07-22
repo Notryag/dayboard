@@ -158,6 +158,22 @@ class CalendarEntryRepository:
             )
         )
 
+    async def get_for_update(
+        self,
+        context: TenantContext,
+        entry_id: UUID,
+    ) -> CalendarEntryRow | None:
+        return await self.session.scalar(
+            select(CalendarEntryRow)
+            .where(
+                CalendarEntryRow.id == entry_id,
+                CalendarEntryRow.tenant_id == context.tenant_id,
+                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+
     async def get_including_cancelled(
         self,
         context: TenantContext,

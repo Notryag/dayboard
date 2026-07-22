@@ -52,6 +52,8 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert "local_date" in fields
     assert "local_start" in fields
     assert "local_end" in fields
+    assert "anchor_entry_id" in fields
+    assert "expected_anchor_updated_at" in fields
     assert "start_time" not in fields
     assert "timezone" not in fields
     assert "tenant_id" not in fields
@@ -297,6 +299,63 @@ async def test_agent_creates_and_searches_anytime_calendar_entry(
             title="冲突形状",
             local_date=date(2026, 7, 21),
             local_start=datetime(2026, 7, 21, 9, 0),
+        )
+
+
+async def test_agent_creates_calendar_entry_after_searched_anchor(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    tools = build_scheduling_tools(
+        session=db_session,
+        context=tenant_context,
+        run_id=uuid4(),
+    )
+    create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
+    search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
+    dance = await create_entry.ainvoke(
+        {
+            "title": "跳舞",
+            "local_start": "2026-07-23T09:00:00",
+        }
+    )
+    matches = await search_entries.ainvoke(
+        {
+            "local_start": "2026-07-23T00:00:00",
+            "local_end": "2026-07-24T00:00:00",
+            "title_query": "跳舞",
+        }
+    )
+
+    singing = await create_entry.ainvoke(
+        {
+            "title": "唱歌",
+            "anchor_entry_id": matches[0]["id"],
+            "expected_anchor_updated_at": matches[0]["updated_at"],
+        }
+    )
+
+    assert len(matches) == 1
+    assert singing["calendar_entry"]["title"] == "唱歌"
+    assert singing["calendar_entry"]["start_time"] == dance["calendar_entry"]["end_time"]
+    assert singing["calendar_entry"]["end_time"] == "2026-07-23T03:00:00+00:00"
+    assert singing["calendar_entry"]["reminder"] == {
+        "offset": "PT0M",
+        "anchor": "start_time",
+    }
+
+
+def test_agent_anchor_input_rejects_direct_time_and_incomplete_version() -> None:
+    anchor_id = uuid4()
+
+    with pytest.raises(ValidationError, match="must be provided together"):
+        AgentCreateCalendarEntryInput(title="唱歌", anchor_entry_id=anchor_id)
+    with pytest.raises(ValidationError, match="exactly one"):
+        AgentCreateCalendarEntryInput(
+            title="唱歌",
+            local_start=datetime(2026, 7, 23, 10, 0),
+            anchor_entry_id=anchor_id,
+            expected_anchor_updated_at="2026-07-22T01:00:00Z",
         )
 
 

@@ -90,6 +90,13 @@ Do not return `requires_follow_up=false`; clarification is represented by the in
 a dormant result flag. Internal domain models may retain audit and idempotency fields, while the
 Agent projection exposes only fields required for rendering and subsequent optimistic mutations.
 
+Sequence-dependent creation uses `anchor_entry_id` plus `expected_anchor_updated_at` on
+`create_calendar_entry`. These fields are mutually exclusive with direct date/start/end inputs.
+After a search selects one timed entry, the service locks that tenant-owned row, verifies its
+version and active state, derives the new start from its authoritative `end_time`, checks conflicts,
+and creates the new entry in the same transaction. The model must not copy `end_time` into a direct
+`local_start`; doing so would reintroduce a search/write race.
+
 ## Dynamic Binding
 
 Dynamic binding is deterministic middleware over canonical tool messages. It does not add a model

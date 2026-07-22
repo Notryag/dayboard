@@ -21,13 +21,27 @@ class CreateCalendarEntryInput(BaseModel):
     timezone: str = Field(min_length=1, max_length=64)
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = None
+    anchor_entry_id: UUID | None = None
+    expected_anchor_updated_at: AwareDatetime | None = None
 
     @model_validator(mode="after")
     def validate_timing(self) -> CreateCalendarEntryInput:
-        if (self.scheduled_date is None) == (self.start_time is None):
-            raise ValueError("provide exactly one of scheduled_date or start_time")
+        anchor_mode = self.anchor_entry_id is not None
+        if anchor_mode != (self.expected_anchor_updated_at is not None):
+            raise ValueError(
+                "anchor_entry_id and expected_anchor_updated_at must be provided together"
+            )
+        if sum(
+            value is not None
+            for value in (self.scheduled_date, self.start_time, self.anchor_entry_id)
+        ) != 1:
+            raise ValueError(
+                "provide exactly one of scheduled_date, start_time, or anchor_entry_id"
+            )
         if self.scheduled_date is not None and (self.end_time is not None or self.reminder is not None):
             raise ValueError("date-only entries cannot have end_time or reminder")
+        if anchor_mode and self.end_time is not None:
+            raise ValueError("anchor-based entries cannot provide end_time")
         return self
 
 
@@ -157,26 +171,46 @@ async def create_calendar_entry(
                 ),
                 calendar_entry=existing,
             )
-    end_time = data.end_time or (data.start_time + timedelta(hours=1) if data.start_time else None)
+    start_time = data.start_time
+    if data.anchor_entry_id is not None:
+        anchor = await service.get_calendar_entry_for_update(context, data.anchor_entry_id)
+        if anchor is None:
+            raise LookupError("Anchor calendar entry was not found or is cancelled")
+        if anchor.updated_at != data.expected_anchor_updated_at:
+            raise CalendarEntryChangedError(
+                "Anchor calendar entry changed after it was selected; search again"
+            )
+        if anchor.end_time is None:
+            raise ValueError("Anchor calendar entry has no end time; clarification is required")
+        start_time = anchor.end_time
+    end_time = data.end_time or (start_time + timedelta(hours=1) if start_time else None)
     conflicts = (
         await service.list_calendar_conflicts(
             context,
-            start_time=data.start_time,
+            start_time=start_time,
             end_time=end_time,
             default_duration=timedelta(hours=1),
         )
-        if data.start_time is not None and end_time is not None
+        if start_time is not None and end_time is not None
         else []
     )
     entry = await service.create_calendar_entry(
         context,
         CalendarEntryCreate(
-            **data.model_dump(exclude={"end_time"}),
+            **data.model_dump(
+                exclude={
+                    "start_time",
+                    "end_time",
+                    "anchor_entry_id",
+                    "expected_anchor_updated_at",
+                }
+            ),
             timing_kind=(
                 CalendarTimingKind.anytime
                 if data.scheduled_date is not None
                 else CalendarTimingKind.timed
             ),
+            start_time=start_time,
             end_time=end_time,
             created_by_run_id=created_by_run_id,
             created_operation_key=operation_key,

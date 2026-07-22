@@ -110,6 +110,14 @@ class SchedulingService:
         row = await self.calendar_entries.get(context, entry_id)
         return calendar_entry_from_row(row) if row else None
 
+    async def get_calendar_entry_for_update(
+        self,
+        context: TenantContext,
+        entry_id: UUID,
+    ) -> CalendarEntry | None:
+        row = await self.calendar_entries.get_for_update(context, entry_id)
+        return calendar_entry_from_row(row) if row else None
+
     async def get_calendar_entry_including_cancelled(
         self,
         context: TenantContext,

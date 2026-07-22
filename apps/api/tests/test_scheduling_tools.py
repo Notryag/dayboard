@@ -137,6 +137,97 @@ async def test_calendar_conflict_detection_allows_adjacent_entries(
     assert adjacent.type == "calendar_entry_created"
 
 
+async def test_calendar_creation_derives_time_from_locked_anchor(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    dance = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="跳舞",
+            start_time="2026-07-23T09:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    singing = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="唱歌",
+            timezone="Asia/Shanghai",
+            anchor_entry_id=dance.calendar_entry.id,
+            expected_anchor_updated_at=dance.calendar_entry.updated_at,
+        ),
+    )
+
+    assert singing.calendar_entry.title == "唱歌"
+    assert singing.calendar_entry.start_time == dance.calendar_entry.end_time
+    assert singing.calendar_entry.end_time == dance.calendar_entry.end_time + timedelta(hours=1)
+    assert singing.conflicts == []
+
+
+async def test_calendar_anchor_rejects_stale_or_anytime_entry(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    dance = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="跳舞",
+            start_time="2026-07-23T09:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    stale_updated_at = dance.calendar_entry.updated_at
+    await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=dance.calendar_entry.id,
+            new_start_time="2026-07-23T10:00:00+08:00",
+            expected_updated_at=stale_updated_at,
+        ),
+        updated_by_run_id=uuid4(),
+        operation_key="move-dance",
+    )
+
+    with pytest.raises(CalendarEntryChangedError, match="Anchor calendar entry changed"):
+        await create_calendar_entry(
+            db_session,
+            tenant_context,
+            CreateCalendarEntryInput(
+                title="唱歌",
+                timezone="Asia/Shanghai",
+                anchor_entry_id=dance.calendar_entry.id,
+                expected_anchor_updated_at=stale_updated_at,
+            ),
+        )
+
+    anytime = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="提交报告",
+            scheduled_date="2026-07-24",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    with pytest.raises(ValueError, match="has no end time"):
+        await create_calendar_entry(
+            db_session,
+            tenant_context,
+            CreateCalendarEntryInput(
+                title="庆祝",
+                timezone="Asia/Shanghai",
+                anchor_entry_id=anytime.calendar_entry.id,
+                expected_anchor_updated_at=anytime.calendar_entry.updated_at,
+            ),
+        )
+
+
 def test_calendar_input_rejects_naive_datetime() -> None:
     with pytest.raises(ValidationError, match="timezone"):
         CreateCalendarEntryInput(

@@ -30,6 +30,10 @@ def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:
     assert '"明天提交报告" uses tomorrow\'s local_date' in prompt
     assert "Date without a clock or daypart is an anytime calendar entry" in prompt
     assert "Any concrete date, clock, or daypart makes the action a calendar entry" in prompt
+    assert "search the referenced calendar entry first" in prompt
+    assert "anchor_entry_id and its updated_at" in prompt
+    assert "Never include the referenced action in the new title" in prompt
+    assert "starts at the anchor's end_time" in prompt
     assert "do not invent a clock" in prompt
     assert "早上 08:00" in prompt
     assert "晚上 20:00" in prompt
