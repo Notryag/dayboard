@@ -137,6 +137,11 @@ FastAPI、arq 或 Next.js 进程。
 5. 备份 PostgreSQL，使用新 API 镜像执行迁移；
 6. 替换 API、Worker、Web 容器并执行健康检查。
 
+自动部署会先验证版本标签确实指向 workflow 构建的 commit，再让服务器仓库以 detached HEAD
+检出该不可变 commit。部署不依赖构建期间 `main` 是否继续前进，因此主线上的后续提交不会
+使一个已经完成质量检查和镜像构建的版本失败。服务器工作树表示当前发布版本，不表示实时
+`main`；需要检查主线时使用 `git log origin/main`，不要在服务器上直接提交。
+
 API 和 Worker 使用同一个 API 镜像。自动部署使用
 [`docker-compose.deploy.yml`](../docker-compose.deploy.yml) 覆盖应用镜像，服务器不会再次构建
 源码，并使用 `docker-compose.platform.yml` 接入共享基础设施。`concurrency` 保证同一时间只有

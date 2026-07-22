@@ -152,8 +152,10 @@ jobs:
         run: |
           ssh -i ~/.ssh/dayboard_deploy "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd /home/zx/dayboard && \
-             git pull --ff-only origin main && \
              git fetch --tags origin && \
              test \"\$(git rev-list -n 1 '$RELEASE_TAG')\" = '$COMMIT_SHA' && \
+             git diff --quiet && \
+             git diff --cached --quiet && \
+             git checkout --detach '$COMMIT_SHA' && \
              test \"\$(git rev-parse HEAD)\" = '$COMMIT_SHA' && \
              ./deploy/scripts/deploy-images.sh '$COMMIT_SHA'"
