@@ -24,14 +24,14 @@ mobile (< 900px)
   -> centered voice composer inside the bottom safe area
 
 desktop (>= 900px)
-  -> full-height, full-width two-pane work surface
+  -> full-height, full-width active view
   -> the same transparent shared header
-  -> conversation pane on the left
-  -> persistent day-view pane on the right
+  -> the same floating Conversation/Schedule switch
+  -> conversation and schedule each use the full viewport
 ```
 
-The desktop layout is a two-pane operational tool, not a dashboard of cards. On mobile, conversation
-is the home page and the floating header control switches between the two top-level sections. Tasks remain
+Conversation is the home page at every viewport width and the floating header control switches
+between the two full-screen top-level sections. Tasks remain
 inside Schedule. The global header's right control opens a settings drawer for account information,
 timezone, appearance, logout, and future settings. Appearance supports system, light, and dark themes.
 The centered wordmark uses a restrained animated gradient glow behind the text.
@@ -43,13 +43,14 @@ home-indicator, and overscroll areas do not reveal a second canvas color.
 
 Mobile view switching uses a Motion-driven draggable track. The surface follows horizontal input
 one-to-one, then combines travel distance and release velocity to choose a destination and settles
-with an interruptible, non-bouncy spring. A left drag in Conversation opens Schedule; a right drag
-in Schedule returns to Conversation. The gesture ignores the outer screen edges, interactive controls,
-and horizontal scrollers such as the date rail so it does not compete with browser navigation or date
-browsing. With reduced motion enabled, direct drag is disabled and the header control switches views
-without spatial animation. Only the active mobile pane participates in focus and the accessibility
-tree; both desktop panes remain available. The current app-like H5 shell locks the viewport to scale
-`1` to prevent accidental pinch and focus zoom while navigating between these full-screen surfaces.
+with an interruptible, non-bouncy spring. Schedule sits to the left of Conversation: a right drag in
+Conversation opens Schedule from the left, and a left drag in Schedule returns to Conversation. The
+gesture ignores the outer screen edges, interactive controls, and horizontal scrollers such as the
+date rail so it does not compete with browser navigation or date browsing. With reduced motion enabled,
+direct drag is disabled and the header control switches views without spatial animation. Only the
+active pane participates in focus and the accessibility tree. The current app-like H5 shell locks
+the viewport to scale `1` to prevent accidental pinch and focus zoom while navigating between these
+full-screen surfaces.
 
 ## Design Direction
 
@@ -168,8 +169,8 @@ fractions, and media-query conditions may remain literal when CSS variables cann
 
 - Design mobile first, then expand carefully for desktop.
 - The conversation screen should be usable at 360px width.
-- Switch to the persistent two-pane workspace at 900px; do not squeeze two panes onto tablets.
-- Use the full desktop viewport and give both panes independent scrolling.
+- Keep Conversation and Schedule as separate full-screen views at every width.
+- Use the full desktop viewport and preserve independent scroll position when switching views.
 - Keep the input dock fixed or sticky at the bottom.
 - Keep the mobile composer inside the bottom safe area. Do not duplicate the Conversation/Schedule
   switch in a bottom tab bar while the header control owns that navigation.
@@ -252,8 +253,8 @@ Agent run records, calendar entries, tasks, and transcripts should remain server
 
 ## Day View
 
-The focused day view is now a first-level product surface: persistent on desktop and selected through
-the mobile Schedule tab. It is not a month board or a dashboard. Keep these stable regions:
+The focused day view is now a first-level full-screen product surface selected through the shared
+header control. It is not a month board or a dashboard. Keep these stable regions:
 
 ```text
 day-view panel

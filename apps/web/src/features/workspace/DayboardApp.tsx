@@ -151,80 +151,78 @@ function ChatHome() {
           onSelectView={selectView}
           trackClassName={styles.workspaceTrack}
         >
-          {(isMobile) => (
-            <>
-              <section
-                aria-label="对话"
-                aria-hidden={isMobile && activeView !== "chat"}
-                className={styles.chatPane}
-                id="chat-panel"
-                inert={isMobile && activeView !== "chat"}
-                role="region"
-              >
-                <ChatMessageList
-                  conversationState={conversationState}
-                  isSubmitting={isSubmitting}
-                  messages={messages}
-                  onChanged={handleScheduleChanged}
-                  onClarificationChoice={(optionKey) => void chooseClarification(optionKey)}
-                  scrollRef={messagesRef}
-                  timezone={timezone}
-                />
+          <>
+            <section
+              aria-label="对话"
+              aria-hidden={activeView !== "chat"}
+              className={styles.chatPane}
+              id="chat-panel"
+              inert={activeView !== "chat"}
+              role="region"
+            >
+              <ChatMessageList
+                conversationState={conversationState}
+                isSubmitting={isSubmitting}
+                messages={messages}
+                onChanged={handleScheduleChanged}
+                onClarificationChoice={(optionKey) => void chooseClarification(optionKey)}
+                scrollRef={messagesRef}
+                timezone={timezone}
+              />
 
-                <div className={styles.composerDock}>
-                  {bootstrapError ? (
-                    <ConversationBootstrapNotice
-                      busy={isThreadBootstrapping}
-                      error={bootstrapError}
-                      onRetry={retryBootstrap}
-                    />
-                  ) : null}
-                  {isSubmitting ? (
-                    <RunActivityTicker
-                      steps={
-                        activeProgress.length
-                          ? activeProgress
-                          : [{ eventType: "submitting", text: "正在提交请求" }]
-                      }
-                    />
-                  ) : null}
-                  <Composer
-                    activeRunId={activeRunId}
-                    disabled={!threadId || isThreadBootstrapping}
-                    inputMode={inputMode}
-                    isSubmitting={isSubmitting}
-                    onCancelRun={() => void cancelActiveRun()}
-                    onChange={setInput}
-                    onInputModeChange={setInputMode}
-                    onSubmit={(text) => {
-                      if (!text.trim() || isSubmitting || !threadId) return;
-                      setInput("");
-                      void submitCommand(text);
-                    }}
-                    value={input}
+              <div className={styles.composerDock}>
+                {bootstrapError ? (
+                  <ConversationBootstrapNotice
+                    busy={isThreadBootstrapping}
+                    error={bootstrapError}
+                    onRetry={retryBootstrap}
                   />
-                </div>
-              </section>
-
-              <div
-                aria-label="日程"
-                aria-hidden={isMobile && activeView !== "schedule"}
-                className={styles.schedulePane}
-                id="schedule-panel"
-                inert={isMobile && activeView !== "schedule"}
-                role="region"
-              >
-                <SchedulePanel
-                  active={activeView === "schedule"}
-                  focusTarget={reminderFocus}
-                  key={reminderFocus?.requestId ?? "schedule"}
-                  onChanged={handleScheduleChanged}
-                  refreshKey={scheduleRevision}
-                  timezone={timezone}
+                ) : null}
+                {isSubmitting ? (
+                  <RunActivityTicker
+                    steps={
+                      activeProgress.length
+                        ? activeProgress
+                        : [{ eventType: "submitting", text: "正在提交请求" }]
+                    }
+                  />
+                ) : null}
+                <Composer
+                  activeRunId={activeRunId}
+                  disabled={!threadId || isThreadBootstrapping}
+                  inputMode={inputMode}
+                  isSubmitting={isSubmitting}
+                  onCancelRun={() => void cancelActiveRun()}
+                  onChange={setInput}
+                  onInputModeChange={setInputMode}
+                  onSubmit={(text) => {
+                    if (!text.trim() || isSubmitting || !threadId) return;
+                    setInput("");
+                    void submitCommand(text);
+                  }}
+                  value={input}
                 />
               </div>
-            </>
-          )}
+            </section>
+
+            <div
+              aria-label="日程"
+              aria-hidden={activeView !== "schedule"}
+              className={styles.schedulePane}
+              id="schedule-panel"
+              inert={activeView !== "schedule"}
+              role="region"
+            >
+              <SchedulePanel
+                active={activeView === "schedule"}
+                focusTarget={reminderFocus}
+                key={reminderFocus?.requestId ?? "schedule"}
+                onChanged={handleScheduleChanged}
+                refreshKey={scheduleRevision}
+                timezone={timezone}
+              />
+            </div>
+          </>
         </MobileViewPager>
 
         {undoNotice ? (

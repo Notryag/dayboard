@@ -142,15 +142,23 @@ test("mobile content swipe switches between conversation and schedule", async ({
   const workspace = page.locator("[data-active-view]");
   const track = page.locator("[data-view-track]");
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
-
-  await page.mouse.move(320, 360);
-  await page.mouse.down();
-  await page.mouse.move(275, 361, { steps: 3 });
-  await page.mouse.move(220, 363, { steps: 3 });
   await expect.poll(() => track.evaluate((element) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
     return matrix.m41;
-  })).toBeLessThan(-60);
+  })).toBeLessThan(-380);
+  await expect.poll(async () => {
+    const box = await page.locator("#schedule-panel").boundingBox();
+    return box ? box.x + box.width : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
+
+  await page.mouse.move(300, 360);
+  await page.mouse.down();
+  await page.mouse.move(365, 361, { steps: 3 });
+  await page.mouse.move(380, 363, { steps: 3 });
+  await expect.poll(() => track.evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return matrix.m41;
+  })).toBeGreaterThan(-320);
   await page.mouse.up();
   await expect(workspace).toHaveAttribute("data-active-view", "schedule");
   await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
@@ -158,18 +166,43 @@ test("mobile content swipe switches between conversation and schedule", async ({
   await expect.poll(() => track.evaluate((element) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
     return matrix.m41;
-  })).toBeLessThan(-380);
+  })).toBeGreaterThan(-10);
   await page.mouse.move(90, 520);
   await page.mouse.down();
-  await page.mouse.move(140, 519, { steps: 3 });
-  await page.mouse.move(200, 517, { steps: 3 });
+  await page.mouse.move(45, 519, { steps: 3 });
+  await page.mouse.move(10, 517, { steps: 3 });
   await expect.poll(() => track.evaluate((element) => {
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
     return matrix.m41;
-  })).toBeGreaterThan(-330);
+  })).toBeLessThan(-60);
   await page.mouse.up();
   await expect(workspace).toHaveAttribute("data-active-view", "chat");
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
+});
+
+test("desktop switches between full-screen conversation and schedule", async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await installApiFixture(page);
+  await page.goto("/dayboard");
+
+  const chatBox = await page.locator("#chat-panel").boundingBox();
+  const scheduleBox = await page.locator("#schedule-panel").boundingBox();
+  expect(chatBox).not.toBeNull();
+  expect(scheduleBox).not.toBeNull();
+  expect(chatBox!.width).toBeCloseTo(1200, 0);
+  expect(scheduleBox!.width).toBeCloseTo(1200, 0);
+  await expect.poll(async () => (await page.locator("#chat-panel").boundingBox())?.x).toBeCloseTo(0, 0);
+  await expect.poll(async () => {
+    const box = await page.locator("#schedule-panel").boundingBox();
+    return box ? box.x + box.width : Number.POSITIVE_INFINITY;
+  }).toBeLessThanOrEqual(1);
+  await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "日程", exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "打开日程" }).click();
+  await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "对话", exact: true })).toHaveCount(0);
+  await expect.poll(async () => (await page.locator("#schedule-panel").boundingBox())?.x).toBeCloseTo(0, 0);
 });
 
 test("reload restores history and rejoins an active Run", async ({ page }) => {
@@ -206,6 +239,7 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
   const original = calendarEntry({ title: "产品评审" });
   const state = await installApiFixture(page, { calendars: [original] });
   await page.goto("/dayboard");
+  await page.getByRole("button", { name: "打开日程" }).click();
   await page.getByRole("button", { name: /查看日程：产品评审/ }).click();
   await page.getByRole("button", { name: "修改" }).click();
   await page.getByLabel("标题").fill("产品终审");

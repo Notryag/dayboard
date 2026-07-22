@@ -10,6 +10,7 @@ import {
 } from "motion/react";
 import {
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useRef,
@@ -20,7 +21,7 @@ export type PrimaryView = "chat" | "schedule";
 
 type MobileViewPagerProps = {
   activeView: PrimaryView;
-  children: (isMobile: boolean) => React.ReactNode;
+  children: ReactNode;
   className: string;
   onSelectView: (view: PrimaryView) => void;
   trackClassName: string;
@@ -55,14 +56,19 @@ export function MobileViewPager({
   trackClassName,
 }: MobileViewPagerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const activeViewRef = useRef(activeView);
   const x = useMotionValue(0);
   const dragControls = useDragControls();
   const reduceMotion = useReducedMotion();
   const [isMobile, setIsMobile] = useState(false);
   const [width, setWidth] = useState(0);
 
+  useEffect(() => {
+    activeViewRef.current = activeView;
+  }, [activeView]);
+
   const targetFor = useCallback(
-    (view: PrimaryView) => (view === "schedule" ? -width : 0),
+    (view: PrimaryView) => (view === "chat" ? -width : 0),
     [width],
   );
 
@@ -90,14 +96,16 @@ export function MobileViewPager({
     const container = containerRef.current;
     if (!container) return;
     const observer = new ResizeObserver(([entry]) => {
-      setWidth(entry.contentRect.width);
+      const nextWidth = entry.contentRect.width;
+      x.set(activeViewRef.current === "chat" ? -nextWidth : 0);
+      setWidth(nextWidth);
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [x]);
 
   useEffect(() => {
-    if (!isMobile || width === 0) {
+    if (width === 0) {
       x.set(0);
       return;
     }
@@ -127,14 +135,14 @@ export function MobileViewPager({
 
     if (
       activeView === "chat"
-      && info.offset.x < 0
-      && (crossedDistance || (crossedVelocity && info.velocity.x < 0))
+      && info.offset.x > 0
+      && (crossedDistance || (crossedVelocity && info.velocity.x > 0))
     ) {
       nextView = "schedule";
     } else if (
       activeView === "schedule"
-      && info.offset.x > 0
-      && (crossedDistance || (crossedVelocity && info.velocity.x > 0))
+      && info.offset.x < 0
+      && (crossedDistance || (crossedVelocity && info.velocity.x < 0))
     ) {
       nextView = "chat";
     }
@@ -160,9 +168,9 @@ export function MobileViewPager({
         dragMomentum={false}
         onDragEnd={handleDragEnd}
         onPointerDownCapture={handlePointerDown}
-        style={{ x }}
+        style={width > 0 ? { x } : undefined}
       >
-        {children(isMobile)}
+        {children}
       </motion.div>
     </div>
   );
