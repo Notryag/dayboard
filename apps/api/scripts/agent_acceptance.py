@@ -78,6 +78,21 @@ SCENARIOS = (
         ),
     ),
     Scenario(
+        name="sequence-anchor",
+        description="Create a follow-up entry from the authoritative end of a prior entry.",
+        turns=(
+            Turn(
+                "明天上午 9 点创建标题为「验收{tag}跳舞」的日程",
+                {"create_calendar_entry": 1},
+            ),
+            Turn(
+                "跳完「验收{tag}跳舞」去唱歌，新日程标题只写「验收{tag}唱歌」",
+                {"search_calendar_entries": 1, "create_calendar_entry": 1},
+                forbidden_tools=("create_task_item", "ask_clarification"),
+            ),
+        ),
+    ),
+    Scenario(
         name="task-changes",
         description="Create two tasks, then complete one and move the other in one Run.",
         turns=(
