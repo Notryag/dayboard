@@ -128,6 +128,63 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
     assert {event.event_metadata["call_id"] for event in starts} == {"tool-1", "tool-2"}
 
 
+async def test_model_lifecycle_is_audited_without_user_stream_publication(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    class RecordingBridge:
+        def __init__(self) -> None:
+            self.events: list[str] = []
+
+        async def publish(self, run_id, event, data, namespace=()):
+            del run_id, data, namespace
+            self.events.append(event)
+
+    async def fake_invoker(**kwargs):
+        sink = kwargs["event_sink"]
+        await sink(
+            RuntimeEvent(
+                "model.completed",
+                "model",
+                metadata={
+                    "call_id": "model-1",
+                    "usage": {"input_tokens": 20, "output_tokens": 5, "total_tokens": 25},
+                },
+            )
+        )
+        await sink(
+            RuntimeEvent(
+                "tool.started",
+                "tool",
+                content={"title": "会议"},
+                metadata={"call_id": "tool-1", "tool_name": "create_task_item"},
+            )
+        )
+        return {"messages": [AIMessage(content="完成")]}
+
+    bridge = RecordingBridge()
+    service = CommandService(
+        db_session,
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        executor_factory=fake_executor_factory(fake_invoker),
+        stream_bridge=bridge,
+    )
+    request = CommandRequest(message="安排会议")
+    run_id = await service.create_command_run(tenant_context, request)
+    await service.execute_command_run(tenant_context, request, run_id)
+
+    from dayboard.app.runs import AgentRunService
+
+    events = await AgentRunService(db_session).list_events(tenant_context, run_id)
+    assert "agent_model_completed" in {event.event_type for event in events}
+    assert "tool_call_started" in {event.event_type for event in events}
+    assert "agent_model_completed" not in bridge.events
+    assert "tool_call_started" in bridge.events
+
+
 async def test_command_service_does_not_invent_missing_provider_usage(
     db_session: AsyncSession,
     tenant_context: TenantContext,

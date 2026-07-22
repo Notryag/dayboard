@@ -23,6 +23,8 @@ implementation that changes them.
 - [engineering-guidelines.md](./engineering-guidelines.md): coding, layering, testing, and safety.
 - [ui-design.md](./ui-design.md): current visual and interaction rules.
 - [tool-design.md](./tool-design.md): model-visible tools and dynamic binding.
+- [context-token-optimization.md](./context-token-optimization.md): accepted compact-result,
+  presentation-artifact, Run-aware compaction, and cross-turn anchor design.
 - [api-errors.md](./api-errors.md): HTTP error envelope.
 - [deploy.md](./deploy.md): production build, deployment, rollback, and health checks.
 - [postgres-backup.md](./postgres-backup.md): backup and restore operations.

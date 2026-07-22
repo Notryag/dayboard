@@ -4,6 +4,10 @@ Last reviewed: 2026-07-20
 
 ## Token Efficiency
 
+- [ ] Implement the accepted compact ToolMessage, presentation artifact, Run-aware compaction, and
+  cross-turn anchor plan in `context-token-optimization.md`, preserving atomic tool batches and
+  measuring the result through Northgate correlation.
+
 - [x] Establish offline and live no-write token baselines for representative scheduling commands.
   The current fixed estimate is 666 system-prompt tokens plus 1,406 tokens across seven scheduling
   schemas and `ask_clarification`. The last pre-anytime live first-round sample was 2,566-2,573

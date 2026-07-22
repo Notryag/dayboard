@@ -37,6 +37,14 @@ from dayboard.domain.conversations import ConversationRole
 
 logger = structlog.get_logger(__name__)
 
+USER_VISIBLE_RUNTIME_EVENTS = frozenset(
+    {
+        "tool_call_started",
+        "tool_call_completed",
+        "tool_call_error",
+    }
+)
+
 
 class IdempotencyConflictError(ValueError):
     pass
@@ -264,14 +272,15 @@ class CommandService:
                             category=projected.category,
                         )
                         await event_session.commit()
-                await self._publish_run_event(
-                    run.id,
-                    projected.event_type,
-                    {
-                        "content": projected.content,
-                        "event_metadata": projected.metadata,
-                    },
-                )
+                if projected.event_type in USER_VISIBLE_RUNTIME_EVENTS:
+                    await self._publish_run_event(
+                        run.id,
+                        projected.event_type,
+                        {
+                            "content": projected.content,
+                            "event_metadata": projected.metadata,
+                        },
+                    )
 
             async def record_stream_event(event: RuntimeStreamEvent) -> None:
                 projected = project_runtime_stream_event(event)

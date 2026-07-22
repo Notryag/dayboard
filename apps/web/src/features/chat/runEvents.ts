@@ -3,9 +3,7 @@ import type { RunActivityStep } from "./RunActivityTicker";
 
 const progressLabels = {
   run_created: "请求已进入队列",
-  run_started: "任务开始处理",
-  agent_model_started: "正在理解你的安排",
-  agent_model_completed: "已完成分析，正在执行下一步",
+  run_started: "正在处理",
   tool_call_started: "正在执行操作",
   tool_call_completed: "操作完成",
   tool_call_error: "操作失败",

@@ -141,12 +141,12 @@ class Settings(BaseSettings):
         alias="DAYBOARD_SUMMARIZATION_MODEL_NAME",
     )
     agent_summarization_trigger_tokens: int = Field(
-        default=1200,
+        default=6000,
         alias="DAYBOARD_SUMMARIZATION_TRIGGER_TOKENS",
         ge=256,
     )
     agent_summarization_trigger_messages: int = Field(
-        default=40,
+        default=60,
         alias="DAYBOARD_SUMMARIZATION_TRIGGER_MESSAGES",
         ge=4,
     )

@@ -119,8 +119,6 @@ TERMINAL_RUN_EVENTS = {
 EXPOSED_RUN_EVENTS = TERMINAL_RUN_EVENTS | {
     "run_created",
     "run_started",
-    "agent_model_started",
-    "agent_model_completed",
     "tool_call_started",
     "tool_call_completed",
     "tool_call_error",

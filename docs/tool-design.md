@@ -72,12 +72,18 @@ Schemas contain only fields required to identify or perform the operation. Field
 format constraints; the system prompt owns cross-tool scheduling policy. Avoid repeating the same
 policy in both places.
 
-Write results contain:
+Model-visible write results contain:
 
 - a stable result `type`;
 - the authoritative calendar entry or task object;
 - conflicts where calendar creation or rescheduling can produce them;
 - an optional concise `summary` only when it adds information not obvious from the entity.
+
+The model-visible result is a compact receipt in `ToolMessage.content`. The complete safe entity
+snapshot is carried separately in `ToolMessage.artifact`, projected to typed SSE, and persisted in
+conversation metadata. PostgreSQL remains authoritative for product state and visible history;
+checkpoint artifacts are transport copies. See
+[Context And Token Optimization](context-token-optimization.md).
 
 Do not return a second top-level object ID when the authoritative entity already contains `id`.
 Do not return `requires_follow_up=false`; clarification is represented by the interaction tool, not
@@ -119,3 +125,5 @@ Tests must prove:
    `requires_follow_up` fields.
 9. Date-only actions create searchable `anytime` entries with no start/end instant, reminder, or
    clock conflict; daypart actions remain timed.
+10. Compact receipts stay within their token budgets while complete artifacts render identically
+    live and after conversation refresh.

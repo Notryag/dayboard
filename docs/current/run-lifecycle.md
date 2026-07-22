@@ -79,8 +79,6 @@ schedule_item_result
 schedule_items_result
 run_created
 run_started
-agent_model_started
-agent_model_completed
 tool_call_started
 tool_call_completed
 tool_call_error
@@ -96,6 +94,10 @@ tools emit `schedule_item_result`; calendar/task searches emit one `schedule_ite
 all safe matches. The browser never parses assistant prose to discover calendar entries or tasks.
 It upserts result parts by schedule kind and entity ID, so an item found and then changed in the same
 Run renders once with its latest snapshot. All named events pass through one state reducer.
+
+Model and summarization lifecycle events remain in the durable RuntimeJournal for usage and audit,
+but are not published through the user-facing SSE contract. Tool artifacts carry complete safe
+presentation snapshots independently from compact model-visible ToolMessage content.
 
 ## Ordering And Durability
 
