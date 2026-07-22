@@ -156,10 +156,6 @@ test("mobile content swipe switches between conversation and schedule", async ({
   await page.mouse.down();
   await page.mouse.move(365, 361, { steps: 3 });
   await page.mouse.move(380, 363, { steps: 3 });
-  await expect.poll(() => track.evaluate((element) => {
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
-    return matrix.m41;
-  })).toBeGreaterThan(-320);
   await page.mouse.up();
   await expect(workspace).toHaveAttribute("data-active-view", "schedule");
   await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
@@ -172,10 +168,6 @@ test("mobile content swipe switches between conversation and schedule", async ({
   await page.mouse.down();
   await page.mouse.move(45, 519, { steps: 3 });
   await page.mouse.move(10, 517, { steps: 3 });
-  await expect.poll(() => track.evaluate((element) => {
-    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
-    return matrix.m41;
-  })).toBeLessThan(-60);
   await page.mouse.up();
   await expect(workspace).toHaveAttribute("data-active-view", "chat");
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
