@@ -1,6 +1,7 @@
 .item {
   --schedule-item-icon-size: 36px;
   --schedule-item-control-size: var(--control-size);
+  --schedule-item-checkbox-size: 20px;
 
   position: relative;
   min-width: 0;
@@ -84,31 +85,57 @@
 }
 
 .completionControl {
+  position: relative;
   width: var(--schedule-item-control-size);
   height: var(--schedule-item-control-size);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid color-mix(in srgb, var(--dayboard-color-text-muted), transparent 28%);
+  border: 0;
   border-radius: var(--radius-pill);
-  color: var(--dayboard-color-primary-foreground);
+  color: var(--dayboard-color-text-muted);
   background: transparent;
   cursor: pointer;
   transition:
-    border-color var(--motion-fast) ease,
     color var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.completionControl::before {
+  position: absolute;
+  width: var(--schedule-item-checkbox-size);
+  height: var(--schedule-item-checkbox-size);
+  border: 1.5px solid color-mix(in srgb, var(--dayboard-color-text-muted), transparent 28%);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  content: "";
+  transition:
+    border-color var(--motion-fast) ease,
     background var(--motion-fast) ease,
     transform var(--motion-fast) ease;
 }
 
+.completionControl svg {
+  position: relative;
+  z-index: 1;
+}
+
 .completionControl:hover:not(:disabled) {
+  color: var(--dayboard-color-success);
+}
+
+.completionControl:hover:not(:disabled)::before {
   border-color: var(--dayboard-color-success);
-  transform: scale(1.05);
+  transform: scale(1.08);
+}
+
+.completionControl[aria-pressed="true"]::before {
+  border-color: var(--dayboard-color-success);
+  background: var(--dayboard-color-success);
 }
 
 .completionControl[aria-pressed="true"] {
-  border-color: var(--dayboard-color-success);
-  background: var(--dayboard-color-success);
+  color: var(--dayboard-color-primary-foreground);
 }
 
 .completionControl:disabled {

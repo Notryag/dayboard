@@ -22,6 +22,7 @@ type TerminalEvent =
 export type RunEvent =
   | { type: "assistant_delta"; delta: string }
   | { type: "schedule_result"; part: ScheduleResultPart }
+  | { type: "schedule_results"; parts: ScheduleResultPart[] }
   | { type: "progress"; step: RunActivityStep }
   | { type: "replay_gap" }
   | TerminalEvent;
@@ -31,6 +32,7 @@ export const runEventNames = [
   "assistant_text_delta",
   "stream_replay_gap",
   "schedule_item_result",
+  "schedule_items_result",
   "run_completed",
   "clarification_requested",
   "run_failed",
@@ -98,6 +100,12 @@ export function parseRunEvent(eventName: string, rawData: string): RunEvent {
   if (eventName === "schedule_item_result") {
     const part = schedulePart(value);
     if (part) return { type: "schedule_result", part };
+  }
+  if (eventName === "schedule_items_result") {
+    if (!Array.isArray(value.parts)) throw new Error("Schedule results must be an array");
+    const parts = value.parts.map(schedulePart);
+    if (parts.some((part) => part === null)) throw new Error("Invalid schedule search result");
+    return { type: "schedule_results", parts: parts as ScheduleResultPart[] };
   }
   if (eventName === "stream_replay_gap") return { type: "replay_gap" };
 

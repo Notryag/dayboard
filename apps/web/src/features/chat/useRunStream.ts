@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import type { ScheduleResultPart } from "@/features/schedule/types";
 import type { AgentRunStatus } from "@/lib/api/types";
 import type { ChatMessage } from "./ChatMessageList";
 import { getRun, getThreadMessages } from "./api";
@@ -61,11 +62,17 @@ function reduceRunEvent(
         ...state,
         messages: upsertAssistantMessage(state.messages, runId, (message) => ({
           ...message,
-          parts: message.parts?.some(
-            (candidate) => candidate.tool_call_id === event.part.tool_call_id,
-          ) ? message.parts : [...(message.parts ?? []), event.part],
+          parts: mergeScheduleParts(message.parts ?? [], [event.part]),
         })),
         scheduleRevision: state.scheduleRevision + 1,
+      };
+    case "schedule_results":
+      return {
+        ...state,
+        messages: upsertAssistantMessage(state.messages, runId, (message) => ({
+          ...message,
+          parts: mergeScheduleParts(message.parts ?? [], event.parts),
+        })),
       };
     case "completed":
     case "failed":
@@ -81,6 +88,22 @@ function reduceRunEvent(
     case "replay_gap":
       return state;
   }
+}
+
+function mergeScheduleParts(
+  current: ScheduleResultPart[],
+  incoming: ScheduleResultPart[],
+): ScheduleResultPart[] {
+  const merged = [...current];
+  for (const part of incoming) {
+    const index = merged.findIndex(
+      (candidate) => candidate.item.kind === part.item.kind
+        && candidate.item.value.id === part.item.value.id,
+    );
+    if (index === -1) merged.push(part);
+    else merged[index] = part;
+  }
+  return merged;
 }
 
 function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunStreamState {

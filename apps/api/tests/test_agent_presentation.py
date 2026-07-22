@@ -66,6 +66,58 @@ def test_rejects_unrecognized_tool_output() -> None:
     assert projected is None
 
 
+def test_projects_calendar_search_results_to_schedule_parts() -> None:
+    projected = project_runtime_stream_event(
+        RuntimeStreamEvent(
+            mode="messages",
+            data=[
+                {
+                    "type": "tool",
+                    "name": "search_calendar_entries",
+                    "tool_call_id": "call-search",
+                    "content": [
+                        {
+                            "id": "calendar-1",
+                            "title": "明日晨会",
+                            "timing_kind": "timed",
+                            "scheduled_date": None,
+                            "start_time": "2026-07-23T09:00:00+08:00",
+                            "end_time": "2026-07-23T10:00:00+08:00",
+                            "timezone": "Asia/Shanghai",
+                            "participants": [],
+                            "reminder": None,
+                            "status": "scheduled",
+                            "updated_at": "2026-07-22T01:00:00Z",
+                        },
+                        {
+                            "id": "calendar-2",
+                            "title": "提交材料",
+                            "timing_kind": "anytime",
+                            "scheduled_date": "2026-07-23",
+                            "start_time": None,
+                            "end_time": None,
+                            "timezone": "Asia/Shanghai",
+                            "participants": [],
+                            "reminder": None,
+                            "status": "scheduled",
+                            "updated_at": "2026-07-22T01:00:00Z",
+                        },
+                    ],
+                },
+                {},
+            ],
+        )
+    )
+
+    assert projected is not None
+    assert projected.event_type == "schedule_items_result"
+    assert [part["item"]["value"]["title"] for part in projected.data["parts"]] == [
+        "明日晨会",
+        "提交材料",
+    ]
+    assert all(part["operation"] == "calendar_entry_found" for part in projected.data["parts"])
+
+
 def test_rejects_tool_messages_from_untrusted_subgraph_namespace() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(

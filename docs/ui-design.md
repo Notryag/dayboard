@@ -19,6 +19,7 @@ mobile (< 900px)
   -> transparent full-width overlay header with a floating circular view switch
   -> centered Dayboard wordmark without a container
   -> one active full-width view
+  -> horizontal content swipe between conversation and schedule
   -> conversation is the default home view
   -> centered voice composer inside the bottom safe area
 
@@ -37,6 +38,18 @@ The centered wordmark uses a restrained animated gradient glow behind the text.
 The global header overlays the conversation scroller and remains visible while Conversation or Schedule
 content scrolls. Its transparent treatment preserves the full-screen surface without introducing a
 separate header band.
+The root document, app shell, and full-screen page use the same surface background so notch, status-bar,
+home-indicator, and overscroll areas do not reveal a second canvas color.
+
+Mobile view switching uses a Motion-driven draggable track. The surface follows horizontal input
+one-to-one, then combines travel distance and release velocity to choose a destination and settles
+with an interruptible, non-bouncy spring. A left drag in Conversation opens Schedule; a right drag
+in Schedule returns to Conversation. The gesture ignores the outer screen edges, interactive controls,
+and horizontal scrollers such as the date rail so it does not compete with browser navigation or date
+browsing. With reduced motion enabled, direct drag is disabled and the header control switches views
+without spatial animation. Only the active mobile pane participates in focus and the accessibility
+tree; both desktop panes remain available. The current app-like H5 shell locks the viewport to scale
+`1` to prevent accidental pinch and focus zoom while navigating between these full-screen surfaces.
 
 ## Design Direction
 
@@ -176,6 +189,10 @@ fractions, and media-query conditions may remain literal when CSS variables cann
   for the application shell, messages, dialogs, and primary controls.
 - Use transitions only for color, opacity, and small transforms. Date selection and resource loading
   must not move fixed-format navigation controls.
+- Gesture-driven navigation must track input directly, hand off release velocity, remain interruptible,
+  and use a spatially symmetric return path. Use Motion for this interaction instead of CSS keyframes.
+- Stagger multiple streamed schedule results by a few milliseconds so their arrival remains legible,
+  but keep the full sequence brief and disable it under `prefers-reduced-motion`.
 
 Voice is the conversation home's default input mode rather than a modal, page, or navigation item.
 The primary voice control is a full-width hold-to-talk bar at the bottom, following the familiar
@@ -200,17 +217,22 @@ audio contexts, timers, and local blobs after stop, cancel, or unmount.
 Current split:
 
 ```text
-app/page.tsx             # conversation command state and responsive view selection
+app/page.tsx                         # route entry only
+
+features/workspace/
+  DayboardApp.tsx                    # authenticated workspace composition and navigation
+  MobileViewPager.tsx                # measured Motion drag, velocity decision, and spring settling
 
 features/chat/
-  ChatMessageList.tsx   # message rendering and clarification placement
-  Composer.tsx          # mode, capabilities, transcription, and errors
-  VoiceComposer.tsx     # hold/release/cancel gestures and recording feedback
-  TextComposer.tsx      # keyboard input, send, and mode switch
+  useConversationSession.ts          # thread, history, active Run, command, clarification, and undo flow
+  ChatMessageList.tsx                # message rendering and clarification placement
+  Composer.tsx                       # mode, capabilities, transcription, and errors
+  VoiceComposer.tsx                  # hold/release/cancel gestures and recording feedback
+  TextComposer.tsx                   # keyboard input, send, and mode switch
 
 features/voice/
-  useVoiceRecorder.ts   # MediaRecorder and browser media resource ownership
-  api.ts                # transcription HTTP boundary
+  useVoiceRecorder.ts                # MediaRecorder and browser media resource ownership
+  api.ts                              # transcription HTTP boundary
 ```
 
 Keep API calls out of visual components. `VoiceComposer` and `TextComposer` receive state and

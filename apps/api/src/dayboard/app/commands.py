@@ -176,7 +176,6 @@ class CommandService:
         usage_accumulator = RuntimeUsageAccumulator()
         runtime_event_lock = asyncio.Lock()
         presentation_parts: list[dict[str, Any]] = []
-        seen_tool_calls: set[str] = set()
         budget_estimate = None
         failure_hook_called = False
         try:
@@ -278,19 +277,21 @@ class CommandService:
                 projected = project_runtime_stream_event(event)
                 if projected is None:
                     return
-                if projected.event_type == "schedule_item_result":
+                if projected.event_type in {"schedule_item_result", "schedule_items_result"}:
                     latest = await runs.get_run_row_for_update(context, run.id)
-                    if (
-                        latest is None
-                        or AgentRunStatus(latest.status) != AgentRunStatus.running
-                    ):
+                    if latest is None or AgentRunStatus(latest.status) != AgentRunStatus.running:
                         await self.session.commit()
                         raise asyncio.CancelledError()
-                    tool_call_id = projected.data["tool_call_id"]
-                    if tool_call_id in seen_tool_calls:
+                    projected_parts = (
+                        projected.data.get("parts", [])
+                        if projected.event_type == "schedule_items_result"
+                        else [projected.data]
+                    )
+                    if not _upsert_presentation_parts(
+                        presentation_parts,
+                        projected_parts,
+                    ):
                         return
-                    seen_tool_calls.add(tool_call_id)
-                    presentation_parts.append(projected.data)
                     await self.conversations.upsert_assistant_message(
                         context,
                         thread_id=run.thread_id,
@@ -644,6 +645,44 @@ async def _mark_run_failed(
             user_id=str(context.user_id),
         )
         return False
+
+
+def _presentation_entity_key(part: dict[str, Any]) -> tuple[str, str] | None:
+    item = part.get("item")
+    if not isinstance(item, dict):
+        return None
+    value = item.get("value")
+    kind = item.get("kind")
+    item_id = value.get("id") if isinstance(value, dict) else None
+    if not isinstance(kind, str) or not isinstance(item_id, str):
+        return None
+    return kind, item_id
+
+
+def _upsert_presentation_parts(
+    current: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+) -> bool:
+    changed = False
+    for part in candidates:
+        key = _presentation_entity_key(part)
+        if key is None:
+            continue
+        index = next(
+            (
+                index
+                for index, existing in enumerate(current)
+                if _presentation_entity_key(existing) == key
+            ),
+            None,
+        )
+        if index is None:
+            current.append(part)
+            changed = True
+        elif current[index] != part:
+            current[index] = part
+            changed = True
+    return changed
 
 
 def _safe_error_message(exc: Exception) -> str:

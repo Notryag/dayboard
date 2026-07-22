@@ -76,6 +76,7 @@ The browser-visible event contract includes:
 ```text
 assistant_text_delta
 schedule_item_result
+schedule_items_result
 run_created
 run_started
 agent_model_started
@@ -90,9 +91,11 @@ run_cancelled
 stream_replay_gap
 ```
 
-The safe projector allowlists scheduling tool results and emits typed snapshots. The browser never
-parses assistant prose to discover calendar entries or tasks. It deduplicates result parts by tool
-call ID and reduces all named events through one state reducer.
+The safe projector allowlists scheduling tool results and emits typed snapshots. Create and mutation
+tools emit `schedule_item_result`; calendar/task searches emit one `schedule_items_result` containing
+all safe matches. The browser never parses assistant prose to discover calendar entries or tasks.
+It upserts result parts by schedule kind and entity ID, so an item found and then changed in the same
+Run renders once with its latest snapshot. All named events pass through one state reducer.
 
 ## Ordering And Durability
 

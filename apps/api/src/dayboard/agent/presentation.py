@@ -59,11 +59,40 @@ def _project_tool_message(
             content = json.loads(content)
         except json.JSONDecodeError:
             return None
+    tool_name = message.get("name")
+    if tool_name in {"search_calendar_entries", "search_task_items"}:
+        if not isinstance(content, list):
+            return None
+        item_kind: ScheduleKind = "calendar" if tool_name == "search_calendar_entries" else "task"
+        parts: list[dict[str, Any]] = []
+        for raw_item in content:
+            if not isinstance(raw_item, dict):
+                continue
+            item = (
+                _safe_calendar_item(raw_item)
+                if item_kind == "calendar"
+                else _safe_task_item(raw_item)
+            )
+            if item is None:
+                continue
+            parts.append(
+                {
+                    "tool_call_id": tool_call_id,
+                    "operation": (
+                        "calendar_entry_found" if item_kind == "calendar" else "task_item_found"
+                    ),
+                    "item": {"kind": item_kind, "value": item},
+                }
+            )
+        return ProjectedStreamEvent(
+            "schedule_items_result",
+            {"tool_call_id": tool_call_id, "parts": parts},
+        )
+
     if not isinstance(content, dict):
         return None
 
     operation = content.get("type")
-    tool_name = message.get("name")
     item_kind: ScheduleKind
     raw_item: Any
     expected_tools = {

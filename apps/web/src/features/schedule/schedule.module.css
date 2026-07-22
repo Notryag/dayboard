@@ -193,6 +193,19 @@
   overscroll-behavior: contain;
   scrollbar-color: var(--dayboard-color-border) transparent;
   scrollbar-width: thin;
+  animation: schedule-content-in var(--motion-standard) ease-out;
+}
+
+@keyframes schedule-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section {
@@ -413,5 +426,9 @@
 
   .spinner {
     animation-duration: var(--motion-spinner-reduced);
+  }
+
+  .content {
+    animation: none;
   }
 }

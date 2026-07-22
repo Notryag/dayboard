@@ -56,6 +56,40 @@ test("multiple arrangements stream into separate schedule cards", async ({ page 
   await expect(results.getByRole("button", { name: /完成/ })).toHaveCount(0);
 });
 
+test("calendar search streams every match before the assistant summary", async ({ page }) => {
+  const first = calendarEntry({ id: "calendar-query-a", title: "明日晨会" });
+  const second = calendarEntry({
+    id: "calendar-query-b",
+    title: "提交材料",
+    timing_kind: "anytime",
+    scheduled_date: "2026-07-23",
+    start_time: null,
+    end_time: null,
+  });
+  const parts = [schedulePart(first, "tool-query"), schedulePart(second, "tool-query")];
+  const state = await installApiFixture(page);
+  state.onCommand = () => ({
+    events: [
+      { type: "schedule_items_result", data: { tool_call_id: "tool-query", parts } },
+      { type: "run_completed", data: { content: "明天有 2 项日程。", parts } },
+    ],
+    parts,
+    persistedText: "明天有 2 项日程。",
+  });
+  await page.goto("/dayboard");
+  const input = await openTextComposer(page);
+  await input.fill("我明天有什么日程");
+  await page.getByRole("button", { name: "发送" }).click();
+
+  const results = page.getByLabel("本次安排");
+  await expect(results.getByText("明日晨会")).toBeVisible();
+  await expect(results.getByText("提交材料")).toBeVisible();
+  await expect(
+    results.locator("xpath=following-sibling::*").getByText("明天有 2 项日程。"),
+  ).toBeVisible();
+  await expect(results.getByRole("button", { name: /完成/ })).toHaveCount(0);
+});
+
 test("mobile viewport keeps the transparent header visible while chat scrolls", async ({ page }) => {
   const messages = Array.from({ length: 24 }, (_, index) => ({
     id: `history-${index}`,
@@ -75,8 +109,21 @@ test("mobile viewport keeps the transparent header visible while chat scrolls", 
     "content",
     /viewport-fit=cover/,
   );
+  await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
+    "content",
+    /minimum-scale=1.*maximum-scale=1.*user-scalable=no/,
+  );
   const header = page.locator("header").first();
   await expect(header).toBeVisible();
+  await expect.poll(() => page.locator("main").evaluate((appShell) => {
+    const pageRoot = appShell.parentElement;
+    return new Set([
+      getComputedStyle(document.documentElement).backgroundColor,
+      getComputedStyle(document.body).backgroundColor,
+      pageRoot ? getComputedStyle(pageRoot).backgroundColor : "missing",
+      getComputedStyle(appShell).backgroundColor,
+    ]).size;
+  })).toBe(1);
   const messagesRegion = page.getByRole("region", { name: "对话记录" });
   await messagesRegion.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
@@ -86,6 +133,43 @@ test("mobile viewport keeps the transparent header visible while chat scrolls", 
     opacity: getComputedStyle(element).opacity,
     transform: getComputedStyle(element).transform,
   }))).toEqual({ opacity: "1", transform: "none" });
+});
+
+test("mobile content swipe switches between conversation and schedule", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installApiFixture(page);
+  await page.goto("/dayboard");
+  const workspace = page.locator("[data-active-view]");
+  const track = page.locator("[data-view-track]");
+  await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
+
+  await page.mouse.move(320, 360);
+  await page.mouse.down();
+  await page.mouse.move(275, 361, { steps: 3 });
+  await page.mouse.move(220, 363, { steps: 3 });
+  await expect.poll(() => track.evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return matrix.m41;
+  })).toBeLessThan(-60);
+  await page.mouse.up();
+  await expect(workspace).toHaveAttribute("data-active-view", "schedule");
+  await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
+
+  await expect.poll(() => track.evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return matrix.m41;
+  })).toBeLessThan(-380);
+  await page.mouse.move(90, 520);
+  await page.mouse.down();
+  await page.mouse.move(140, 519, { steps: 3 });
+  await page.mouse.move(200, 517, { steps: 3 });
+  await expect.poll(() => track.evaluate((element) => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
+    return matrix.m41;
+  })).toBeGreaterThan(-330);
+  await page.mouse.up();
+  await expect(workspace).toHaveAttribute("data-active-view", "chat");
+  await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
 });
 
 test("reload restores history and rejoins an active Run", async ({ page }) => {

@@ -98,7 +98,7 @@ export function SchedulePanel({
         today={today}
       />
 
-      <div className={styles.content} aria-live="polite">
+      <div className={styles.content} aria-live="polite" key={selectedDate}>
         <DayAgendaSection
           calendar={calendar}
           focusTarget={focusTarget}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CalendarDays,
   MessageCircle,
@@ -22,9 +22,8 @@ import { ScheduleUndoToast } from "@/features/schedule/ScheduleUndoToast";
 import { ReminderCenter } from "@/features/reminders/ReminderCenter";
 import type { ReminderFocusTarget } from "@/features/reminders/types";
 import type { ScheduleChange } from "@/features/schedule/types";
+import { MobileViewPager, type PrimaryView } from "./MobileViewPager";
 import styles from "@/app/page.module.css";
-
-type PrimaryView = "chat" | "schedule";
 
 type UndoNotice = NonNullable<ScheduleChange["undo"]> & {
   id: string;
@@ -109,10 +108,10 @@ function ChatHome() {
     }
   }
 
-  function selectView(view: PrimaryView) {
+  const selectView = useCallback((view: PrimaryView) => {
     setActiveView(view);
     if (view === "schedule") markScheduleChanged();
-  }
+  }, [markScheduleChanged]);
 
   return (
     <div className={styles.page}>
@@ -146,78 +145,87 @@ function ChatHome() {
           </div>
         </header>
 
-        <div className={styles.workspace}>
-          <section
-            aria-label="对话"
-            className={`${styles.chatPane} ${
-              activeView === "chat" ? styles.paneActive : ""
-            }`}
-            id="chat-panel"
-            role="region"
-          >
-            <ChatMessageList
-              conversationState={conversationState}
-              isSubmitting={isSubmitting}
-              messages={messages}
-              onChanged={handleScheduleChanged}
-              onClarificationChoice={(optionKey) => void chooseClarification(optionKey)}
-              scrollRef={messagesRef}
-              timezone={timezone}
-            />
-
-            <div className={styles.composerDock}>
-              {bootstrapError ? (
-                <ConversationBootstrapNotice
-                  busy={isThreadBootstrapping}
-                  error={bootstrapError}
-                  onRetry={retryBootstrap}
+        <MobileViewPager
+          activeView={activeView}
+          className={styles.workspace}
+          onSelectView={selectView}
+          trackClassName={styles.workspaceTrack}
+        >
+          {(isMobile) => (
+            <>
+              <section
+                aria-label="对话"
+                aria-hidden={isMobile && activeView !== "chat"}
+                className={styles.chatPane}
+                id="chat-panel"
+                inert={isMobile && activeView !== "chat"}
+                role="region"
+              >
+                <ChatMessageList
+                  conversationState={conversationState}
+                  isSubmitting={isSubmitting}
+                  messages={messages}
+                  onChanged={handleScheduleChanged}
+                  onClarificationChoice={(optionKey) => void chooseClarification(optionKey)}
+                  scrollRef={messagesRef}
+                  timezone={timezone}
                 />
-              ) : null}
-              {isSubmitting ? (
-                <RunActivityTicker
-                  steps={
-                    activeProgress.length
-                      ? activeProgress
-                      : [{ eventType: "submitting", text: "正在提交请求" }]
-                  }
-                />
-              ) : null}
-              <Composer
-                activeRunId={activeRunId}
-                disabled={!threadId || isThreadBootstrapping}
-                inputMode={inputMode}
-                isSubmitting={isSubmitting}
-                onCancelRun={() => void cancelActiveRun()}
-                onChange={setInput}
-                onInputModeChange={setInputMode}
-                onSubmit={(text) => {
-                  if (!text.trim() || isSubmitting || !threadId) return;
-                  setInput("");
-                  void submitCommand(text);
-                }}
-                value={input}
-              />
-            </div>
-          </section>
 
-          <div
-            aria-label="日程"
-            className={`${styles.schedulePane} ${
-              activeView === "schedule" ? styles.paneActive : ""
-            }`}
-            id="schedule-panel"
-            role="region"
-          >
-            <SchedulePanel
-              active={activeView === "schedule"}
-              focusTarget={reminderFocus}
-              key={reminderFocus?.requestId ?? "schedule"}
-              onChanged={handleScheduleChanged}
-              refreshKey={scheduleRevision}
-              timezone={timezone}
-            />
-          </div>
-        </div>
+                <div className={styles.composerDock}>
+                  {bootstrapError ? (
+                    <ConversationBootstrapNotice
+                      busy={isThreadBootstrapping}
+                      error={bootstrapError}
+                      onRetry={retryBootstrap}
+                    />
+                  ) : null}
+                  {isSubmitting ? (
+                    <RunActivityTicker
+                      steps={
+                        activeProgress.length
+                          ? activeProgress
+                          : [{ eventType: "submitting", text: "正在提交请求" }]
+                      }
+                    />
+                  ) : null}
+                  <Composer
+                    activeRunId={activeRunId}
+                    disabled={!threadId || isThreadBootstrapping}
+                    inputMode={inputMode}
+                    isSubmitting={isSubmitting}
+                    onCancelRun={() => void cancelActiveRun()}
+                    onChange={setInput}
+                    onInputModeChange={setInputMode}
+                    onSubmit={(text) => {
+                      if (!text.trim() || isSubmitting || !threadId) return;
+                      setInput("");
+                      void submitCommand(text);
+                    }}
+                    value={input}
+                  />
+                </div>
+              </section>
+
+              <div
+                aria-label="日程"
+                aria-hidden={isMobile && activeView !== "schedule"}
+                className={styles.schedulePane}
+                id="schedule-panel"
+                inert={isMobile && activeView !== "schedule"}
+                role="region"
+              >
+                <SchedulePanel
+                  active={activeView === "schedule"}
+                  focusTarget={reminderFocus}
+                  key={reminderFocus?.requestId ?? "schedule"}
+                  onChanged={handleScheduleChanged}
+                  refreshKey={scheduleRevision}
+                  timezone={timezone}
+                />
+              </div>
+            </>
+          )}
+        </MobileViewPager>
 
         {undoNotice ? (
           <ScheduleUndoToast

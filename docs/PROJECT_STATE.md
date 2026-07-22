@@ -6,7 +6,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Current Version
 
-- Development line: `0.3.x`; latest release tag: `v0.3.9`.
+- Development line: `0.3.x`; latest release tag: `v0.3.11`.
 - Product: self-service Dayboard web application at `/dayboard/` with a same-site FastAPI API.
 - Runtime: PostgreSQL, Redis, FastAPI, arq Worker, and Next.js managed by Docker Compose.
 - Scheduling policy: any resolvable date or time creates a calendar entry; date-only entries use the
@@ -39,8 +39,9 @@ implementation chronology. Current facts live under [current](./current/README.m
   recovery, provider usage settlement, and request/Run/tool correlation.
 - Redis StreamBridge delivery with replay cursors, replay-gap recovery, safe tool-result projection,
   persisted conversation parts, and reconnectable browser SSE.
-- Responsive conversation/day-view UI, voice recording and ASR adapters, direct schedule editing,
-  dark mode, settings drawer, generated API schema, and 600-line frontend source enforcement.
+- Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
+  voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
+  API schema, and 600-line frontend source enforcement.
 - Daily local PostgreSQL backups with checksums, retention, and a successful restore rehearsal.
 
 ## Next Milestone

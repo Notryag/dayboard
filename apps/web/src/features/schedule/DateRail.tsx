@@ -38,7 +38,12 @@ export function DateRail({
   }, [active, centerDate, selectedDate]);
 
   return (
-    <nav className={styles.dateRail} aria-label="浏览日期" ref={railRef}>
+    <nav
+      className={styles.dateRail}
+      aria-label="浏览日期"
+      data-swipe-navigation-ignore
+      ref={railRef}
+    >
       {dates.map((date) => {
         const isSelected = date === selectedDate;
         const isToday = date === today;
