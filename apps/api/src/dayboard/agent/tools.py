@@ -293,7 +293,13 @@ def build_scheduling_tools(
     def serialize_tool(function):
         async def serialized(**kwargs):
             async with tool_lock:
-                return await function(**kwargs)
+                try:
+                    result = await function(**kwargs)
+                    await session.commit()
+                    return result
+                except BaseException:
+                    await session.rollback()
+                    raise
 
         return serialized
 
@@ -329,7 +335,6 @@ def build_scheduling_tools(
             created_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry", input_data),
         )
-        await session.commit()
         content = {
             "type": result.type,
             "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
@@ -402,7 +407,6 @@ def build_scheduling_tools(
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry_reschedule", input_data),
         )
-        await session.commit()
         content = {
             "type": result.type,
             "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
@@ -426,7 +430,6 @@ def build_scheduling_tools(
             cancelled_by_run_id=run_id,
             operation_key=_create_operation_key("calendar_entry_cancel", input_data),
         )
-        await session.commit()
         content = {
             "type": result.type,
             "calendar_entry": _calendar_entry_receipt(result.calendar_entry),
@@ -451,7 +454,6 @@ def build_scheduling_tools(
             created_by_run_id=run_id,
             operation_key=_create_operation_key("task_item", input_data),
         )
-        await session.commit()
         content = {
             "type": result.type,
             "task_item": _task_item_receipt(result.task_item),
@@ -491,7 +493,6 @@ def build_scheduling_tools(
             updated_by_run_id=run_id,
             operation_key=_create_operation_key("task_item_update", input_data),
         )
-        await session.commit()
         content = {
             "type": result.type,
             "task_item": _task_item_receipt(result.task_item),
