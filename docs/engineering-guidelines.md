@@ -249,6 +249,12 @@ Rules:
 - Use soft deletion for business objects with `deleted_at`.
 - Store external files in object storage; store only URIs and metadata in PostgreSQL.
 - Keep migrations replayable and code-reviewed.
+- Never rewrite the meaning of a migration that may already have run. Correct deployed schema drift
+  with a new forward migration, even when a clean database built from edited history appears right.
+- Keep physical PostgreSQL types and indexes, SQLAlchemy metadata, and Alembic history aligned;
+  enforce owned-schema drift with `alembic check` in CI.
+- Declare tables created by an external runtime or provider through an explicit ownership filter.
+  Do not suppress unknown schema differences broadly or ignore them case by case.
 
 Common business table fields:
 

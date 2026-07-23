@@ -198,6 +198,13 @@ PostgreSQL stores:
 - Agent Runs, durable RuntimeJournal events, and provider usage settlement;
 - tenant/owner scope, audit timestamps, soft-deletion state, and Run correlation.
 
+Dayboard Alembic owns and compares only Dayboard tables. North's checkpoint saver owns
+`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, and `checkpoint_migrations`; those tables
+share the PostgreSQL database but are explicitly excluded from Dayboard autogeneration. Forward
+migrations reconcile deployed physical schemas with current ORM metadata, and CI runs
+`alembic check` after upgrading a clean test database so owned type, index, and constraint drift
+cannot silently accumulate.
+
 Redis provides:
 
 - arq job delivery using `run_id` as the job identity;

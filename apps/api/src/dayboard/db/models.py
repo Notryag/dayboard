@@ -168,6 +168,13 @@ class ReminderDeliveryRow(TimestampMixin, Base):
             "owner_user_id",
             "created_at",
         ),
+        Index(
+            "ix_reminder_deliveries_tenant_owner_unread",
+            "tenant_id",
+            "owner_user_id",
+            "read_at",
+            postgresql_where=text("status = 'delivered' AND deleted_at IS NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -246,7 +253,12 @@ class CalendarEntryRow(TimestampMixin, Base):
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False)
-    participants: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    participants: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'::jsonb"),
+    )
     reminder: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )
@@ -499,7 +511,12 @@ class AgentRunEventRow(Base):
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     category: Mapped[str] = mapped_column(String(40), nullable=False)
     content: Mapped[str | None] = mapped_column(String(4000), nullable=True)
-    event_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    event_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -549,7 +566,12 @@ class ProviderUsageRecordRow(Base):
     input_tokens: Mapped[int] = mapped_column(nullable=False)
     output_tokens: Mapped[int] = mapped_column(nullable=False)
     total_tokens: Mapped[int] = mapped_column(nullable=False)
-    usage_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    usage_metadata: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'::jsonb"),
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

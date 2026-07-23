@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from dayboard.config import get_settings
 from dayboard.db.models import Base
+from dayboard.db.schema_ownership import include_dayboard_schema_name
 
 config = context.config
 
@@ -26,6 +27,7 @@ def run_migrations_offline() -> None:
     context.configure(
         url=get_url(),
         target_metadata=target_metadata,
+        include_name=include_dayboard_schema_name,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -35,7 +37,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_name=include_dayboard_schema_name,
+    )
 
     with context.begin_transaction():
         context.run_migrations()

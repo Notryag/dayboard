@@ -51,6 +51,8 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Separated Conversation Thread lifecycle from primary identity with a constrained
   `active | archived` status, explicit `is_primary`, one-time data migration, and active-only command
   submission while preserving archived history reads and idempotent retries.
+- Reconciled legacy JSON storage with the ORM's JSONB contract, declared North checkpoint tables as
+  externally owned, and made `alembic check` a CI schema-drift gate.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -73,10 +75,6 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 
 ## Known Issues
 
-- Legacy databases still contain several physical `json` columns now declared as `jsonb` by the
-  ORM, and Dayboard Alembic comparison still sees North-owned checkpoint tables. A forward schema
-  reconciliation migration and Alembic ownership filter are required before `alembic check` can be
-  promoted to a CI gate.
 - Installed-PWA background notifications are not implemented; browser Notifications currently
   require the authenticated Web app to be active.
 - The last reference one-write Agent Run used 10,362 tokens over two model calls; cache-hit and
