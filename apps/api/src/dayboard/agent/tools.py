@@ -4,12 +4,12 @@ from collections.abc import Awaitable, Callable
 from datetime import date, datetime, time, timedelta
 import asyncio
 from hashlib import sha256
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from langchain_core.tools import StructuredTool
-from pydantic import AwareDatetime, BaseModel, Field, NaiveDatetime, model_validator
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.context import TenantContext
@@ -34,27 +34,39 @@ from dayboard.tools import (
 )
 
 
+LocalMinute = Annotated[
+    str,
+    Field(
+        pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$",
+        description="Beijing Time local datetime in YYYY-MM-DDTHH:mm format, without an offset.",
+    ),
+]
+
+
+def _parse_local_minute(value: str) -> datetime:
+    return datetime.strptime(value, "%Y-%m-%dT%H:%M")
+
+
 class AgentCreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     local_date: date | None = Field(
         default=None,
         description="Local date for an anytime entry with no clock time."
     )
-    local_start: NaiveDatetime | None = Field(
+    local_start: LocalMinute | None = Field(
         default=None,
-        description="Local datetime for a timed entry, without an offset."
     )
-    local_end: NaiveDatetime | None = Field(
+    local_end: LocalMinute | None = Field(
         default=None,
-        description="Optional local ISO 8601 datetime without an offset.",
     )
     anchor_entry_id: UUID | None = Field(
         default=None,
         description="Existing timed calendar entry whose end anchors this new entry.",
     )
-    expected_anchor_updated_at: AwareDatetime | None = Field(
+    expected_anchor_row_version: int | None = Field(
         default=None,
-        description="The anchor's updated_at returned by search_calendar_entries.",
+        ge=1,
+        description="The anchor's row_version returned by search_calendar_entries.",
     )
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = Field(
@@ -67,9 +79,9 @@ class AgentCreateCalendarEntryInput(BaseModel):
     @model_validator(mode="after")
     def validate_timing(self) -> AgentCreateCalendarEntryInput:
         anchor_mode = self.anchor_entry_id is not None
-        if anchor_mode != (self.expected_anchor_updated_at is not None):
+        if anchor_mode != (self.expected_anchor_row_version is not None):
             raise ValueError(
-                "anchor_entry_id and expected_anchor_updated_at must be provided together"
+                "anchor_entry_id and expected_anchor_row_version must be provided together"
             )
         if sum(
             value is not None
@@ -90,13 +102,11 @@ class AgentCreateTaskItemInput(BaseModel):
 
 
 class AgentSearchCalendarEntriesInput(BaseModel):
-    local_start: NaiveDatetime | None = Field(
+    local_start: LocalMinute | None = Field(
         default=None,
-        description="Optional inclusive local interval start without an offset.",
     )
-    local_end: NaiveDatetime | None = Field(
+    local_end: LocalMinute | None = Field(
         default=None,
-        description="Optional exclusive local interval end without an offset.",
     )
     title_query: str | None = Field(default=None, min_length=1, max_length=240)
 
@@ -116,18 +126,22 @@ class AgentSearchCalendarEntriesInput(BaseModel):
 class AgentRescheduleCalendarEntryInput(BaseModel):
     calendar_entry_id: UUID
     new_date: date | None = None
-    new_local_start: NaiveDatetime | None = None
-    new_local_end: NaiveDatetime | None = None
-    expected_updated_at: AwareDatetime
+    new_local_start: LocalMinute | None = None
+    new_local_end: LocalMinute | None = None
+    new_duration_minutes: int | None = Field(default=None, ge=1, le=10080)
+    expected_row_version: int = Field(ge=1)
 
     @model_validator(mode="after")
     def validate_target(self) -> AgentRescheduleCalendarEntryInput:
         if self.new_date is not None and self.new_local_start is not None:
             raise ValueError("new_date and new_local_start cannot be combined")
+        if self.new_local_end is not None and self.new_duration_minutes is not None:
+            raise ValueError("new_local_end and new_duration_minutes cannot be combined")
         if (
             self.new_date is None
             and self.new_local_start is None
             and self.new_local_end is None
+            and self.new_duration_minutes is None
         ):
             raise ValueError("provide at least one calendar time change")
         return self
@@ -135,7 +149,7 @@ class AgentRescheduleCalendarEntryInput(BaseModel):
 
 class AgentUpdateTaskItemInput(BaseModel):
     task_item_id: UUID
-    expected_updated_at: AwareDatetime
+    expected_row_version: int = Field(ge=1)
     new_title: str | None = Field(default=None, min_length=1, max_length=240)
     new_status: TaskStatus | None = None
 
@@ -149,6 +163,7 @@ class AgentUpdateTaskItemInput(BaseModel):
 def _calendar_entry_view(entry) -> dict[str, Any]:
     return {
         "id": str(entry.id),
+        "row_version": entry.row_version,
         "title": entry.title,
         "timing_kind": entry.timing_kind.value,
         "scheduled_date": entry.scheduled_date.isoformat() if entry.scheduled_date else None,
@@ -175,6 +190,7 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
 def _task_item_view(task) -> dict[str, Any]:
     return {
         "id": str(task.id),
+        "row_version": task.row_version,
         "title": task.title,
         "due_at": task.due_at.isoformat() if task.due_at else None,
         "timezone": task.timezone,
@@ -198,14 +214,22 @@ def _calendar_entry_receipt(entry) -> dict[str, Any]:
             if entry.completed_at is not None
             else "scheduled"
         ),
-        "updated_at": entry.updated_at.isoformat(),
+        "row_version": entry.row_version,
     }
     if entry.scheduled_date is not None:
         receipt["scheduled_date"] = entry.scheduled_date.isoformat()
     if entry.start_time is not None:
-        receipt["start_time"] = entry.start_time.isoformat()
+        receipt["local_start"] = (
+            entry.start_time.astimezone(ZoneInfo(entry.timezone))
+            .replace(tzinfo=None)
+            .isoformat(timespec="minutes")
+        )
     if entry.end_time is not None:
-        receipt["end_time"] = entry.end_time.isoformat()
+        receipt["local_end"] = (
+            entry.end_time.astimezone(ZoneInfo(entry.timezone))
+            .replace(tzinfo=None)
+            .isoformat(timespec="minutes")
+        )
     if entry.reminder is not None:
         receipt["reminder"] = entry.reminder.model_dump()
     return receipt
@@ -216,10 +240,14 @@ def _task_item_receipt(task) -> dict[str, Any]:
         "id": str(task.id),
         "title": task.title,
         "status": task.status.value,
-        "updated_at": task.updated_at.isoformat(),
+        "row_version": task.row_version,
     }
     if task.due_at is not None:
-        receipt["due_at"] = task.due_at.isoformat()
+        receipt["local_due"] = (
+            task.due_at.astimezone(ZoneInfo(task.timezone))
+            .replace(tzinfo=None)
+            .isoformat(timespec="minutes")
+        )
     if task.reminder is not None:
         receipt["reminder"] = task.reminder.model_dump()
     return receipt
@@ -277,12 +305,12 @@ def build_scheduling_tools(
             title=input_data.title,
             scheduled_date=input_data.local_date,
             start_time=(
-                resolve_local_datetime(input_data.local_start, context.timezone)
+                resolve_local_datetime(_parse_local_minute(input_data.local_start), context.timezone)
                 if input_data.local_start
                 else None
             ),
             end_time=(
-                resolve_local_datetime(input_data.local_end, context.timezone)
+                resolve_local_datetime(_parse_local_minute(input_data.local_end), context.timezone)
                 if input_data.local_end
                 else None
             ),
@@ -294,7 +322,7 @@ def build_scheduling_tools(
                 else None
             ),
             anchor_entry_id=input_data.anchor_entry_id,
-            expected_anchor_updated_at=input_data.expected_anchor_updated_at,
+            expected_anchor_row_version=input_data.expected_anchor_row_version,
         )
         result = await create_calendar_entry(
             session,
@@ -323,8 +351,8 @@ def build_scheduling_tools(
             local_start = datetime.combine(local_today, time.min)
             local_end = local_start + timedelta(days=90)
         else:
-            local_start = input_data.local_start
-            local_end = input_data.local_end
+            local_start = _parse_local_minute(input_data.local_start)
+            local_end = _parse_local_minute(input_data.local_end)
         assert local_end is not None
         start_time = resolve_local_datetime(local_start, context.timezone)
         end_time = resolve_local_datetime(local_end, context.timezone)
@@ -353,16 +381,21 @@ def build_scheduling_tools(
             calendar_entry_id=input_data.calendar_entry_id,
             new_date=input_data.new_date,
             new_start_time=(
-                resolve_local_datetime(input_data.new_local_start, context.timezone)
+                resolve_local_datetime(
+                    _parse_local_minute(input_data.new_local_start), context.timezone
+                )
                 if input_data.new_local_start
                 else None
             ),
             new_end_time=(
-                resolve_local_datetime(input_data.new_local_end, context.timezone)
+                resolve_local_datetime(
+                    _parse_local_minute(input_data.new_local_end), context.timezone
+                )
                 if input_data.new_local_end
                 else None
             ),
-            expected_updated_at=input_data.expected_updated_at,
+            new_duration_minutes=input_data.new_duration_minutes,
+            expected_row_version=input_data.expected_row_version,
         )
         result = await reschedule_calendar_entry(
             session,
@@ -449,7 +482,7 @@ def build_scheduling_tools(
         input_data = AgentUpdateTaskItemInput.model_validate(kwargs)
         data = UpdateTaskItemInput(
             task_item_id=input_data.task_item_id,
-            expected_updated_at=input_data.expected_updated_at,
+            expected_row_version=input_data.expected_row_version,
             new_title=input_data.new_title,
             new_status=input_data.new_status,
         )

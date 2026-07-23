@@ -2,12 +2,54 @@
 
 ## Core Principles
 
-- Keep Dayboard product concepts out of `north`.
+- Keep dependency direction `north <- agent_platform <- dayboard`.
+- Keep Dayboard product concepts out of `north` and `agent_platform`.
 - Keep `north` runtime concepts out of Dayboard business models unless they are references, such as `run_id`.
 - Treat PostgreSQL as the source of truth.
 - Treat Redis or Valkey as infrastructure for queues, fanout, locks, rate limits, and cache.
 - Make tenant and user context explicit from the first implementation.
 - Prefer mature existing libraries over custom implementations for infrastructure, protocol, parsing, UI primitives, and generated clients.
+
+## Design Durable Invariants First
+
+Do not treat foundational data and architecture decisions as temporary implementation details.
+Before coding a feature that crosses persistence or service boundaries, identify the invariants
+that must remain correct as the product grows. A shortcut at this layer is expensive because the
+same assumption spreads into migrations, repositories, domain models, API schemas, generated
+clients, Agent tools, prompts, cached context, tests, and production data. Correcting it later is a
+system-wide protocol migration rather than a local refactor.
+
+Review these questions before the first schema or public contract is written:
+
+1. What is the authoritative source of truth and who owns each transformation?
+2. Is each field carrying exactly one semantic responsibility?
+3. What are the transaction, concurrency, idempotency, and tenant-isolation guarantees?
+4. Which representation belongs at the database, service, API, model, and UI boundaries?
+5. Which constraints and indexes make invalid states impossible and expected access paths efficient?
+6. How will the design migrate, roll back, recover, and remain observable under real concurrency?
+7. Is the design extensible through stable boundaries, rather than speculative abstractions or
+   compatibility branches?
+
+Choose the strongest simple design supported by known requirements. "Extensible" does not mean
+building unused generality; it means preserving clear ownership, single-purpose fields, explicit
+invariants, and replaceable boundaries. Optimize foundational correctness before delivery speed,
+while allowing presentation and other low-cost details to evolve incrementally.
+
+The schedule concurrency redesign is the reference example. `updated_at` was initially reused as
+an optimistic-lock token even though it is an audit field. That coupled concurrency correctness to
+timestamp precision, database update behavior, timezone/serialization rules, and client round
+trips. It also sent long timestamps through REST and model tool schemas. Replacing it with
+`row_version` required coordinated database, repository, API, generated TypeScript, Agent receipt,
+prompt, checkpoint, and test changes. A dedicated integer version from the first migration would
+have been both more correct and cheaper: audit time answers when a row changed, while `row_version`
+answers whether it is still the exact revision previously read.
+
+Time representation exposed the same class of mistake. Allowing UTC entities and Beijing local
+values into one model context made the model responsible for conversion and permitted an eight-hour
+shift to become a false scheduling conflict. The durable design assigns one representation per
+boundary: Beijing local wall-clock values for the model, timezone-aware datetimes in application
+code, UTC instants in PostgreSQL, and full absolute entities only in UI artifacts. See
+[current/time-protocol.md](./current/time-protocol.md).
 
 ## Documentation Boundaries
 
@@ -85,6 +127,11 @@ Dependency rules:
 - Check current documentation before adding a library with fast-moving setup commands or breaking changes.
 
 ## Backend Layers
+
+Repository-level package ownership is defined by
+[ADR-008](./adr/008-introduce-agent-application-platform.md): North owns runtime primitives,
+`agent_platform` owns reusable application capabilities, and Dayboard owns scheduling product
+semantics. The package boundary sits above the internal Dayboard backend layers below.
 
 Target backend layout:
 

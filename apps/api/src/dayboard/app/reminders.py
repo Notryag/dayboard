@@ -13,7 +13,9 @@ from dayboard.domain.calendar import Reminder
 from dayboard.domain.reminders import (
     ReminderDelivery,
     ReminderDeliveryStatus,
+    ReminderInboxItem,
     ReminderSourceType,
+    ReminderSourceStatus,
 )
 
 
@@ -99,6 +101,72 @@ class ReminderService:
         return [
             reminder_delivery_from_row(row) for row in await self.deliveries.list_for_user(context)
         ]
+
+    async def list_inbox(self, context: TenantContext) -> list[ReminderInboxItem]:
+        deliveries = await self.deliveries.list_inbox_for_user(context)
+        calendar_ids = {
+            row.source_id
+            for row in deliveries
+            if row.source_type == ReminderSourceType.calendar_entry.value
+        }
+        task_ids = {
+            row.source_id
+            for row in deliveries
+            if row.source_type == ReminderSourceType.task_item.value
+        }
+        calendars = {
+            row.id: row
+            for row in await self.session.scalars(
+                select(CalendarEntryRow).where(
+                    CalendarEntryRow.tenant_id == context.tenant_id,
+                    CalendarEntryRow.owner_user_id == context.user_id,
+                    CalendarEntryRow.id.in_(calendar_ids),
+                )
+            )
+        } if calendar_ids else {}
+        tasks = {
+            row.id: row
+            for row in await self.session.scalars(
+                select(TaskItemRow).where(
+                    TaskItemRow.tenant_id == context.tenant_id,
+                    TaskItemRow.owner_user_id == context.user_id,
+                    TaskItemRow.id.in_(task_ids),
+                )
+            )
+        } if task_ids else {}
+
+        items: list[ReminderInboxItem] = []
+        for delivery in deliveries:
+            source_status = ReminderSourceStatus.deleted
+            source_occurs_at = delivery.scheduled_for
+            if delivery.source_type == ReminderSourceType.calendar_entry.value:
+                entry = calendars.get(delivery.source_id)
+                if entry is not None:
+                    source_occurs_at = entry.start_time or delivery.scheduled_for
+                    source_status = (
+                        ReminderSourceStatus.deleted
+                        if entry.deleted_at is not None
+                        else ReminderSourceStatus.completed
+                        if entry.completed_at is not None
+                        else ReminderSourceStatus.scheduled
+                    )
+            else:
+                task = tasks.get(delivery.source_id)
+                if task is not None:
+                    source_occurs_at = task.due_at or delivery.scheduled_for
+                    source_status = (
+                        ReminderSourceStatus.deleted
+                        if task.deleted_at is not None
+                        else ReminderSourceStatus(task.status)
+                    )
+            items.append(
+                ReminderInboxItem(
+                    **reminder_delivery_from_row(delivery).model_dump(),
+                    source_status=source_status,
+                    source_occurs_at=source_occurs_at,
+                )
+            )
+        return items
 
     async def mark_read(
         self,

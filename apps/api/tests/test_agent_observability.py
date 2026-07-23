@@ -105,7 +105,7 @@ def test_search_and_cancel_tool_have_product_specific_progress() -> None:
             category="tool",
             content={
                 "calendar_entry_id": "00000000-0000-0000-0000-000000000001",
-                "expected_updated_at": "2026-07-10T12:00:00+00:00",
+                "expected_row_version": "2026-07-10T12:00:00+00:00",
                 "secret": "must-not-leak",
             },
             metadata={"call_id": "call-3", "tool_name": "cancel_calendar_entry"},
@@ -127,7 +127,7 @@ def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
             content={
                 "calendar_entry_id": "00000000-0000-0000-0000-000000000001",
                 "new_local_end": "2026-07-14T17:00:00",
-                "expected_updated_at": "2026-07-13T08:00:00+00:00",
+                "expected_row_version": "2026-07-13T08:00:00+00:00",
                 "secret": "must-not-leak",
             },
             metadata={"call_id": "call-4", "tool_name": "reschedule_calendar_entry"},

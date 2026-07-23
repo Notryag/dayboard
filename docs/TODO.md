@@ -1,6 +1,6 @@
 # Dayboard TODO
 
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-23
 
 ## Token Efficiency
 
@@ -11,7 +11,7 @@ Last reviewed: 2026-07-22
   lower bound, and zero compaction events in `agent-token-optimization-history.md`.
 
 - [x] Establish offline and live no-write token baselines for representative scheduling commands.
-  The current fixed estimate is 772 system-prompt tokens plus 1,487 tokens across seven scheduling
+  The current fixed estimate is 913 system-prompt tokens plus 1,469 tokens across seven scheduling
   schemas and `ask_clarification`. The last pre-anytime live first-round sample was 2,566-2,573
   tokens, down from about
   4,710 initially, 2,915-2,943 after prompt compression, and 2,805-2,814 after tool unification.

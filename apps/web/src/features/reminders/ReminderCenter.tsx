@@ -6,7 +6,7 @@ import { Bell, BellRing, CalendarClock, LoaderCircle, RefreshCw, RotateCw, X } f
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
-import type { ReminderDelivery } from "@/lib/api/types";
+import type { ReminderInboxItem } from "@/lib/api/types";
 import { getReminders, markReminderRead, retryReminder } from "./api";
 import type { ReminderFocusTarget } from "./types";
 import styles from "./ReminderCenter.module.css";
@@ -28,17 +28,16 @@ function subscribeNotificationPermission(onChange: () => void) {
   return () => window.removeEventListener(notificationPermissionEvent, onChange);
 }
 
-function payloadString(reminder: ReminderDelivery, key: string) {
+function payloadString(reminder: ReminderInboxItem, key: string) {
   const value = reminder.payload[key];
   return typeof value === "string" ? value : null;
 }
 
-function reminderTitle(reminder: ReminderDelivery) {
+function reminderTitle(reminder: ReminderInboxItem) {
   return payloadString(reminder, "title") ?? "日程提醒";
 }
 
-function reminderDate(reminder: ReminderDelivery, timezone: string) {
-  const occursAt = payloadString(reminder, "occurs_at") ?? reminder.scheduled_for;
+function reminderDate(reminder: ReminderInboxItem, timezone: string) {
   return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
     day: "numeric",
@@ -46,25 +45,27 @@ function reminderDate(reminder: ReminderDelivery, timezone: string) {
     minute: "2-digit",
     hour12: false,
     timeZone: timezone,
-  }).format(new Date(occursAt));
+  }).format(new Date(reminder.source_occurs_at));
 }
 
-function dateKey(reminder: ReminderDelivery, timezone: string) {
-  const occursAt = payloadString(reminder, "occurs_at") ?? reminder.scheduled_for;
+function dateKey(reminder: ReminderInboxItem, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     timeZone: timezone,
-  }).formatToParts(new Date(occursAt));
+  }).formatToParts(new Date(reminder.source_occurs_at));
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-function statusLabel(reminder: ReminderDelivery) {
+function sourceUnavailable(reminder: ReminderInboxItem) {
+  return reminder.source_status === "deleted" || reminder.source_status === "cancelled";
+}
+
+function statusLabel(reminder: ReminderInboxItem) {
+  if (sourceUnavailable(reminder)) return reminder.source_type === "task_item" ? "待办已删除" : "日程已删除";
   if (reminder.status === "failed") return "投递失败";
-  if (reminder.status === "pending") return "等待提醒";
-  if (reminder.status === "processing") return "正在投递";
   return reminder.read_at ? "已读" : "新提醒";
 }
 
@@ -81,30 +82,29 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
     queryFn: getReminders,
     refetchInterval: 15_000,
   });
-  const visible = useMemo(
-    () => (reminders.data ?? []).filter((item) => item.status !== "cancelled"),
-    [reminders.data],
-  );
+  const visible = useMemo(() => reminders.data ?? [], [reminders.data]);
   const unreadCount = visible.filter(
-    (item) => item.status === "delivered" && item.read_at === null,
+    (item) => item.status === "delivered" && item.read_at === null && !sourceUnavailable(item),
   ).length;
 
   const markRead = useMutation({
     mutationFn: markReminderRead,
     onSuccess: (updated) => {
-      queryClient.setQueryData<ReminderDelivery[]>(["reminders"], (current = []) =>
-        current.map((item) => item.id === updated.id ? updated : item));
+      void updated;
+      void queryClient.invalidateQueries({ queryKey: ["reminders"] });
     },
   });
   const retry = useMutation({
     mutationFn: retryReminder,
     onSuccess: (updated) => {
-      queryClient.setQueryData<ReminderDelivery[]>(["reminders"], (current = []) =>
-        current.map((item) => item.id === updated.id ? updated : item));
+      queryClient.setQueryData<ReminderInboxItem[]>(["reminders"], (current = []) =>
+        current.filter((item) => item.id !== updated.id));
+      void queryClient.invalidateQueries({ queryKey: ["reminders"] });
     },
   });
 
-  const openSource = useCallback(async (reminder: ReminderDelivery) => {
+  const openSource = useCallback(async (reminder: ReminderInboxItem) => {
+    if (sourceUnavailable(reminder)) return;
     if (reminder.status === "delivered" && !reminder.read_at) {
       await markRead.mutateAsync(reminder.id).catch(() => undefined);
     }
@@ -121,7 +121,7 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
   useEffect(() => {
     if (permission !== "granted") return;
     for (const reminder of visible) {
-      if (reminder.status !== "delivered" || reminder.read_at) continue;
+      if (reminder.status !== "delivered" || reminder.read_at || sourceUnavailable(reminder)) continue;
       const storageKey = `dayboard:notification:${reminder.id}`;
       if (sessionStorage.getItem(storageKey)) continue;
       sessionStorage.setItem(storageKey, "shown");
@@ -235,15 +235,23 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
           ) : (
             <ol className={styles.list}>
               {visible.map((reminder) => {
-                const unread = reminder.status === "delivered" && !reminder.read_at;
+                const unavailable = sourceUnavailable(reminder);
+                const unread = reminder.status === "delivered" && !reminder.read_at && !unavailable;
                 return (
                   <li className={`${styles.item} ${unread ? styles.unread : ""}`} key={reminder.id}>
-                    <button className={styles.itemMain} onClick={() => void openSource(reminder)} type="button">
+                    <button
+                      className={styles.itemMain}
+                      disabled={unavailable}
+                      onClick={() => void openSource(reminder)}
+                      type="button"
+                    >
                       <span className={styles.itemIcon}><CalendarClock size={17} /></span>
                       <span className={styles.itemCopy}>
                         <strong>{reminderTitle(reminder)}</strong>
                         <span>{reminderDate(reminder, timezone)}</span>
-                        <small data-status={reminder.status}>{statusLabel(reminder)}</small>
+                        <small data-source-status={reminder.source_status} data-status={reminder.status}>
+                          {statusLabel(reminder)}
+                        </small>
                       </span>
                     </button>
                     {reminder.status === "failed" ? (

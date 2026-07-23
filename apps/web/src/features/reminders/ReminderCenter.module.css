@@ -69,12 +69,15 @@
 
 .unread { border-color: color-mix(in srgb, var(--dayboard-color-primary), transparent 48%); }
 .itemMain { min-width: 0; flex: 1; display: flex; gap: var(--space-3); align-items: center; padding: var(--space-3); text-align: left; }
+.itemMain:disabled { cursor: default; }
+.itemMain:disabled .itemIcon { color: var(--dayboard-color-text-muted); background: var(--dayboard-color-surface); }
 .itemIcon { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: var(--radius-md); color: var(--dayboard-color-primary); background: color-mix(in srgb, var(--dayboard-color-primary), transparent 88%); }
 .itemCopy { min-width: 0; display: grid; gap: 2px; }
 .itemCopy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .itemCopy span { color: var(--dayboard-color-text-muted); font-size: var(--font-size-caption); }
 .itemCopy small { width: fit-content; color: var(--dayboard-color-text-muted); font-size: 11px; }
 .itemCopy small[data-status="failed"] { color: var(--dayboard-color-danger); }
+.itemCopy small[data-source-status="deleted"], .itemCopy small[data-source-status="cancelled"] { color: var(--dayboard-color-text-muted); }
 .unread .itemCopy small { color: var(--dayboard-color-primary); font-weight: var(--font-weight-semibold); }
 
 .notice, .empty { min-height: 180px; display: flex; flex-direction: column; gap: var(--space-3); align-items: center; justify-content: center; color: var(--dayboard-color-text-muted); text-align: center; }

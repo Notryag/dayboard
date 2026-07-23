@@ -34,6 +34,11 @@ class ConversationMessage(BaseModel):
     created_at: datetime
 
 
+class ConversationMessagePage(BaseModel):
+    items: list[ConversationMessage]
+    next_cursor: UUID | None
+
+
 class ConversationState(BaseModel):
     thread_id: UUID
     pending_action: str | None

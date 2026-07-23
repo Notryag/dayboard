@@ -1,7 +1,7 @@
 import { apiClient, requireApiData } from "@/lib/api/typedClient";
-import type { ReminderDelivery } from "@/lib/api/types";
+import type { ReminderDelivery, ReminderInboxItem } from "@/lib/api/types";
 
-export async function getReminders(): Promise<ReminderDelivery[]> {
+export async function getReminders(): Promise<ReminderInboxItem[]> {
   const { data } = await apiClient.GET("/api/reminders");
   return requireApiData(data);
 }

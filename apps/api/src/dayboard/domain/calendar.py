@@ -89,6 +89,7 @@ class CalendarEntryCreate(BaseModel):
 
 class CalendarEntry(BaseModel):
     id: UUID
+    row_version: int = Field(ge=1)
     tenant_id: UUID
     owner_user_id: UUID
     title: str

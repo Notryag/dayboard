@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from dayboard.app.scheduling import SchedulingService
 from dayboard.context import TenantContext
 from dayboard.tools import (
     CancelCalendarEntryInput,
@@ -158,7 +159,7 @@ async def test_calendar_creation_derives_time_from_locked_anchor(
             title="唱歌",
             timezone="Asia/Shanghai",
             anchor_entry_id=dance.calendar_entry.id,
-            expected_anchor_updated_at=dance.calendar_entry.updated_at,
+            expected_anchor_row_version=dance.calendar_entry.row_version,
         ),
     )
 
@@ -181,14 +182,14 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
             timezone="Asia/Shanghai",
         ),
     )
-    stale_updated_at = dance.calendar_entry.updated_at
+    stale_row_version = dance.calendar_entry.row_version
     await reschedule_calendar_entry(
         db_session,
         tenant_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=dance.calendar_entry.id,
             new_start_time="2026-07-23T10:00:00+08:00",
-            expected_updated_at=stale_updated_at,
+            expected_row_version=stale_row_version,
         ),
         updated_by_run_id=uuid4(),
         operation_key="move-dance",
@@ -202,7 +203,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
                 title="唱歌",
                 timezone="Asia/Shanghai",
                 anchor_entry_id=dance.calendar_entry.id,
-                expected_anchor_updated_at=stale_updated_at,
+                expected_anchor_row_version=stale_row_version,
             ),
         )
 
@@ -223,7 +224,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
                 title="庆祝",
                 timezone="Asia/Shanghai",
                 anchor_entry_id=anytime.calendar_entry.id,
-                expected_anchor_updated_at=anytime.calendar_entry.updated_at,
+                expected_anchor_row_version=anytime.calendar_entry.row_version,
             ),
         )
 
@@ -360,7 +361,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         tenant_context,
         UpdateTaskItemInput(
             task_item_id=first.task_item.id,
-            expected_updated_at=first.task_item.updated_at,
+            expected_row_version=first.task_item.row_version,
             new_status="completed",
         ),
         updated_by_run_id=run_id,
@@ -371,7 +372,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         tenant_context,
         UpdateTaskItemInput(
             task_item_id=second.task_item.id,
-            expected_updated_at=second.task_item.updated_at,
+            expected_row_version=second.task_item.row_version,
             new_due_at="2026-07-13T18:00:00+08:00",
         ),
         updated_by_run_id=run_id,
@@ -382,7 +383,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
         tenant_context,
         UpdateTaskItemInput(
             task_item_id=second.task_item.id,
-            expected_updated_at=second.task_item.updated_at,
+            expected_row_version=second.task_item.row_version,
             new_due_at="2026-07-13T18:00:00+08:00",
         ),
         updated_by_run_id=run_id,
@@ -410,7 +411,7 @@ async def test_update_task_rejects_stale_selected_version(
         tenant_context,
         UpdateTaskItemInput(
             task_item_id=created.task_item.id,
-            expected_updated_at=created.task_item.updated_at,
+            expected_row_version=created.task_item.row_version,
             new_title="整理会议纪要",
         ),
         updated_by_run_id=uuid4(),
@@ -423,7 +424,7 @@ async def test_update_task_rejects_stale_selected_version(
             tenant_context,
             UpdateTaskItemInput(
                 task_item_id=created.task_item.id,
-                expected_updated_at=created.task_item.updated_at,
+                expected_row_version=created.task_item.row_version,
                 new_status="cancelled",
             ),
             updated_by_run_id=uuid4(),
@@ -462,7 +463,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
         RescheduleCalendarEntryInput(
             calendar_entry_id=matches[0].id,
             new_date="2026-07-12",
-            expected_updated_at=matches[0].updated_at,
+            expected_row_version=matches[0].row_version,
         ),
         updated_by_run_id=update_run_id,
         operation_key="move-product-meeting",
@@ -473,7 +474,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
         RescheduleCalendarEntryInput(
             calendar_entry_id=matches[0].id,
             new_start_time="2026-07-13T08:00:00+08:00",
-            expected_updated_at=matches[0].updated_at,
+            expected_row_version=matches[0].row_version,
         ),
         updated_by_run_id=update_run_id,
         operation_key="move-product-meeting",
@@ -513,7 +514,7 @@ async def test_reschedule_rejects_stale_selected_version(
         RescheduleCalendarEntryInput(
             calendar_entry_id=selected.id,
             new_start_time="2026-07-12T10:00:00+08:00",
-            expected_updated_at=selected.updated_at,
+            expected_row_version=selected.row_version,
         ),
         updated_by_run_id=uuid4(),
         operation_key="first-move",
@@ -526,7 +527,7 @@ async def test_reschedule_rejects_stale_selected_version(
             RescheduleCalendarEntryInput(
                 calendar_entry_id=selected.id,
                 new_start_time="2026-07-13T10:00:00+08:00",
-                expected_updated_at=selected.updated_at,
+                expected_row_version=selected.row_version,
             ),
             updated_by_run_id=uuid4(),
             operation_key="stale-move",
@@ -554,7 +555,7 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
         RescheduleCalendarEntryInput(
             calendar_entry_id=created.calendar_entry.id,
             new_end_time="2026-07-14T17:00:00+08:00",
-            expected_updated_at=created.calendar_entry.updated_at,
+            expected_row_version=created.calendar_entry.row_version,
         ),
         updated_by_run_id=uuid4(),
         operation_key="extend-lunch",
@@ -574,11 +575,63 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
             RescheduleCalendarEntryInput(
                 calendar_entry_id=extended.calendar_entry.id,
                 new_end_time="2026-07-14T17:00:00+08:00",
-                expected_updated_at=extended.calendar_entry.updated_at,
+                expected_row_version=extended.calendar_entry.row_version,
             ),
             updated_by_run_id=uuid4(),
             operation_key="noop-extension",
         )
+
+
+async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    fishing = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="钓鱼",
+            start_time="2026-07-24T16:00:00+08:00",
+            end_time="2026-07-24T17:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+    shopping = await create_calendar_entry(
+        db_session,
+        tenant_context,
+        CreateCalendarEntryInput(
+            title="超市",
+            start_time="2026-07-24T17:00:00+08:00",
+            end_time="2026-07-24T18:00:00+08:00",
+            timezone="Asia/Shanghai",
+        ),
+    )
+
+    shortened = await reschedule_calendar_entry(
+        db_session,
+        tenant_context,
+        RescheduleCalendarEntryInput(
+            calendar_entry_id=fishing.calendar_entry.id,
+            new_duration_minutes=30,
+            expected_row_version=fishing.calendar_entry.row_version,
+        ),
+        updated_by_run_id=uuid4(),
+        operation_key="shorten-fishing",
+    )
+
+    assert shortened.calendar_entry.start_time == fishing.calendar_entry.start_time
+    assert shortened.calendar_entry.row_version == fishing.calendar_entry.row_version + 1
+    assert shortened.calendar_entry.end_time == datetime(
+        2026, 7, 24, 16, 30, tzinfo=ZoneInfo("Asia/Shanghai")
+    )
+    assert shortened.conflicts == []
+    persisted_shopping = await SchedulingService(db_session).get_calendar_entry(
+        tenant_context, shopping.calendar_entry.id
+    )
+    assert persisted_shopping is not None
+    assert persisted_shopping.row_version == shopping.calendar_entry.row_version
+    assert persisted_shopping.start_time == shopping.calendar_entry.start_time
+    assert persisted_shopping.end_time == shopping.calendar_entry.end_time
 
 
 async def test_multiple_calendar_updates_and_cancellations_in_one_run(
@@ -608,7 +661,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[0].id,
             new_date="2026-07-12",
-            expected_updated_at=entries[0].updated_at,
+            expected_row_version=entries[0].row_version,
         ),
         updated_by_run_id=run_id,
         operation_key="move-morning-meeting",
@@ -619,7 +672,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[1].id,
             new_date="2026-07-13",
-            expected_updated_at=entries[1].updated_at,
+            expected_row_version=entries[1].row_version,
         ),
         updated_by_run_id=run_id,
         operation_key="move-review",
@@ -629,7 +682,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         tenant_context,
         CancelCalendarEntryInput(
             calendar_entry_id=entries[2].id,
-            expected_updated_at=entries[2].updated_at,
+            expected_row_version=entries[2].row_version,
         ),
         cancelled_by_run_id=run_id,
         operation_key="cancel-interview",
@@ -639,7 +692,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         tenant_context,
         CancelCalendarEntryInput(
             calendar_entry_id=entries[3].id,
-            expected_updated_at=entries[3].updated_at,
+            expected_row_version=entries[3].row_version,
         ),
         cancelled_by_run_id=run_id,
         operation_key="cancel-retrospective",
@@ -650,7 +703,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[0].id,
             new_date="2026-07-12",
-            expected_updated_at=entries[0].updated_at,
+            expected_row_version=entries[0].row_version,
         ),
         updated_by_run_id=run_id,
         operation_key="move-morning-meeting",
@@ -681,7 +734,7 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     run_id = uuid4()
     input_data = CancelCalendarEntryInput(
         calendar_entry_id=created.calendar_entry.id,
-        expected_updated_at=created.calendar_entry.updated_at,
+        expected_row_version=created.calendar_entry.row_version,
         reason="客户改期",
     )
 
@@ -743,7 +796,7 @@ async def test_cancel_rejects_stale_selected_version(
         RescheduleCalendarEntryInput(
             calendar_entry_id=selected.id,
             new_date="2026-07-12",
-            expected_updated_at=selected.updated_at,
+            expected_row_version=selected.row_version,
         ),
         updated_by_run_id=uuid4(),
         operation_key="move-before-cancel",
@@ -755,7 +808,7 @@ async def test_cancel_rejects_stale_selected_version(
             tenant_context,
             CancelCalendarEntryInput(
                 calendar_entry_id=selected.id,
-                expected_updated_at=selected.updated_at,
+                expected_row_version=selected.row_version,
             ),
             cancelled_by_run_id=uuid4(),
             operation_key="stale-cancel",

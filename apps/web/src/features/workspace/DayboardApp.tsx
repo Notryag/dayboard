@@ -39,8 +39,11 @@ function ChatHome() {
     cancelActiveRun,
     chooseClarification,
     conversationState,
+    hasOlderMessages,
     isSubmitting,
+    isLoadingOlderMessages,
     isThreadBootstrapping,
+    loadOlderMessages,
     markScheduleChanged,
     messages,
     progress: activeProgress,
@@ -64,13 +67,14 @@ function ChatHome() {
     return () => window.clearTimeout(timeout);
   }, [undoNotice]);
 
+  const lastMessage = messages.at(-1);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const container = messagesRef.current;
       if (container) container.scrollTop = container.scrollHeight;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [conversationState, isSubmitting, messages]);
+  }, [conversationState, isSubmitting, lastMessage?.id, lastMessage?.parts, lastMessage?.text]);
 
   function handleScheduleChanged(change?: ScheduleChange) {
     markScheduleChanged();
@@ -162,10 +166,13 @@ function ChatHome() {
             >
               <ChatMessageList
                 conversationState={conversationState}
+                hasOlderMessages={hasOlderMessages}
+                isLoadingOlderMessages={isLoadingOlderMessages}
                 isSubmitting={isSubmitting}
                 messages={messages}
                 onChanged={handleScheduleChanged}
                 onClarificationChoice={(optionKey) => void chooseClarification(optionKey)}
+                onLoadOlderMessages={() => void loadOlderMessages()}
                 scrollRef={messagesRef}
                 timezone={timezone}
               />

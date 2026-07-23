@@ -212,7 +212,7 @@ class CalendarEntryRepository:
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
         updated_by_run_id: UUID,
         operation_key: str,
     ) -> CalendarEntryRow | None:
@@ -222,7 +222,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
             )
@@ -234,6 +234,7 @@ class CalendarEntryRepository:
                 reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
                 updated_by_run_id=updated_by_run_id,
                 updated_operation_key=operation_key,
+                row_version=CalendarEntryRow.row_version + 1,
                 updated_at=func.now(),
             )
             .returning(CalendarEntryRow)
@@ -249,7 +250,7 @@ class CalendarEntryRepository:
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
             update(CalendarEntryRow)
@@ -257,7 +258,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
             )
@@ -270,6 +271,7 @@ class CalendarEntryRepository:
                 reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
                 updated_by_run_id=None,
                 updated_operation_key=None,
+                row_version=CalendarEntryRow.row_version + 1,
                 updated_at=func.now(),
             )
             .returning(CalendarEntryRow)
@@ -296,7 +298,7 @@ class CalendarEntryRepository:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
         cancelled_by_run_id: UUID,
         operation_key: str,
         cancellation_reason: str | None,
@@ -308,7 +310,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
             )
@@ -318,6 +320,7 @@ class CalendarEntryRepository:
                 cancelled_by_run_id=cancelled_by_run_id,
                 cancelled_operation_key=operation_key,
                 cancellation_reason=cancellation_reason,
+                row_version=CalendarEntryRow.row_version + 1,
             )
             .returning(CalendarEntryRow)
         )
@@ -345,7 +348,7 @@ class CalendarEntryRepository:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntryRow | None:
         now = func.now()
         return await self.session.scalar(
@@ -354,7 +357,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
             )
@@ -364,6 +367,7 @@ class CalendarEntryRepository:
                 cancelled_by_run_id=None,
                 cancelled_operation_key=None,
                 cancellation_reason=None,
+                row_version=CalendarEntryRow.row_version + 1,
             )
             .returning(CalendarEntryRow)
         )
@@ -373,7 +377,7 @@ class CalendarEntryRepository:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntryRow | None:
         now = func.now()
         return await self.session.scalar(
@@ -382,11 +386,15 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
             )
-            .values(completed_at=now, updated_at=now)
+            .values(
+                completed_at=now,
+                row_version=CalendarEntryRow.row_version + 1,
+                updated_at=now,
+            )
             .returning(CalendarEntryRow)
         )
 
@@ -395,7 +403,7 @@ class CalendarEntryRepository:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntryRow | None:
         return await self.session.scalar(
             update(CalendarEntryRow)
@@ -403,11 +411,15 @@ class CalendarEntryRepository:
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.updated_at == expected_updated_at,
+                CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_not(None),
             )
-            .values(completed_at=None, updated_at=func.now())
+            .values(
+                completed_at=None,
+                row_version=CalendarEntryRow.row_version + 1,
+                updated_at=func.now(),
+            )
             .returning(CalendarEntryRow)
         )
 
@@ -587,11 +599,12 @@ class TaskItemRepository:
         *,
         task_id: UUID,
         data: TaskItemUpdate,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItemRow | None:
         values = {
             "updated_by_run_id": data.updated_by_run_id,
             "updated_operation_key": data.updated_operation_key,
+            "row_version": TaskItemRow.row_version + 1,
             "updated_at": func.now(),
         }
         if data.title is not None:
@@ -606,7 +619,7 @@ class TaskItemRepository:
                 TaskItemRow.id == task_id,
                 TaskItemRow.tenant_id == context.tenant_id,
                 TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.updated_at == expected_updated_at,
+                TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )
             .values(**values)
@@ -620,7 +633,7 @@ class TaskItemRepository:
         task_id: UUID,
         title: str,
         due_at: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItemRow | None:
         return await self.session.scalar(
             update(TaskItemRow)
@@ -628,7 +641,7 @@ class TaskItemRepository:
                 TaskItemRow.id == task_id,
                 TaskItemRow.tenant_id == context.tenant_id,
                 TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.updated_at == expected_updated_at,
+                TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )
             .values(
@@ -636,6 +649,7 @@ class TaskItemRepository:
                 due_at=due_at,
                 updated_by_run_id=None,
                 updated_operation_key=None,
+                row_version=TaskItemRow.row_version + 1,
                 updated_at=func.now(),
             )
             .returning(TaskItemRow)
@@ -665,7 +679,7 @@ class TaskItemRepository:
         *,
         task_id: UUID,
         status: TaskStatus,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItemRow | None:
         return await self.session.scalar(
             update(TaskItemRow)
@@ -673,7 +687,7 @@ class TaskItemRepository:
                 TaskItemRow.id == task_id,
                 TaskItemRow.tenant_id == context.tenant_id,
                 TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.updated_at == expected_updated_at,
+                TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )
             .values(
@@ -681,6 +695,7 @@ class TaskItemRepository:
                 updated_at=func.now(),
                 updated_by_run_id=None,
                 updated_operation_key=None,
+                row_version=TaskItemRow.row_version + 1,
             )
             .returning(TaskItemRow)
         )

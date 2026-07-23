@@ -47,6 +47,8 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --locked
+      - run: uv run python ../../tools/check_architecture.py
+      - run: uv run ruff check ../../packages/agent-platform/src ../../tools/check_architecture.py
       - run: uv run ruff check .
       - run: uv run alembic upgrade head
       - run: uv run pytest -q

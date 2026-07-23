@@ -61,12 +61,23 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
             ToolMessage(
                 name="search_calendar_entries",
                 tool_call_id="search-1",
-                content=(
-                    '[{"id":"entry-1","title":"产品会议",'
-                    '"start_time":"2026-07-11T08:00:00+08:00",'
-                    '"updated_at":"2026-07-10T09:00:00Z",'
-                    '"tenant_id":"must-not-persist"}]'
-                ),
+                content='[{"id":"entry-1","title":"产品会议","local_start":"2026-07-11T08:00"}]',
+                artifact={
+                    "type": "schedule_items_result",
+                    "items": [
+                        {
+                            "kind": "calendar",
+                            "value": {
+                                "id": "entry-1",
+                                "row_version": 4,
+                                "title": "产品会议",
+                                "start_time": "2026-07-11T00:00:00+00:00",
+                                "timezone": "Asia/Shanghai",
+                                "tenant_id": "must-not-persist",
+                            },
+                        }
+                    ],
+                },
             ),
         ]
     }
@@ -79,9 +90,10 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
             {
                 "key": "candidate_1",
                 "id": "entry-1",
+                "row_version": 4,
                 "title": "产品会议",
-                "start_time": "2026-07-11T08:00:00+08:00",
-                "updated_at": "2026-07-10T09:00:00Z",
+                "start_time": "2026-07-11T00:00:00+00:00",
+                "timezone": "Asia/Shanghai",
             }
         ],
         "interaction": {
@@ -90,7 +102,8 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
                 {
                     "key": "candidate_1",
                     "title": "产品会议",
-                    "start_time": "2026-07-11T08:00:00+08:00",
+                    "start_time": "2026-07-11T00:00:00+00:00",
+                    "timezone": "Asia/Shanghai",
                 }
             ],
         },
@@ -486,7 +499,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
     async def fake_invoker(**kwargs):
         assert kwargs["agent_factory"]() == {"agent": "fake"}
         assert kwargs["config"]["configurable"]["thread_id"] != str(run_id)
-        assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard"
+        assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard-time-v2"
         assert kwargs["context"]["run_id"] == str(run_id)
         assert len(built["compaction_hooks"]) == 1
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}

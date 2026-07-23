@@ -5,14 +5,13 @@ import type {
   ClarificationInteraction as Interaction,
   ConversationState,
 } from "@/features/clarifications/types";
-import { ApiError, apiBaseUrl, userFacingApiError } from "@/lib/api/client";
-import type { ConversationMessage } from "@/lib/api/types";
+import { apiBaseUrl, userFacingApiError } from "@/lib/api/client";
 import {
   cancelRun,
   createCommandRun,
-  createThread,
   getActiveRun,
   getConversationState,
+  getPrimaryConversation,
   getThreadMessages,
   submitClarificationChoice,
 } from "./api";
@@ -50,8 +49,11 @@ export function useConversationSession() {
   const [conversationState, setConversationState] = useState<ConversationState | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isThreadBootstrapping, setIsThreadBootstrapping] = useState(true);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [nextMessageCursor, setNextMessageCursor] = useState<string | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const initializingThreadRef = useRef(false);
+  const loadingOlderMessagesRef = useRef(false);
 
   const refreshConversationState = useCallback(async (resolvedThreadId: string) => {
     setConversationState(await getConversationState(resolvedThreadId));
@@ -72,32 +74,17 @@ export function useConversationSession() {
     setIsThreadBootstrapping(true);
 
     async function initializeThread() {
-      let resolvedThreadId = localStorage.getItem("dayboard.thread_id");
-      let history: ConversationMessage[] = [];
-      if (resolvedThreadId) {
-        try {
-          history = await getThreadMessages(resolvedThreadId);
-        } catch (error) {
-          if (error instanceof ApiError && error.status === 404) {
-            localStorage.removeItem("dayboard.thread_id");
-            resolvedThreadId = null;
-          } else {
-            throw error;
-          }
-        }
-      }
-      if (!resolvedThreadId) {
-        const thread = await createThread();
-        resolvedThreadId = thread.id;
-        localStorage.setItem("dayboard.thread_id", resolvedThreadId);
-      }
+      const currentThread = await getPrimaryConversation();
+      const resolvedThreadId = currentThread.id;
 
+      const history = await getThreadMessages(resolvedThreadId);
       const state = await getConversationState(resolvedThreadId);
       setThreadId(resolvedThreadId);
       setConversationState(state);
+      setNextMessageCursor(history.next_cursor);
       dispatch({
         type: "messages_replaced",
-        messages: history.length ? history.map(persistedMessage) : initialMessages,
+        messages: history.items.length ? history.items.map(persistedMessage) : initialMessages,
       });
 
       const activeRun = await getActiveRun(resolvedThreadId);
@@ -193,6 +180,23 @@ export function useConversationSession() {
     dispatch({ type: "schedule_changed" });
   }, [dispatch]);
 
+  const loadOlderMessages = useCallback(async () => {
+    if (!threadId || !nextMessageCursor || loadingOlderMessagesRef.current) return;
+    loadingOlderMessagesRef.current = true;
+    setIsLoadingOlderMessages(true);
+    try {
+      const history = await getThreadMessages(threadId, nextMessageCursor);
+      setNextMessageCursor(history.next_cursor);
+      dispatch({
+        type: "messages_prepended",
+        messages: history.items.map(persistedMessage),
+      });
+    } finally {
+      loadingOlderMessagesRef.current = false;
+      setIsLoadingOlderMessages(false);
+    }
+  }, [dispatch, nextMessageCursor, threadId]);
+
   const retryBootstrap = useCallback(() => {
     setBootstrapAttempt((current) => current + 1);
   }, []);
@@ -205,6 +209,9 @@ export function useConversationSession() {
     conversationState,
     isSubmitting,
     isThreadBootstrapping,
+    isLoadingOlderMessages,
+    hasOlderMessages: nextMessageCursor !== null,
+    loadOlderMessages,
     markScheduleChanged,
     messages,
     progress,

@@ -24,6 +24,7 @@ class InvalidScheduleCursor(ValueError):
 
 class CalendarEntryView(BaseModel):
     id: UUID
+    row_version: int
     title: str
     timing_kind: CalendarTimingKind
     scheduled_date: date | None
@@ -55,6 +56,7 @@ class CalendarEntryView(BaseModel):
 
 class TaskItemView(BaseModel):
     id: UUID
+    row_version: int
     title: str
     due_at: datetime | None
     timezone: str

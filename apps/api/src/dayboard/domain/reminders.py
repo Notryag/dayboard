@@ -21,6 +21,14 @@ class ReminderDeliveryStatus(StrEnum):
     cancelled = "cancelled"
 
 
+class ReminderSourceStatus(StrEnum):
+    scheduled = "scheduled"
+    open = "open"
+    completed = "completed"
+    cancelled = "cancelled"
+    deleted = "deleted"
+
+
 class ReminderDelivery(BaseModel):
     id: UUID
     tenant_id: UUID
@@ -39,3 +47,8 @@ class ReminderDelivery(BaseModel):
     payload: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+
+
+class ReminderInboxItem(ReminderDelivery):
+    source_status: ReminderSourceStatus
+    source_occurs_at: AwareDatetime

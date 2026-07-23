@@ -11,6 +11,7 @@ CALENDAR_ID_2 = "33333333-3333-4333-8333-333333333333"
 def _task_value(*, title: str = "提交周报") -> dict:
     return {
         "id": TASK_ID,
+        "row_version": 1,
         "title": title,
         "due_at": None,
         "timezone": "Asia/Shanghai",
@@ -34,6 +35,7 @@ def _calendar_value(
 ) -> dict:
     return {
         "id": entry_id,
+        "row_version": 1,
         "title": title,
         "timing_kind": timing_kind,
         "scheduled_date": scheduled_date,

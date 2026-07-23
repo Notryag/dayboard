@@ -29,6 +29,11 @@ flowchart LR
 PostgreSQL is the source of truth for accounts, schedules, conversations, Runs, durable Run events,
 reminders, and provider usage. Redis owns queue delivery, rate limits, coordination, and bounded
 live StreamBridge replay. Redis is not authoritative product storage.
+Conversation bootstrap resolves the owner's primary Thread from PostgreSQL; browser-local state
+cannot create a separate history boundary across devices.
+The primary Thread is protected by a partial unique database index. Conversation messages use
+cursor pagination rather than an unbounded history response; PostgreSQL remains authoritative on
+refresh and across devices.
 
 ## Ownership
 
@@ -66,7 +71,7 @@ thread, Run, operation keys, and permissions are injected by the runtime and nev
 model-supplied tool arguments. Repository queries scope business data by tenant and owner.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
-`expected_updated_at`; retryable Agent writes also use server-derived operation identities.
+`expected_row_version`; retryable Agent writes also use server-derived operation identities.
 
 ## Agent Boundary
 

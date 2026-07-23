@@ -4,6 +4,7 @@ type Json = Record<string, unknown>;
 
 export type CalendarEntry = {
   id: string;
+  row_version: number;
   title: string;
   timing_kind: "timed" | "anytime";
   scheduled_date: string | null;
@@ -20,6 +21,7 @@ export type CalendarEntry = {
 
 export type TaskItem = {
   id: string;
+  row_version: number;
   title: string;
   due_at: string | null;
   timezone: string;
@@ -44,6 +46,8 @@ export type ReminderDelivery = {
   scheduled_for: string;
   status: "pending" | "processing" | "delivered" | "failed" | "cancelled";
   read_at: string | null;
+  source_occurs_at: string;
+  source_status: "scheduled" | "open" | "completed" | "cancelled" | "deleted";
   payload: Record<string, unknown>;
   [key: string]: unknown;
 };
@@ -70,6 +74,7 @@ const now = "2026-07-21T08:00:00Z";
 export function calendarEntry(overrides: Partial<CalendarEntry> = {}): CalendarEntry {
   return {
     id: "calendar-1",
+    row_version: 1,
     title: "产品评审",
     timing_kind: "timed",
     scheduled_date: null,
@@ -89,6 +94,7 @@ export function calendarEntry(overrides: Partial<CalendarEntry> = {}): CalendarE
 export function taskItem(overrides: Partial<TaskItem> = {}): TaskItem {
   return {
     id: "task-1",
+    row_version: 1,
     title: "整理资料",
     due_at: null,
     timezone: "Asia/Shanghai",
@@ -202,6 +208,19 @@ export async function installApiFixture(
         duration_seconds: 1,
       });
     }
+    if (path === "/api/conversation" && method === "PUT") {
+      state.threadId ??= `thread-${++sequence}`;
+      return json(route, {
+        id: state.threadId,
+        tenant_id: "tenant-1",
+        owner_user_id: "user-1",
+        title: null,
+        status: "active",
+        summary: null,
+        created_at: now,
+        updated_at: now,
+      });
+    }
     if (path === "/api/threads" && method === "POST") {
       state.threadId = `thread-${++sequence}`;
       return json(route, {
@@ -209,11 +228,25 @@ export async function installApiFixture(
         tenant_id: "tenant-1",
         owner_user_id: "user-1",
         title: null,
-        expected_updated_at: now,
+        status: "active",
+        summary: null,
+        created_at: now,
+        updated_at: now,
       });
     }
     const messagesMatch = path.match(/^\/api\/threads\/([^/]+)\/messages$/);
-    if (messagesMatch) return json(route, state.messages);
+    if (messagesMatch) {
+      const before = url.searchParams.get("before");
+      const beforeIndex = before
+        ? state.messages.findIndex((message) => message.id === before)
+        : state.messages.length;
+      const end = beforeIndex < 0 ? 0 : beforeIndex;
+      const start = Math.max(0, end - 30);
+      return json(route, {
+        items: state.messages.slice(start, end),
+        next_cursor: start > 0 ? state.messages[start].id : null,
+      });
+    }
     const stateMatch = path.match(/^\/api\/threads\/([^/]+)\/state$/);
     if (stateMatch) return json(route, state.clarification);
     const activeMatch = path.match(/^\/api\/threads\/([^/]+)\/active-run$/);
@@ -275,7 +308,12 @@ export async function installApiFixture(
     }
     const runMatch = path.match(/^\/api\/runs\/([^/]+)$/);
     if (runMatch) return json(route, state.activeRun ?? { id: runMatch[1], status: "completed", result_message: "已处理完成。" });
-    if (path === "/api/reminders" && method === "GET") return json(route, state.reminders);
+    if (path === "/api/reminders" && method === "GET") {
+      return json(
+        route,
+        state.reminders.filter((item) => item.status === "delivered" || item.status === "failed"),
+      );
+    }
     const reminderRead = path.match(/^\/api\/reminders\/([^/]+)\/read$/);
     if (reminderRead && method === "POST") {
       const reminder = state.reminders.find((item) => item.id === reminderRead[1]);
@@ -306,11 +344,12 @@ export async function installApiFixture(
     if (taskComplete && method === "POST") {
       const index = state.tasks.findIndex((task) => task.id === taskComplete[1]);
       const current = state.tasks[index];
-      if (!current || (body as Json).expected_updated_at !== current.updated_at) {
+      if (!current || (body as Json).expected_row_version !== current.row_version) {
         return json(route, { error: { code: "SCHEDULE_ITEM_CONFLICT", message: "Conflict" } }, 409);
       }
       const completed = {
         ...current,
+        row_version: current.row_version + 1,
         status: "completed" as const,
         updated_at: `2026-07-21T08:00:0${sequence++}Z`,
       };
@@ -321,11 +360,12 @@ export async function installApiFixture(
     if (taskReopen && method === "POST") {
       const index = state.tasks.findIndex((task) => task.id === taskReopen[1]);
       const current = state.tasks[index];
-      if (!current || (body as Json).expected_updated_at !== current.updated_at) {
+      if (!current || (body as Json).expected_row_version !== current.row_version) {
         return json(route, { error: { code: "SCHEDULE_ITEM_CONFLICT", message: "Conflict" } }, 409);
       }
       const reopened = {
         ...current,
+        row_version: current.row_version + 1,
         status: "open" as const,
         updated_at: `2026-07-21T08:00:0${sequence++}Z`,
       };
@@ -336,19 +376,20 @@ export async function installApiFixture(
     if (calendarUpdate && method === "PUT") {
       const index = state.calendars.findIndex((entry) => entry.id === calendarUpdate[1]);
       const current = state.calendars[index];
-      if (!current || (body as Json).expected_updated_at !== current.updated_at) {
+      if (!current || (body as Json).expected_row_version !== current.row_version) {
         return json(route, { error: { code: "SCHEDULE_ITEM_CONFLICT", message: "Conflict" } }, 409);
       }
-      const version = `2026-07-21T08:00:0${sequence++}Z`;
+      const updatedAt = `2026-07-21T08:00:0${sequence++}Z`;
       const timingKind = (body as Json).timing_kind as "timed" | "anytime";
       const updated: CalendarEntry = {
         ...current,
+        row_version: current.row_version + 1,
         title: String((body as Json).title),
         timing_kind: timingKind,
         scheduled_date: timingKind === "anytime" ? String((body as Json).scheduled_date) : null,
         start_time: timingKind === "timed" ? String((body as Json).start_time) : null,
         end_time: timingKind === "timed" ? String((body as Json).start_time) : null,
-        updated_at: version,
+        updated_at: updatedAt,
       };
       state.calendars[index] = updated;
       return json(route, updated);

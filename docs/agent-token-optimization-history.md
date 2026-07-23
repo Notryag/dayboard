@@ -1,7 +1,7 @@
 # Agent Token Optimization History
 
 Status: append-only engineering record  
-Last reviewed: 2026-07-20
+Last reviewed: 2026-07-23
 
 This document preserves each measured Dayboard Agent token optimization as a product and
 engineering highlight. Do not replace older baselines when a new optimization lands. Append a new
@@ -19,11 +19,13 @@ stable system prompt and serialized model-visible tool schemas.
 | Absolute temporal classification | 861 | 1,341 | 2,202 | -40.8% | 2,566-2,573 |
 | Native anytime calendar entries | 666 | 1,406 | 2,072 | -44.3% | pending deployment sample |
 | Compact tool receipts + sequence anchors | 772 | 1,487 | 2,259 | -39.2% | 2,523 |
+| Beijing-local protocol + integer versions | 913 | 1,469 | 2,382 | -35.9% | pending deployment sample |
 
-The current fixed surface is 1,458 tokens smaller than the initial baseline. It is 187 tokens larger
-than the preceding version because concurrency-safe sequence anchors add two create fields and an
-explicit cross-turn policy. Live input includes provider protocol overhead and user messages, so it
-will not equal the offline fixed count.
+The current fixed surface is 1,335 tokens smaller than the initial baseline. It is 123 tokens larger
+than the preceding version because the time protocol explicitly prevents UTC conversion and defines
+adjacent-entry behavior. Tool schemas became 18 tokens smaller after integer row versions replaced
+timestamp concurrency fields, despite adding a duration parameter. Live input includes provider
+protocol overhead and user messages, so it will not equal the offline fixed count.
 
 ## 2026-07-20: Incident Baseline
 
@@ -137,6 +139,38 @@ call of the second Run. The provider omitted cached-token detail on the other fo
 Northgate surfaced as `CACHED_USAGE_MISSING`; therefore 1,536 is a measured lower bound, not a zero
 cache result. `EXACT_CACHE_BYPASSED` was also expected because each semantic round had different
 messages or bound tools and was not an identical request replay.
+
+## 2026-07-23: Beijing-Local Model Protocol And Integer Versions
+
+The model-visible scheduling contract now uses only Beijing local wall-clock values in
+`YYYY-MM-DDTHH:mm`. UTC instants remain in PostgreSQL and presentation artifacts. Provider-bound
+ToolMessages discard artifacts, legacy absolute receipts are rewritten defensively, and the new
+`dayboard-time-v2` checkpoint namespace prevents old UTC receipts from entering either summary or
+main-model context. Duration edits use `new_duration_minutes`, so the model no longer computes an
+end timestamp.
+
+Calendar and task concurrency moved from `expected_updated_at` to an atomic integer `row_version`.
+The system prompt increased from 772 to 913 tokens to make the local-time and adjacency invariants
+explicit. The eight model-visible schemas fell from 1,487 to 1,469 tokens, producing a fixed total
+of 2,382 tokens: 5.4% above the preceding version and still 35.9% below the initial 3,717-token
+baseline. Provider input and cache-read measurements remain pending deployment.
+
+Programmatic regression coverage verifies UTC storage/local receipts, artifact isolation, stale
+version rejection, anchor validation, and shortening a 16:00-17:00 entry to 30 minutes without
+moving the independent 17:00 entry.
+
+## 2026-07-23: Deterministic Terminal Completion
+
+Successful terminal scheduling writes now end the Agent loop in Dayboard middleware with a short
+grounded completion assembled from canonical ToolMessages. The model is still called after searches,
+errors, partial results, or unresolved work, but it is no longer called merely to restate a committed
+write already rendered by the UI. The fixed system-prompt and tool-schema surface remains 2,382
+tokens; this change removes an entire provider round instead of compressing that round.
+
+The pre-change production sample contained four final confirmation calls totaling 10,144 prompt
+tokens and 55 completion tokens. Their 10,199 total tokens were 29.4% of the 34,638 tokens consumed
+by four Runs. Post-deployment provider measurements remain to be recorded before claiming realized
+savings.
 
 ## Entry Template
 

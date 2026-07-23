@@ -31,9 +31,9 @@ def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:
     assert "Date without a clock or daypart is an anytime calendar entry" in prompt
     assert "Any concrete date, clock, or daypart makes the action a calendar entry" in prompt
     assert "search the referenced calendar entry first" in prompt
-    assert "anchor_entry_id and its updated_at" in prompt
+    assert "anchor_entry_id and its row_version" in prompt
     assert "Never include the referenced action in the new title" in prompt
-    assert "starts at the anchor's end_time" in prompt
+    assert "starts at the anchor's end" in prompt
     assert "do not invent a clock" in prompt
     assert "早上 08:00" in prompt
     assert "晚上 20:00" in prompt
@@ -42,7 +42,9 @@ def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:
     assert "Use plain text only: do not use Markdown" in prompt
     assert "separate cards" in prompt
     assert prompt.index("Rules:") < prompt.index("Runtime scheduling context:")
-    assert prompt.index("Runtime scheduling context:") < prompt.index("Current local datetime:")
+    assert prompt.index("Runtime scheduling context:") < prompt.index(
+        "Current Beijing datetime:"
+    )
 
 
 def test_system_prompt_keeps_runtime_values_after_the_stable_prefix() -> None:

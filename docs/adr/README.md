@@ -41,3 +41,4 @@ Create another ADR when a new decision in one of these areas becomes expensive t
 - [ADR-005: Authenticated Identity Boundary](./005-authenticated-identity-boundary.md)
 - [ADR-006: Tenant Isolation and External Tool Boundaries](./006-tenant-isolation-and-external-tools.md)
 - [ADR-007: Stream Canonical Agent Messages](./007-stream-canonical-agent-messages.md)
+- [ADR-008: Introduce An Agent Application Platform Layer](./008-introduce-agent-application-platform.md)

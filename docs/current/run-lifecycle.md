@@ -110,6 +110,12 @@ publishes the end sentinel, Dayboard lifecycle hooks persist:
 - clarification state when required;
 - durable RuntimeJournal events used for diagnostics and usage correlation.
 
+When the trailing tool-call batch contains only successful terminal schedule writes, Dayboard's
+Agent middleware returns a deterministic grounded AI message and ends the loop without a final
+provider confirmation call. This optimization never runs for search results, tool errors,
+clarification, malformed output, partial completion, or unresolved work. The committed artifact is
+still projected and persisted before the Run becomes terminal.
+
 `agent_run_events` are durable observability records. They are not polled as the primary live UI
 protocol and are not used to reconstruct schedule cards.
 

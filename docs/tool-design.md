@@ -14,8 +14,8 @@ The model never receives or supplies `tenant_id`, `user_id`, `run_id`, `operatio
 and are resolved with `TenantContext.timezone`. A future explicit foreign timezone may be an
 optional model field, but it must never replace the trusted default implicitly.
 
-`expected_updated_at` remains model-visible on mutations of existing objects. It is required for
-optimistic locking and protects a selection from concurrent changes.
+Schedule receipts expose integer `row_version`; mutations require `expected_row_version` for atomic
+optimistic locking. Audit timestamps are not model-visible concurrency tokens.
 
 ## Model-Visible Surface
 
@@ -90,7 +90,7 @@ Do not return `requires_follow_up=false`; clarification is represented by the in
 a dormant result flag. Internal domain models may retain audit and idempotency fields, while the
 Agent projection exposes only fields required for rendering and subsequent optimistic mutations.
 
-Sequence-dependent creation uses `anchor_entry_id` plus `expected_anchor_updated_at` on
+Sequence-dependent creation uses `anchor_entry_id` plus `expected_anchor_row_version` on
 `create_calendar_entry`. These fields are mutually exclusive with direct date/start/end inputs.
 After a search selects one timed entry, the service locks that tenant-owned row, verifies its
 version and active state, derives the new start from its authoritative `end_time`, checks conflicts,
@@ -107,12 +107,17 @@ selector call and does not classify user text with keywords.
 | First semantic turn or new user turn | Seven scheduling tools plus `ask_clarification` |
 | Successful calendar search result | Four calendar tools plus `ask_clarification` |
 | Successful task search result | Three task tools plus `ask_clarification` |
-| Successful terminal write result(s) | No scheduling tools; generate the grounded confirmation |
+| Successful terminal write result(s) | End the Agent loop with a deterministic grounded completion; do not call the model again |
 | Same tool-call batch spans calendar and task domains | Full tool surface until the batch resolves |
 | Error, malformed result, or unavailable required tool | Restore the full surface for one recovery attempt |
 
 Domain narrowing applies after search, where the next operation is known to stay in that domain. A
-calendar or task write does not narrow to more write tools; a successful write enters confirmation.
+calendar or task write does not narrow to more write tools. When every result in the trailing
+tool-call batch is a successful terminal write, middleware creates a short localized completion
+from the canonical receipts and ends the loop without another provider request. Search results,
+errors, malformed results, partial completion, and unresolved mixed batches continue through the
+model. Conflict counts returned by successful calendar writes remain visible in the deterministic
+completion.
 This avoids hiding a task merely because a mixed command happened to execute a calendar write
 first. A recovery marker must prevent unbounded restore/retry loops.
 
@@ -125,9 +130,9 @@ Tests must prove:
 3. Empty searches are bounded and calendar interval searches detect overlaps.
 4. Create and reschedule return conflicts without a separate conflict tool.
 5. Task creation cannot select a non-open status.
-6. Mutation results require and enforce `expected_updated_at`.
-7. Successful searches narrow by domain, mixed batches retain the full surface, terminal writes
-   remove tools, and failures restore the full surface once.
+6. Mutation results require and enforce `expected_row_version`.
+7. Successful searches narrow by domain, mixed terminal write batches finish without another model
+   call, and failures restore the full surface once.
 8. Stream projection and conversation cards render authoritative entities without duplicate IDs or
    `requires_follow_up` fields.
 9. Date-only actions create searchable `anytime` entries with no start/end instant, reminder, or

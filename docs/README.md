@@ -14,6 +14,8 @@ Read only what the task needs:
 - [current/architecture.md](./current/architecture.md): system and ownership boundaries.
 - [current/product-model.md](./current/product-model.md): schedule/task semantics and product scope.
 - [current/run-lifecycle.md](./current/run-lifecycle.md): Run states, Redis Streams, SSE, and recovery.
+- [current/time-protocol.md](./current/time-protocol.md): Beijing local model protocol, UTC storage,
+  artifacts, and row-version concurrency.
 
 These are the only documents that should describe the whole current system. Update them with the
 implementation that changes them.
@@ -21,6 +23,8 @@ implementation that changes them.
 ## Engineering Guides
 
 - [engineering-guidelines.md](./engineering-guidelines.md): coding, layering, testing, and safety.
+- [agent-platform-extraction.md](./agent-platform-extraction.md): target three-layer ownership map
+  and incremental extraction gates.
 - [ui-design.md](./ui-design.md): current visual and interaction rules.
 - [tool-design.md](./tool-design.md): model-visible tools and dynamic binding.
 - [context-token-optimization.md](./context-token-optimization.md): accepted compact-result,

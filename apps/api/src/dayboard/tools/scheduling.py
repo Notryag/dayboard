@@ -22,14 +22,14 @@ class CreateCalendarEntryInput(BaseModel):
     participants: list[str] = Field(default_factory=list)
     reminder: Reminder | None = None
     anchor_entry_id: UUID | None = None
-    expected_anchor_updated_at: AwareDatetime | None = None
+    expected_anchor_row_version: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def validate_timing(self) -> CreateCalendarEntryInput:
         anchor_mode = self.anchor_entry_id is not None
-        if anchor_mode != (self.expected_anchor_updated_at is not None):
+        if anchor_mode != (self.expected_anchor_row_version is not None):
             raise ValueError(
-                "anchor_entry_id and expected_anchor_updated_at must be provided together"
+                "anchor_entry_id and expected_anchor_row_version must be provided together"
             )
         if sum(
             value is not None
@@ -69,13 +69,21 @@ class RescheduleCalendarEntryInput(BaseModel):
     new_date: date | None = None
     new_start_time: AwareDatetime | None = None
     new_end_time: AwareDatetime | None = None
-    expected_updated_at: AwareDatetime
+    new_duration_minutes: int | None = Field(default=None, ge=1, le=10080)
+    expected_row_version: int = Field(ge=1)
 
     @model_validator(mode="after")
     def validate_target(self) -> RescheduleCalendarEntryInput:
         if self.new_date is not None and self.new_start_time is not None:
             raise ValueError("new_date and new_start_time cannot be combined")
-        if self.new_date is None and self.new_start_time is None and self.new_end_time is None:
+        if self.new_end_time is not None and self.new_duration_minutes is not None:
+            raise ValueError("new_end_time and new_duration_minutes cannot be combined")
+        if (
+            self.new_date is None
+            and self.new_start_time is None
+            and self.new_end_time is None
+            and self.new_duration_minutes is None
+        ):
             raise ValueError("provide at least one calendar time change")
         return self
 
@@ -96,7 +104,7 @@ class CalendarEntryChangedError(RuntimeError):
 
 class CancelCalendarEntryInput(BaseModel):
     calendar_entry_id: UUID
-    expected_updated_at: AwareDatetime
+    expected_row_version: int = Field(ge=1)
     reason: str | None = Field(default=None, max_length=500)
 
 
@@ -126,7 +134,7 @@ class SearchTaskItemsInput(BaseModel):
 
 class UpdateTaskItemInput(BaseModel):
     task_item_id: UUID
-    expected_updated_at: AwareDatetime
+    expected_row_version: int = Field(ge=1)
     new_title: str | None = Field(default=None, min_length=1, max_length=240)
     new_due_at: AwareDatetime | None = None
     new_status: TaskStatus | None = None
@@ -176,7 +184,7 @@ async def create_calendar_entry(
         anchor = await service.get_calendar_entry_for_update(context, data.anchor_entry_id)
         if anchor is None:
             raise LookupError("Anchor calendar entry was not found or is cancelled")
-        if anchor.updated_at != data.expected_anchor_updated_at:
+        if anchor.row_version != data.expected_anchor_row_version:
             raise CalendarEntryChangedError(
                 "Anchor calendar entry changed after it was selected; search again"
             )
@@ -202,7 +210,7 @@ async def create_calendar_entry(
                     "start_time",
                     "end_time",
                     "anchor_entry_id",
-                    "expected_anchor_updated_at",
+                    "expected_anchor_row_version",
                 }
             ),
             timing_kind=(
@@ -271,13 +279,15 @@ async def reschedule_calendar_entry(
     existing = await service.get_calendar_entry(context, data.calendar_entry_id)
     if existing is None:
         raise LookupError("Calendar entry not found")
-    if existing.updated_at != data.expected_updated_at:
+    if existing.row_version != data.expected_row_version:
         raise CalendarEntryChangedError(
             "Calendar entry changed after it was selected; search again before updating"
         )
     if existing.start_time is None:
-        if data.new_start_time is None and data.new_end_time is not None:
-            raise ValueError("new_end_time requires a clock time")
+        if data.new_start_time is None and (
+            data.new_end_time is not None or data.new_duration_minutes is not None
+        ):
+            raise ValueError("new_end_time or new_duration_minutes requires a clock time")
         if data.new_start_time is None:
             assert data.new_date is not None
             if data.new_date == existing.scheduled_date:
@@ -289,7 +299,7 @@ async def reschedule_calendar_entry(
                 scheduled_date=data.new_date,
                 start_time=None,
                 end_time=None,
-                expected_updated_at=data.expected_updated_at,
+                expected_row_version=data.expected_row_version,
                 updated_by_run_id=updated_by_run_id,
                 operation_key=operation_key,
             )
@@ -316,7 +326,11 @@ async def reschedule_calendar_entry(
         )
     else:
         resolved_start_time = existing.start_time
-    resolved_end_time = data.new_end_time or resolved_start_time + duration
+    resolved_end_time = (
+        resolved_start_time + timedelta(minutes=data.new_duration_minutes)
+        if data.new_duration_minutes is not None
+        else data.new_end_time or resolved_start_time + duration
+    )
     if resolved_end_time <= resolved_start_time:
         raise ValueError("new_end_time must be after the resolved start time")
     if (
@@ -338,7 +352,7 @@ async def reschedule_calendar_entry(
         scheduled_date=None,
         start_time=resolved_start_time,
         end_time=resolved_end_time,
-        expected_updated_at=data.expected_updated_at,
+        expected_row_version=data.expected_row_version,
         updated_by_run_id=updated_by_run_id,
         operation_key=operation_key,
     )
@@ -392,7 +406,7 @@ async def cancel_calendar_entry(
     cancelled = await service.cancel_calendar_entry(
         context,
         entry_id=existing.id,
-        expected_updated_at=data.expected_updated_at,
+        expected_row_version=data.expected_row_version,
         cancelled_by_run_id=cancelled_by_run_id,
         operation_key=operation_key,
         cancellation_reason=data.reason,
@@ -488,7 +502,7 @@ async def update_task_item(
     updated = await service.update_task_item(
         context,
         task_id=existing.id,
-        expected_updated_at=data.expected_updated_at,
+        expected_row_version=data.expected_row_version,
         data=TaskItemUpdate(
             title=data.new_title,
             due_at=data.new_due_at,

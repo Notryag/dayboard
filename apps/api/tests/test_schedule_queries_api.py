@@ -187,11 +187,11 @@ async def test_completed_schedule_items_remain_queryable_for_the_day(
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
         completed_entry = await client.post(
             f"/api/calendar-entries/{entry.id}/complete",
-            json={"expected_updated_at": entry.updated_at.isoformat()},
+            json={"expected_row_version": entry.row_version},
         )
         completed_task = await client.post(
             f"/api/task-items/{task.id}/complete",
-            json={"expected_updated_at": task.updated_at.isoformat()},
+            json={"expected_row_version": task.row_version},
         )
         calendar_page = await client.get(
             "/api/calendar-entries",
@@ -305,40 +305,41 @@ async def test_run_schedule_items_and_direct_actions(
     await db_session.refresh(entry)
     await db_session.refresh(cancelled_entry)
     await db_session.refresh(task)
-    original_task_updated_at = task.updated_at.isoformat()
+    original_entry_row_version = entry.row_version
+    original_task_row_version = task.row_version
 
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
         completed = await client.post(
             f"/api/task-items/{task.id}/complete",
-            json={"expected_updated_at": original_task_updated_at},
+            json={"expected_row_version": original_task_row_version},
         )
         stale_cancel = await client.post(
             f"/api/task-items/{task.id}/cancel",
-            json={"expected_updated_at": original_task_updated_at},
+            json={"expected_row_version": original_task_row_version},
         )
         completed_entry = await client.post(
             f"/api/calendar-entries/{entry.id}/complete",
-            json={"expected_updated_at": entry.updated_at.isoformat()},
+            json={"expected_row_version": entry.row_version},
         )
         repeated_completion = await client.post(
             f"/api/calendar-entries/{entry.id}/complete",
-            json={"expected_updated_at": entry.updated_at.isoformat()},
+            json={"expected_row_version": entry.row_version},
         )
         completed_entry_cancel = await client.post(
             f"/api/calendar-entries/{entry.id}/cancel",
-            json={"expected_updated_at": entry.updated_at.isoformat()},
+            json={"expected_row_version": entry.row_version},
         )
         reopened_task = await client.post(
             f"/api/task-items/{task.id}/reopen",
-            json={"expected_updated_at": completed.json()["updated_at"]},
+            json={"expected_row_version": completed.json()["row_version"]},
         )
         reopened_entry = await client.post(
             f"/api/calendar-entries/{entry.id}/reopen",
-            json={"expected_updated_at": completed_entry.json()["updated_at"]},
+            json={"expected_row_version": completed_entry.json()["row_version"]},
         )
         cancelled = await client.post(
             f"/api/calendar-entries/{cancelled_entry.id}/cancel",
-            json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
+            json={"expected_row_version": cancelled_entry.row_version},
         )
         selected_date = await client.get(
             "/api/calendar-entries",
@@ -346,22 +347,26 @@ async def test_run_schedule_items_and_direct_actions(
         )
         missing = await client.post(
             f"/api/calendar-entries/{uuid4()}/cancel",
-            json={"expected_updated_at": cancelled_entry.updated_at.isoformat()},
+            json={"expected_row_version": cancelled_entry.row_version},
         )
 
     assert completed.status_code == 200
     assert completed.json()["status"] == "completed"
+    assert completed.json()["row_version"] == original_task_row_version + 1
     assert stale_cancel.status_code == 409
     assert stale_cancel.json()["error"]["code"] == "SCHEDULE_ITEM_CONFLICT"
     assert completed_entry.status_code == 200
     assert completed_entry.json()["status"] == "completed"
+    assert completed_entry.json()["row_version"] == original_entry_row_version + 1
     assert repeated_completion.status_code == 200
     assert repeated_completion.json()["status"] == "completed"
     assert completed_entry_cancel.status_code == 409
     assert reopened_task.status_code == 200
     assert reopened_task.json()["status"] == "open"
+    assert reopened_task.json()["row_version"] == original_task_row_version + 2
     assert reopened_entry.status_code == 200
     assert reopened_entry.json()["status"] == "scheduled"
+    assert reopened_entry.json()["row_version"] == original_entry_row_version + 2
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert [item["status"] for item in selected_date.json()["items"]] == ["scheduled"]
@@ -396,13 +401,13 @@ async def test_direct_schedule_item_updates(
     await db_session.commit()
     await db_session.refresh(entry)
     await db_session.refresh(task)
-    entry_version = entry.updated_at.isoformat()
+    entry_row_version = entry.row_version
 
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
         updated_entry = await client.put(
             f"/api/calendar-entries/{entry.id}",
             json={
-                "expected_updated_at": entry_version,
+                "expected_row_version": entry_row_version,
                 "title": "新日程",
                 "timing_kind": "timed",
                 "start_time": "2026-07-21T14:30:00+08:00",
@@ -412,7 +417,7 @@ async def test_direct_schedule_item_updates(
         stale_entry = await client.put(
             f"/api/calendar-entries/{entry.id}",
             json={
-                "expected_updated_at": entry_version,
+                "expected_row_version": entry_row_version,
                 "title": "覆盖更新",
                 "timing_kind": "timed",
                 "start_time": "2026-07-21T15:00:00+08:00",
@@ -422,7 +427,7 @@ async def test_direct_schedule_item_updates(
         anytime_entry = await client.put(
             f"/api/calendar-entries/{entry.id}",
             json={
-                "expected_updated_at": updated_entry.json()["updated_at"],
+                "expected_row_version": updated_entry.json()["row_version"],
                 "title": "随时日程",
                 "timing_kind": "anytime",
                 "scheduled_date": "2026-07-22",
@@ -431,7 +436,7 @@ async def test_direct_schedule_item_updates(
         updated_task = await client.put(
             f"/api/task-items/{task.id}",
             json={
-                "expected_updated_at": task.updated_at.isoformat(),
+                "expected_row_version": task.row_version,
                 "title": "新待办",
                 "due_at": None,
             },

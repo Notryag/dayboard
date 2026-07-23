@@ -1,6 +1,10 @@
 const dateKeyFormatters = new Map<string, Intl.DateTimeFormat>();
 const timeFormatters = new Map<string, Intl.DateTimeFormat>();
 
+export function timezoneDisplayName(timezone: string) {
+  return timezone === "Asia/Shanghai" ? "北京时间" : timezone;
+}
+
 const weekdayLongFormatter = new Intl.DateTimeFormat("zh-CN", {
   weekday: "long",
   timeZone: "UTC",

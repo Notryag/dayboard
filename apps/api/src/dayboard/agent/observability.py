@@ -107,18 +107,25 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
     if not isinstance(content, dict):
         return {}
     allowed_fields = {
-        "create_calendar_entry": ("title", "local_start", "local_end"),
+        "create_calendar_entry": (
+            "title",
+            "local_start",
+            "local_end",
+            "anchor_entry_id",
+            "expected_anchor_row_version",
+        ),
         "search_calendar_entries": ("local_start", "local_end", "title_query"),
         "reschedule_calendar_entry": (
             "calendar_entry_id",
             "new_date",
             "new_local_start",
             "new_local_end",
-            "expected_updated_at",
+            "new_duration_minutes",
+            "expected_row_version",
         ),
         "cancel_calendar_entry": (
             "calendar_entry_id",
-            "expected_updated_at",
+            "expected_row_version",
             "reason",
         ),
         "create_task_item": ("title",),
@@ -126,7 +133,7 @@ def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
         "update_task_item": (
             "new_title",
             "new_status",
-            "expected_updated_at",
+            "expected_row_version",
         ),
     }.get(tool_name, ())
     return {key: content[key] for key in allowed_fields if key in content}

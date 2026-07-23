@@ -38,7 +38,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function invalidateSession() {
-      localStorage.removeItem("dayboard.thread_id");
       queryClient.clear();
       setAccount(null);
     }
@@ -84,7 +83,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       async logout() {
         await logoutAccount();
-        localStorage.removeItem("dayboard.thread_id");
         queryClient.clear();
         setAccount(null);
       },

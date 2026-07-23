@@ -27,10 +27,15 @@ These notes are for coding agents working on Dayboard.
 
 - Prefer stable, mature dependencies over hand-rolled lightweight code when the dependency improves reliability, operability, or maintainability.
 - Do not avoid a good dependency just to keep the dependency count low.
-- Keep Dayboard product concepts out of `north`; Dayboard depends on `north`, and `north` must not depend on Dayboard.
+- Keep the dependency direction `north <- agent_platform <- dayboard`. A higher layer may import a
+  lower layer; a lower layer must never import a higher layer.
+- Keep Dayboard product concepts out of both `north` and `agent_platform`. North owns runtime
+  primitives, while `agent_platform` owns reusable application capabilities defined by ADR-008.
 - Keep PostgreSQL as the source of truth. Do not replace it with SQLite, JSON files, or in-memory storage for product behavior.
 - Use `/root/deer-flow` as the primary design reference when evolving `north`, especially its model provider factory, async middleware chain, run manager, stream bridge, and thread/run API semantics.
-- Adapt DeerFlow patterns deliberately instead of copying its Gateway application wholesale. Reusable model/runtime contracts belong in `north`; Dayboard keeps FastAPI routes, tenant/auth policy, PostgreSQL product persistence, and scheduling concepts.
+- Adapt DeerFlow patterns deliberately instead of copying its Gateway application wholesale.
+  Reusable model/runtime contracts belong in `north`; reusable application contracts belong in
+  `agent_platform`; Dayboard keeps scheduling policy, product persistence, prompts, tools, and UI.
 - Prefer DeerFlow's run resource lifecycle for future API work: create returns immediately, stream creates and follows a run, join follows an existing run, wait blocks for final state, and cancel is explicit.
 
 ## Test Execution

@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -35,6 +37,20 @@ TERMINAL_WRITE_RESULTS = {
     "update_task_item": "task_item_updated",
 }
 SEARCH_TOOLS = frozenset({"search_calendar_entries", "search_task_items"})
+MODEL_TIMEZONE = ZoneInfo("Asia/Shanghai")
+ABSOLUTE_TO_LOCAL_FIELDS = {
+    "start_time": "local_start",
+    "end_time": "local_end",
+    "due_at": "local_due",
+}
+MODEL_HIDDEN_FIELDS = {
+    "timezone",
+    "created_at",
+    "updated_at",
+    "created_by_run_id",
+    "updated_by_run_id",
+    "cancelled_by_run_id",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,16 +68,25 @@ class SchedulingToolBindingMiddleware(AgentMiddleware):
         request: ModelRequest,
         handler: Callable[[ModelRequest], ModelResponse],
     ) -> ModelResponse | AIMessage:
-        return handler(self._prepare_request(request))
+        prepared = self._prepare_request(request)
+        completion = _terminal_completion(prepared.messages)
+        return AIMessage(content=completion) if completion is not None else handler(prepared)
 
     async def awrap_model_call(
         self,
         request: ModelRequest,
         handler: Callable[[ModelRequest], Awaitable[ModelResponse]],
     ) -> ModelResponse | AIMessage:
-        return await handler(self._prepare_request(request))
+        prepared = self._prepare_request(request)
+        completion = _terminal_completion(prepared.messages)
+        return (
+            AIMessage(content=completion)
+            if completion is not None
+            else await handler(prepared)
+        )
 
     def _prepare_request(self, request: ModelRequest) -> ModelRequest:
+        request = _sanitize_model_messages(request)
         trailing = _trailing_tool_messages(request.messages)
         if not trailing:
             return request
@@ -84,6 +109,70 @@ class SchedulingToolBindingMiddleware(AgentMiddleware):
         )
 
 
+def _sanitize_model_messages(request: ModelRequest) -> ModelRequest:
+    """Strip presentation artifacts and rewrite legacy UTC receipts for the provider."""
+    changed = False
+    messages: list[Any] = []
+    for message in request.messages:
+        if not isinstance(message, ToolMessage):
+            messages.append(message)
+            continue
+        content = message.content
+        if isinstance(content, str):
+            try:
+                payload = json.loads(content)
+            except json.JSONDecodeError:
+                pass
+            else:
+                sanitized = _sanitize_receipt_value(payload)
+                content = json.dumps(
+                    sanitized,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+        artifact = getattr(message, "artifact", None)
+        if content != message.content or artifact is not None:
+            changed = True
+            messages.append(message.model_copy(update={"content": content, "artifact": None}))
+        else:
+            messages.append(message)
+    return request.override(messages=messages) if changed else request
+
+
+def _sanitize_receipt_value(value: Any) -> Any:
+    if isinstance(value, list):
+        return [_sanitize_receipt_value(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    sanitized: dict[str, Any] = {}
+    for key, item in value.items():
+        if key in MODEL_HIDDEN_FIELDS:
+            continue
+        local_key = ABSOLUTE_TO_LOCAL_FIELDS.get(key)
+        if local_key is not None and isinstance(item, str):
+            local_value = _absolute_to_local_minute(item)
+            if local_value is not None:
+                sanitized[local_key] = local_value
+                continue
+        sanitized[key] = _sanitize_receipt_value(item)
+    return sanitized
+
+
+def _absolute_to_local_minute(value: str) -> str | None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.isoformat(timespec="minutes")
+    return (
+        parsed.astimezone(MODEL_TIMEZONE)
+        .replace(tzinfo=None)
+        .isoformat(timespec="minutes")
+    )
+
+
 def _trailing_tool_messages(messages: Sequence[Any]) -> list[ToolMessage]:
     trailing: list[ToolMessage] = []
     for message in reversed(messages):
@@ -103,6 +192,49 @@ def _parse_results(messages: Sequence[ToolMessage]) -> list[_ToolResult] | None:
     return parsed
 
 
+def _terminal_completion(messages: Sequence[Any]) -> str | None:
+    trailing = _trailing_tool_messages(messages)
+    results = _parse_results(trailing)
+    if not results or not all(result.terminal for result in results):
+        return None
+
+    payloads = [_tool_payload(message) for message in trailing]
+    if any(payload is None for payload in payloads):
+        return None
+    terminal_payloads = [payload for payload in payloads if payload is not None]
+    conflict_count = sum(
+        len(conflicts)
+        for payload in terminal_payloads
+        if isinstance((conflicts := payload.get("conflicts")), list)
+    )
+    if len(terminal_payloads) > 1:
+        completion = f"已完成 {len(terminal_payloads)} 项安排。"
+    else:
+        completion = _single_terminal_completion(terminal_payloads[0])
+    if conflict_count:
+        return f"{completion[:-1]}，检测到 {conflict_count} 项时间冲突。"
+    return completion
+
+
+def _single_terminal_completion(payload: dict[str, Any]) -> str:
+    result_type = payload.get("type")
+    if result_type == "calendar_entry_created":
+        return "日程已创建。"
+    if result_type == "calendar_entry_rescheduled":
+        return "日程已更新。"
+    if result_type == "calendar_entry_cancelled":
+        return "日程已取消。"
+    if result_type == "task_item_created":
+        return "待办已创建。"
+    task = payload.get("task_item")
+    status = task.get("status") if isinstance(task, dict) else None
+    if status == "completed":
+        return "待办已完成。"
+    if status == "cancelled":
+        return "待办已取消。"
+    return "待办已更新。"
+
+
 def _invalid_result_count(messages: Sequence[Any]) -> int:
     count = 0
     for message in reversed(messages):
@@ -120,9 +252,8 @@ def _parse_result(message: ToolMessage) -> _ToolResult | None:
     domain = _tool_domain(name)
     if domain is None or not isinstance(message.content, str):
         return None
-    try:
-        payload = json.loads(message.content)
-    except json.JSONDecodeError:
+    payload = _tool_payload(message)
+    if payload is None:
         return None
 
     if name in SEARCH_TOOLS:
@@ -134,6 +265,16 @@ def _parse_result(message: ToolMessage) -> _ToolResult | None:
     if payload.get("type") != expected_type:
         return None
     return _ToolResult(name=name, domain=domain, terminal=True)
+
+
+def _tool_payload(message: ToolMessage) -> dict[str, Any] | list[Any] | None:
+    if not isinstance(message.content, str):
+        return None
+    try:
+        payload = json.loads(message.content)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, (dict, list)) else None
 
 
 def _tool_domain(name: str) -> ToolDomain | None:

@@ -18,6 +18,7 @@ from dayboard.app.reminders import ReminderService
 def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
     return CalendarEntry(
         id=row.id,
+        row_version=row.row_version,
         tenant_id=row.tenant_id,
         owner_user_id=row.owner_user_id,
         title=row.title,
@@ -45,6 +46,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
 def task_item_from_row(row: TaskItemRow) -> TaskItem:
     return TaskItem(
         id=row.id,
+        row_version=row.row_version,
         tenant_id=row.tenant_id,
         owner_user_id=row.owner_user_id,
         title=row.title,
@@ -144,7 +146,7 @@ class SchedulingService:
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
         updated_by_run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
@@ -155,7 +157,7 @@ class SchedulingService:
             scheduled_date=scheduled_date,
             start_time=start_time,
             end_time=end_time,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
             updated_by_run_id=updated_by_run_id,
             operation_key=operation_key,
         )
@@ -180,7 +182,7 @@ class SchedulingService:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
         cancelled_by_run_id: UUID,
         operation_key: str,
         cancellation_reason: str | None,
@@ -188,7 +190,7 @@ class SchedulingService:
         row = await self.calendar_entries.cancel(
             context,
             entry_id=entry_id,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
             cancelled_by_run_id=cancelled_by_run_id,
             operation_key=operation_key,
             cancellation_reason=cancellation_reason,
@@ -214,12 +216,12 @@ class SchedulingService:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.cancel_from_ui(
             context,
             entry_id=entry_id,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None
@@ -233,12 +235,12 @@ class SchedulingService:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.complete_from_ui(
             context,
             entry_id=entry_id,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None
@@ -252,12 +254,12 @@ class SchedulingService:
         context: TenantContext,
         *,
         entry_id: UUID,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.reopen_from_ui(
             context,
             entry_id=entry_id,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None
@@ -276,7 +278,7 @@ class SchedulingService:
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> CalendarEntry | None:
         row = await self.calendar_entries.update_from_ui(
             context,
@@ -286,7 +288,7 @@ class SchedulingService:
             scheduled_date=scheduled_date,
             start_time=start_time,
             end_time=end_time,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None
@@ -350,10 +352,10 @@ class SchedulingService:
         *,
         task_id: UUID,
         data: TaskItemUpdate,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItem | None:
         row = await self.task_items.update(
-            context, task_id=task_id, data=data, expected_updated_at=expected_updated_at
+            context, task_id=task_id, data=data, expected_row_version=expected_row_version
         )
         if row is None:
             return None
@@ -377,13 +379,13 @@ class SchedulingService:
         *,
         task_id: UUID,
         status: TaskStatus,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItem | None:
         row = await self.task_items.set_status_from_ui(
             context,
             task_id=task_id,
             status=status,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None
@@ -399,14 +401,14 @@ class SchedulingService:
         task_id: UUID,
         title: str,
         due_at: datetime | None,
-        expected_updated_at: datetime,
+        expected_row_version: int,
     ) -> TaskItem | None:
         row = await self.task_items.update_from_ui(
             context,
             task_id=task_id,
             title=title,
             due_at=due_at,
-            expected_updated_at=expected_updated_at,
+            expected_row_version=expected_row_version,
         )
         if row is None:
             return None

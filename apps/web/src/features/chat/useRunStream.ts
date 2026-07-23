@@ -27,6 +27,7 @@ type RunStreamState = {
 
 type RunStreamAction =
   | { type: "messages_replaced"; messages: ChatMessage[] }
+  | { type: "messages_prepended"; messages: ChatMessage[] }
   | { type: "message_appended"; message: ChatMessage }
   | { type: "progress_reset" }
   | { type: "run_result_received"; runId: string; text: string }
@@ -110,6 +111,16 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
   switch (action.type) {
     case "messages_replaced":
       return { ...state, messages: action.messages };
+    case "messages_prepended": {
+      const existing = new Set(state.messages.map((message) => message.id));
+      return {
+        ...state,
+        messages: [
+          ...action.messages.filter((message) => !existing.has(message.id)),
+          ...state.messages,
+        ],
+      };
+    }
     case "message_appended":
       return { ...state, messages: [...state.messages, action.message] };
     case "progress_reset":
@@ -183,7 +194,7 @@ export function useRunStream(apiUrl: string) {
         void getThreadMessages(threadId)
           .then((history) => {
             if (settled) return;
-            const message = history.find(
+            const message = history.items.find(
               (candidate) => candidate.role === "assistant" && candidate.run_id === runId,
             );
             if (message) dispatch({ type: "stream_replayed", runId, message });

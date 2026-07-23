@@ -41,7 +41,7 @@ export async function getDatedTaskPage(
 export async function cancelCalendarEntry(entry: CalendarEntry): Promise<CalendarEntry> {
   const { data } = await apiClient.POST("/api/calendar-entries/{entry_id}/cancel", {
     params: { path: { entry_id: entry.id } },
-    body: { expected_updated_at: entry.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: entry.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -49,7 +49,7 @@ export async function cancelCalendarEntry(entry: CalendarEntry): Promise<Calenda
 export async function completeCalendarEntry(entry: CalendarEntry): Promise<CalendarEntry> {
   const { data } = await apiClient.POST("/api/calendar-entries/{entry_id}/complete", {
     params: { path: { entry_id: entry.id } },
-    body: { expected_updated_at: entry.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: entry.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -57,7 +57,7 @@ export async function completeCalendarEntry(entry: CalendarEntry): Promise<Calen
 export async function reopenCalendarEntry(entry: CalendarEntry): Promise<CalendarEntry> {
   const { data } = await apiClient.POST("/api/calendar-entries/{entry_id}/reopen", {
     params: { path: { entry_id: entry.id } },
-    body: { expected_updated_at: entry.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: entry.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -65,7 +65,7 @@ export async function reopenCalendarEntry(entry: CalendarEntry): Promise<Calenda
 export async function completeTaskItem(task: TaskItem): Promise<TaskItem> {
   const { data } = await apiClient.POST("/api/task-items/{task_id}/complete", {
     params: { path: { task_id: task.id } },
-    body: { expected_updated_at: task.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: task.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -73,7 +73,7 @@ export async function completeTaskItem(task: TaskItem): Promise<TaskItem> {
 export async function reopenTaskItem(task: TaskItem): Promise<TaskItem> {
   const { data } = await apiClient.POST("/api/task-items/{task_id}/reopen", {
     params: { path: { task_id: task.id } },
-    body: { expected_updated_at: task.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: task.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -81,7 +81,7 @@ export async function reopenTaskItem(task: TaskItem): Promise<TaskItem> {
 export async function cancelTaskItem(task: TaskItem): Promise<TaskItem> {
   const { data } = await apiClient.POST("/api/task-items/{task_id}/cancel", {
     params: { path: { task_id: task.id } },
-    body: { expected_updated_at: task.updated_at } satisfies ScheduleMutation,
+    body: { expected_row_version: task.row_version } satisfies ScheduleMutation,
   });
   return requireApiData(data);
 }
@@ -95,7 +95,7 @@ export async function updateCalendarEntry(
   const { data } = await apiClient.PUT("/api/calendar-entries/{entry_id}", {
     params: { path: { entry_id: entry.id } },
     body: {
-      expected_updated_at: entry.updated_at,
+      expected_row_version: entry.row_version,
       title: input.title,
       timing_kind: input.timingKind,
       scheduled_date: input.timingKind === "anytime" ? input.scheduledDate : null,
@@ -113,7 +113,7 @@ export async function updateTaskItem(
   const { data } = await apiClient.PUT("/api/task-items/{task_id}", {
     params: { path: { task_id: task.id } },
     body: {
-      expected_updated_at: task.updated_at,
+      expected_row_version: task.row_version,
       title: input.title,
       due_at: input.dueAt,
     } satisfies TaskItemUpdate,

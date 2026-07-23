@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime, timedelta
+import json
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -53,7 +54,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert "local_start" in fields
     assert "local_end" in fields
     assert "anchor_entry_id" in fields
-    assert "expected_anchor_updated_at" in fields
+    assert "expected_anchor_row_version" in fields
     assert "start_time" not in fields
     assert "timezone" not in fields
     assert "tenant_id" not in fields
@@ -71,11 +72,12 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
         "new_date",
         "new_local_start",
         "new_local_end",
-        "expected_updated_at",
+        "new_duration_minutes",
+        "expected_row_version",
     }
     assert set(cancel_entry.args_schema.model_json_schema()["properties"]) == {
         "calendar_entry_id",
-        "expected_updated_at",
+        "expected_row_version",
         "reason",
     }
     assert set(search_tasks.args_schema.model_json_schema()["properties"]) == {
@@ -85,7 +87,7 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert set(create_task.args_schema.model_json_schema()["properties"]) == {"title"}
     assert set(update_task.args_schema.model_json_schema()["properties"]) == {
         "task_item_id",
-        "expected_updated_at",
+        "expected_row_version",
         "new_title",
         "new_status",
     }
@@ -112,7 +114,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
 
     entry_input = {
         "title": "产品复盘",
-        "local_start": "2026-07-10T10:00:00",
+        "local_start": "2026-07-10T10:00",
         "participants": ["Alice"],
     }
     task_input = {"title": "整理会议纪要"}
@@ -120,7 +122,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     second_entry_result = await create_entry.ainvoke(
         {
             "title": "客户会议",
-            "local_start": "2026-07-10T11:00:00",
+            "local_start": "2026-07-10T11:00",
             "reminder": None,
         }
     )
@@ -141,11 +143,11 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "id",
         "title",
         "timing_kind",
-        "start_time",
-        "end_time",
+        "local_start",
+        "local_end",
         "reminder",
         "status",
-        "updated_at",
+        "row_version",
     }
     assert "tenant_id" not in str(entry_result)
     assert "created_by_run_id" not in str(entry_result)
@@ -154,7 +156,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "id",
         "title",
         "status",
-        "updated_at",
+        "row_version",
     }
 
     entries = await search_calendar_entries(
@@ -208,7 +210,7 @@ async def test_agent_tool_message_splits_compact_content_from_full_artifact(
             "name": "create_calendar_entry",
             "args": {
                 "title": "产品复盘",
-                "local_start": "2026-07-10T10:00:00",
+                "local_start": "2026-07-10T10:00",
             },
             "id": "call-create",
             "type": "tool_call",
@@ -229,6 +231,11 @@ async def test_agent_tool_message_splits_compact_content_from_full_artifact(
     assert isinstance(result.content, str)
     for omitted in ("timezone", "participants", "created_at", "created_by_run_id"):
         assert omitted not in result.content
+    assert json.loads(result.content)["calendar_entry"]["local_start"] == (
+        "2026-07-10T10:00"
+    )
+    assert '"start_time":' not in result.content
+    assert presentation["start_time"] == "2026-07-10T02:00:00+00:00"
     assert len(result.content.encode("utf-8")) <= 600
     assert count_tokens_approximately([result]) <= 120
 
@@ -253,7 +260,7 @@ async def test_empty_agent_searches_replace_list_tools(
             "title": "空查询日程",
             "local_start": tomorrow.replace(hour=10, minute=0, second=0, microsecond=0)
             .replace(tzinfo=None)
-            .isoformat(),
+            .isoformat(timespec="minutes"),
         }
     )
     created_task = await create_task.ainvoke({"title": "空查询任务"})
@@ -290,7 +297,7 @@ async def test_agent_creates_and_searches_anytime_calendar_entry(
     assert created["conflicts"] == []
 
     found = await search_entries.ainvoke(
-        {"local_start": "2026-07-21T00:00:00", "local_end": "2026-07-22T00:00:00"}
+        {"local_start": "2026-07-21T00:00", "local_end": "2026-07-22T00:00"}
     )
     assert [candidate["id"] for candidate in found] == [entry["id"]]
 
@@ -298,7 +305,7 @@ async def test_agent_creates_and_searches_anytime_calendar_entry(
         AgentCreateCalendarEntryInput(
             title="冲突形状",
             local_date=date(2026, 7, 21),
-            local_start=datetime(2026, 7, 21, 9, 0),
+            local_start="2026-07-21T09:00",
         )
 
 
@@ -316,13 +323,13 @@ async def test_agent_creates_calendar_entry_after_searched_anchor(
     dance = await create_entry.ainvoke(
         {
             "title": "跳舞",
-            "local_start": "2026-07-23T09:00:00",
+            "local_start": "2026-07-23T09:00",
         }
     )
     matches = await search_entries.ainvoke(
         {
-            "local_start": "2026-07-23T00:00:00",
-            "local_end": "2026-07-24T00:00:00",
+            "local_start": "2026-07-23T00:00",
+            "local_end": "2026-07-24T00:00",
             "title_query": "跳舞",
         }
     )
@@ -331,14 +338,14 @@ async def test_agent_creates_calendar_entry_after_searched_anchor(
         {
             "title": "唱歌",
             "anchor_entry_id": matches[0]["id"],
-            "expected_anchor_updated_at": matches[0]["updated_at"],
+            "expected_anchor_row_version": matches[0]["row_version"],
         }
     )
 
     assert len(matches) == 1
     assert singing["calendar_entry"]["title"] == "唱歌"
-    assert singing["calendar_entry"]["start_time"] == dance["calendar_entry"]["end_time"]
-    assert singing["calendar_entry"]["end_time"] == "2026-07-23T03:00:00+00:00"
+    assert singing["calendar_entry"]["local_start"] == dance["calendar_entry"]["local_end"]
+    assert singing["calendar_entry"]["local_end"] == "2026-07-23T11:00"
     assert singing["calendar_entry"]["reminder"] == {
         "offset": "PT0M",
         "anchor": "start_time",
@@ -353,14 +360,14 @@ def test_agent_anchor_input_rejects_direct_time_and_incomplete_version() -> None
     with pytest.raises(ValidationError, match="exactly one"):
         AgentCreateCalendarEntryInput(
             title="唱歌",
-            local_start=datetime(2026, 7, 23, 10, 0),
+            local_start="2026-07-23T10:00",
             anchor_entry_id=anchor_id,
-            expected_anchor_updated_at="2026-07-22T01:00:00Z",
+            expected_anchor_row_version=1,
         )
 
 
 def test_agent_local_datetime_inputs_reject_timezone_offsets() -> None:
-    with pytest.raises(ValidationError, match="timezone"):
+    with pytest.raises(ValidationError, match="pattern"):
         AgentCreateCalendarEntryInput.model_validate(
             {
                 "title": "产品复盘",
@@ -385,32 +392,65 @@ async def test_agent_search_and_reschedule_resolve_local_beijing_time(
     created = await create_entry.ainvoke(
         {
             "title": "吃饭",
-            "local_start": "2026-07-14T12:00:00",
-            "local_end": "2026-07-14T13:00:00",
+            "local_start": "2026-07-14T12:00",
+            "local_end": "2026-07-14T13:00",
         }
     )
     matches = await search_entries.ainvoke(
         {
-            "local_start": "2026-07-14T12:30:00",
-            "local_end": "2026-07-14T13:30:00",
+            "local_start": "2026-07-14T12:30",
+            "local_end": "2026-07-14T13:30",
             "title_query": "吃饭",
         }
     )
     updated = await reschedule_entry.ainvoke(
         {
             "calendar_entry_id": created["calendar_entry"]["id"],
-            "new_local_end": "2026-07-14T17:00:00",
-            "expected_updated_at": matches[0]["updated_at"],
+            "new_local_end": "2026-07-14T17:00",
+            "expected_row_version": matches[0]["row_version"],
         }
     )
 
     assert len(matches) == 1
-    assert datetime.fromisoformat(updated["calendar_entry"]["start_time"]).astimezone(
-        ZoneInfo("Asia/Shanghai")
-    ).hour == 12
-    assert datetime.fromisoformat(updated["calendar_entry"]["end_time"]).astimezone(
-        ZoneInfo("Asia/Shanghai")
-    ).hour == 17
+    assert updated["calendar_entry"]["local_start"] == "2026-07-14T12:00"
+    assert updated["calendar_entry"]["local_end"] == "2026-07-14T17:00"
+
+
+async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    tools = build_scheduling_tools(
+        session=db_session,
+        context=tenant_context,
+        run_id=uuid4(),
+    )
+    create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
+    search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
+    reschedule_entry = next(tool for tool in tools if tool.name == "reschedule_calendar_entry")
+
+    await create_entry.ainvoke(
+        {
+            "title": "钓鱼",
+            "local_start": "2026-07-24T16:00",
+            "local_end": "2026-07-24T17:00",
+        }
+    )
+    matches = await search_entries.ainvoke({"title_query": "钓鱼"})
+    assert matches[0]["local_start"] == "2026-07-24T16:00"
+    assert matches[0]["local_end"] == "2026-07-24T17:00"
+    assert "start_time" not in matches[0]
+    assert "timezone" not in matches[0]
+
+    updated = await reschedule_entry.ainvoke(
+        {
+            "calendar_entry_id": matches[0]["id"],
+            "new_duration_minutes": 30,
+            "expected_row_version": matches[0]["row_version"],
+        }
+    )
+    assert updated["calendar_entry"]["local_start"] == "2026-07-24T16:00"
+    assert updated["calendar_entry"]["local_end"] == "2026-07-24T16:30"
 
 
 async def test_agent_task_updates_status_without_time_fields(
@@ -433,7 +473,7 @@ async def test_agent_task_updates_status_without_time_fields(
     updated = await update_task.ainvoke(
         {
             "task_item_id": created["task_item"]["id"],
-            "expected_updated_at": matches[0]["updated_at"],
+            "expected_row_version": matches[0]["row_version"],
             "new_status": "completed",
         }
     )

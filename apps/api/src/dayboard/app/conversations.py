@@ -17,6 +17,7 @@ from dayboard.db.conversation_repositories import (
 from dayboard.db.models import ConversationMessageRow, ConversationStateRow, ConversationThreadRow
 from dayboard.domain.conversations import (
     ConversationMessage,
+    ConversationMessagePage,
     ConversationRole,
     ConversationState,
     ConversationThread,
@@ -109,6 +110,9 @@ class ConversationService:
         row = await self.threads.get(context, thread_id)
         return conversation_thread_from_row(row) if row else None
 
+    async def get_or_create_primary_thread(self, context: TenantContext) -> ConversationThreadRow:
+        return await self.threads.get_or_create_primary(context)
+
     async def append_message(
         self,
         context: TenantContext,
@@ -137,6 +141,26 @@ class ConversationService:
         await self.require_thread(context, thread_id)
         rows = await self.messages.list_for_thread(context, thread_id)
         return [conversation_message_from_row(row) for row in rows]
+
+    async def list_message_page(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+        *,
+        before: UUID | None,
+        limit: int,
+    ) -> ConversationMessagePage:
+        await self.require_thread(context, thread_id)
+        rows, next_cursor = await self.messages.list_page_for_thread(
+            context,
+            thread_id,
+            before=before,
+            limit=limit,
+        )
+        return ConversationMessagePage(
+            items=[conversation_message_from_row(row) for row in rows],
+            next_cursor=next_cursor,
+        )
 
     async def upsert_assistant_message(
         self,
@@ -255,29 +279,61 @@ class ConversationService:
                 display_message=f"选择“{label}”",
             )
 
-        trusted_candidate = {
+        presentation_candidate = {
             key: selected[key]
-            for key in ("id", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone", "updated_at")
+            for key in (
+                "id",
+                "row_version",
+                "title",
+                "timing_kind",
+                "scheduled_date",
+                "start_time",
+                "end_time",
+                "timezone",
+            )
             if key in selected
         }
-        title = str(trusted_candidate.get("title") or "所选日程")
-        start_time = trusted_candidate.get("start_time")
+        model_candidate = {
+            key: presentation_candidate[key]
+            for key in ("id", "row_version", "title", "timing_kind", "scheduled_date")
+            if key in presentation_candidate
+        }
+        for source_key, target_key in (("start_time", "local_start"), ("end_time", "local_end")):
+            value = presentation_candidate.get(source_key)
+            if not isinstance(value, str):
+                continue
+            try:
+                parsed = datetime.fromisoformat(value)
+            except ValueError as exc:
+                raise ClarificationStateError(
+                    "The selected calendar time is invalid"
+                ) from exc
+            if parsed.tzinfo is None:
+                raise ClarificationStateError("The selected calendar time is invalid")
+            model_candidate[target_key] = (
+                parsed.astimezone(ZoneInfo(context.timezone))
+                .replace(tzinfo=None)
+                .isoformat(timespec="minutes")
+            )
+
+        title = str(presentation_candidate.get("title") or "所选日程")
+        start_time = presentation_candidate.get("start_time")
         display_message = f"选择“{title}”"
         if isinstance(start_time, str):
             try:
                 parsed_start = datetime.fromisoformat(start_time)
-                timezone_name = trusted_candidate.get("timezone")
+                timezone_name = presentation_candidate.get("timezone")
                 if isinstance(timezone_name, str):
                     parsed_start = parsed_start.astimezone(ZoneInfo(timezone_name))
                 display_time = parsed_start.strftime("%m月%d日 %H:%M")
             except (ValueError, TypeError):
                 display_time = start_time
             display_message = f"选择“{title} · {display_time}”"
-        elif isinstance(trusted_candidate.get("scheduled_date"), str):
-            display_message = f"选择“{title} · {trusted_candidate['scheduled_date']} · 随时”"
+        elif isinstance(presentation_candidate.get("scheduled_date"), str):
+            display_message = f"选择“{title} · {presentation_candidate['scheduled_date']} · 随时”"
         agent_message = (
             "The user selected this server-validated calendar candidate for the pending "
-            f"clarification: {json.dumps(trusted_candidate, ensure_ascii=False)}. "
+            f"clarification: {json.dumps(model_candidate, ensure_ascii=False)}. "
             "Continue the previous request using this exact candidate."
         )
         return ResolvedClarificationChoice(

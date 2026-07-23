@@ -31,7 +31,8 @@ class ConversationThreadRepository:
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
             title=title,
-            status="active",
+            status="isolated",
+            is_primary=False,
         )
         if thread_id is not None:
             values["id"] = thread_id
@@ -50,6 +51,43 @@ class ConversationThreadRepository:
                 ConversationThreadRow.deleted_at.is_(None),
             )
         )
+
+    async def get_primary(self, context: TenantContext) -> ConversationThreadRow | None:
+        return await self.session.scalar(
+            select(ConversationThreadRow)
+            .where(
+                ConversationThreadRow.tenant_id == context.tenant_id,
+                ConversationThreadRow.owner_user_id == context.user_id,
+                ConversationThreadRow.is_primary.is_(True),
+                ConversationThreadRow.deleted_at.is_(None),
+            )
+        )
+
+    async def get_or_create_primary(self, context: TenantContext) -> ConversationThreadRow:
+        statement = (
+            insert(ConversationThreadRow)
+            .values(
+                tenant_id=context.tenant_id,
+                owner_user_id=context.user_id,
+                is_primary=True,
+                status="active",
+            )
+            .on_conflict_do_nothing(
+                index_elements=["tenant_id", "owner_user_id"],
+                index_where=(
+                    ConversationThreadRow.is_primary.is_(True)
+                    & ConversationThreadRow.deleted_at.is_(None)
+                ),
+            )
+            .returning(ConversationThreadRow)
+        )
+        row = (await self.session.execute(statement)).scalar_one_or_none()
+        if row is not None:
+            return row
+        existing = await self.get_primary(context)
+        if existing is None:
+            raise RuntimeError("Primary conversation conflict was not persisted")
+        return existing
 
     async def update_summary(
         self,
@@ -171,6 +209,50 @@ class ConversationMessageRepository:
             .order_by(ConversationMessageRow.created_at.asc(), ConversationMessageRow.id.asc())
         )
         return list(result)
+
+    async def list_page_for_thread(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+        *,
+        before: UUID | None,
+        limit: int,
+    ) -> tuple[list[ConversationMessageRow], UUID | None]:
+        statement = select(ConversationMessageRow).where(
+            ConversationMessageRow.tenant_id == context.tenant_id,
+            ConversationMessageRow.owner_user_id == context.user_id,
+            ConversationMessageRow.thread_id == thread_id,
+        )
+        if before is not None:
+            cursor = await self.session.scalar(
+                select(ConversationMessageRow).where(
+                    ConversationMessageRow.id == before,
+                    ConversationMessageRow.tenant_id == context.tenant_id,
+                    ConversationMessageRow.owner_user_id == context.user_id,
+                    ConversationMessageRow.thread_id == thread_id,
+                )
+            )
+            if cursor is None:
+                raise LookupError("Conversation message cursor not found")
+            statement = statement.where(
+                (ConversationMessageRow.created_at < cursor.created_at)
+                | (
+                    (ConversationMessageRow.created_at == cursor.created_at)
+                    & (ConversationMessageRow.id < cursor.id)
+                )
+            )
+        rows = list(
+            await self.session.scalars(
+                statement.order_by(
+                    ConversationMessageRow.created_at.desc(),
+                    ConversationMessageRow.id.desc(),
+                ).limit(limit + 1)
+            )
+        )
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        page.reverse()
+        return page, page[0].id if has_more else None
 
 
 class ConversationStateRepository:

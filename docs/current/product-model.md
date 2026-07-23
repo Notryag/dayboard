@@ -78,11 +78,22 @@ configured reminder offset has just passed may still be delivered immediately. C
 cancelling an entry cancels pending delivery, while already delivered rows remain as reminder
 history. Completed calendar entries and tasks remain visible in the schedule view so users can
 inspect or reopen them.
+The delivery queue is not the user inbox. `pending`, `processing`, and `cancelled` rows remain
+internal operational state; the Web reminder center receives only delivered or failed items. Each
+inbox item carries the source's current occurrence time and lifecycle status so rescheduled items
+open on their current date, while deleted sources remain honest, non-actionable history.
 
 ## Conversation And Clarification
 
 Conversation threads and messages are durable and owner-scoped. Bounded context and persisted
 compaction summaries prevent full history from being sent to every model call.
+The mobile client resolves the owner's primary Thread from PostgreSQL before loading history.
+Device-local storage never determines conversation ownership, so another device restores
+the same durable history instead of silently creating a separate conversation.
+The product exposes one primary conversation per owner. The first screen loads the newest 30
+messages, and scrolling upward follows an owner-scoped `(created_at, id)` cursor to fetch older
+pages without shifting the visible scroll position. Isolated evaluation Threads are not product
+conversations and do not appear in this history.
 
 When missing information would materially change the result, the Agent uses structured
 clarification. Dayboard persists the question and trusted option mapping in `conversation_states`.
@@ -102,6 +113,10 @@ override that scope.
 
 Scheduling currently resolves local time with the trusted account context, which defaults to
 `Asia/Shanghai`. Explicit foreign-timezone conversion is not supported.
+
+The product displays this zone as `北京时间`. Model-visible scheduling values use Beijing local
+wall-clock time without an offset; PostgreSQL stores absolute instants as `timestamptz` under a UTC
+session. See [Time And Concurrency Protocol](time-protocol.md).
 
 ## Product Surfaces
 

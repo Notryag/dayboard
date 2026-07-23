@@ -45,7 +45,7 @@ from dayboard.context import TenantContext
 from dayboard.db.session import get_session
 from dayboard.domain.runs import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
-from dayboard.domain.reminders import ReminderDelivery
+from dayboard.domain.reminders import ReminderDelivery, ReminderInboxItem
 from dayboard.domain.tasks import TaskStatus
 from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.integrations.audio_probe import (
@@ -57,7 +57,7 @@ from dayboard.integrations.audio_probe import (
 from dayboard.timezones import resolve_local_date_window
 from dayboard.domain.interactions import ClarificationChoiceRequest
 from dayboard.domain.conversations import (
-    ConversationMessage,
+    ConversationMessagePage,
     ConversationState,
     ConversationThread,
 )
@@ -85,7 +85,7 @@ class ThreadCreateRequest(BaseModel):
 
 
 class ScheduleMutationRequest(BaseModel):
-    expected_updated_at: AwareDatetime
+    expected_row_version: int = Field(ge=1)
 
 
 class CalendarEntryUpdateRequest(ScheduleMutationRequest):
@@ -201,12 +201,12 @@ async def health(
     }
 
 
-@router.get("/api/reminders", response_model=list[ReminderDelivery])
+@router.get("/api/reminders", response_model=list[ReminderInboxItem])
 async def list_reminders(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
-) -> list[ReminderDelivery]:
-    return await ReminderService(session).list_for_user(tenant_context)
+) -> list[ReminderInboxItem]:
+    return await ReminderService(session).list_inbox(tenant_context)
 
 
 @router.post("/api/reminders/{delivery_id}/read", response_model=ReminderDelivery)
@@ -360,7 +360,7 @@ async def cancel_calendar_entry_from_ui(
     entry = await service.cancel_calendar_entry_from_ui(
         tenant_context,
         entry_id=entry_id,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if entry is None:
         raise ApiProblem(
@@ -391,7 +391,7 @@ async def complete_calendar_entry_from_ui(
     entry = await service.complete_calendar_entry_from_ui(
         tenant_context,
         entry_id=entry_id,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if entry is None:
         raise ApiProblem(
@@ -422,7 +422,7 @@ async def reopen_calendar_entry_from_ui(
     entry = await service.reopen_calendar_entry_from_ui(
         tenant_context,
         entry_id=entry_id,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if entry is None:
         raise ApiProblem(
@@ -460,7 +460,7 @@ async def update_calendar_entry_from_ui(
             if body.start_time is not None and body.duration_minutes is not None
             else None
         ),
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if entry is None:
         raise ApiProblem(
@@ -492,7 +492,7 @@ async def _set_task_status_from_ui(
         tenant_context,
         task_id=task_id,
         status=target_status,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if task is None:
         raise ApiProblem(
@@ -546,7 +546,7 @@ async def reopen_task_item_from_ui(
         tenant_context,
         task_id=task_id,
         status=TaskStatus.open,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if task is None:
         raise ApiProblem(
@@ -577,7 +577,7 @@ async def update_task_item_from_ui(
         task_id=task_id,
         title=body.title,
         due_at=body.due_at,
-        expected_updated_at=body.expected_updated_at,
+        expected_row_version=body.expected_row_version,
     )
     if task is None:
         raise ApiProblem(
@@ -673,14 +673,32 @@ async def create_thread(
     return conversation_thread_from_row(row)
 
 
-@router.get("/api/threads/{thread_id}/messages", response_model=list[ConversationMessage])
-async def get_thread_messages(
-    thread_id: UUID,
+@router.put("/api/conversation", response_model=ConversationThread)
+async def get_or_create_primary_conversation(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
-) -> list[ConversationMessage]:
+) -> ConversationThread:
+    row = await ConversationService(session).get_or_create_primary_thread(tenant_context)
+    await session.commit()
+    await session.refresh(row)
+    return conversation_thread_from_row(row)
+
+
+@router.get("/api/threads/{thread_id}/messages", response_model=ConversationMessagePage)
+async def get_thread_messages(
+    thread_id: UUID,
+    before: UUID | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+    tenant_context: TenantContext = Depends(get_tenant_context),
+) -> ConversationMessagePage:
     try:
-        return await ConversationService(session).list_messages(tenant_context, thread_id)
+        return await ConversationService(session).list_message_page(
+            tenant_context,
+            thread_id,
+            before=before,
+            limit=limit,
+        )
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,

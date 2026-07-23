@@ -83,6 +83,30 @@ class ReminderDeliveryRepository:
         )
         return list(result)
 
+    async def list_inbox_for_user(
+        self,
+        context: TenantContext,
+        *,
+        limit: int = 100,
+    ) -> list[ReminderDeliveryRow]:
+        result = await self.session.scalars(
+            select(ReminderDeliveryRow)
+            .where(
+                ReminderDeliveryRow.tenant_id == context.tenant_id,
+                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.status.in_(
+                    [
+                        ReminderDeliveryStatus.delivered.value,
+                        ReminderDeliveryStatus.failed.value,
+                    ]
+                ),
+                ReminderDeliveryRow.deleted_at.is_(None),
+            )
+            .order_by(ReminderDeliveryRow.scheduled_for.desc(), ReminderDeliveryRow.id.desc())
+            .limit(limit)
+        )
+        return list(result)
+
     async def get_for_user(
         self,
         context: TenantContext,

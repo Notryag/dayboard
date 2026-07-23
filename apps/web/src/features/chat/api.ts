@@ -5,7 +5,7 @@ import type {
   AgentRun,
   CommandRequest,
   CommandRun,
-  ConversationMessage,
+  ConversationMessagePage,
   ConversationThread,
   ThreadCreate,
 } from "@/lib/api/types";
@@ -15,9 +15,20 @@ export async function createThread(body: ThreadCreate = {}): Promise<Conversatio
   return requireApiData(data);
 }
 
-export async function getThreadMessages(threadId: string): Promise<ConversationMessage[]> {
+export async function getPrimaryConversation(): Promise<ConversationThread> {
+  const { data } = await apiClient.PUT("/api/conversation");
+  return requireApiData(data);
+}
+
+export async function getThreadMessages(
+  threadId: string,
+  before?: string,
+): Promise<ConversationMessagePage> {
   const { data } = await apiClient.GET("/api/threads/{thread_id}/messages", {
-    params: { path: { thread_id: threadId } },
+    params: {
+      path: { thread_id: threadId },
+      query: { before, limit: 30 },
+    },
   });
   return requireApiData(data);
 }

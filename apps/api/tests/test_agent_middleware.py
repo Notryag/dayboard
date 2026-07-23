@@ -28,9 +28,15 @@ def _request(messages) -> ModelRequest:
     return ModelRequest(model=object(), messages=messages, tools=_tools())
 
 
-def _write_result(name: str, result_type: str, *, status: str = "success") -> ToolMessage:
+def _write_result(
+    name: str,
+    result_type: str,
+    *,
+    status: str = "success",
+    **payload,
+) -> ToolMessage:
     return ToolMessage(
-        content=json.dumps({"type": result_type}),
+        content=json.dumps({"type": result_type, **payload}),
         tool_call_id=f"call-{name}",
         name=name,
         status=status,
@@ -142,14 +148,134 @@ def test_new_user_turn_restores_full_surface() -> None:
     assert _names(middleware._prepare_request(request)) == TOOL_NAMES
 
 
-def test_async_wrapper_uses_the_same_binding_policy() -> None:
-    async def run() -> list:
+def test_async_wrapper_completes_terminal_write_without_calling_model() -> None:
+    async def run() -> tuple[AIMessage, bool]:
         middleware = SchedulingToolBindingMiddleware()
         request = _request([_write_result("update_task_item", "task_item_updated")])
+        called = False
 
         async def handler(prepared):
+            nonlocal called
+            called = True
             return prepared.tools
 
-        return await middleware.awrap_model_call(request, handler)
+        response = await middleware.awrap_model_call(request, handler)
+        return response, called
 
-    assert asyncio.run(run()) == []
+    response, called = asyncio.run(run())
+
+    assert isinstance(response, AIMessage)
+    assert response.content == "待办已更新。"
+    assert called is False
+
+
+def test_mixed_terminal_batch_completes_without_calling_model() -> None:
+    middleware = SchedulingToolBindingMiddleware()
+    request = _request(
+        [
+            _write_result("create_calendar_entry", "calendar_entry_created"),
+            _write_result("create_task_item", "task_item_created"),
+        ]
+    )
+
+    def handler(prepared):
+        raise AssertionError(f"model should not be called with {prepared.tools}")
+
+    response = middleware.wrap_model_call(request, handler)
+
+    assert isinstance(response, AIMessage)
+    assert response.content == "已完成 2 项安排。"
+
+
+def test_terminal_completion_preserves_conflict_warning() -> None:
+    middleware = SchedulingToolBindingMiddleware()
+    request = _request(
+        [
+            _write_result(
+                "create_calendar_entry",
+                "calendar_entry_created",
+                conflicts=[{"id": "conflict-1"}],
+            )
+        ]
+    )
+
+    response = middleware.wrap_model_call(request, lambda prepared: prepared)
+
+    assert isinstance(response, AIMessage)
+    assert response.content == "日程已创建，检测到 1 项时间冲突。"
+
+
+def test_search_and_error_results_still_call_model() -> None:
+    middleware = SchedulingToolBindingMiddleware()
+    search_called = False
+    error_called = False
+
+    def search_handler(prepared):
+        nonlocal search_called
+        search_called = True
+        return AIMessage(content="继续处理")
+
+    def error_handler(prepared):
+        nonlocal error_called
+        error_called = True
+        return AIMessage(content="说明错误")
+
+    search_response = middleware.wrap_model_call(
+        _request([_search_result("search_calendar_entries")]), search_handler
+    )
+    error_response = middleware.wrap_model_call(
+        _request(
+            [
+                _write_result(
+                    "create_calendar_entry",
+                    "calendar_entry_created",
+                    status="error",
+                )
+            ]
+        ),
+        error_handler,
+    )
+
+    assert search_response.content == "继续处理"
+    assert error_response.content == "说明错误"
+    assert search_called is True
+    assert error_called is True
+
+
+def test_provider_request_strips_artifact_and_rewrites_legacy_utc_receipt() -> None:
+    middleware = SchedulingToolBindingMiddleware()
+    original = ToolMessage(
+        content=json.dumps(
+            {
+                "type": "calendar_entry_created",
+                "calendar_entry": {
+                    "id": "entry-1",
+                    "title": "钓鱼",
+                    "start_time": "2026-07-24T08:00:00+00:00",
+                    "end_time": "2026-07-24T09:00:00+00:00",
+                    "timezone": "Asia/Shanghai",
+                    "updated_at": "2026-07-23T08:00:00+00:00",
+                },
+            }
+        ),
+        artifact={
+            "item": {
+                "value": {"start_time": "2026-07-24T08:00:00+00:00"}
+            }
+        },
+        tool_call_id="call-create",
+        name="create_calendar_entry",
+    )
+
+    prepared = middleware._prepare_request(_request([original]))
+    provider_message = prepared.messages[0]
+    payload = json.loads(provider_message.content)
+
+    assert original.artifact is not None
+    assert provider_message.artifact is None
+    assert payload["calendar_entry"]["local_start"] == "2026-07-24T16:00"
+    assert payload["calendar_entry"]["local_end"] == "2026-07-24T17:00"
+    assert "start_time" not in provider_message.content
+    assert "end_time" not in provider_message.content
+    assert "timezone" not in provider_message.content
+    assert "updated_at" not in provider_message.content

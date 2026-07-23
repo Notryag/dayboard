@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { Globe2, LogOut, Monitor, Moon, Settings2, Sun, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { timezoneDisplayName } from "./date";
 import {
   Sheet,
   SheetClose,
@@ -116,7 +117,7 @@ export function ScheduleSettingsDrawer({
               <strong>{accountName}</strong>
               <span>
                 <Globe2 aria-hidden="true" size={14} />
-                {timezone}
+                {timezoneDisplayName(timezone)}
               </span>
             </div>
           </div>

@@ -12,6 +12,7 @@ from dayboard.api.routes import get_command_dispatcher
 from dayboard.context import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
+from dayboard.domain.conversations import ConversationRole
 
 
 async def test_create_background_command_run_returns_before_execution(
@@ -69,9 +70,64 @@ async def test_thread_command_persists_user_message_once(
     assert first.status_code == 202
     assert repeated.json() == first.json()
     assert first.json()["thread_id"] == thread_id
-    assert [(message["role"], message["content"]) for message in messages.json()] == [
+    assert [(message["role"], message["content"]) for message in messages.json()["items"]] == [
         ("user", "明天上午开会")
     ]
+
+
+async def test_primary_conversation_is_stable_for_the_owner(api_app: FastAPI) -> None:
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        first = await client.put("/api/conversation")
+        second = await client.put("/api/conversation")
+        isolated = await client.post("/api/threads", json={"title": "验收隔离"})
+
+    assert first.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert first.json()["status"] == "active"
+    assert isolated.json()["id"] != first.json()["id"]
+    assert isolated.json()["status"] == "isolated"
+
+
+async def test_conversation_messages_use_stable_cursor_pagination(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    conversations = ConversationService(db_session)
+    thread = await conversations.get_or_create_primary_thread(tenant_context)
+    for index in range(35):
+        await conversations.append_message(
+            tenant_context,
+            thread_id=thread.id,
+            run_id=uuid4(),
+            role=ConversationRole.user,
+            content=f"历史消息 {index + 1}",
+        )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        latest = await client.get(f"/api/threads/{thread.id}/messages?limit=30")
+        older = await client.get(
+            f"/api/threads/{thread.id}/messages",
+            params={"limit": 30, "before": latest.json()["next_cursor"]},
+        )
+
+    latest_body = latest.json()
+    older_body = older.json()
+    assert latest.status_code == 200
+    assert len(latest_body["items"]) == 30
+    assert latest_body["next_cursor"] is not None
+    assert len(older_body["items"]) == 5
+    assert older_body["next_cursor"] is None
+    assert {item["id"] for item in latest_body["items"]}.isdisjoint(
+        item["id"] for item in older_body["items"]
+    )
 
 
 async def test_thread_rejects_a_second_active_run_and_allows_next_after_completion(
@@ -112,7 +168,7 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
     assert second.json()["error"]["code"] == "COMMAND_ALREADY_IN_PROGRESS"
     assert second.json()["error"]["request_id"].startswith("req_")
     assert third.status_code == 202
-    assert [message["content"] for message in messages.json()] == [
+    assert [message["content"] for message in messages.json()["items"]] == [
         "创建明天的会议",
         "再创建一个任务",
     ]
@@ -255,8 +311,11 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     assert response.status_code == 202
     assert response.json()["thread_id"] == str(thread.id)
     assert "entry-secret-id" in queued_request.message
-    assert messages.json()[-1]["content"].startswith("选择“产品会议")
-    assert "entry-secret-id" not in messages.json()[-1]["content"]
+    assert '"local_start": "2026-07-12T15:00"' in queued_request.message
+    assert '"start_time"' not in queued_request.message
+    assert "Asia/Shanghai" not in queued_request.message
+    assert messages.json()["items"][-1]["content"].startswith("选择“产品会议")
+    assert "entry-secret-id" not in messages.json()["items"][-1]["content"]
     assert "candidates" not in state.json()["state_data"]
     assert state.json()["state_data"]["interaction"]["options"][0]["key"] == "candidate_1"
 
@@ -510,11 +569,11 @@ async def test_stream_run_events_forwards_live_structured_messages(
                 "tool_call_id": "call-1",
                 "content": {
                     "type": "task_item_created",
-                    "task_item": {
-                        "id": "11111111-1111-4111-8111-111111111111",
-                        "title": "提交周报",
-                        "status": "open",
-                        "updated_at": "2026-07-20T10:00:00Z",
+                        "task_item": {
+                            "id": "11111111-1111-4111-8111-111111111111",
+                            "row_version": 1,
+                            "title": "提交周报",
+                            "status": "open",
                     },
                 },
                 "artifact": {
@@ -522,9 +581,10 @@ async def test_stream_run_events_forwards_live_structured_messages(
                     "operation": "task_item_created",
                     "item": {
                         "kind": "task",
-                        "value": {
-                            "id": "11111111-1111-4111-8111-111111111111",
-                            "title": "提交周报",
+                            "value": {
+                                "id": "11111111-1111-4111-8111-111111111111",
+                                "row_version": 1,
+                                "title": "提交周报",
                             "due_at": None,
                             "timezone": "Asia/Shanghai",
                             "reminder": None,

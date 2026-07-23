@@ -36,6 +36,7 @@ def _task_artifact(*, task_id: str, title: str) -> dict:
             "kind": "task",
             "value": {
                 "id": task_id,
+                "row_version": 1,
                 "title": title,
                 "due_at": None,
                 "timezone": "Asia/Shanghai",

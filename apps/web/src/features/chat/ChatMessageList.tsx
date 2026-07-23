@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -30,7 +31,10 @@ export type ChatMessage = {
 type ChatMessageListProps = {
   conversationState: ConversationState | null;
   isSubmitting: boolean;
+  hasOlderMessages: boolean;
+  isLoadingOlderMessages: boolean;
   messages: ChatMessage[];
+  onLoadOlderMessages: () => void;
   onChanged: (change?: ScheduleChange) => void;
   onClarificationChoice: (optionKey: string) => void;
   scrollRef: RefObject<HTMLElement | null>;
@@ -54,16 +58,48 @@ function messageTextId(messageId: string) {
 
 export function ChatMessageList({
   conversationState,
+  hasOlderMessages,
+  isLoadingOlderMessages,
   isSubmitting,
   messages,
   onChanged,
   onClarificationChoice,
+  onLoadOlderMessages,
   scrollRef,
   timezone,
 }: ChatMessageListProps) {
   const [messageMenu, setMessageMenu] = useState<MessageActionMenu | null>(null);
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const pressTimerRef = useRef<number | null>(null);
+  const previousLayoutRef = useRef<{ firstMessageId: string | undefined; height: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const firstMessageId = messages[0]?.id;
+    const previous = previousLayoutRef.current;
+    if (
+      previous
+      && previous.firstMessageId !== firstMessageId
+      && messages.some((message) => message.id === previous.firstMessageId)
+    ) {
+      container.scrollTop += container.scrollHeight - previous.height;
+    }
+    previousLayoutRef.current = { firstMessageId, height: container.scrollHeight };
+  }, [messages, scrollRef]);
+
+  function handleScroll() {
+    const container = scrollRef.current;
+    if (
+      container
+      && container.scrollTop <= 80
+      && hasOlderMessages
+      && !isLoadingOlderMessages
+    ) {
+      onLoadOlderMessages();
+    }
+  }
+
   function clearLongPress() {
     if (pressTimerRef.current !== null) {
       window.clearTimeout(pressTimerRef.current);
@@ -178,7 +214,9 @@ export function ChatMessageList({
     <>
       <section
         aria-label="对话记录"
+        aria-busy={isLoadingOlderMessages}
         className={styles.messages}
+        onScroll={handleScroll}
         ref={scrollRef}
       >
         {messages.map((message) => {

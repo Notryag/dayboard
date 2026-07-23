@@ -395,6 +395,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Get Or Create Primary Conversation */
+        put: operations["get_or_create_primary_conversation_api_conversation_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/threads/{thread_id}/messages": {
         parameters: {
             query?: never;
@@ -719,11 +736,8 @@ export interface components {
         };
         /** CalendarEntryUpdateRequest */
         CalendarEntryUpdateRequest: {
-            /**
-             * Expected Updated At
-             * Format: date-time
-             */
-            expected_updated_at: string;
+            /** Expected Row Version */
+            expected_row_version: number;
             /** Title */
             title: string;
             /**
@@ -745,6 +759,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Row Version */
+            row_version: number;
             /** Title */
             title: string;
             timing_kind: components["schemas"]["CalendarTimingKind"];
@@ -832,6 +848,13 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ConversationMessagePage */
+        ConversationMessagePage: {
+            /** Items */
+            items: components["schemas"]["ConversationMessage"][];
+            /** Next Cursor */
+            next_cursor: string | null;
         };
         /**
          * ConversationRole
@@ -1022,6 +1045,75 @@ export interface components {
          * @enum {string}
          */
         ReminderDeliveryStatus: "pending" | "processing" | "delivered" | "failed" | "cancelled";
+        /** ReminderInboxItem */
+        ReminderInboxItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Tenant Id
+             * Format: uuid
+             */
+            tenant_id: string;
+            /**
+             * Owner User Id
+             * Format: uuid
+             */
+            owner_user_id: string;
+            source_type: components["schemas"]["ReminderSourceType"];
+            /**
+             * Source Id
+             * Format: uuid
+             */
+            source_id: string;
+            /** Channel */
+            channel: string;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            status: components["schemas"]["ReminderDeliveryStatus"];
+            /** Attempt Count */
+            attempt_count: number;
+            /** Next Attempt At */
+            next_attempt_at: string | null;
+            /** Delivered At */
+            delivered_at: string | null;
+            /** Read At */
+            read_at: string | null;
+            /** Provider Message Id */
+            provider_message_id: string | null;
+            /** Last Error */
+            last_error: string | null;
+            /** Payload */
+            payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            source_status: components["schemas"]["ReminderSourceStatus"];
+            /**
+             * Source Occurs At
+             * Format: date-time
+             */
+            source_occurs_at: string;
+        };
+        /**
+         * ReminderSourceStatus
+         * @enum {string}
+         */
+        ReminderSourceStatus: "scheduled" | "open" | "completed" | "cancelled" | "deleted";
         /**
          * ReminderSourceType
          * @enum {string}
@@ -1029,11 +1121,8 @@ export interface components {
         ReminderSourceType: "calendar_entry" | "task_item";
         /** ScheduleMutationRequest */
         ScheduleMutationRequest: {
-            /**
-             * Expected Updated At
-             * Format: date-time
-             */
-            expected_updated_at: string;
+            /** Expected Row Version */
+            expected_row_version: number;
         };
         /** SchedulePage[CalendarEntryView] */
         SchedulePage_CalendarEntryView_: {
@@ -1051,11 +1140,8 @@ export interface components {
         };
         /** TaskItemUpdateRequest */
         TaskItemUpdateRequest: {
-            /**
-             * Expected Updated At
-             * Format: date-time
-             */
-            expected_updated_at: string;
+            /** Expected Row Version */
+            expected_row_version: number;
             /** Title */
             title: string;
             /** Due At */
@@ -1068,6 +1154,8 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /** Row Version */
+            row_version: number;
             /** Title */
             title: string;
             /** Due At */
@@ -1401,7 +1489,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReminderDelivery"][];
+                    "application/json": components["schemas"]["ReminderInboxItem"][];
                 };
             };
         };
@@ -1889,9 +1977,32 @@ export interface operations {
             };
         };
     };
-    get_thread_messages_api_threads__thread_id__messages_get: {
+    get_or_create_primary_conversation_api_conversation_put: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationThread"];
+                };
+            };
+        };
+    };
+    get_thread_messages_api_threads__thread_id__messages_get: {
+        parameters: {
+            query?: {
+                before?: string | null;
+                limit?: number;
+            };
             header?: never;
             path: {
                 thread_id: string;
@@ -1906,7 +2017,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationMessage"][];
+                    "application/json": components["schemas"]["ConversationMessagePage"];
                 };
             };
             /** @description Validation Error */

@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import asyncio
-import json
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -452,7 +451,7 @@ class CommandService:
                 config={
                     "configurable": {
                         "thread_id": str(run.thread_id),
-                        "checkpoint_ns": "dayboard",
+                        "checkpoint_ns": "dayboard-time-v2",
                     }
                 },
                 context={
@@ -751,7 +750,7 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
         return state_data
 
     search_calls: dict[str, dict[str, Any]] = {}
-    latest: tuple[dict[str, Any], Any] | None = None
+    latest: Any | None = None
     for message in result["messages"]:
         tool_calls = getattr(message, "tool_calls", None)
         if isinstance(message, dict):
@@ -767,27 +766,41 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
 
         if isinstance(message, ToolMessage):
             call_id = message.tool_call_id
-            content = message.content
+            artifact = message.artifact
         elif isinstance(message, dict) and message.get("type") == "tool":
             call_id = message.get("tool_call_id")
-            content = message.get("content")
+            artifact = message.get("artifact")
         else:
             continue
         if isinstance(call_id, str) and call_id in search_calls:
-            latest = (search_calls[call_id], content)
+            latest = artifact
 
     if latest is None:
         return state_data
-    args, content = latest
-    if isinstance(content, str):
-        try:
-            content = json.loads(content)
-        except json.JSONDecodeError:
-            return state_data
-    if not isinstance(content, list):
+    artifact = latest
+    if not isinstance(artifact, dict) or artifact.get("type") != "schedule_items_result":
         return state_data
+    artifact_items = artifact.get("items")
+    if not isinstance(artifact_items, list):
+        return state_data
+    content = [
+        item["value"]
+        for item in artifact_items
+        if isinstance(item, dict)
+        and item.get("kind") == "calendar"
+        and isinstance(item.get("value"), dict)
+    ]
 
-    allowed = ("id", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone", "updated_at")
+    allowed = (
+        "id",
+        "row_version",
+        "title",
+        "timing_kind",
+        "scheduled_date",
+        "start_time",
+        "end_time",
+        "timezone",
+    )
     candidates = [
         {"key": f"candidate_{index}", **{key: item[key] for key in allowed if key in item}}
         for index, item in enumerate(
@@ -804,7 +817,15 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
             "options": [
                 {
                     key: candidate[key]
-                    for key in ("key", "title", "timing_kind", "scheduled_date", "start_time", "end_time", "timezone")
+                    for key in (
+                        "key",
+                        "title",
+                        "timing_kind",
+                        "scheduled_date",
+                        "start_time",
+                        "end_time",
+                        "timezone",
+                    )
                     if key in candidate
                 }
                 for candidate in candidates

@@ -63,7 +63,7 @@ The compact result contains only fields needed for later reasoning:
 - stable result type;
 - entity ID and concise title;
 - timing kind and scheduled date/start/end values;
-- status and `updated_at` for optimistic locking;
+- status and `row_version` for optimistic locking;
 - reminder or conflict summaries only when relevant.
 
 It omits `created_at`, trusted fixed timezone, empty collections and reminders,
@@ -124,7 +124,7 @@ search first, then creates through an anchor-aware input:
 
 ```text
 anchor_entry_id
-expected_anchor_updated_at
+expected_anchor_row_version
 ```
 
 Direct `local_start` and anchor mode are mutually exclusive. In one transaction,
@@ -143,7 +143,7 @@ search_calendar_entries(title_query="跳舞", ...)
 create_calendar_entry(
   title="唱歌",
   anchor_entry_id=<selected id>,
-  expected_anchor_updated_at=<selected updated_at>,
+  expected_anchor_row_version=<selected row_version>,
 )
 ```
 

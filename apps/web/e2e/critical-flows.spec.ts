@@ -25,7 +25,6 @@ test("register, login, and create a conversation thread", async ({ page }) => {
 
   await page.getByRole("button", { name: "打开设置" }).click();
   await page.getByRole("button", { name: "退出登录" }).click();
-  await page.evaluate(() => localStorage.removeItem("dayboard.thread_id"));
   await page.getByLabel("账号操作").getByRole("button", { name: "登录" }).click();
   await page.getByLabel("用户名或邮箱").fill("e2e-user");
   await page.getByRole("textbox", { name: "密码" }).fill("correct-horse-battery");
@@ -33,7 +32,51 @@ test("register, login, and create a conversation thread", async ({ page }) => {
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
   expect(state.requests.some((request) => request.path === "/api/auth/register")).toBeTruthy();
   expect(state.requests.some((request) => request.path === "/api/auth/login")).toBeTruthy();
-  expect(state.requests.filter((request) => request.path === "/api/threads")).toHaveLength(2);
+  expect(state.requests.filter((request) => request.path === "/api/conversation")).toHaveLength(2);
+});
+
+test("conversation history follows the account across devices", async ({ page }) => {
+  const state = await installApiFixture(page, {
+    threadId: "thread-server-current",
+    messages: [{
+      id: "message-history",
+      thread_id: "thread-server-current",
+      run_id: "run-history",
+      role: "assistant",
+      content: "明天上午九点的跳舞日程已创建。",
+      message_metadata: {},
+      created_at: "2026-07-21T08:00:00Z",
+    }],
+  });
+  await page.goto("/dayboard");
+
+  await expect(page.getByText("明天上午九点的跳舞日程已创建。")).toBeVisible();
+  expect(state.requests.filter((request) => request.path === "/api/conversation")).toHaveLength(1);
+});
+
+test("older conversation messages load when the user scrolls upward", async ({ page }) => {
+  const messages = Array.from({ length: 45 }, (_, index) => ({
+    id: `paged-history-${index + 1}`,
+    thread_id: "thread-paged",
+    run_id: `paged-run-${index + 1}`,
+    role: "user" as const,
+    content: `分页历史消息 ${index + 1}`,
+    message_metadata: {},
+    created_at: new Date(Date.UTC(2026, 6, 20, 0, index)).toISOString(),
+  }));
+  await installApiFixture(page, { messages, threadId: "thread-paged" });
+  await page.goto("/dayboard");
+
+  await expect(page.getByText("分页历史消息 45", { exact: true })).toBeVisible();
+  await expect(page.getByText("分页历史消息 1", { exact: true })).toHaveCount(0);
+  const messageList = page.getByRole("region", { name: "对话记录" });
+  await messageList.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+
+  await expect(page.getByText("分页历史消息 1", { exact: true })).toBeVisible();
+  await expect.poll(() => messageList.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
 });
 
 test("multiple arrangements stream into separate schedule cards", async ({ page }) => {
@@ -103,7 +146,6 @@ test("mobile viewport keeps the transparent header visible while chat scrolls", 
   }));
   await page.setViewportSize({ width: 390, height: 844 });
   await installApiFixture(page, { messages, threadId: "thread-existing" });
-  await page.addInitScript(() => localStorage.setItem("dayboard.thread_id", "thread-existing"));
   await page.goto("/dayboard");
 
   await expect(page.locator('meta[name="viewport"]')).toHaveAttribute(
@@ -195,7 +237,6 @@ test("reload restores history and rejoins an active Run", async ({ page }) => {
     parts: [part],
     persistedText: "恢复执行完成。",
   });
-  await page.addInitScript(() => localStorage.setItem("dayboard.thread_id", "thread-existing"));
   await page.goto("/dayboard");
   await expect(page.getByText("昨天的历史消息")).toBeVisible();
   await expect(page.getByText("恢复后的日程")).toBeVisible();
@@ -223,8 +264,8 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
     (request) => request.method === "PUT" && request.path === "/api/calendar-entries/calendar-1",
   );
   expect(updates).toHaveLength(2);
-  expect((updates[0].body as Record<string, unknown>).expected_updated_at).toBe(original.updated_at);
-  expect((updates[1].body as Record<string, unknown>).expected_updated_at).not.toBe(original.updated_at);
+  expect((updates[0].body as Record<string, unknown>).expected_row_version).toBe(original.row_version);
+  expect((updates[1].body as Record<string, unknown>).expected_row_version).toBe(original.row_version + 1);
 });
 
 test("completed task remains visible in the schedule", async ({ page }) => {
@@ -369,6 +410,8 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
       next_attempt_at: null,
       delivered_at: "2026-07-21T09:50:00+08:00",
       read_at: null,
+      source_occurs_at: entry.start_time!,
+      source_status: "scheduled",
       provider_message_id: "in_app:reminder-1",
       last_error: null,
       payload: {
@@ -378,6 +421,46 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
       },
       created_at: "2026-07-21T09:00:00+08:00",
       updated_at: "2026-07-21T09:50:00+08:00",
+    }, {
+      id: "reminder-deleted",
+      tenant_id: "tenant-1",
+      owner_user_id: "user-1",
+      source_type: "calendar_entry",
+      source_id: "calendar-deleted",
+      channel: "in_app",
+      scheduled_for: "2026-07-20T10:00:00+08:00",
+      status: "delivered",
+      attempt_count: 1,
+      next_attempt_at: null,
+      delivered_at: "2026-07-20T10:00:00+08:00",
+      read_at: "2026-07-20T10:05:00+08:00",
+      source_occurs_at: "2026-07-20T10:00:00+08:00",
+      source_status: "deleted",
+      provider_message_id: "in_app:reminder-deleted",
+      last_error: null,
+      payload: { title: "已删除日程" },
+      created_at: "2026-07-20T09:00:00+08:00",
+      updated_at: "2026-07-20T10:05:00+08:00",
+    }, {
+      id: "reminder-pending",
+      tenant_id: "tenant-1",
+      owner_user_id: "user-1",
+      source_type: "calendar_entry",
+      source_id: "calendar-future",
+      channel: "in_app",
+      scheduled_for: "2026-07-24T10:00:00+08:00",
+      status: "pending",
+      attempt_count: 0,
+      next_attempt_at: null,
+      delivered_at: null,
+      read_at: null,
+      source_occurs_at: "2026-07-24T10:00:00+08:00",
+      source_status: "scheduled",
+      provider_message_id: null,
+      last_error: null,
+      payload: { title: "未来日程" },
+      created_at: "2026-07-21T09:00:00+08:00",
+      updated_at: "2026-07-21T09:00:00+08:00",
     }],
   });
 
@@ -385,6 +468,9 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
   await page.getByRole("button", { name: "提醒，1 条未读" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByText("1 条未读")).toBeVisible();
+  await expect(drawer.getByText("等待提醒")).toHaveCount(0);
+  await expect(drawer.getByRole("button", { name: /已删除日程/ })).toBeDisabled();
+  await expect(drawer.getByText("日程已删除")).toBeVisible();
   await drawer.getByRole("button", { name: /产品评审/ }).click();
   await expect(page.locator("[data-reminder-highlighted='true']")).toContainText("产品评审");
   await expect(page.getByRole("button", { name: "提醒", exact: true })).toBeVisible();
