@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,6 +14,7 @@ from agent_platform.core import (
     ConversationThread,
     InteractionConflictError,
     PendingInteraction,
+    PresentationEnvelope,
 )
 from agent_platform.core import TenantContext
 
@@ -101,7 +101,7 @@ class MemoryMessageStore:
         run_id: UUID,
         role: ConversationRole,
         content: str,
-        message_metadata: dict[str, Any] | None = None,
+        presentation: PresentationEnvelope | None = None,
     ) -> ConversationMessage:
         del context
         existing = next(
@@ -116,7 +116,7 @@ class MemoryMessageStore:
             run_id=run_id,
             role=role,
             content=content,
-            message_metadata=message_metadata or {},
+            presentation=presentation,
             created_at=datetime.now(UTC),
         )
         self.records.append(message)
@@ -129,7 +129,7 @@ class MemoryMessageStore:
         thread_id: UUID,
         run_id: UUID,
         content: str,
-        message_metadata: dict[str, Any],
+        presentation: PresentationEnvelope | None,
     ) -> ConversationMessage:
         self.records = [
             message
@@ -142,7 +142,7 @@ class MemoryMessageStore:
             run_id=run_id,
             role=ConversationRole.assistant,
             content=content,
-            message_metadata=message_metadata,
+            presentation=presentation,
         )
 
     async def get_assistant_for_run(
@@ -304,7 +304,11 @@ def test_conversation_history_and_state_are_storage_independent() -> None:
             thread_id=thread.id,
             run_id=run_id,
             content="已记录",
-            message_metadata={"parts": [{"type": "product_result"}]},
+            presentation=PresentationEnvelope(
+                kind="example.product-results",
+                schema_version=1,
+                payload={"parts": [{"type": "product_result"}]},
+            ),
         )
         interaction = PendingInteraction(
             interaction_type="example.choice",

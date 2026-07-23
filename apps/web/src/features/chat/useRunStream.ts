@@ -143,9 +143,9 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
         messages: upsertAssistantMessage(state.messages, action.runId, (message) => ({
           ...message,
           text: action.message.content,
-          parts: action.message.message_metadata.parts === undefined
+          parts: action.message.presentation === null
             ? message.parts
-            : parseScheduleResultParts(action.message.message_metadata.parts),
+            : parseScheduleResultParts(action.message.presentation.payload.parts),
         })),
       };
   }

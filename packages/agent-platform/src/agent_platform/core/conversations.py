@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from agent_platform.core.interactions import PendingInteraction
+from agent_platform.core.presentations import PresentationEnvelope
 
 
 class ConversationRole(StrEnum):
@@ -34,7 +34,7 @@ class ConversationMessage(BaseModel):
     run_id: UUID
     role: ConversationRole
     content: str
-    message_metadata: dict[str, Any]
+    presentation: PresentationEnvelope | None
     created_at: datetime
 
 

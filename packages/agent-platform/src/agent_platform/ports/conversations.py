@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
 from agent_platform.core.conversations import (
@@ -14,6 +14,7 @@ from agent_platform.core.conversations import (
 )
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.interactions import PendingInteraction
+from agent_platform.core.presentations import PresentationEnvelope
 
 
 class ConversationThreadStore(Protocol):
@@ -50,7 +51,7 @@ class ConversationMessageStore(Protocol):
         run_id: UUID,
         role: ConversationRole,
         content: str,
-        message_metadata: dict[str, Any] | None = None,
+        presentation: PresentationEnvelope | None = None,
     ) -> ConversationMessage: ...
 
     async def upsert_assistant(
@@ -60,7 +61,7 @@ class ConversationMessageStore(Protocol):
         thread_id: UUID,
         run_id: UUID,
         content: str,
-        message_metadata: dict[str, Any],
+        presentation: PresentationEnvelope | None,
     ) -> ConversationMessage: ...
 
     async def get_assistant_for_run(

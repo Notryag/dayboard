@@ -375,6 +375,20 @@ class ConversationMessageRow(Base):
             "role",
             unique=True,
         ),
+        CheckConstraint(
+            "presentation_schema_version IS NULL OR presentation_schema_version >= 1",
+            name="ck_conversation_message_presentation_schema_version",
+        ),
+        CheckConstraint(
+            "(presentation_kind IS NULL AND presentation_schema_version IS NULL "
+            "AND presentation_payload = '{}'::jsonb) OR "
+            "(presentation_kind IS NOT NULL AND presentation_schema_version IS NOT NULL)",
+            name="ck_conversation_message_presentation_complete",
+        ),
+        CheckConstraint(
+            "presentation_kind IS NULL OR role = 'assistant'",
+            name="ck_conversation_message_presentation_assistant_only",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -384,7 +398,11 @@ class ConversationMessageRow(Base):
     run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(String(4000), nullable=False)
-    message_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    presentation_kind: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    presentation_schema_version: Mapped[int | None] = mapped_column(nullable=True)
+    presentation_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

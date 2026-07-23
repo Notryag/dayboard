@@ -22,6 +22,12 @@ from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, get_command_service
+from dayboard.app.conversation_presentations import (
+    DayboardConversationMessagePage,
+    build_dayboard_presentation,
+    dayboard_presentation_parts,
+    project_conversation_message_page,
+)
 from agent_platform.core import (
     ActiveThreadRunError,
     IdempotencyConflictError,
@@ -64,10 +70,7 @@ from dayboard.domain.interactions import (
     ClarificationChoiceRequest,
     ClarificationConversationState,
 )
-from agent_platform.core import (
-    ConversationMessagePage,
-    ConversationThread,
-)
+from agent_platform.core import ConversationThread
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 router = APIRouter()
@@ -694,20 +697,25 @@ async def get_or_create_primary_conversation(
     return thread
 
 
-@router.get("/api/threads/{thread_id}/messages", response_model=ConversationMessagePage)
+@router.get(
+    "/api/threads/{thread_id}/messages",
+    response_model=DayboardConversationMessagePage,
+)
 async def get_thread_messages(
     thread_id: UUID,
     before: UUID | None = None,
     limit: int = Query(default=30, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
-) -> ConversationMessagePage:
+) -> DayboardConversationMessagePage:
     try:
-        return await build_conversation_service(session).list_message_page(
-            tenant_context,
-            thread_id,
-            before=before,
-            limit=limit,
+        return project_conversation_message_page(
+            await build_conversation_service(session).list_message_page(
+                tenant_context,
+                thread_id,
+                before=before,
+                limit=limit,
+            )
         )
     except LookupError as exc:
         raise ApiProblem(
@@ -1028,17 +1036,15 @@ async def cancel_run(
         existing_message = await conversations.get_assistant_message_for_run(
             tenant_context, run.id
         )
-        parts = (
-            existing_message.message_metadata.get("parts", [])
-            if existing_message is not None
-            else []
+        parts = dayboard_presentation_parts(
+            existing_message.presentation if existing_message is not None else None
         )
         await conversations.upsert_assistant_message(
             tenant_context,
             thread_id=run.thread_id,
             run_id=run.id,
             content=run.result_message or "请求已取消",
-            message_metadata={"status": "cancelled", "parts": parts},
+            presentation=build_dayboard_presentation(parts),
         )
     await platform.unit_of_work.commit()
     if transitioned:
@@ -1110,12 +1116,9 @@ async def stream_run_events(
             assistant = await build_conversation_service(session).get_assistant_message_for_run(
                 tenant_context, run_id
             )
-            raw_parts = (
-                assistant.message_metadata.get("parts", [])
-                if assistant is not None
-                else []
+            parts = dayboard_presentation_parts(
+                assistant.presentation if assistant is not None else None
             )
-            parts = raw_parts if isinstance(raw_parts, list) else []
             return _terminal_stream_event(current_run, parts=parts)
 
         terminal = await terminal_event(run)

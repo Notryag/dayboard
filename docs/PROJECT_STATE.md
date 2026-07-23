@@ -45,6 +45,9 @@ implementation chronology. Current facts live under [current](./current/README.m
   reuse, and concurrency-safe durable Run-event sequence allocation.
 - Added versioned resumable Interactions, Dayboard-owned typed clarification payloads, safe generated
   Web state contracts, and atomic compare-and-consume continuation submission with retry recovery.
+- Replaced unversioned assistant message metadata with Platform-owned versioned Presentation
+  envelopes, Dayboard-owned validated schedule payloads, generated Web history types, and identical
+  live-versus-refresh schedule-card recovery.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -54,8 +57,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Architecture hardening and public-release completion:
 
-1. Add versioned presentation and event extension envelopes before extracting more product
-   orchestration.
+1. Version product-specific durable event extensions before extracting more Run orchestration.
 2. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
 3. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
 4. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
@@ -68,13 +70,16 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 
 ## Known Issues
 
+- Legacy databases still contain several physical `json` columns now declared as `jsonb` by the
+  ORM, and Dayboard Alembic comparison still sees North-owned checkpoint tables. A forward schema
+  reconciliation migration and Alembic ownership filter are required before `alembic check` can be
+  promoted to a CI gate.
 - Installed-PWA background notifications are not implemented; browser Notifications currently
   require the authenticated Web app to be active.
 - The last reference one-write Agent Run used 10,362 tokens over two model calls; cache-hit and
   per-round growth measurements are still incomplete.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model
   scoped budgets for all traffic.
-- Persisted assistant presentation metadata still needs a versioned Platform envelope.
 - Scheduling defaults to trusted `Asia/Shanghai`; explicit foreign-timezone conversion is unsupported.
 - Browser voice behavior has provider smoke coverage but not the full Chrome/Safari release matrix.
 - Backups are host-local; encrypted off-host replication is pending.

@@ -819,6 +819,15 @@ export interface components {
              */
             updated_at: string;
         };
+        /** CalendarPresentationItem */
+        CalendarPresentationItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "calendar";
+            value: components["schemas"]["CalendarEntryView"];
+        };
         /**
          * CalendarTimingKind
          * @enum {string}
@@ -894,43 +903,6 @@ export interface components {
             /** Thread Id */
             thread_id?: string | null;
         };
-        /** ConversationMessage */
-        ConversationMessage: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Thread Id
-             * Format: uuid
-             */
-            thread_id: string;
-            /**
-             * Run Id
-             * Format: uuid
-             */
-            run_id: string;
-            role: components["schemas"]["ConversationRole"];
-            /** Content */
-            content: string;
-            /** Message Metadata */
-            message_metadata: {
-                [key: string]: unknown;
-            };
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-        };
-        /** ConversationMessagePage */
-        ConversationMessagePage: {
-            /** Items */
-            items: components["schemas"]["ConversationMessage"][];
-            /** Next Cursor */
-            next_cursor: string | null;
-        };
         /**
          * ConversationRole
          * @enum {string}
@@ -969,6 +941,61 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** DayboardConversationMessage */
+        DayboardConversationMessage: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            role: components["schemas"]["ConversationRole"];
+            /** Content */
+            content: string;
+            presentation: components["schemas"]["DayboardPresentationEnvelope"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** DayboardConversationMessagePage */
+        DayboardConversationMessagePage: {
+            /** Items */
+            items: components["schemas"]["DayboardConversationMessage"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /** DayboardPresentationEnvelope */
+        DayboardPresentationEnvelope: {
+            /**
+             * Kind
+             * @default dayboard.schedule-results
+             * @constant
+             */
+            kind: "dayboard.schedule-results";
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
+            payload: components["schemas"]["DayboardPresentationPayload"];
+        };
+        /** DayboardPresentationPayload */
+        DayboardPresentationPayload: {
+            /** Parts */
+            parts: components["schemas"]["ScheduleResultPart"][];
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1188,6 +1215,18 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** ScheduleResultPart */
+        ScheduleResultPart: {
+            /** Tool Call Id */
+            tool_call_id: string;
+            /**
+             * Operation
+             * @enum {string}
+             */
+            operation: "calendar_entry_created" | "calendar_entry_found" | "calendar_entry_rescheduled" | "calendar_entry_cancelled" | "task_item_created" | "task_item_found" | "task_item_updated";
+            /** Item */
+            item: components["schemas"]["CalendarPresentationItem"] | components["schemas"]["TaskPresentationItem"];
+        };
         /** SuggestedChoiceOption */
         SuggestedChoiceOption: {
             /** Key */
@@ -1243,6 +1282,15 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** TaskPresentationItem */
+        TaskPresentationItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "task";
+            value: components["schemas"]["TaskItemView"];
         };
         /**
          * TaskStatus
@@ -2084,7 +2132,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationMessagePage"];
+                    "application/json": components["schemas"]["DayboardConversationMessagePage"];
                 };
             };
             /** @description Validation Error */

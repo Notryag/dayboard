@@ -106,9 +106,15 @@ publishes the end sentinel, Dayboard lifecycle hooks persist:
 
 - terminal Run status and result message;
 - assistant conversation text;
-- safe schedule result parts in assistant message metadata;
+- safe schedule result parts in `dayboard.schedule-results@1` presentation envelopes;
 - clarification state when required;
 - durable RuntimeJournal events used for diagnostics and usage correlation.
+
+The Platform persists only the generic presentation kind, schema version, and opaque payload.
+Dayboard validates the known payload before writing it and again when projecting history through
+the public API. The complete UTC schedule snapshots used by the UI live in the presentation
+payload, while compact local-time ToolMessage receipts remain model-only. Run lifecycle status is
+read from the authoritative Run row and is not repeated in the presentation.
 
 When the trailing tool-call batch contains only successful terminal schedule writes, Dayboard's
 Agent middleware returns a deterministic grounded AI message and ends the loop without a final
@@ -130,9 +136,10 @@ If a live terminal event is unavailable, the SSE endpoint reads the terminal Run
 PostgreSQL and emits the appropriate terminal event. A page reload asks for the thread's active Run
 and rejoins it when present.
 
-Historical assistant messages render schedule cards from their persisted typed parts. They do not
-query current business rows by `created_by_run_id`, because those rows may have changed since the
-original conversation.
+Historical assistant messages render schedule cards from their persisted, versioned presentation.
+The same typed parts are used for live SSE and refresh recovery, and a browser test verifies that
+cards remain identical after reload. History does not query current business rows by
+`created_by_run_id`, because those rows may have changed since the original conversation.
 
 ## Clarification
 

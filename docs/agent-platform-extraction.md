@@ -51,7 +51,7 @@ integration details from becoming dependencies of the reusable Core.
 | PostgreSQL Run repositories | Dayboard adapter | Platform adapter | Move only after lifecycle concurrency contracts are proven |
 | Command idempotency | Platform | Platform | ORM-independent record, Store, validation, cleanup, and rollback are complete |
 | Command submission and dispatch | Split | Split | Platform owns atomic submission; Dayboard owns queue and product execution |
-| Persisted message artifacts | Mixed | Split | Platform owns a versioned envelope and lifecycle; Dayboard owns schedule payloads |
+| Persisted message artifacts | Split | Split | Implemented: Platform owns the versioned envelope/lifecycle; Dayboard owns and validates schedule payloads |
 | Clarification interaction state | Split | Split | Implemented: Platform owns envelope/CAS; Dayboard owns typed payload and response projection |
 | Voice/media ingestion lifecycle | Dayboard | Platform boundary | Provider and product interpretation remain adapters |
 | Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
@@ -99,7 +99,8 @@ status rather than retaining stale findings as if they were still unresolved:
 | Concurrent Run-event sequence allocation | Complete; the PostgreSQL adapter serializes allocation by locking the parent Run |
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
-| Versioned presentation and event extension envelopes | Pending; current metadata remains unversioned mappings |
+| Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
+| Versioned durable event extension envelopes | Pending; RuntimeJournal metadata remains a generic diagnostic mapping |
 | Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
 | Explicit Conversation Thread lifecycle and primary-role contracts | Pending; current `status` remains a free string |
 
@@ -197,9 +198,10 @@ A capability is considered extracted only when:
 7. Add Unit of Work and platform idempotency contracts; remove ORM records from command use cases.
    Complete.
 8. Add versioned PendingInteraction envelopes and atomic continuation submission. Complete.
-9. Add versioned presentation and event extension envelopes.
-10. Split generic Run coordination from Dayboard Agent execution and result projection.
-11. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
+9. Add versioned persisted presentation envelopes and typed Dayboard history projection. Complete.
+10. Add versioned durable event extension envelopes where product-specific replay requires them.
+11. Split generic Run coordination from Dayboard Agent execution and result projection.
+12. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
    Dayboard path.
-12. Consider usage accounting and notification delivery only after the lifecycle adapters are
+13. Consider usage accounting and notification delivery only after the lifecycle adapters are
     demonstrated.

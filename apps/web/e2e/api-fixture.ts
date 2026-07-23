@@ -129,6 +129,14 @@ function corsHeaders(contentType = "application/json") {
   };
 }
 
+function schedulePresentation(parts: Json[]) {
+  return {
+    kind: "dayboard.schedule-results",
+    schema_version: 1,
+    payload: { parts },
+  };
+}
+
 async function json(route: Route, body: unknown, status = 200) {
   await route.fulfill({
     body: JSON.stringify(body),
@@ -266,7 +274,7 @@ export async function installApiFixture(
         run_id: runId,
         role: "user",
         content: message,
-        message_metadata: {},
+        presentation: null,
         created_at: now,
       });
       if (spec.persistedText !== undefined) {
@@ -276,7 +284,7 @@ export async function installApiFixture(
           run_id: runId,
           role: "assistant",
           content: spec.persistedText,
-          message_metadata: { parts: spec.parts ?? [] },
+          presentation: schedulePresentation(spec.parts ?? []),
           created_at: now,
         });
       }

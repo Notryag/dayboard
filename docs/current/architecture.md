@@ -60,7 +60,7 @@ Platform does not understand calendars, tasks, scheduling prompts, or the Dayboa
 The reusable application package currently owns shared identity and Conversation/Run contracts:
 
 ```text
-agent_platform.core          identity, Conversation/Run contracts, and shared errors
+agent_platform.core          identity, Conversation/Run, Interaction, and Presentation contracts
 agent_platform.ports         persistence-neutral Conversation and Run Store protocols
 agent_platform.application   Conversation/Run lifecycle, idempotency, and command submission
 ```
@@ -102,9 +102,16 @@ one transaction for the idempotency claim, expected-state-version consumption, R
 now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
 state schema contains only presentation options, never trusted candidate IDs or row versions.
 
-Persisted assistant presentation metadata remains an unversioned mapping. A versioned presentation
-envelope is the next extraction gap; it is not conflated with the now-complete Interaction contract.
-The hardening sequence is tracked in [../agent-platform-extraction.md](../agent-platform-extraction.md).
+The Platform also owns the generic `PresentationEnvelope` identity, schema version, persistence,
+and replay contract. Dayboard owns `dayboard.schedule-results@1`, validates every schedule part,
+and projects only that known kind and version into the public message API. PostgreSQL stores the
+envelope as separate kind, version, and JSONB payload columns; a database constraint permits a
+presentation only on assistant messages. Run status is not duplicated into the payload because the
+Run row is authoritative. Unknown product kinds or versions remain opaque to the Platform and are
+not interpreted as Dayboard cards; malformed payloads for the known Dayboard version fail
+validation. The former unversioned message metadata was migrated once and has no runtime
+compatibility path. That data migration normalizes pre-version-counter schedule snapshots to the
+same initial `row_version = 1` assigned when row versions were introduced.
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
@@ -160,7 +167,9 @@ Named SSE events are validated and converted to a discriminated `RunEvent` union
 one reducer. EventSource transport callbacks do not inspect arbitrary payload fields or
 independently assemble message, progress, and schedule state. Persisted schedule data remains
 server-backed in TanStack Query; the reducer holds only conversation presentation state and a
-schedule invalidation revision.
+schedule invalidation revision. Live schedule parts and refresh history share the generated
+`ScheduleResultPart` contract; persisted messages expose the typed versioned presentation rather
+than a handwritten metadata mapping.
 
 API transport types are generated with `npm run api:types`. Handwritten code consumes aliases from
 `lib/api/types.ts`, and all ordinary Web REST endpoints use `openapi-fetch`, including Auth, Voice,

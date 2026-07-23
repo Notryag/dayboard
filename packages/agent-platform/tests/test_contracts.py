@@ -7,7 +7,7 @@ from uuid import uuid4
 from pydantic import ValidationError
 import pytest
 
-from agent_platform.core import ConversationMessage, ConversationRole
+from agent_platform.core import ConversationMessage, ConversationRole, PresentationEnvelope
 from agent_platform.core import TenantContext
 from agent_platform.core import AgentRunEvent, AgentRunEventCategory
 
@@ -24,18 +24,24 @@ def test_tenant_context_is_trusted_immutable_data() -> None:
         context.timezone = "UTC"  # type: ignore[misc]
 
 
-def test_conversation_message_keeps_product_artifacts_opaque() -> None:
+def test_conversation_message_keeps_versioned_product_presentations_opaque() -> None:
+    presentation = PresentationEnvelope(
+        kind="example.product-results",
+        schema_version=1,
+        payload={"parts": [{"type": "product_result", "payload": {"id": "1"}}]},
+    )
     message = ConversationMessage(
         id=uuid4(),
         thread_id=uuid4(),
         run_id=uuid4(),
         role=ConversationRole.assistant,
         content="已处理",
-        message_metadata={"parts": [{"type": "product_result", "payload": {"id": "1"}}]},
+        presentation=presentation,
         created_at=datetime.now(UTC),
     )
 
-    assert message.message_metadata["parts"][0]["payload"] == {"id": "1"}
+    assert message.presentation == presentation
+    assert message.presentation.payload["parts"][0]["payload"] == {"id": "1"}
 
 
 def test_run_event_rejects_empty_event_type() -> None:

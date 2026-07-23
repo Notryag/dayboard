@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.platform_services import build_run_service
 from dayboard.app.clarifications import ClarificationService
+from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
 from agent_platform.core import TenantContext
@@ -565,10 +566,29 @@ async def test_stream_run_events_returns_terminal_run_state(
         thread_id=run.thread_id,
         run_id=run.id,
         content="几点开始？",
-        message_metadata={
-            "status": "needs_clarification",
-            "parts": [{"tool_call_id": "call-1", "operation": "task_item_created"}],
-        },
+        presentation=build_dayboard_presentation(
+            [
+                {
+                    "tool_call_id": "call-1",
+                    "operation": "task_item_created",
+                    "item": {
+                        "kind": "task",
+                        "value": {
+                            "id": "11111111-1111-4111-8111-111111111111",
+                            "row_version": 1,
+                            "title": "提交周报",
+                            "due_at": None,
+                            "timezone": "Asia/Shanghai",
+                            "reminder": None,
+                            "status": "open",
+                            "created_by_run_id": None,
+                            "created_at": "2026-07-20T10:00:00Z",
+                            "updated_at": "2026-07-20T10:00:00Z",
+                        },
+                    },
+                }
+            ]
+        ),
     )
     await db_session.commit()
 

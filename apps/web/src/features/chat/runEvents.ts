@@ -11,6 +11,21 @@ const progressLabels = {
   conflict_check_completed: "日程冲突检查完成",
 } as const;
 
+const scheduleOperations = new Set<ScheduleResultPart["operation"]>([
+  "calendar_entry_created",
+  "calendar_entry_found",
+  "calendar_entry_rescheduled",
+  "calendar_entry_cancelled",
+  "task_item_created",
+  "task_item_found",
+  "task_item_updated",
+]);
+
+function isScheduleOperation(value: unknown): value is ScheduleResultPart["operation"] {
+  return typeof value === "string"
+    && scheduleOperations.has(value as ScheduleResultPart["operation"]);
+}
+
 type TerminalEvent =
   | { type: "completed"; content: string | null; parts?: ScheduleResultPart[] }
   | { type: "failed"; content: string | null; parts?: ScheduleResultPart[] }
@@ -50,10 +65,22 @@ function scheduleItem(value: unknown): ScheduleDisplayItem | null {
 function schedulePart(value: unknown): ScheduleResultPart | null {
   if (!isRecord(value)) return null;
   const item = scheduleItem(value.item);
-  if (typeof value.tool_call_id !== "string" || typeof value.operation !== "string" || !item) {
+  if (
+    typeof value.tool_call_id !== "string"
+    || !isScheduleOperation(value.operation)
+    || !item
+  ) {
     return null;
   }
-  return { tool_call_id: value.tool_call_id, operation: value.operation, item };
+  const operationMatchesItem = item.kind === "calendar"
+    ? value.operation.startsWith("calendar_entry_")
+    : value.operation.startsWith("task_item_");
+  if (!operationMatchesItem) return null;
+  return {
+    tool_call_id: value.tool_call_id,
+    operation: value.operation,
+    item,
+  };
 }
 
 export function parseScheduleResultParts(value: unknown): ScheduleResultPart[] {

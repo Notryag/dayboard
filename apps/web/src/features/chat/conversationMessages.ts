@@ -49,7 +49,7 @@ export function persistedMessage(message: ConversationMessage): ChatMessage {
       hour12: false,
     }).format(new Date(message.created_at)),
     runId: message.run_id,
-    parts: parseScheduleResultParts(message.message_metadata.parts),
+    parts: parseScheduleResultParts(message.presentation?.payload.parts),
   };
 }
 

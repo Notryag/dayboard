@@ -14,6 +14,7 @@ from agent_platform.core import (
     ConversationState,
     ConversationThread,
     PendingInteraction,
+    PresentationEnvelope,
 )
 from dayboard.db.models import (
     ConversationMessageRow,
@@ -36,13 +37,22 @@ def conversation_thread_from_row(row: ConversationThreadRow) -> ConversationThre
 
 
 def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMessage:
+    presentation = None
+    if row.presentation_kind is not None:
+        if row.presentation_schema_version is None:
+            raise RuntimeError("Persisted presentation is incomplete")
+        presentation = PresentationEnvelope(
+            kind=row.presentation_kind,
+            schema_version=row.presentation_schema_version,
+            payload=row.presentation_payload,
+        )
     return ConversationMessage(
         id=row.id,
         thread_id=row.thread_id,
         run_id=row.run_id,
         role=ConversationRole(row.role),
         content=row.content,
-        message_metadata=row.message_metadata,
+        presentation=presentation,
         created_at=row.created_at,
     )
 
@@ -179,7 +189,7 @@ class ConversationMessageRepository:
         run_id: UUID,
         role: ConversationRole,
         content: str,
-        message_metadata: dict | None = None,
+        presentation: PresentationEnvelope | None = None,
     ) -> ConversationMessage:
         statement = (
             insert(ConversationMessageRow)
@@ -190,7 +200,11 @@ class ConversationMessageRepository:
                 run_id=run_id,
                 role=role.value,
                 content=content,
-                message_metadata=message_metadata or {},
+                presentation_kind=presentation.kind if presentation is not None else None,
+                presentation_schema_version=(
+                    presentation.schema_version if presentation is not None else None
+                ),
+                presentation_payload=presentation.payload if presentation is not None else {},
             )
             .on_conflict_do_nothing(
                 index_elements=["tenant_id", "run_id", "role"],
@@ -218,7 +232,7 @@ class ConversationMessageRepository:
         thread_id: UUID,
         run_id: UUID,
         content: str,
-        message_metadata: dict,
+        presentation: PresentationEnvelope | None,
     ) -> ConversationMessage:
         statement = (
             insert(ConversationMessageRow)
@@ -229,11 +243,22 @@ class ConversationMessageRepository:
                 run_id=run_id,
                 role=ConversationRole.assistant.value,
                 content=content,
-                message_metadata=message_metadata,
+                presentation_kind=presentation.kind if presentation is not None else None,
+                presentation_schema_version=(
+                    presentation.schema_version if presentation is not None else None
+                ),
+                presentation_payload=presentation.payload if presentation is not None else {},
             )
             .on_conflict_do_update(
                 index_elements=["tenant_id", "run_id", "role"],
-                set_={"content": content, "message_metadata": message_metadata},
+                set_={
+                    "content": content,
+                    "presentation_kind": presentation.kind if presentation is not None else None,
+                    "presentation_schema_version": (
+                        presentation.schema_version if presentation is not None else None
+                    ),
+                    "presentation_payload": presentation.payload if presentation is not None else {},
+                },
             )
             .returning(ConversationMessageRow)
         )

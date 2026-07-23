@@ -4,6 +4,8 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage
 from north import RuntimeStreamEvent
 import pytest
@@ -12,6 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.app.clarifications import ClarificationService
+from dayboard.app.conversation_presentations import (
+    build_dayboard_presentation,
+    dayboard_presentation_parts,
+)
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
@@ -97,6 +103,7 @@ async def test_two_runs_persist_complete_thread_history(
 
 
 async def test_tool_message_part_is_persisted_with_final_assistant_message(
+    api_app: FastAPI,
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
@@ -145,12 +152,23 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
         tenant_context, created.thread_id
     )
     assistant = messages[-1]
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        history = await client.get(f"/api/threads/{created.thread_id}/messages")
 
     assert assistant.content == "任务已创建。"
-    assert assistant.message_metadata["status"] == "completed"
-    assert assistant.message_metadata["parts"][0]["tool_call_id"] == "call-1"
-    assert assistant.message_metadata["parts"][0]["item"]["value"]["title"] == "提交周报"
+    assert assistant.presentation is not None
+    assert assistant.presentation.kind == "dayboard.schedule-results"
+    assert assistant.presentation.schema_version == 1
+    parts = dayboard_presentation_parts(assistant.presentation)
+    assert parts[0]["tool_call_id"] == "call-1"
+    assert parts[0]["item"]["value"]["title"] == "提交周报"
     assert [event_type for _, event_type, _ in run_stream.events] == ["run_completed"]
+    persisted = history.json()["items"][-1]
+    assert persisted["presentation"]["payload"]["parts"] == run_stream.events[0][2]["parts"]
+    assert "message_metadata" not in persisted
 
 
 async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
@@ -172,7 +190,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
                 thread_id=created.thread_id,
                 run_id=created.run_id,
                 content="请求已取消",
-                message_metadata={"status": "cancelled", "parts": []},
+                presentation=build_dayboard_presentation([]),
             )
             await cancel_session.commit()
         await kwargs["stream_sink"](
@@ -221,7 +239,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     assistant = messages[-1]
 
     assert assistant.content == "请求已取消"
-    assert assistant.message_metadata == {"status": "cancelled", "parts": []}
+    assert dayboard_presentation_parts(assistant.presentation) == []
     assert run_stream.events == []
 
 

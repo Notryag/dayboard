@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID
 
 from agent_platform.core.conversations import (
@@ -16,6 +15,7 @@ from agent_platform.core.conversations import (
 from agent_platform.core.errors import ConversationNotFoundError, InteractionConflictError
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.interactions import PendingInteraction
+from agent_platform.core.presentations import PresentationEnvelope
 from agent_platform.ports.unit_of_work import ConversationUnitOfWork
 
 
@@ -63,7 +63,7 @@ class ConversationService:
         run_id: UUID,
         role: ConversationRole,
         content: str,
-        message_metadata: dict[str, Any] | None = None,
+        presentation: PresentationEnvelope | None = None,
     ) -> ConversationMessage:
         return await self.messages.append_once(
             context,
@@ -71,7 +71,7 @@ class ConversationService:
             run_id=run_id,
             role=role,
             content=content,
-            message_metadata=message_metadata,
+            presentation=presentation,
         )
 
     async def list_messages(
@@ -106,14 +106,14 @@ class ConversationService:
         thread_id: UUID,
         run_id: UUID,
         content: str,
-        message_metadata: dict[str, Any],
+        presentation: PresentationEnvelope | None,
     ) -> ConversationMessage:
         return await self.messages.upsert_assistant(
             context,
             thread_id=thread_id,
             run_id=run_id,
             content=content,
-            message_metadata=message_metadata,
+            presentation=presentation,
         )
 
     async def get_assistant_message_for_run(

@@ -15,11 +15,7 @@ export type ScheduleDisplayItem =
   | { kind: "calendar"; value: CalendarEntry }
   | { kind: "task"; value: TaskItem };
 
-export type ScheduleResultPart = {
-  tool_call_id: string;
-  operation: string;
-  item: ScheduleDisplayItem;
-};
+export type { ScheduleResultPart } from "@/lib/api/types";
 
 export type ScheduleChange = {
   undo?: {

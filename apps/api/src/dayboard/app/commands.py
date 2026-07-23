@@ -26,6 +26,7 @@ from dayboard.agent.presentation import project_runtime_stream_event
 from agent_platform.application import AgentRunService, CommandSubmissionService, ConversationService
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
+from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.app.platform_services import (
     build_platform_services,
 )
@@ -336,10 +337,7 @@ class CommandService:
                         thread_id=run.thread_id,
                         run_id=run.id,
                         content="",
-                        message_metadata={
-                            "status": "running",
-                            "parts": presentation_parts,
-                        },
+                        presentation=build_dayboard_presentation(presentation_parts),
                     )
                     await self.platform_unit_of_work.commit()
                 # Live presentation is projected from the canonical bridge event by the API.
@@ -394,10 +392,7 @@ class CommandService:
                         thread_id=run.thread_id,
                         run_id=run.id,
                         content=clarification_question,
-                        message_metadata={
-                            "status": "needs_clarification",
-                            "parts": presentation_parts,
-                        },
+                        presentation=build_dayboard_presentation(presentation_parts),
                     )
                     await self.platform_unit_of_work.commit()
                     await self._publish_run_event(
@@ -427,7 +422,7 @@ class CommandService:
                     thread_id=run.thread_id,
                     run_id=run.id,
                     content=message,
-                    message_metadata={"status": "completed", "parts": presentation_parts},
+                    presentation=build_dayboard_presentation(presentation_parts),
                 )
                 await self.conversations.clear_interaction(context, run.thread_id)
                 await self.platform_unit_of_work.commit()
@@ -640,7 +635,7 @@ class CommandService:
             run_id=run.id,
             role=ConversationRole.assistant,
             content=_safe_error_message(exc),
-            message_metadata={"status": "failed"},
+            presentation=build_dayboard_presentation([]),
         )
         await self.platform_unit_of_work.commit()
 
@@ -674,10 +669,7 @@ async def _mark_run_failed(
             thread_id=run.thread_id,
             run_id=run.id,
             content=_safe_error_message(exc),
-            message_metadata={
-                "status": "failed",
-                "parts": presentation_parts or [],
-            },
+            presentation=build_dayboard_presentation(presentation_parts or []),
         )
         await unit_of_work.commit()
         return True

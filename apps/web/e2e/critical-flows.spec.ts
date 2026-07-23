@@ -44,7 +44,7 @@ test("conversation history follows the account across devices", async ({ page })
       run_id: "run-history",
       role: "assistant",
       content: "明天上午九点的跳舞日程已创建。",
-      message_metadata: {},
+      presentation: null,
       created_at: "2026-07-21T08:00:00Z",
     }],
   });
@@ -61,7 +61,7 @@ test("older conversation messages load when the user scrolls upward", async ({ p
     run_id: `paged-run-${index + 1}`,
     role: "user" as const,
     content: `分页历史消息 ${index + 1}`,
-    message_metadata: {},
+    presentation: null,
     created_at: new Date(Date.UTC(2026, 6, 20, 0, index)).toISOString(),
   }));
   await installApiFixture(page, { messages, threadId: "thread-paged" });
@@ -98,6 +98,11 @@ test("multiple arrangements stream into separate schedule cards", async ({ page 
   await expect(results.getByText("项目晨会")).toBeVisible();
   await expect(results.getByText("客户访谈")).toBeVisible();
   await expect(results.getByRole("button", { name: /完成/ })).toHaveCount(0);
+
+  await page.reload();
+  const restoredResults = page.getByLabel("本次安排");
+  await expect(restoredResults.getByText("项目晨会")).toBeVisible();
+  await expect(restoredResults.getByText("客户访谈")).toBeVisible();
 });
 
 test("calendar search streams every match before the assistant summary", async ({ page }) => {
@@ -141,7 +146,7 @@ test("mobile viewport keeps the transparent header visible while chat scrolls", 
     run_id: `run-${index}`,
     role: "user" as const,
     content: `历史安排 ${index + 1}：这是一条用于验证移动端滚动区域的较长消息。`,
-    message_metadata: {},
+    presentation: null,
     created_at: `2026-07-20T${String(index).padStart(2, "0")}:00:00Z`,
   }));
   await page.setViewportSize({ width: 390, height: 844 });
@@ -226,7 +231,7 @@ test("reload restores history and rejoins an active Run", async ({ page }) => {
       run_id: "run-old",
       role: "user",
       content: "昨天的历史消息",
-      message_metadata: {},
+      presentation: null,
       created_at: "2026-07-20T08:00:00Z",
     }],
     threadId: "thread-existing",
