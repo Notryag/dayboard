@@ -21,7 +21,7 @@ from dayboard.app.conversation_presentations import (
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
-from agent_platform.core import InteractionConflictError, TenantContext
+from agent_platform.core import AgentRunStatus, InteractionConflictError, TenantContext
 from dayboard.db.session import SessionLocal
 from dayboard.domain.interactions import ClarificationPayload
 from fake_runtime import fake_executor_factory
@@ -79,14 +79,14 @@ async def test_two_runs_persist_complete_thread_history(
     )
     first_request = CommandRequest(message="明天八点开会")
     first = await service.create_or_get_command_run(tenant_context, first_request)
-    await service.execute_command_run(tenant_context, first_request, first.run_id)
+    await service.execute_command_run(tenant_context, first.run_id)
     second_request = CommandRequest(message="改到后天")
     second = await service.create_or_get_command_run(
         tenant_context,
         second_request,
         thread_id=first.thread_id,
     )
-    await service.execute_command_run(tenant_context, second_request, second.run_id)
+    await service.execute_command_run(tenant_context, second.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, first.thread_id
@@ -146,7 +146,7 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
     )
     request = CommandRequest(message="提醒我提交周报")
     created = await service.create_or_get_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, request, created.run_id)
+    await service.execute_command_run(tenant_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
@@ -231,7 +231,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     created = await service.create_or_get_command_run(tenant_context, request)
 
     with pytest.raises(asyncio.CancelledError):
-        await service.execute_command_run(tenant_context, request, created.run_id)
+        await service.execute_command_run(tenant_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
@@ -241,6 +241,62 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     assert assistant.content == "请求已取消"
     assert dayboard_presentation_parts(assistant.presentation) == []
     assert run_stream.events == []
+
+
+async def test_clarification_outcome_is_persisted_before_terminal_stream(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    run_stream = RecordingRunStream()
+
+    async def fake_invoker(**kwargs):
+        del kwargs
+        return {
+            "thread_data": {
+                "clarification": {
+                    "question": "上午还是下午？",
+                    "response_kind": "single_choice",
+                    "options": ["上午", "下午"],
+                }
+            },
+            "messages": [],
+        }
+
+    service = CommandService(
+        db_session,
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        executor_factory=fake_executor_factory(fake_invoker),
+        stream_bridge=run_stream,
+    )
+    created = await service.create_or_get_command_run(
+        tenant_context,
+        CommandRequest(message="明天开会"),
+    )
+
+    await service.execute_command_run(tenant_context, created.run_id)
+
+    runs = build_run_service(db_session)
+    conversations = build_conversation_service(db_session)
+    run = await runs.get_run(tenant_context, created.run_id)
+    state = await conversations.get_state(tenant_context, created.thread_id)
+    messages = await conversations.list_messages(tenant_context, created.thread_id)
+    events = await runs.list_events(tenant_context, created.run_id)
+
+    assert run is not None
+    assert run.status == AgentRunStatus.needs_clarification
+    assert state is not None and state.interaction is not None
+    assert state.interaction.source_run_id == created.run_id
+    assert messages[-1].content == "上午还是下午？"
+    assert events[-1].event_type == "clarification_requested"
+    assert events[-1].extension is not None
+    assert events[-1].extension.kind == "agent-platform.interaction-state"
+    assert events[-1].extension.payload == {"state_version": state.version}
+    assert [event_type for _, event_type, _ in run_stream.events] == [
+        "clarification_requested"
+    ]
 
 
 async def test_pending_clarification_state_is_versioned_and_clearable(

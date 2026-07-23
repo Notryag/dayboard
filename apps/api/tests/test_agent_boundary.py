@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -9,40 +10,11 @@ from fake_runtime import fake_executor_factory
 from langchain_core.messages import AIMessage, ToolMessage
 
 from dayboard.agent.factory import build_dayboard_agent
-from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService, _extract_clarification_payload
+from dayboard.agent.budget import ProviderBudgetGuard
+from dayboard.app.run_execution import DayboardRunExecutionDriver
+from dayboard.app.run_result_projection import extract_clarification_payload
 from dayboard.config import Settings
-from agent_platform.core import TenantContext
-
-
-class FakeConversationService:
-    async def create_thread(self, context, *, thread_id=None, title=None):
-        del context, title
-        return SimpleNamespace(id=thread_id or uuid4())
-
-    async def require_thread(self, context, thread_id):
-        del context
-        return SimpleNamespace(id=thread_id)
-
-    async def append_message(self, context, **kwargs):
-        del context, kwargs
-        return None
-
-    async def upsert_assistant_message(self, context, **kwargs):
-        del context, kwargs
-        return None
-
-    async def update_summary(self, context, thread_id, summary):
-        del context, thread_id, summary
-        return None
-
-    async def set_interaction(self, context, **kwargs):
-        del context
-        return SimpleNamespace(version=1, interaction=kwargs["interaction"])
-
-    async def clear_interaction(self, context, thread_id):
-        del context, thread_id
-        return None
+from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
 
 
 def test_clarification_state_uses_real_search_tool_candidates() -> None:
@@ -87,7 +59,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
         ]
     }
 
-    payload = _extract_clarification_payload(result)
+    payload = extract_clarification_payload(result)
 
     assert payload.response_kind == "calendar_choice"
     candidate = payload.candidates[0]
@@ -101,7 +73,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
 
 
 def test_clarification_state_uses_agent_suggested_choices_without_search_results() -> None:
-    payload = _extract_clarification_payload(
+    payload = extract_clarification_payload(
         {
             "thread_data": {
                 "clarification": {
@@ -428,53 +400,25 @@ def test_build_dayboard_agent_rejects_trusted_context_in_tool_schema() -> None:
         )
 
 
-async def test_command_service_maps_north_clarification_result_to_run(
+async def test_dayboard_driver_maps_north_clarification_result_to_platform_outcome(
     tenant_context: TenantContext,
     monkeypatch,
 ) -> None:
     built = {}
-    recorded_events = []
-
-    class FakeRunService:
-        def __init__(self, session) -> None:
-            self.session = session
-
-        async def create_run(self, context, *, input_message, thread_id=None):
-                del context, input_message
-                return SimpleNamespace(id=uuid4(), thread_id=thread_id)
-
-        async def get_run(self, context, run_id):
-            del context
-            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
-
-        async def mark_running(self, context, run):
-            del context
-            return run
-
-        async def mark_needs_clarification(
-            self, context, run, *, question, extension=None
-        ):
-            result = run
-            del context, run, extension
-            recorded_events.append(("clarification_requested", question))
-            return result
-
-        async def mark_completed(self, context, run, *, result_message, extension=None):
-            result = run
-            del context, result_message, extension, run
-            return result
-
-        async def mark_failed(self, context, run, *, error_type, error_message):
-            result = run
-            del context, error_type, error_message, run
-            return result
-
-    class FakeSession:
-        async def commit(self) -> None:
-            return None
-
-        async def rollback(self) -> None:
-            return None
+    outcomes = []
+    run_id = uuid4()
+    now = datetime.now(UTC)
+    run = AgentRun(
+        id=run_id,
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        thread_id=uuid4(),
+        status=AgentRunStatus.running,
+        input_message="安排会议",
+        result_message=None,
+        created_at=now,
+        updated_at=now,
+    )
 
     def fake_build_dayboard_agent(*args, **kwargs):
         built["run_id"] = kwargs["run_id"]
@@ -490,97 +434,88 @@ async def test_command_service_maps_north_clarification_result_to_run(
         assert len(built["compaction_hooks"]) == 1
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 
-    monkeypatch.setattr("dayboard.app.commands.build_dayboard_agent", fake_build_dayboard_agent)
-    fake_session = FakeSession()
-    service = CommandService(
-        fake_session,
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-            executor_factory=fake_executor_factory(fake_invoker),
-            conversation_service=FakeConversationService(),
-            run_service=FakeRunService(fake_session),
+    async def complete(outcome) -> None:
+        outcomes.append(outcome)
+
+    async def fail(failure) -> bool:
+        del failure
+        return True
+
+    settings = Settings(
+        APP_MODEL_NAME="openai:gpt-test",
+        DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+    )
+    monkeypatch.setattr("dayboard.app.run_execution.build_dayboard_agent", fake_build_dayboard_agent)
+    driver = DayboardRunExecutionDriver(
+        SimpleNamespace(),
+        settings=settings,
+        unit_of_work=SimpleNamespace(),
+        conversations=SimpleNamespace(),
+        runs=SimpleNamespace(),
+        budget_guard=ProviderBudgetGuard(settings),
+        executor_factory=fake_executor_factory(fake_invoker),
     )
 
-    request = CommandRequest(message="安排会议")
-    run_id = uuid4()
-    await service.execute_command_run(tenant_context, request, run_id)
+    await driver.execute(tenant_context, run, on_completed=complete, on_failed=fail)
 
     assert built["context"] == tenant_context
     assert built["run_id"] == run_id
-    assert recorded_events[-1] == ("clarification_requested", "几点开始？")
+    assert outcomes[0].result_message == "几点开始？"
+    assert outcomes[0].interaction is not None
+    assert outcomes[0].interaction.source_run_id == run_id
 
 
-async def test_command_service_logs_and_marks_failed_run(
+async def test_dayboard_driver_logs_and_projects_failure(
     tenant_context: TenantContext,
-    monkeypatch,
     caplog,
 ) -> None:
     recorded_failures = []
-
-    class FakeRunService:
-        def __init__(self, session) -> None:
-            self.session = session
-
-        async def create_run(self, context, *, input_message, thread_id=None):
-                del context, input_message
-                return SimpleNamespace(id=uuid4(), thread_id=thread_id)
-
-        async def get_run(self, context, run_id):
-            del context
-            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
-
-        async def mark_running(self, context, run):
-            del context
-            return run
-
-        async def mark_needs_clarification(
-            self, context, run, *, question, extension=None
-        ):
-            result = run
-            del context, question, run, extension
-            return result
-
-        async def mark_completed(self, context, run, *, result_message, extension=None):
-            result = run
-            del context, result_message, extension, run
-            return result
-
-        async def mark_failed(self, context, run, *, error_type, error_message):
-            result = run
-            del context, run
-            recorded_failures.append((error_type, error_message))
-            return result
-
-    class FakeSession:
-        async def commit(self) -> None:
-            return None
-
-        async def rollback(self) -> None:
-            return None
 
     async def failing_invoker(**kwargs):
         del kwargs
         raise RuntimeError("provider unavailable")
 
-    fake_session = FakeSession()
-    service = CommandService(
-        fake_session,
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-            executor_factory=fake_executor_factory(failing_invoker),
-            conversation_service=FakeConversationService(),
-            run_service=FakeRunService(fake_session),
+    async def complete(outcome) -> None:
+        del outcome
+
+    async def fail(failure) -> bool:
+        recorded_failures.append((failure.error_type, failure.error_message))
+        return True
+
+    now = datetime.now(UTC)
+    run = AgentRun(
+        id=uuid4(),
+        tenant_id=tenant_context.tenant_id,
+        owner_user_id=tenant_context.user_id,
+        thread_id=uuid4(),
+        status=AgentRunStatus.running,
+        input_message="安排会议",
+        result_message=None,
+        created_at=now,
+        updated_at=now,
+    )
+    settings = Settings(
+        APP_MODEL_NAME="openai:gpt-test",
+        DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+    )
+    driver = DayboardRunExecutionDriver(
+        SimpleNamespace(),
+        settings=settings,
+        unit_of_work=SimpleNamespace(),
+        conversations=SimpleNamespace(),
+        runs=SimpleNamespace(),
+        budget_guard=ProviderBudgetGuard(settings),
+        executor_factory=fake_executor_factory(failing_invoker),
     )
 
-    with caplog.at_level(logging.ERROR, logger="dayboard.app.commands"):
+    with caplog.at_level(logging.ERROR, logger="dayboard.app.run_execution"):
         with pytest.raises(RuntimeError, match="provider unavailable"):
-            request = CommandRequest(message="安排会议")
-            run_id = uuid4()
-            await service.execute_command_run(tenant_context, request, run_id)
+            await driver.execute(
+                tenant_context,
+                run,
+                on_completed=complete,
+                on_failed=fail,
+            )
 
     assert recorded_failures == [("RuntimeError", "provider unavailable")]
     assert "dayboard.command.failed" in caplog.text

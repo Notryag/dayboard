@@ -12,7 +12,6 @@ from dayboard.config import Settings, get_settings
 from dayboard.api.account_recovery import get_password_reset_mailer
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import CommandService, get_command_service
-from agent_platform.core import TenantContext
 from dayboard.db.models import (
     PasswordResetTokenRow,
     UserCredentialRow,
@@ -28,8 +27,7 @@ class RecordingDispatcher:
         self.enqueued: list[UUID] = []
         self.cancelled: list[UUID] = []
 
-    async def enqueue(self, run_id: UUID, context: TenantContext, request: object) -> None:
-        del context, request
+    async def enqueue(self, run_id: UUID) -> None:
         self.enqueued.append(run_id)
 
     async def cancel(self, run_id: UUID) -> bool:

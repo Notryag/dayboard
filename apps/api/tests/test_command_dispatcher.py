@@ -3,12 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
-from dayboard.app.command_schemas import CommandRequest
-from agent_platform.core import TenantContext
-
-
 async def test_redis_dispatcher_enqueues_serializable_unique_job(
-    tenant_context: TenantContext,
 ) -> None:
     captured = {}
 
@@ -20,7 +15,7 @@ async def test_redis_dispatcher_enqueues_serializable_unique_job(
     run_id = uuid4()
     dispatcher = RedisCommandDispatcher(FakeRedis(), queue_name="dayboard:test")
 
-    await dispatcher.enqueue(run_id, tenant_context, CommandRequest(message="安排会议"))
+    await dispatcher.enqueue(run_id)
 
     assert captured["function"] == "execute_command_run"
     assert captured["args"][0] == str(run_id)
@@ -30,7 +25,6 @@ async def test_redis_dispatcher_enqueues_serializable_unique_job(
 
 
 async def test_redis_dispatcher_rejects_duplicate_job(
-    tenant_context: TenantContext,
 ) -> None:
     class FakeRedis:
         async def enqueue_job(self, function, *args, **kwargs):
@@ -41,7 +35,7 @@ async def test_redis_dispatcher_rejects_duplicate_job(
     dispatcher = RedisCommandDispatcher(FakeRedis(), queue_name="dayboard:test")
 
     try:
-        await dispatcher.enqueue(run_id, tenant_context, CommandRequest(message="安排会议"))
+        await dispatcher.enqueue(run_id)
     except RuntimeError as exc:
         assert str(run_id) in str(exc)
     else:

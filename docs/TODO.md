@@ -8,18 +8,23 @@ Last reviewed: 2026-07-23
   `EventExtensionEnvelope { kind, schema_version, payload }`. Keep generic lifecycle fields in the
   Run event itself; require Dayboard or the runtime adapter to name and validate extension payloads
   that are persisted for diagnostics or replay.
-- [ ] Split generic Run execution coordination from Dayboard's Agent construction, scheduling
+- [x] Split generic Run execution coordination from Dayboard's Agent construction, scheduling
   result projection, user-visible progress projection, usage settlement, and StreamBridge adapter.
-- [ ] Delete the superseded orchestration path while splitting `apps/api/src/dayboard/app/commands.py`;
+- [x] Delete the superseded orchestration path while splitting `apps/api/src/dayboard/app/commands.py`;
   do not retain a compatibility wrapper for the old execution flow.
-- [ ] Move reusable PostgreSQL Conversation/Run and North adapters into `agent_platform` only after
-  their active Dayboard contracts are explicit and covered through the platform ports.
+- [x] Define the product-neutral `RunExecutionDriver` callback port in Agent Platform. Keep the
+  North implementation and Dayboard result projector in Dayboard, so Platform has no dependency on
+  North or scheduling concepts. Queue jobs carry only `run_id`; workers restore trusted execution
+  context and input from PostgreSQL.
+- [ ] Move reusable PostgreSQL Conversation/Run adapters into `agent_platform` only after their
+  active Dayboard contracts are explicit and covered through the platform ports. Generalize the
+  North adapter only if a second product proves a common contract; Platform must not import North.
 - [ ] Evaluate provider usage accounting and notification delivery as later platform capabilities
   only when their lifecycle boundaries are stable or a second product needs them.
 
-Required order: Event Extension Envelope first, then Run execution coordination, then adapter
-extraction. Migration squashing remains deferred until every persistent environment has reached
-Alembic revision `202607230007` or later.
+The Event Extension Envelope and Run execution coordination slices are complete. Migration
+squashing remains deferred until every persistent environment has reached Alembic revision
+`202607230007` or later.
 
 ## Token Efficiency
 

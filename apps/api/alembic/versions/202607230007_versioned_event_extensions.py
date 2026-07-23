@@ -90,7 +90,7 @@ def upgrade() -> None:
                 WHEN event_type = 'run_failed' THEN 'agent-platform.failure'
                 WHEN event_type = 'clarification_requested'
                      AND event_metadata ? 'state_version'
-                THEN 'dayboard.clarification'
+                THEN 'agent-platform.interaction-state'
                 WHEN event_type IN ('conflict_check_started', 'conflict_check_completed')
                 THEN 'dayboard.schedule-conflict-check'
                 WHEN event_type = 'context_compacted' THEN 'north.context-compaction'

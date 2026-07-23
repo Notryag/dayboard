@@ -12,7 +12,6 @@ from agent_platform.core import EventExtensionEnvelope
 EVENT_EXTENSION_SCHEMA_VERSION = 1
 NORTH_MODEL_CALL_EVENT_KIND = "north.model-call"
 NORTH_TOOL_CALL_EVENT_KIND = "north.tool-call"
-DAYBOARD_CLARIFICATION_EVENT_KIND = "dayboard.clarification"
 
 
 class ModelUsageEventPayload(BaseModel):
@@ -38,20 +37,9 @@ class NorthToolCallEventPayload(BaseModel):
     error_type: str | None = None
 
 
-class DayboardClarificationEventPayload(BaseModel):
-    state_version: int = Field(ge=1)
-
-
 def build_event_extension(kind: str, payload: BaseModel) -> EventExtensionEnvelope:
     return EventExtensionEnvelope(
         kind=kind,
         schema_version=EVENT_EXTENSION_SCHEMA_VERSION,
         payload=payload.model_dump(mode="json", exclude_none=True),
-    )
-
-
-def build_clarification_event_extension(state_version: int) -> EventExtensionEnvelope:
-    return build_event_extension(
-        DAYBOARD_CLARIFICATION_EVENT_KIND,
-        DayboardClarificationEventPayload(state_version=state_version),
     )

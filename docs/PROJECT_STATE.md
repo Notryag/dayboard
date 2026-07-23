@@ -54,7 +54,10 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Reconciled legacy JSON storage with the ORM's JSONB contract, declared North checkpoint tables as
   externally owned, and made `alembic check` a CI schema-drift gate.
 - Replaced unversioned durable Run-event metadata with Platform-owned Event Extension envelopes and
-  typed North, Platform failure, and Dayboard clarification payloads.
+  typed North model/tool plus Platform failure/interaction-state payloads.
+- Added a product-neutral Platform Run execution coordinator with atomic terminal persistence,
+  a Dayboard-owned North driver and result projector, database-authoritative `run_id`-only jobs, and
+  no superseded execution compatibility path.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -64,14 +67,13 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Architecture hardening and public-release completion:
 
-1. Split generic Run execution coordination from Dayboard Agent execution and result projection.
-2. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
-3. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
-4. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
+1. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
+2. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
+3. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
    provider budget window allows it.
-5. Measure Northgate prompt-cache effectiveness and move scoped provider-token policy to the
+4. Measure Northgate prompt-cache effectiveness and move scoped provider-token policy to the
    gateway only after all production traffic uses it without direct-provider fallback.
-6. Add encrypted off-host PostgreSQL backup replication and rehearse recovery from that copy.
+5. Add encrypted off-host PostgreSQL backup replication and rehearse recovery from that copy.
 
 Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 

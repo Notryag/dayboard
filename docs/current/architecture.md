@@ -13,8 +13,11 @@ flowchart LR
     API --> DB[(PostgreSQL)]
     API -->|enqueue run_id| Redis[(Redis)]
     Redis --> Worker[arq Worker]
-    Worker --> DB
-    Worker --> North[North RunExecutor]
+    Worker --> Coordinator[Platform RunExecutionCoordinator]
+    Coordinator --> DB
+    Coordinator --> Driver[Dayboard RunExecutionDriver]
+    Driver --> North[North RunExecutor]
+    Driver -->|projected outcome| Coordinator
     North --> Model[OpenAI-compatible model]
     North --> Tools[Dayboard tools]
     Tools --> Services[Application services]
@@ -45,35 +48,36 @@ an active Thread; archived history remains readable but cannot accept new comman
 | --- | --- | --- |
 | Web | authenticated presentation, recording gestures, REST/SSE clients | intent policy, trusted identity, persistence |
 | FastAPI | auth, validation, tenant context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
-| Worker | queued Run execution, lifecycle hooks, stale-Run recovery, reminder delivery | browser sessions |
+| Worker | queued job execution, dependency composition, stale-Run recovery, reminder delivery | browser sessions |
 | North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
-| Agent Platform | identity, Conversation/Run contracts, persistence use cases and storage ports | scheduling policy or Dayboard presentation |
-| Dayboard Agent | prompt, seven scheduling tools, safe result projection | tenant identity or direct model-authorized writes |
+| Agent Platform | identity, Conversation/Run contracts, lifecycle coordination, persistence ports | North or scheduling concepts |
+| Dayboard Agent | prompt, seven scheduling tools, North adapter, safe result projection | tenant identity or direct model-authorized writes |
 | Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
 | Redis | arq queue, rate limits, locks, Redis Streams | durable product truth |
 
-The source-code dependency direction is `Dayboard -> Agent Platform -> North`, equivalently
-`North <- Agent Platform <- Dayboard`. A consumer points toward what it imports. Runtime calls,
-events, and return values may flow in both directions through declared interfaces without changing
-that import direction. North does not understand application identity or persistence; Agent
-Platform does not understand calendars, tasks, scheduling prompts, or the Dayboard UI.
+Agent Platform and North are independent lower-level capabilities; neither imports the other.
+Dayboard depends on both and bridges them through a Dayboard-owned adapter implementing the
+Platform `RunExecutionDriver` port. Runtime callbacks and results flow through declared interfaces
+without reversing source dependencies. North does not understand application identity or
+persistence; Agent Platform does not understand North events, calendars, tasks, scheduling prompts,
+or the Dayboard UI.
 
 ## Backend Shape
 
 The reusable application package currently owns shared identity and Conversation/Run contracts:
 
 ```text
-agent_platform.core          identity, Conversation/Run, Interaction, and Presentation contracts
-agent_platform.ports         persistence-neutral Conversation and Run Store protocols
-agent_platform.application   Conversation/Run lifecycle, idempotency, and command submission
+agent_platform.core          identity, Conversation/Run, Interaction, Presentation, execution outcome
+agent_platform.ports         persistence-neutral stores, Unit of Work, Run execution driver
+agent_platform.application   Conversation/Run lifecycle, submission, idempotency, execution coordinator
 ```
 
 The Dayboard API package is split by responsibility:
 
 ```text
 dayboard.api           HTTP, SSE, request and response schemas
-dayboard.app           use cases and orchestration
+dayboard.app           product use cases, North execution adapter, result projection
 dayboard.agent         prompt, North assembly, presentation projection
 dayboard.domain        product models and deterministic validation
 dayboard.tools         thin Agent-facing adapters
@@ -99,6 +103,16 @@ and `run_created` event, and appends the user message. Run lifecycle checkpoints
 Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation locks the
 parent Run, so concurrent writers cannot select the same `max(seq) + 1` value.
 
+`RunExecutionCoordinator` owns the generic execution lifecycle. It commits `queued -> running`
+before invoking external work, ends any read transaction before waiting on the model, and uses a
+row lock to atomically persist the terminal Run state, assistant message, and optional Interaction.
+The injected Dayboard driver owns North construction, runtime-event projection, schedule
+presentation assembly, usage settlement, and StreamBridge publication. North lifecycle callbacks
+project raw results into Platform outcomes before North emits its end sentinel, so PostgreSQL is
+already terminal when the browser observes stream completion. Redis carries only `run_id`; the
+worker reloads tenant, owner, thread, and input from PostgreSQL. The superseded queue/execution
+protocol has no compatibility path.
+
 The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
 Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
 one transaction for the idempotency claim, expected-state-version consumption, Run and
@@ -119,10 +133,10 @@ same initial `row_version = 1` assigned when row versions were introduced.
 
 Durable Run-event extensions follow the same ownership rule through
 `EventExtensionEnvelope(kind, schema_version, payload)`. Generic event type, category, content, and
-ordering remain Platform fields. North and Dayboard adapters construct typed payloads for model,
-tool, failure, and clarification diagnostics before persistence. PostgreSQL stores extension kind,
-version, and JSONB payload separately and rejects partial envelopes. User-facing SSE receives only
-projected product status and never exposes the diagnostic extension payload.
+ordering remain Platform fields. Dayboard's North adapter constructs typed model/tool payloads,
+while the Platform constructs failure and interaction-state payloads before persistence. PostgreSQL stores
+extension kind, version, and JSONB payload separately and rejects partial envelopes. User-facing
+SSE receives only projected product status and never exposes the diagnostic extension payload.
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,

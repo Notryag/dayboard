@@ -656,7 +656,7 @@ async def create_command_run(
             run_id=str(creation.run_id), status=creation.status, thread_id=str(creation.thread_id)
         )
     try:
-        await dispatcher.enqueue(creation.run_id, tenant_context, body)
+        await dispatcher.enqueue(creation.run_id)
     except Exception as exc:
         await service.fail_command_run(tenant_context, creation.run_id, exc)
         raise ApiProblem(
@@ -910,7 +910,7 @@ async def create_thread_command_run(
         ) from exc
     if creation.created:
         try:
-            await dispatcher.enqueue(creation.run_id, tenant_context, body)
+            await dispatcher.enqueue(creation.run_id)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
             raise ApiProblem(
@@ -943,14 +943,13 @@ async def respond_to_clarification(
 ) -> CommandRunResponse:
     del request
     try:
-        submission = await service.create_or_get_clarification_run(
+        creation = await service.create_or_get_clarification_run(
             tenant_context,
             thread_id=thread_id,
             state_version=body.state_version,
             option_key=body.option_key,
             idempotency_key=idempotency_key,
         )
-        creation = submission.creation
     except ConversationArchivedError as exc:
         raise ApiProblem(
             status_code=409,
@@ -976,10 +975,8 @@ async def respond_to_clarification(
         ) from exc
 
     if creation.created:
-        if submission.request is None:
-            raise RuntimeError("Created clarification Run is missing its command request")
         try:
-            await dispatcher.enqueue(creation.run_id, tenant_context, submission.request)
+            await dispatcher.enqueue(creation.run_id)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
             raise ApiProblem(

@@ -11,7 +11,6 @@ from north import CheckpointerConfig, make_checkpointer
 from north.runtime import RedisStreamBridge
 import structlog
 
-from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.app.reminders import ReminderService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
@@ -30,7 +29,6 @@ logger = structlog.get_logger(__name__)
 async def execute_command_run(
     ctx: dict[str, Any],
     run_id: str,
-    *_legacy_untrusted_args: object,
 ) -> None:
     resolved_run_id = UUID(run_id)
     async with SessionLocal() as session:
@@ -43,7 +41,6 @@ async def execute_command_run(
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
-        request = CommandRequest(message=run.input_message)
         await CommandService(
             session,
             checkpointer=ctx.get("checkpointer"),
@@ -51,7 +48,7 @@ async def execute_command_run(
                 ctx["redis"],
                 key_prefix="dayboard:run-stream",
             ),
-        ).execute_command_run(context, request, resolved_run_id)
+        ).execute_command_run(context, resolved_run_id)
 
 
 async def startup(ctx: dict[str, Any]) -> None:

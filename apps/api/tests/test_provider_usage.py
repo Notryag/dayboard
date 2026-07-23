@@ -67,7 +67,7 @@ async def test_command_service_records_provider_usage(
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, request, run_id)
+    await service.execute_command_run(tenant_context, run_id)
     records = await ProviderUsageRepository(db_session).list_for_run(
         tenant_context,
         run_id,
@@ -118,7 +118,7 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
     )
     request = CommandRequest(message="创建两个任务")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, request, run_id)
+    await service.execute_command_run(tenant_context, run_id)
 
     from dayboard.app.platform_services import build_run_service
 
@@ -182,7 +182,7 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
     )
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, request, run_id)
+    await service.execute_command_run(tenant_context, run_id)
 
     from dayboard.app.platform_services import build_run_service
 
@@ -212,7 +212,7 @@ async def test_command_service_does_not_invent_missing_provider_usage(
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, request, run_id)
+    await service.execute_command_run(tenant_context, run_id)
 
     assert await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id) == []
 
@@ -248,7 +248,7 @@ async def test_command_service_settles_usage_when_invocation_does_not_return(
     run_id = await service.create_command_run(tenant_context, request)
 
     with pytest.raises(type(error)):
-        await service.execute_command_run(tenant_context, request, run_id)
+        await service.execute_command_run(tenant_context, run_id)
 
     records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
     assert len(records) == 1

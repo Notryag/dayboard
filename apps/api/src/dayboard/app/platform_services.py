@@ -9,6 +9,7 @@ from agent_platform.application import (
     CommandSubmissionService,
     ConversationService,
     IdempotencyService,
+    RunExecutionCoordinator,
 )
 
 from dayboard.db.platform_uow import SqlAlchemyPlatformUnitOfWork
@@ -21,6 +22,7 @@ class PlatformServiceScope:
     runs: AgentRunService
     submissions: CommandSubmissionService
     idempotency: IdempotencyService
+    execution: RunExecutionCoordinator
 
 
 def build_platform_unit_of_work(session: AsyncSession) -> SqlAlchemyPlatformUnitOfWork:
@@ -35,6 +37,7 @@ def build_platform_services(session: AsyncSession) -> PlatformServiceScope:
         runs=AgentRunService(unit_of_work),
         submissions=CommandSubmissionService(unit_of_work),
         idempotency=IdempotencyService(unit_of_work),
+        execution=RunExecutionCoordinator(unit_of_work),
     )
 
 

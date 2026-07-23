@@ -5,10 +5,6 @@ from uuid import UUID
 from arq.connections import ArqRedis
 from arq.jobs import Job
 
-from dayboard.app.command_schemas import CommandRequest
-from agent_platform.core import TenantContext
-
-
 class RedisCommandDispatcher:
     """Enqueue command runs for execution by an arq worker."""
 
@@ -16,13 +12,7 @@ class RedisCommandDispatcher:
         self.redis = redis
         self.queue_name = queue_name
 
-    async def enqueue(
-        self,
-        run_id: UUID,
-        context: TenantContext,
-        request: CommandRequest,
-    ) -> None:
-        del context, request
+    async def enqueue(self, run_id: UUID) -> None:
         job = await self.redis.enqueue_job(
             "execute_command_run",
             str(run_id),

@@ -37,9 +37,8 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
             captured["checkpointer"] = checkpointer
             captured["stream_bridge"] = stream_bridge
 
-        async def execute_command_run(self, context, request, requested_run_id):
+        async def execute_command_run(self, context, requested_run_id):
             captured["context"] = context
-            captured["request"] = request
             captured["run_id"] = requested_run_id
 
     monkeypatch.setattr(
@@ -58,12 +57,9 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     await execute_command_run(
         {"checkpointer": "checkpoint", "redis": object()},
         str(run_id),
-        {"tenant_id": str(uuid4()), "user_id": str(uuid4())},
-        {"message": "队列中伪造的消息"},
     )
 
     assert captured["context"].tenant_id == tenant_id
     assert captured["context"].user_id == user_id
-    assert captured["request"].message == "数据库中的消息"
     assert captured["run_id"] == run_id
     assert captured["checkpointer"] == "checkpoint"

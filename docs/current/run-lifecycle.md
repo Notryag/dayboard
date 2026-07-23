@@ -45,12 +45,16 @@ existing Run before this lifecycle check.
 arq worker receives run_id
   -> open independent database session
   -> load Run, tenant, owner, thread, and input from PostgreSQL
-  -> transition queued to running atomically
+  -> Platform coordinator transitions queued to running and commits
+  -> close the lifecycle transaction before external execution
   -> assemble bounded history, prompt, tools, and trusted context
-  -> invoke North RunExecutor
+  -> Dayboard RunExecutionDriver invokes North RunExecutor
   -> North performs the only production agent.astream loop
   -> tools commit scoped product changes
-  -> lifecycle hook persists messages and final Run state
+  -> lifecycle callback projects a Platform outcome
+  -> Platform atomically persists message, Interaction, and terminal Run state
+  -> Dayboard publishes the terminal product event
+  -> North publishes its end sentinel
   -> settle provider usage exactly once
 ```
 
@@ -105,7 +109,8 @@ presentation snapshots independently from compact model-visible ToolMessage cont
 ## Ordering And Durability
 
 A tool's product transaction commits before its successful ToolMessage is projected. Before North
-publishes the end sentinel, Dayboard lifecycle hooks persist:
+publishes the end sentinel, its lifecycle callback enters the Platform coordinator, which persists
+in one transaction:
 
 - terminal Run status and result message;
 - assistant conversation text;
@@ -113,11 +118,11 @@ publishes the end sentinel, Dayboard lifecycle hooks persist:
 - clarification state when required;
 - durable RuntimeJournal events used for diagnostics and usage correlation.
 
-The Platform persists only the generic presentation kind, schema version, and opaque payload.
-Dayboard validates the known payload before writing it and again when projecting history through
-the public API. The complete UTC schedule snapshots used by the UI live in the presentation
-payload, while compact local-time ToolMessage receipts remain model-only. Run lifecycle status is
-read from the authoritative Run row and is not repeated in the presentation.
+The Platform persists only the generic execution outcome and presentation kind, schema version, and
+opaque payload. Dayboard validates the known payload before handing it to Platform and again when
+projecting history through the public API. The complete UTC schedule snapshots used by the UI live
+in the presentation payload, while compact local-time ToolMessage receipts remain model-only. Run
+lifecycle status is read from the authoritative Run row and is not repeated in the presentation.
 
 When the trailing tool-call batch contains only successful terminal schedule writes, Dayboard's
 Agent middleware returns a deterministic grounded AI message and ends the loop without a final
@@ -126,9 +131,9 @@ clarification, malformed output, partial completion, or unresolved work. The com
 still projected and persisted before the Run becomes terminal.
 
 `agent_run_events` are durable observability records. Their generic event fields are product-neutral;
-optional diagnostic data uses a versioned `EventExtensionEnvelope`. North model/tool extensions,
-Platform failure details, and Dayboard clarification references are validated by their producing
-owner before persistence. The database rejects partial envelopes. These records are not polled as
+optional diagnostic data uses a versioned `EventExtensionEnvelope`. North model/tool extensions and
+Platform failure/interaction-state extensions are validated by their producing owner before
+persistence. The database rejects partial envelopes. These records are not polled as
 the primary live UI protocol, their extension payloads are not sent through user-facing SSE, and
 they are not used to reconstruct schedule cards.
 

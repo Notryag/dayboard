@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -7,40 +8,10 @@ import pytest
 from fake_runtime import fake_executor_factory
 
 from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, estimate_prompt_tokens
-from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService, _safe_error_message
+from dayboard.app.run_execution import DayboardRunExecutionDriver
+from dayboard.app.run_result_projection import safe_error_message
 from dayboard.config import Settings
-from agent_platform.core import TenantContext
-
-
-class FakeConversationService:
-    async def create_thread(self, context, *, thread_id=None, title=None):
-        del context, title
-        return SimpleNamespace(id=thread_id or uuid4())
-
-    async def require_thread(self, context, thread_id):
-        del context
-        return SimpleNamespace(id=thread_id)
-
-    async def append_message(self, context, **kwargs):
-        del context, kwargs
-        return None
-
-    async def upsert_assistant_message(self, context, **kwargs):
-        del context, kwargs
-        return None
-
-    async def update_summary(self, context, thread_id, summary):
-        del context, thread_id, summary
-        return None
-
-    async def set_interaction(self, context, **kwargs):
-        del context
-        return SimpleNamespace(version=1, interaction=kwargs["interaction"])
-
-    async def clear_interaction(self, context, thread_id):
-        del context, thread_id
-        return None
+from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
 
 
 def test_estimate_prompt_tokens_is_nonzero() -> None:
@@ -56,7 +27,7 @@ def test_estimate_prompt_tokens_is_nonzero() -> None:
     ],
 )
 def test_provider_budget_errors_are_user_friendly(budget_type: str, expected: str) -> None:
-    assert _safe_error_message(ProviderBudgetExceeded(budget_type, "test-limit")) == expected
+    assert safe_error_message(ProviderBudgetExceeded(budget_type, "test-limit")) == expected
 
 
 def test_upstream_rate_limit_is_user_friendly() -> None:
@@ -64,7 +35,7 @@ def test_upstream_rate_limit_is_user_friendly() -> None:
         status_code = 429
 
     assert (
-        _safe_error_message(UpstreamRateLimitError("Token limit exceeded"))
+        safe_error_message(UpstreamRateLimitError("Token limit exceeded"))
         == "AI 服务当前有点繁忙，请稍等几分钟后再试。"
     )
 
@@ -115,7 +86,6 @@ def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
 
 async def test_command_service_checks_budget_before_model_execution(
     tenant_context: TenantContext,
-    monkeypatch,
 ) -> None:
     guard = ProviderBudgetGuard(
         Settings(
@@ -129,61 +99,49 @@ async def test_command_service_checks_budget_before_model_execution(
         del kwargs
         return {"messages": [{"content": "ok"}]}
 
-    class FakeRunService:
-        def __init__(self, session) -> None:
-            self.session = session
+    async def complete(outcome) -> None:
+        del outcome
 
-        async def create_run(self, context, *, input_message, thread_id=None):
-                del context, input_message
-                return SimpleNamespace(id="fake-run", thread_id=thread_id)
+    async def fail(failure) -> bool:
+        del failure
+        return True
 
-        async def get_run(self, context, run_id):
-            del context
-            return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
-
-        async def mark_running(self, context, run):
-            del context
-            return run
-
-        async def mark_needs_clarification(
-            self, context, run, *, question, extension=None
-        ):
-            result = run
-            del context, question, run, extension
-            return result
-
-        async def mark_completed(self, context, run, *, result_message, extension=None):
-            result = run
-            del context, result_message, extension, run
-            return result
-
-        async def mark_failed(self, context, run, *, error_type, error_message):
-            result = run
-            del context, error_type, error_message, run
-            return result
-
-    class FakeSession:
-        async def commit(self) -> None:
-            return None
-
-        async def rollback(self) -> None:
-            return None
-
-    fake_session = FakeSession()
-    service = CommandService(
-        fake_session,
-        settings=guard.settings,
-        budget_guard=guard,
+    def build_driver() -> DayboardRunExecutionDriver:
+        return DayboardRunExecutionDriver(
+            SimpleNamespace(),
+            settings=guard.settings,
+            unit_of_work=SimpleNamespace(),
+            conversations=SimpleNamespace(),
+            runs=SimpleNamespace(),
+            budget_guard=guard,
             executor_factory=fake_executor_factory(fake_invoker),
-            conversation_service=FakeConversationService(),
-            run_service=FakeRunService(fake_session),
+        )
+
+    def build_run(message: str) -> AgentRun:
+        now = datetime.now(UTC)
+        return AgentRun(
+            id=uuid4(),
+            tenant_id=tenant_context.tenant_id,
+            owner_user_id=tenant_context.user_id,
+            thread_id=uuid4(),
+            status=AgentRunStatus.running,
+            input_message=message,
+            result_message=None,
+            created_at=now,
+            updated_at=now,
+        )
+
+    await build_driver().execute(
+        tenant_context,
+        build_run("安排明天开会"),
+        on_completed=complete,
+        on_failed=fail,
     )
 
-    first = CommandRequest(message="安排明天开会")
-    first_run_id = uuid4()
-    await service.execute_command_run(tenant_context, first, first_run_id)
-
     with pytest.raises(ProviderBudgetExceeded):
-        second = CommandRequest(message="安排后天开会")
-        second_run_id = uuid4()
-        await service.execute_command_run(tenant_context, second, second_run_id)
+        await build_driver().execute(
+            tenant_context,
+            build_run("安排后天开会"),
+            on_completed=complete,
+            on_failed=fail,
+        )

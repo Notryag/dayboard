@@ -47,14 +47,19 @@ async def test_create_background_command_run_returns_before_execution(
         tenant_context,
         UUID(body["run_id"]),
     )
+    run = await build_run_service(db_session).get_run(
+        tenant_context,
+        UUID(body["run_id"]),
+    )
     dispatcher = api_app.state.test_command_dispatcher
 
     assert response.status_code == 202
     assert body["status"] == "queued"
     assert body["thread_id"]
     assert [event.event_type for event in events] == ["run_created"]
-    assert dispatcher.started[0][0] == UUID(body["run_id"])
-    assert dispatcher.started[0][2].message == "安排明天上午九点的项目会议"
+    assert dispatcher.started == [UUID(body["run_id"])]
+    assert run is not None
+    assert run.input_message == "安排明天上午九点的项目会议"
 
 
 async def test_thread_command_persists_user_message_once(
@@ -367,7 +372,10 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
         state = await client.get(f"/api/threads/{thread.id}/state")
 
     dispatcher = api_app.state.test_command_dispatcher
-    queued_request = dispatcher.started[-1][2]
+    queued_run = await build_run_service(db_session).get_run(
+        tenant_context,
+        UUID(response.json()["run_id"]),
+    )
     public_body = public_state.json()
     assert "candidates" not in public_body["interaction"]["payload"]
     assert public_body["interaction"]["payload"]["presentation"]["options"][0]["key"] == (
@@ -377,10 +385,11 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     assert repeated.json() == response.json()
     assert conflicting_retry.status_code == 409
     assert response.json()["thread_id"] == str(thread.id)
-    assert str(entry_id) in queued_request.message
-    assert '"local_start": "2026-07-12T15:00"' in queued_request.message
-    assert '"start_time"' not in queued_request.message
-    assert "Asia/Shanghai" not in queued_request.message
+    assert queued_run is not None
+    assert str(entry_id) in queued_run.input_message
+    assert '"local_start": "2026-07-12T15:00"' in queued_run.input_message
+    assert '"start_time"' not in queued_run.input_message
+    assert "Asia/Shanghai" not in queued_run.input_message
     assert messages.json()["items"][-1]["content"].startswith("选择“产品会议")
     assert str(entry_id) not in messages.json()["items"][-1]["content"]
     assert len(dispatcher.started) == 1
@@ -510,8 +519,7 @@ async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> Non
         def __init__(self) -> None:
             self.run_id = None
 
-        async def enqueue(self, run_id, context, request) -> None:
-            del context, request
+        async def enqueue(self, run_id) -> None:
             self.run_id = run_id
             raise ConnectionError("redis unavailable")
 

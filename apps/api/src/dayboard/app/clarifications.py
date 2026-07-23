@@ -33,6 +33,12 @@ class ResolvedClarificationChoice:
     display_message: str
 
 
+@dataclass(frozen=True, slots=True)
+class PendingClarification:
+    interaction: PendingInteraction
+    expires_at: datetime
+
+
 def public_conversation_state(
     state: ConversationState | None,
 ) -> ClarificationConversationState | None:
@@ -75,9 +81,27 @@ class ClarificationService:
         question: str,
         payload: ClarificationPayload,
     ) -> ConversationState:
+        pending = self.build_pending(
+            run_id=run_id,
+            question=question,
+            payload=payload,
+        )
         return await self.conversations.set_interaction(
             context,
             thread_id=thread_id,
+            interaction=pending.interaction,
+            expires_at=pending.expires_at,
+        )
+
+    @staticmethod
+    def build_pending(
+        *,
+        run_id: UUID,
+        question: str,
+        payload: ClarificationPayload,
+        now: datetime | None = None,
+    ) -> PendingClarification:
+        return PendingClarification(
             interaction=PendingInteraction(
                 interaction_type=CLARIFICATION_INTERACTION_TYPE,
                 schema_version=CLARIFICATION_SCHEMA_VERSION,
@@ -85,7 +109,7 @@ class ClarificationService:
                 prompt=question,
                 payload=payload.model_dump(mode="json", exclude_none=True),
             ),
-            expires_at=datetime.now(UTC) + timedelta(days=7),
+            expires_at=(now or datetime.now(UTC)) + timedelta(days=7),
         )
 
     async def resolve_choice(
