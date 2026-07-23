@@ -5,8 +5,9 @@ from agent_platform.ports.conversations import (
     ConversationStateStore,
     ConversationThreadStore,
 )
-from agent_platform.ports.runs import RunEventStore, RunStore
+from agent_platform.ports.execution import RunExecutionDriver
 from agent_platform.ports.idempotency import IdempotencyStore
+from agent_platform.ports.runs import RunEventStore, RunStore
 from agent_platform.ports.unit_of_work import (
     ConversationUnitOfWork,
     IdempotencyUnitOfWork,
@@ -24,6 +25,7 @@ __all__ = [
     "IdempotencyUnitOfWork",
     "PlatformUnitOfWork",
     "RunEventStore",
+    "RunExecutionDriver",
     "RunStore",
     "RunUnitOfWork",
     "TransactionBoundary",
