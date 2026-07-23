@@ -17,6 +17,7 @@ from agent_platform.core.errors import (
     IdempotencyTargetNotFoundError,
     InteractionConflictError,
 )
+from agent_platform.core.events import EventExtensionEnvelope, RunFailureEventPayload
 from agent_platform.core.identity import TenantContext, TenantIsolationMode
 from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
 from agent_platform.core.interactions import PendingInteraction
@@ -43,6 +44,7 @@ __all__ = [
     "ConversationThread",
     "ConversationThreadStatus",
     "CommandSubmission",
+    "EventExtensionEnvelope",
     "IdempotencyClaim",
     "IdempotencyConflictError",
     "IdempotencyRecord",
@@ -50,6 +52,7 @@ __all__ = [
     "InteractionConflictError",
     "PendingInteraction",
     "PresentationEnvelope",
+    "RunFailureEventPayload",
     "TenantContext",
     "TenantIsolationMode",
 ]

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Protocol
 from uuid import UUID
 
+from agent_platform.core.events import EventExtensionEnvelope
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.runs import (
     AgentRun,
@@ -66,7 +67,7 @@ class RunEventStore(Protocol):
         event_type: str,
         category: AgentRunEventCategory,
         content: str | None = None,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
     ) -> AgentRunEvent: ...
 
     async def list_for_run(

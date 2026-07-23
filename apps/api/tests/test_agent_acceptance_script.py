@@ -61,7 +61,11 @@ class FakeAcceptanceClient:
                 [
                     {
                         "event_type": "tool_call_completed",
-                        "event_metadata": {"tool_name": "search_calendar_entries"},
+                        "extension": {
+                            "kind": "north.tool-call",
+                            "schema_version": 1,
+                            "payload": {"tool_name": "search_calendar_entries"},
+                        },
                     }
                 ]
             )

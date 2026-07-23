@@ -502,6 +502,17 @@ class AgentRunEventRow(Base):
     __table_args__ = (
         Index("ix_agent_run_events_tenant_run_seq", "tenant_id", "run_id", "seq", unique=True),
         Index("ix_agent_run_events_tenant_run_created", "tenant_id", "run_id", "created_at"),
+        CheckConstraint(
+            "extension_schema_version IS NULL OR extension_schema_version >= 1",
+            name="ck_agent_run_event_extension_schema_version",
+        ),
+        CheckConstraint(
+            "(extension_kind IS NULL AND extension_schema_version IS NULL "
+            "AND extension_payload = '{}'::jsonb) OR "
+            "(extension_kind IS NOT NULL AND char_length(extension_kind) > 0 "
+            "AND extension_schema_version IS NOT NULL)",
+            name="ck_agent_run_event_extension_complete",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -511,7 +522,9 @@ class AgentRunEventRow(Base):
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     category: Mapped[str] = mapped_column(String(40), nullable=False)
     content: Mapped[str | None] = mapped_column(String(4000), nullable=True)
-    event_metadata: Mapped[dict[str, Any]] = mapped_column(
+    extension_kind: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    extension_schema_version: Mapped[int | None] = mapped_column(nullable=True)
+    extension_payload: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
         default=dict,

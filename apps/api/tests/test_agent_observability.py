@@ -21,7 +21,9 @@ def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
     assert projected is not None
     assert projected.event_type == "tool_call_started"
     assert projected.content == "正在创建任务“提交周报”"
-    assert projected.metadata["inputs"] == {"title": "提交周报"}
+    assert projected.extension.kind == "north.tool-call"
+    assert projected.extension.schema_version == 1
+    assert projected.extension.payload["inputs"] == {"title": "提交周报"}
     assert "must-not-leak" not in str(projected)
 
 
@@ -42,7 +44,11 @@ def test_model_projection_does_not_persist_message_or_reasoning_content() -> Non
 
     assert projected is not None
     assert projected.content == "已完成分析，正在执行下一步"
-    assert projected.metadata["usage"] == {"input_tokens": 10, "output_tokens": 5}
+    assert projected.extension.kind == "north.model-call"
+    assert projected.extension.payload["usage"] == {
+        "input_tokens": 10,
+        "output_tokens": 5,
+    }
     assert "private reasoning" not in str(projected)
     assert "raw answer" not in str(projected)
     assert "hidden" not in str(projected)
@@ -136,5 +142,7 @@ def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
 
     assert projected is not None
     assert projected.content == "正在修改日程结束时间为 2026-07-14T17:00:00"
-    assert projected.metadata["inputs"]["new_local_end"] == "2026-07-14T17:00:00"
+    assert projected.extension.payload["inputs"]["new_local_end"] == (
+        "2026-07-14T17:00:00"
+    )
     assert "must-not-leak" not in str(projected)

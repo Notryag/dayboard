@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.platform_services import build_platform_services, build_run_service
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
-from agent_platform.core import ActiveThreadRunError, TenantContext
+from agent_platform.core import ActiveThreadRunError, EventExtensionEnvelope, TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
 from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
 from dayboard.db.session import SessionLocal
@@ -45,7 +45,7 @@ async def test_agent_run_service_records_lifecycle_events(
     assert events[-1].content == "需要几点？"
 
 
-async def test_run_event_metadata_serializes_datetime(
+async def test_run_event_extension_round_trips(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
@@ -57,13 +57,20 @@ async def test_run_event_metadata_serializes_datetime(
         run.id,
         event_type="time_resolved",
         content="时间已识别",
-        event_metadata={"start_time": aware_time},
+        extension=EventExtensionEnvelope(
+            kind="dayboard.time-resolution",
+            schema_version=1,
+            payload={"start_time": aware_time.isoformat()},
+        ),
     )
     await db_session.commit()
 
     events = await service.list_events(tenant_context, run.id)
 
-    assert events[-1].event_metadata == {"start_time": aware_time.isoformat()}
+    assert events[-1].extension is not None
+    assert events[-1].extension.kind == "dayboard.time-resolution"
+    assert events[-1].extension.schema_version == 1
+    assert events[-1].extension.payload == {"start_time": aware_time.isoformat()}
 
 
 async def test_concurrent_run_events_receive_unique_ordered_sequences(
@@ -119,7 +126,9 @@ async def test_stale_running_runs_are_recovered_to_failed(
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.failed
     assert events[-1].event_type == "run_failed"
-    assert events[-1].event_metadata["error_type"] == "StaleRunRecovered"
+    assert events[-1].extension is not None
+    assert events[-1].extension.kind == "agent-platform.failure"
+    assert events[-1].extension.payload["error_type"] == "StaleRunRecovered"
 
 
 async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
@@ -153,7 +162,9 @@ async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
     assert refreshed_recent is not None
     assert refreshed_recent.status == AgentRunStatus.queued
     assert events[-1].event_type == "run_failed"
-    assert events[-1].event_metadata["error_type"] == "QueueWaitTimeout"
+    assert events[-1].extension is not None
+    assert events[-1].extension.kind == "agent-platform.failure"
+    assert events[-1].extension.payload["error_type"] == "QueueWaitTimeout"
 
 
 async def test_queued_timeout_cannot_fail_a_run_that_has_started(

@@ -699,10 +699,7 @@ export interface components {
             category: components["schemas"]["AgentRunEventCategory"];
             /** Content */
             content: string | null;
-            /** Event Metadata */
-            event_metadata: {
-                [key: string]: unknown;
-            };
+            extension?: components["schemas"]["EventExtensionEnvelope"] | null;
             /**
              * Created At
              * Format: date-time
@@ -1003,11 +1000,23 @@ export interface components {
             /** Parts */
             parts: components["schemas"]["ScheduleResultPart"][];
         };
+        /** EventExtensionEnvelope */
+        EventExtensionEnvelope: {
+            /** Kind */
+            kind: string;
+            /** Schema Version */
+            schema_version: number;
+            /** Payload */
+            payload: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        JsonValue: unknown;
         /** LoginRequest */
         LoginRequest: {
             /** Identifier */

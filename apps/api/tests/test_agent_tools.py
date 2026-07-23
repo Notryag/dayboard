@@ -98,16 +98,10 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     tenant_context: TenantContext,
 ) -> None:
     run_id = uuid4()
-    progress_events: list[tuple[str, str, dict]] = []
-
-    async def record_progress(event_type: str, content: str, metadata: dict) -> None:
-        progress_events.append((event_type, content, metadata))
-
     tools = build_scheduling_tools(
         session=db_session,
         context=tenant_context,
         run_id=run_id,
-        progress=record_progress,
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
     create_task = next(tool for tool in tools if tool.name == "create_task_item")
@@ -191,7 +185,6 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert tasks[0].created_by_run_id == run_id
     assert tasks[0].timezone == tenant_context.timezone
     assert "due_at" not in task_result["task_item"]
-    assert progress_events == []
 
 
 async def test_agent_tool_message_splits_compact_content_from_full_artifact(

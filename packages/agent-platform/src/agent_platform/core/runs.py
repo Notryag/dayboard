@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+from agent_platform.core.events import EventExtensionEnvelope
 
 
 class AgentRunStatus(StrEnum):
@@ -47,5 +48,5 @@ class AgentRunEvent(BaseModel):
     event_type: str = Field(min_length=1, max_length=80)
     category: AgentRunEventCategory
     content: str | None
-    event_metadata: dict[str, Any]
+    extension: EventExtensionEnvelope | None = None
     created_at: datetime

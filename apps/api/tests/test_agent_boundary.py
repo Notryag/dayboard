@@ -452,16 +452,16 @@ async def test_command_service_maps_north_clarification_result_to_run(
             return run
 
         async def mark_needs_clarification(
-            self, context, run, *, question, event_metadata=None
+            self, context, run, *, question, extension=None
         ):
             result = run
-            del context, run, event_metadata
+            del context, run, extension
             recorded_events.append(("clarification_requested", question))
             return result
 
-        async def mark_completed(self, context, run, *, result_message, event_metadata=None):
+        async def mark_completed(self, context, run, *, result_message, extension=None):
             result = run
-            del context, result_message, event_metadata, run
+            del context, result_message, extension, run
             return result
 
         async def mark_failed(self, context, run, *, error_type, error_message):
@@ -536,15 +536,15 @@ async def test_command_service_logs_and_marks_failed_run(
             return run
 
         async def mark_needs_clarification(
-            self, context, run, *, question, event_metadata=None
+            self, context, run, *, question, extension=None
         ):
             result = run
-            del context, question, run, event_metadata
+            del context, question, run, extension
             return result
 
-        async def mark_completed(self, context, run, *, result_message, event_metadata=None):
+        async def mark_completed(self, context, run, *, result_message, extension=None):
             result = run
-            del context, result_message, event_metadata, run
+            del context, result_message, extension, run
             return result
 
         async def mark_failed(self, context, run, *, error_type, error_message):

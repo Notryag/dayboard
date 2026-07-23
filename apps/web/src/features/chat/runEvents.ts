@@ -7,8 +7,6 @@ const progressLabels = {
   tool_call_started: "正在执行操作",
   tool_call_completed: "操作完成",
   tool_call_error: "操作失败",
-  conflict_check_started: "正在检查日程冲突",
-  conflict_check_completed: "日程冲突检查完成",
 } as const;
 
 const scheduleOperations = new Set<ScheduleResultPart["operation"]>([

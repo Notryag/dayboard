@@ -133,8 +133,6 @@ EXPOSED_RUN_EVENTS = TERMINAL_RUN_EVENTS | {
     "tool_call_started",
     "tool_call_completed",
     "tool_call_error",
-    "conflict_check_started",
-    "conflict_check_completed",
 }
 
 

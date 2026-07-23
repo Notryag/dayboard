@@ -125,8 +125,12 @@ provider confirmation call. This optimization never runs for search results, too
 clarification, malformed output, partial completion, or unresolved work. The committed artifact is
 still projected and persisted before the Run becomes terminal.
 
-`agent_run_events` are durable observability records. They are not polled as the primary live UI
-protocol and are not used to reconstruct schedule cards.
+`agent_run_events` are durable observability records. Their generic event fields are product-neutral;
+optional diagnostic data uses a versioned `EventExtensionEnvelope`. North model/tool extensions,
+Platform failure details, and Dayboard clarification references are validated by their producing
+owner before persistence. The database rejects partial envelopes. These records are not polled as
+the primary live UI protocol, their extension payloads are not sent through user-facing SSE, and
+they are not used to reconstruct schedule cards.
 
 ## Reconnection And Replay
 

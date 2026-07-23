@@ -75,12 +75,14 @@ def validate_corpus(cases: list[EvalCase]) -> None:
 
 
 def _tool_counts(events: list[dict[str, Any]]) -> dict[str, int]:
-    return dict(Counter(
-        metadata["tool_name"]
-        for event in events
-        if event.get("event_type") == "tool_call_completed"
-        and isinstance((metadata := event.get("event_metadata") or {}).get("tool_name"), str)
-    ))
+    counts: Counter[str] = Counter()
+    for event in events:
+        if event.get("event_type") != "tool_call_completed":
+            continue
+        tool_name = _event_extension_payload(event, "north.tool-call").get("tool_name")
+        if isinstance(tool_name, str):
+            counts[tool_name] += 1
+    return dict(counts)
 
 
 def _token_usage(events: list[dict[str, Any]]) -> dict[str, int]:
@@ -89,7 +91,7 @@ def _token_usage(events: list[dict[str, Any]]) -> dict[str, int]:
     for event in events:
         if event.get("event_type") != "agent_model_completed":
             continue
-        metadata = event.get("event_metadata") or {}
+        metadata = _event_extension_payload(event, "north.model-call")
         call_id = metadata.get("call_id")
         if not isinstance(call_id, str) or not call_id or call_id in seen_calls:
             continue
@@ -100,6 +102,21 @@ def _token_usage(events: list[dict[str, Any]]) -> dict[str, int]:
             if isinstance(value, int) and value >= 0:
                 totals[key] += value
     return totals
+
+
+def _event_extension_payload(
+    event: dict[str, Any],
+    expected_kind: str,
+) -> dict[str, Any]:
+    extension = event.get("extension")
+    if not isinstance(extension, dict):
+        raise ValueError(f"Run event is missing extension: {event.get('event_type')}")
+    if extension.get("kind") != expected_kind or extension.get("schema_version") != 1:
+        raise ValueError(f"Unexpected Run event extension: {extension}")
+    payload = extension.get("payload")
+    if not isinstance(payload, dict):
+        raise ValueError(f"Run event extension payload must be an object: {extension}")
+    return payload
 
 
 def _percentile(values: list[int], percentile: float) -> int:

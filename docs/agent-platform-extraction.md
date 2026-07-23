@@ -100,7 +100,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
-| Versioned durable event extension envelopes | Pending; RuntimeJournal metadata remains a generic diagnostic mapping |
+| Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
 | Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
 | Explicit Conversation Thread lifecycle and primary-role contracts | Complete; lifecycle is `active | archived`, `is_primary` is independent, and archived writes are rejected |
 
@@ -139,6 +139,11 @@ PresentationEnvelope
   schema_version
   payload             validated by the product adapter
 
+EventExtensionEnvelope
+  kind
+  schema_version
+  payload             validated by the producing product/runtime adapter
+
 PendingInteraction
   interaction_type
   schema_version
@@ -153,7 +158,8 @@ ConversationState
 
 Dayboard continues to own `ScheduleResultPart`, scheduling receipts, candidate shapes, and local-time
 projection. North continues to own transient `ToolMessage.content` and `ToolMessage.artifact`
-transport. The Platform owns only durable envelope persistence, replay, and interaction lifecycle.
+transport. The Platform owns only durable envelope identity, persistence, replay, and interaction
+lifecycle.
 The same model context must never receive both UTC entity timestamps and local-time receipts.
 
 ## Definition Of Done For A Slice
@@ -201,6 +207,7 @@ A capability is considered extracted only when:
 9. Add versioned persisted presentation envelopes and typed Dayboard history projection. Complete.
 10. Separate Thread lifecycle from primary role and reject archived command submission. Complete.
 11. Add versioned durable event extension envelopes where product-specific replay requires them.
+    Complete.
 12. Split generic Run coordination from Dayboard Agent execution and result projection.
 13. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
    Dayboard path.

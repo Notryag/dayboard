@@ -125,7 +125,15 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
     events = await build_run_service(db_session).list_events(tenant_context, run_id)
     starts = [event for event in events if event.event_type == "tool_call_started"]
     assert [event.seq for event in starts] == sorted(event.seq for event in starts)
-    assert {event.event_metadata["call_id"] for event in starts} == {"tool-1", "tool-2"}
+    assert all(event.extension is not None for event in starts)
+    assert {event.extension.kind for event in starts if event.extension is not None} == {
+        "north.tool-call"
+    }
+    assert {
+        event.extension.payload["call_id"]
+        for event in starts
+        if event.extension is not None
+    } == {"tool-1", "tool-2"}
 
 
 async def test_model_lifecycle_is_audited_without_user_stream_publication(

@@ -8,11 +8,16 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi.encoders import jsonable_encoder
 
 from agent_platform.core import IdempotencyClaim, IdempotencyRecord, TenantContext
 from agent_platform.core import ActiveThreadRunError
-from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+from agent_platform.core import (
+    AgentRun,
+    AgentRunEvent,
+    AgentRunEventCategory,
+    AgentRunStatus,
+    EventExtensionEnvelope,
+)
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
 
 
@@ -46,6 +51,15 @@ def agent_run_from_row(row: AgentRunRow) -> AgentRun:
 
 
 def agent_run_event_from_row(row: AgentRunEventRow) -> AgentRunEvent:
+    extension = (
+        EventExtensionEnvelope(
+            kind=row.extension_kind,
+            schema_version=row.extension_schema_version,
+            payload=row.extension_payload,
+        )
+        if row.extension_kind is not None and row.extension_schema_version is not None
+        else None
+    )
     return AgentRunEvent(
         id=row.id,
         tenant_id=row.tenant_id,
@@ -54,7 +68,7 @@ def agent_run_event_from_row(row: AgentRunEventRow) -> AgentRunEvent:
         event_type=row.event_type,
         category=AgentRunEventCategory(row.category),
         content=row.content,
-        event_metadata=row.event_metadata,
+        extension=extension,
         created_at=row.created_at,
     )
 
@@ -294,7 +308,7 @@ class AgentRunEventRepository:
         event_type: str,
         category: AgentRunEventCategory,
         content: str | None = None,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
     ) -> AgentRunEvent:
         seq = await self._next_seq(context, run_id)
         row = AgentRunEventRow(
@@ -304,7 +318,11 @@ class AgentRunEventRepository:
             event_type=event_type,
             category=category.value,
             content=content,
-            event_metadata=jsonable_encoder(event_metadata or {}),
+            extension_kind=extension.kind if extension is not None else None,
+            extension_schema_version=(
+                extension.schema_version if extension is not None else None
+            ),
+            extension_payload=extension.payload if extension is not None else {},
         )
         self.session.add(row)
         await self.session.flush()

@@ -30,6 +30,7 @@ from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.app.platform_services import (
     build_platform_services,
 )
+from dayboard.app.run_event_extensions import build_clarification_event_extension
 from dayboard.config import Settings, get_settings
 from agent_platform.core import CommandSubmission, TenantContext
 from agent_platform.ports import PlatformUnitOfWork
@@ -256,28 +257,6 @@ class CommandService:
                 user_id=str(context.user_id),
                 model=self.settings.agent_model_name,
             )
-            async def record_progress(
-                event_type: str,
-                content: str,
-                event_metadata: dict[str, Any],
-            ) -> None:
-                latest = await runs.get_run(context, run.id)
-                if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
-                    raise asyncio.CancelledError()
-                await runs.append_progress(
-                    context,
-                    run.id,
-                    event_type=event_type,
-                    content=content,
-                    event_metadata=event_metadata,
-                )
-                await self.platform_unit_of_work.commit()
-                await self._publish_run_event(
-                    run.id,
-                    event_type,
-                    {"content": content, "event_metadata": event_metadata},
-                )
-
             async def record_runtime_event(event) -> None:
                 await usage_accumulator(event)
                 projected = project_runtime_event(event)
@@ -299,7 +278,7 @@ class CommandService:
                             run.id,
                             event_type=projected.event_type,
                             content=projected.content,
-                            event_metadata=projected.metadata,
+                            extension=projected.extension,
                             category=projected.category,
                         )
                         await event_unit_of_work.commit()
@@ -307,10 +286,7 @@ class CommandService:
                     await self._publish_run_event(
                         run.id,
                         projected.event_type,
-                        {
-                            "content": projected.content,
-                            "event_metadata": projected.metadata,
-                        },
+                        {"content": projected.content},
                     )
 
             async def record_stream_event(event: RuntimeStreamEvent) -> None:
@@ -376,14 +352,7 @@ class CommandService:
                         context,
                         run,
                         question=clarification_question,
-                        event_metadata={
-                            "state_version": pending.version,
-                            "presentation": clarification_payload.presentation.model_dump(
-                                mode="json", exclude_none=True
-                            )
-                            if clarification_payload.presentation is not None
-                            else None,
-                        },
+                        extension=build_clarification_event_extension(pending.version),
                     ):
                         await self.platform_unit_of_work.rollback()
                         raise asyncio.CancelledError()
@@ -413,7 +382,6 @@ class CommandService:
                     context,
                     run,
                     result_message=message,
-                    event_metadata={"runtime": "north"},
                 ):
                     await self.platform_unit_of_work.rollback()
                     raise asyncio.CancelledError()
@@ -476,7 +444,6 @@ class CommandService:
                     run_id=run.id,
                     checkpointer=self.checkpointer,
                     compaction_hooks=[record_compaction],
-                    progress=record_progress,
                 ),
                 graph_input={"messages": [HumanMessage(content=request.message)]},
                 config={

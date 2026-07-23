@@ -53,6 +53,8 @@ implementation chronology. Current facts live under [current](./current/README.m
   submission while preserving archived history reads and idempotent retries.
 - Reconciled legacy JSON storage with the ORM's JSONB contract, declared North checkpoint tables as
   externally owned, and made `alembic check` a CI schema-drift gate.
+- Replaced unversioned durable Run-event metadata with Platform-owned Event Extension envelopes and
+  typed North, Platform failure, and Dayboard clarification payloads.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -62,7 +64,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Architecture hardening and public-release completion:
 
-1. Version product-specific durable event extensions before extracting more Run orchestration.
+1. Split generic Run execution coordination from Dayboard Agent execution and result projection.
 2. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
 3. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
 4. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the

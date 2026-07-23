@@ -7,7 +7,12 @@ from uuid import uuid4
 from pydantic import ValidationError
 import pytest
 
-from agent_platform.core import ConversationMessage, ConversationRole, PresentationEnvelope
+from agent_platform.core import (
+    ConversationMessage,
+    ConversationRole,
+    EventExtensionEnvelope,
+    PresentationEnvelope,
+)
 from agent_platform.core import TenantContext
 from agent_platform.core import AgentRunEvent, AgentRunEventCategory
 
@@ -54,6 +59,19 @@ def test_run_event_rejects_empty_event_type() -> None:
             event_type="",
             category=AgentRunEventCategory.lifecycle,
             content=None,
-            event_metadata={},
             created_at=datetime.now(UTC),
         )
+
+
+def test_event_extension_requires_identity_and_version() -> None:
+    extension = EventExtensionEnvelope(
+        kind="example.event",
+        schema_version=1,
+        payload={"value": 1},
+    )
+
+    assert extension.payload == {"value": 1}
+    with pytest.raises(ValidationError):
+        EventExtensionEnvelope(kind="", schema_version=1, payload={})
+    with pytest.raises(ValidationError):
+        EventExtensionEnvelope(kind="example.event", schema_version=0, payload={})

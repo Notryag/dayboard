@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import Any
 from uuid import UUID, uuid4
 
-from agent_platform.core import TenantContext
+from agent_platform.core import EventExtensionEnvelope, TenantContext
 from agent_platform.application import AgentRunService
 from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 
@@ -128,7 +127,7 @@ class MemoryRunEventStore:
         event_type: str,
         category: AgentRunEventCategory,
         content: str | None = None,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
     ) -> AgentRunEvent:
         event = AgentRunEvent(
             id=uuid4(),
@@ -138,7 +137,7 @@ class MemoryRunEventStore:
             event_type=event_type,
             category=category,
             content=content,
-            event_metadata=event_metadata or {},
+            extension=extension,
             created_at=datetime.now(UTC),
         )
         self.events.append(event)
@@ -198,5 +197,33 @@ def test_run_lifecycle_is_storage_independent() -> None:
             "run_started",
             "run_completed",
         ]
+
+    asyncio.run(scenario())
+
+
+def test_failed_run_records_platform_owned_extension() -> None:
+    async def scenario() -> None:
+        context = TenantContext(
+            tenant_id=uuid4(),
+            user_id=uuid4(),
+            timezone="Asia/Shanghai",
+            locale="zh-CN",
+        )
+        unit_of_work = MemoryRunUnitOfWork()
+        service = AgentRunService(unit_of_work)
+        run = await service.create_run(context, input_message="记录今天的饮食")
+
+        assert await service.mark_failed(
+            context,
+            run,
+            error_type="ProviderUnavailable",
+            error_message="服务暂时不可用",
+        )
+
+        event = (await service.list_events(context, run.id))[-1]
+        assert event.extension is not None
+        assert event.extension.kind == "agent-platform.failure"
+        assert event.extension.schema_version == 1
+        assert event.extension.payload == {"error_type": "ProviderUnavailable"}
 
     asyncio.run(scenario())

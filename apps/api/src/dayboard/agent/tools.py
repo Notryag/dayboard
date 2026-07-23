@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from datetime import date, datetime, time, timedelta
 import asyncio
 from hashlib import sha256
@@ -283,7 +282,6 @@ def build_scheduling_tools(
     session: AsyncSession,
     context: TenantContext,
     run_id: UUID | None,
-    progress: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
 ) -> list[StructuredTool]:
     """Build agent-safe scheduling tools with trusted context injected.
 

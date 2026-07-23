@@ -5,7 +5,15 @@ from typing import Any
 
 from north import RuntimeEvent
 
-from agent_platform.core import AgentRunEventCategory
+from agent_platform.core import AgentRunEventCategory, EventExtensionEnvelope
+from dayboard.app.run_event_extensions import (
+    NORTH_MODEL_CALL_EVENT_KIND,
+    NORTH_TOOL_CALL_EVENT_KIND,
+    ModelUsageEventPayload,
+    NorthModelCallEventPayload,
+    NorthToolCallEventPayload,
+    build_event_extension,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,7 +21,7 @@ class ProjectedRuntimeEvent:
     event_type: str
     category: AgentRunEventCategory
     content: str
-    metadata: dict[str, Any]
+    extension: EventExtensionEnvelope
 
 
 def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
@@ -23,7 +31,7 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
             "agent_model_started",
             AgentRunEventCategory.model,
             "正在理解你的安排" if call_index in (None, 1) else "正在整理处理结果",
-            _model_metadata(event.metadata),
+            _model_extension(event.metadata),
         )
     if event.event_type == "model.completed":
         call_index = event.metadata.get("call_index")
@@ -31,14 +39,14 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
             "agent_model_completed",
             AgentRunEventCategory.model,
             "已完成分析，正在执行下一步" if call_index in (None, 1) else "处理结果已整理完成",
-            _model_metadata(event.metadata),
+            _model_extension(event.metadata),
         )
     if event.event_type == "model.error":
         return ProjectedRuntimeEvent(
             "agent_model_error",
             AgentRunEventCategory.error,
             "分析过程发生错误",
-            _error_metadata(event.metadata),
+            _model_extension(event.metadata, include_error=True),
         )
     if event.event_type == "tool.started":
         tool_name = _tool_name(event.metadata)
@@ -47,11 +55,7 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
             "tool_call_started",
             AgentRunEventCategory.tool,
             _tool_started_text(tool_name, safe_inputs),
-            {
-                "call_id": event.metadata.get("call_id"),
-                "tool_name": tool_name,
-                "inputs": safe_inputs,
-            },
+            _tool_extension(event.metadata, tool_name=tool_name, inputs=safe_inputs),
         )
     if event.event_type == "tool.completed":
         tool_name = _tool_name(event.metadata)
@@ -59,7 +63,7 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
             "tool_call_completed",
             AgentRunEventCategory.tool,
             f"{_tool_label(tool_name)}完成",
-            _tool_terminal_metadata(event.metadata),
+            _tool_extension(event.metadata, tool_name=tool_name),
         )
     if event.event_type == "tool.error":
         tool_name = _tool_name(event.metadata)
@@ -72,35 +76,62 @@ def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
                 if error_type == "ValidationError"
                 else f"{_tool_label(tool_name)}失败"
             ),
-            {**_tool_terminal_metadata(event.metadata), **_error_metadata(event.metadata)},
+            _tool_extension(event.metadata, tool_name=tool_name, include_error=True),
         )
     return None
 
 
-def _model_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
+def _model_extension(
+    metadata: dict[str, Any],
+    *,
+    include_error: bool = False,
+) -> EventExtensionEnvelope:
     usage = metadata.get("usage")
-    safe_usage = {}
+    safe_usage: dict[str, int] = {}
     if isinstance(usage, dict):
         for key in ("input_tokens", "output_tokens", "total_tokens"):
             value = usage.get(key)
-            if isinstance(value, int) and value >= 0:
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
                 safe_usage[key] = value
-    return {
-        "call_id": metadata.get("call_id"),
-        "call_index": metadata.get("call_index"),
-        "caller": metadata.get("caller"),
-        "latency_ms": metadata.get("latency_ms"),
-        "usage": safe_usage,
-    }
-
-
-def _error_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {"error_type": metadata.get("error_type")}
+    return build_event_extension(
+        NORTH_MODEL_CALL_EVENT_KIND,
+        NorthModelCallEventPayload(
+            call_id=_optional_text(metadata.get("call_id")),
+            call_index=_positive_int(metadata.get("call_index")),
+            caller=_optional_text(metadata.get("caller")),
+            latency_ms=_non_negative_number(metadata.get("latency_ms")),
+            usage=ModelUsageEventPayload.model_validate(safe_usage),
+            error_type=(
+                _optional_text(metadata.get("error_type")) if include_error else None
+            ),
+        ),
+    )
 
 
 def _tool_name(metadata: dict[str, Any]) -> str:
     value = metadata.get("tool_name")
     return value if isinstance(value, str) and value else "unknown"
+
+
+def _tool_extension(
+    metadata: dict[str, Any],
+    *,
+    tool_name: str,
+    inputs: dict[str, Any] | None = None,
+    include_error: bool = False,
+) -> EventExtensionEnvelope:
+    return build_event_extension(
+        NORTH_TOOL_CALL_EVENT_KIND,
+        NorthToolCallEventPayload(
+            call_id=_optional_text(metadata.get("call_id")),
+            tool_name=tool_name,
+            inputs=inputs or {},
+            latency_ms=_non_negative_number(metadata.get("latency_ms")),
+            error_type=(
+                _optional_text(metadata.get("error_type")) if include_error else None
+            ),
+        ),
+    )
 
 
 def _safe_tool_inputs(tool_name: str, content: Any) -> dict[str, Any]:
@@ -190,12 +221,18 @@ def _tool_label(tool_name: str) -> str:
     }.get(tool_name, "操作")
 
 
-def _tool_terminal_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "call_id": metadata.get("call_id"),
-        "tool_name": _tool_name(metadata),
-        "latency_ms": metadata.get("latency_ms"),
-    }
+def _optional_text(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
+
+
+def _positive_int(value: Any) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 1 else None
+
+
+def _non_negative_number(value: Any) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        return None
+    return value
 
 
 def _time_suffix(start_time: Any, end_time: Any) -> str:

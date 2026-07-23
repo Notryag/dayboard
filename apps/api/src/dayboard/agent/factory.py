@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Awaitable, Callable
 from hashlib import sha256
-from typing import Any
 from uuid import UUID
 
 from north import AppConfig, build_agent
@@ -100,7 +98,6 @@ def build_dayboard_agent(
     run_id: UUID | None = None,
     checkpointer=None,
     compaction_hooks: list[CompactionHook] | None = None,
-    progress: Callable[[str, str, dict[str, Any]], Awaitable[None]] | None = None,
 ):
     resolved_settings = settings or get_settings()
     resolved_tools = tools
@@ -109,7 +106,6 @@ def build_dayboard_agent(
             session=session,
             context=context,
             run_id=run_id,
-            progress=progress,
         )
     resolved_tools = list(resolved_tools or [])
     if not any(getattr(tool, "name", None) == ask_clarification.name for tool in resolved_tools):

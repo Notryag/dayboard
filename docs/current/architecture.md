@@ -117,6 +117,13 @@ validation. The former unversioned message metadata was migrated once and has no
 compatibility path. That data migration normalizes pre-version-counter schedule snapshots to the
 same initial `row_version = 1` assigned when row versions were introduced.
 
+Durable Run-event extensions follow the same ownership rule through
+`EventExtensionEnvelope(kind, schema_version, payload)`. Generic event type, category, content, and
+ordering remain Platform fields. North and Dayboard adapters construct typed payloads for model,
+tool, failure, and clarification diagnostics before persistence. PostgreSQL stores extension kind,
+version, and JSONB payload separately and rejects partial envelopes. User-facing SSE receives only
+projected product status and never exposes the diagnostic extension payload.
+
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
 workers, Agent tools, North, FastAPI, or SQLAlchemy.

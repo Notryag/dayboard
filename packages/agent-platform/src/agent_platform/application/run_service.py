@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
+from agent_platform.core.events import (
+    EventExtensionEnvelope,
+    build_run_failure_event_extension,
+)
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 from agent_platform.ports.unit_of_work import RunUnitOfWork
@@ -65,7 +68,7 @@ class AgentRunService:
         *,
         event_type: str,
         content: str,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
         category: AgentRunEventCategory = AgentRunEventCategory.tool,
     ) -> None:
         await self.events.append(
@@ -74,7 +77,7 @@ class AgentRunService:
             event_type=event_type,
             category=category,
             content=content,
-            event_metadata=event_metadata,
+            extension=extension,
         )
 
     async def mark_completed(
@@ -83,7 +86,7 @@ class AgentRunService:
         run: AgentRun,
         *,
         result_message: str,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
     ) -> bool:
         transitioned = await self.runs.transition_status(
             context,
@@ -100,7 +103,7 @@ class AgentRunService:
             event_type="run_completed",
             category=AgentRunEventCategory.lifecycle,
             content=result_message,
-            event_metadata=event_metadata,
+            extension=extension,
         )
         return True
 
@@ -110,7 +113,7 @@ class AgentRunService:
         run: AgentRun,
         *,
         question: str,
-        event_metadata: dict[str, Any] | None = None,
+        extension: EventExtensionEnvelope | None = None,
     ) -> bool:
         transitioned = await self.runs.transition_status(
             context,
@@ -127,7 +130,7 @@ class AgentRunService:
             event_type="clarification_requested",
             category=AgentRunEventCategory.clarification,
             content=question,
-            event_metadata=event_metadata,
+            extension=extension,
         )
         return True
 
@@ -155,7 +158,7 @@ class AgentRunService:
             event_type="run_failed",
             category=AgentRunEventCategory.error,
             content=error_message,
-            event_metadata={"error_type": error_type},
+            extension=build_run_failure_event_extension(error_type),
         )
         return True
 
