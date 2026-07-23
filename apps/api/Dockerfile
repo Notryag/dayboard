@@ -3,6 +3,7 @@ FROM python:3.11-slim AS build
 ARG UV_VERSION=0.11.28
 
 ENV UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -37,10 +38,14 @@ RUN apt-get update \
     && groupadd --system dayboard \
     && useradd --system --create-home --home-dir /home/dayboard --gid dayboard --shell /usr/sbin/nologin dayboard
 
-COPY --from=build --chown=dayboard:dayboard /workspace/apps/api/.venv ./.venv
+COPY --from=build --chown=dayboard:dayboard /app/.venv ./.venv
 COPY --chown=dayboard:dayboard apps/api/src ./src
 COPY --chown=dayboard:dayboard apps/api/alembic.ini ./alembic.ini
 COPY --chown=dayboard:dayboard apps/api/alembic ./alembic
+
+RUN /app/.venv/bin/alembic --help >/dev/null \
+    && /app/.venv/bin/fastapi --help >/dev/null \
+    && /app/.venv/bin/arq --help >/dev/null
 
 USER dayboard
 
