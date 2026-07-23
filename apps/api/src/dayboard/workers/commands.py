@@ -14,10 +14,11 @@ import structlog
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.app.reminders import ReminderService
-from dayboard.app.runs import AgentRunService
+from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
+from dayboard.app.platform_services import build_run_service
 from dayboard.config import get_settings
 from agent_platform.identity import TenantContext
-from dayboard.db.run_repositories import AgentRunRepository, IdempotencyKeyRepository
+from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal
 
 logger = structlog.get_logger(__name__)
@@ -30,7 +31,7 @@ async def execute_command_run(
 ) -> None:
     resolved_run_id = UUID(run_id)
     async with SessionLocal() as session:
-        run = await AgentRunRepository(session).get_for_worker(resolved_run_id)
+        run = await build_run_service(session).get_run_for_worker(resolved_run_id)
         if run is None:
             raise LookupError(f"Run {resolved_run_id} not found")
         context = TenantContext(
@@ -74,13 +75,15 @@ async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
     running_cutoff = now - timedelta(seconds=settings.stale_run_seconds)
     queued_cutoff = now - timedelta(seconds=settings.queued_run_timeout_seconds)
     async with SessionLocal() as session:
-        service = AgentRunService(session)
-        recovered_running = await service.recover_stale_running(
+        service = build_run_service(session)
+        recovered_running = await recover_stale_running_runs(
+            service,
             updated_before=running_cutoff,
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
-        recovered_queued = await service.recover_stale_queued(
+        recovered_queued = await recover_stale_queued_runs(
+            service,
             created_before=queued_cutoff,
             timezone=settings.default_timezone,
             locale=settings.default_locale,

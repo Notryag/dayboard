@@ -31,7 +31,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-agent-application-platform = { path = "../../packages/agent-platform" }
+agent-application-platform = { path = "../../packages/agent-platform", editable = true }
 north = { git = "https://github.com/Notryag/north-agent.git", rev = "9c1f1b7a87c0cf295e1efa2417f7ccf8fff3fcd2", subdirectory = "packages/harness" }
 
 [project.scripts]

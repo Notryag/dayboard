@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.app.conversations import ConversationService
-from dayboard.app.runs import AgentRunService
+from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
 from agent_platform.identity import TenantContext
 from dayboard.db.session import SessionLocal
@@ -161,8 +161,8 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     async def fake_invoker(**kwargs):
         assert created is not None
         async with SessionLocal() as cancel_session:
-            cancel_runs = AgentRunService(cancel_session)
-            run = await cancel_runs.get_run_row_for_update(tenant_context, created.run_id)
+            cancel_runs = build_run_service(cancel_session)
+            run = await cancel_runs.get_run_for_update(tenant_context, created.run_id)
             assert run is not None
             assert await cancel_runs.mark_cancelled(tenant_context, run)
             await ConversationService(cancel_session).upsert_assistant_message(

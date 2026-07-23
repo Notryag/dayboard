@@ -120,9 +120,9 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
     run_id = await service.create_command_run(tenant_context, request)
     await service.execute_command_run(tenant_context, request, run_id)
 
-    from dayboard.app.runs import AgentRunService
+    from dayboard.app.platform_services import build_run_service
 
-    events = await AgentRunService(db_session).list_events(tenant_context, run_id)
+    events = await build_run_service(db_session).list_events(tenant_context, run_id)
     starts = [event for event in events if event.event_type == "tool_call_started"]
     assert [event.seq for event in starts] == sorted(event.seq for event in starts)
     assert {event.event_metadata["call_id"] for event in starts} == {"tool-1", "tool-2"}
@@ -176,9 +176,9 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
     run_id = await service.create_command_run(tenant_context, request)
     await service.execute_command_run(tenant_context, request, run_id)
 
-    from dayboard.app.runs import AgentRunService
+    from dayboard.app.platform_services import build_run_service
 
-    events = await AgentRunService(db_session).list_events(tenant_context, run_id)
+    events = await build_run_service(db_session).list_events(tenant_context, run_id)
     assert "agent_model_completed" in {event.event_type for event in events}
     assert "tool_call_started" in {event.event_type for event in events}
     assert "agent_model_completed" not in bridge.events

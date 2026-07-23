@@ -26,7 +26,7 @@ from dayboard.app.conversations import (
 )
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
-from dayboard.app.runs import ActiveThreadRunError, AgentRunService
+from agent_platform.run_service import ActiveThreadRunError
 from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
@@ -37,6 +37,7 @@ from dayboard.app.schedule_queries import (
     ScheduleQueryService,
     TaskItemView,
 )
+from dayboard.app.platform_services import build_run_service
 from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
@@ -967,7 +968,7 @@ async def get_run(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
-    run = await AgentRunService(session).get_run(tenant_context, run_id)
+    run = await build_run_service(session).get_run(tenant_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return run
@@ -987,7 +988,7 @@ async def get_active_thread_run(
             code="THREAD_NOT_FOUND",
             message="Conversation thread not found",
         ) from exc
-    return await AgentRunService(session).get_active_thread_run(tenant_context, thread_id)
+    return await build_run_service(session).get_active_thread_run(tenant_context, thread_id)
 
 
 @router.post("/api/runs/{run_id}/cancel", response_model=AgentRun)
@@ -998,11 +999,15 @@ async def cancel_run(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
-    service = AgentRunService(session)
-    run = await service.get_run_row_for_update(tenant_context, run_id)
+    service = build_run_service(session)
+    run = await service.get_run_for_update(tenant_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
-    transitioned = await service.mark_cancelled(tenant_context, run)
+    transitioned = await service.mark_cancelled(
+        tenant_context,
+        run,
+        event_content="请求已取消",
+    )
     if transitioned:
         conversations = ConversationService(session)
         existing_message = await conversations.get_assistant_message_for_run(
@@ -1053,7 +1058,7 @@ async def get_run_events(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[AgentRunEvent]:
-    service = AgentRunService(session)
+    service = build_run_service(session)
     if await service.get_run(tenant_context, run_id) is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return await service.list_events(tenant_context, run_id)
@@ -1073,7 +1078,7 @@ async def stream_run_events(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> StreamingResponse:
-    service = AgentRunService(session)
+    service = build_run_service(session)
     run = await service.get_run(tenant_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")

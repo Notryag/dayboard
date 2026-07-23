@@ -23,7 +23,7 @@ os.environ["DATABASE_URL"] = test_database_url
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.api.routes import get_command_dispatcher, get_stream_bridge
 from dayboard.app.commands import CommandService, get_command_service
-from dayboard.app.runs import AgentRunService
+from dayboard.app.platform_services import build_run_service
 from north.runtime import END_SENTINEL, StreamEvent
 from agent_platform.identity import TenantContext
 from dayboard.api.auth import get_tenant_context
@@ -61,7 +61,7 @@ class TestCommandService:
         context: TenantContext,
         request: CommandRequest,
     ) -> UUID:
-        run = await AgentRunService(self.session).create_run(
+        run = await build_run_service(self.session).create_run(
             context,
             input_message=request.message,
         )
@@ -80,7 +80,7 @@ class TestCommandService:
         from agent_platform.runs import AgentRunStatus
 
         del idempotency_key
-        run = await AgentRunService(self.session).create_run(
+        run = await build_run_service(self.session).create_run(
             context,
             input_message=request.message,
             thread_id=thread_id,
@@ -94,8 +94,8 @@ class TestCommandService:
         run_id: UUID,
         exc: Exception,
     ) -> None:
-        runs = AgentRunService(self.session)
-        run = await runs.get_run_row(context, run_id)
+        runs = build_run_service(self.session)
+        run = await runs.get_run(context, run_id)
         assert run is not None
         await runs.mark_failed(
             context,

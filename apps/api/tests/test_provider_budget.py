@@ -137,7 +137,7 @@ async def test_command_service_checks_budget_before_model_execution(
                 del context, input_message
                 return SimpleNamespace(id="fake-run", thread_id=thread_id)
 
-        async def get_run_row(self, context, run_id):
+        async def get_run(self, context, run_id):
             del context
             return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
@@ -169,7 +169,10 @@ async def test_command_service_checks_budget_before_model_execution(
         async def rollback(self) -> None:
             return None
 
-    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
+    monkeypatch.setattr(
+        "dayboard.app.commands.build_run_service",
+        lambda session: FakeRunService(session),
+    )
 
     service = CommandService(
         FakeSession(),

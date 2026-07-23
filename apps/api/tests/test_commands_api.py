@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.runs import AgentRunService
+from dayboard.app.platform_services import build_run_service
 from dayboard.app.conversations import ConversationService
 from dayboard.api.routes import get_command_dispatcher
 from agent_platform.identity import TenantContext
@@ -150,8 +150,8 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
             json={"message": "再创建一个任务"},
         )
 
-        runs = AgentRunService(db_session)
-        first_row = await runs.get_run_row(tenant_context, UUID(first.json()["run_id"]))
+        runs = build_run_service(db_session)
+        first_row = await runs.get_run(tenant_context, UUID(first.json()["run_id"]))
         assert first_row is not None
         await runs.mark_running(tenant_context, first_row)
         await runs.mark_completed(tenant_context, first_row, result_message="会议已创建")
@@ -191,8 +191,8 @@ async def test_active_thread_run_can_be_resumed_until_it_finishes(
         )
         active = await client.get(f"/api/threads/{thread_id}/active-run")
 
-        runs = AgentRunService(db_session)
-        run = await runs.get_run_row(tenant_context, UUID(created.json()["run_id"]))
+        runs = build_run_service(db_session)
+        run = await runs.get_run(tenant_context, UUID(created.json()["run_id"]))
         assert run is not None
         await runs.mark_running(tenant_context, run)
         await runs.mark_completed(tenant_context, run, result_message="会议已创建")
@@ -484,7 +484,7 @@ async def test_cancel_terminal_run_does_not_overwrite_status(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     await service.mark_running(tenant_context, run)
     await service.mark_completed(tenant_context, run, result_message="已安排")
@@ -510,7 +510,7 @@ async def test_stream_run_events_returns_terminal_run_state(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    runs = AgentRunService(db_session)
+    runs = build_run_service(db_session)
     run = await runs.create_run(tenant_context, input_message="安排会议")
     await runs.mark_running(tenant_context, run)
     await runs.mark_needs_clarification(tenant_context, run, question="几点开始？")
@@ -554,7 +554,7 @@ async def test_stream_run_events_forwards_live_structured_messages(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    runs = AgentRunService(db_session)
+    runs = build_run_service(db_session)
     run = await runs.create_run(tenant_context, input_message="创建任务")
     await runs.mark_running(tenant_context, run)
     await db_session.commit()
@@ -620,7 +620,7 @@ async def test_stream_run_events_drops_unprojected_canonical_and_raw_errors(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    runs = AgentRunService(db_session)
+    runs = build_run_service(db_session)
     run = await runs.create_run(tenant_context, input_message="执行内部工具")
     await runs.mark_running(tenant_context, run)
     await db_session.commit()
@@ -664,7 +664,7 @@ async def test_stream_run_events_resumes_from_last_event_id_header(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    runs = AgentRunService(db_session)
+    runs = build_run_service(db_session)
     run = await runs.create_run(tenant_context, input_message="继续事件流")
     await runs.mark_running(tenant_context, run)
     await db_session.commit()
@@ -693,7 +693,7 @@ async def test_stream_run_events_rejects_invalid_last_event_id(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    run = await AgentRunService(db_session).create_run(
+    run = await build_run_service(db_session).create_run(
         tenant_context, input_message="无效游标"
     )
     await db_session.commit()
@@ -715,7 +715,7 @@ async def test_stream_run_events_ignores_live_cursor_for_terminal_run(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    runs = AgentRunService(db_session)
+    runs = build_run_service(db_session)
     run = await runs.create_run(tenant_context, input_message="安排会议")
     await runs.mark_running(tenant_context, run)
     await runs.mark_completed(tenant_context, run, result_message="已安排")

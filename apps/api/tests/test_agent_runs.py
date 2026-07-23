@@ -6,7 +6,8 @@ from uuid import uuid4
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.runs import AgentRunService
+from dayboard.app.platform_services import build_run_service
+from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from agent_platform.identity import TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
 from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
@@ -19,17 +20,18 @@ async def test_agent_run_service_records_lifecycle_events(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
 
     run = await service.create_run(tenant_context, input_message="安排明天的事情")
     await service.mark_running(tenant_context, run)
     await service.mark_needs_clarification(tenant_context, run, question="需要几点？")
     await db_session.commit()
-    await db_session.refresh(run)
+    refreshed = await service.get_run(tenant_context, run.id)
 
     events = await AgentRunEventRepository(db_session).list_for_run(tenant_context, run.id)
 
-    assert run.status == AgentRunStatus.needs_clarification.value
+    assert refreshed is not None
+    assert refreshed.status == AgentRunStatus.needs_clarification
     assert [event.seq for event in events] == [1, 2, 3]
     assert [event.event_type for event in events] == [
         "run_created",
@@ -43,7 +45,7 @@ async def test_run_event_metadata_serializes_datetime(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     aware_time = datetime.now(UTC)
     await service.append_progress(
@@ -64,7 +66,7 @@ async def test_stale_running_runs_are_recovered_to_failed(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     await service.mark_running(tenant_context, run)
     stale_at = datetime.now(UTC) - timedelta(minutes=20)
@@ -73,17 +75,19 @@ async def test_stale_running_runs_are_recovered_to_failed(
     )
     await db_session.commit()
 
-    recovered = await service.recover_stale_running(
+    recovered = await recover_stale_running_runs(
+        service,
         updated_before=datetime.now(UTC) - timedelta(minutes=10),
         timezone="Asia/Shanghai",
         locale="zh-CN",
     )
     await db_session.commit()
-    await db_session.refresh(run)
+    refreshed = await service.get_run(tenant_context, run.id)
     events = await service.list_events(tenant_context, run.id)
 
     assert recovered == [run.id]
-    assert run.status == "failed"
+    assert refreshed is not None
+    assert refreshed.status == AgentRunStatus.failed
     assert events[-1].event_type == "run_failed"
     assert events[-1].event_metadata["error_type"] == "StaleRunRecovered"
 
@@ -92,7 +96,7 @@ async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     stale = await service.create_run(tenant_context, input_message="旧请求")
     recent = await service.create_run(tenant_context, input_message="新请求")
     stale_at = datetime.now(UTC) - timedelta(minutes=40)
@@ -101,20 +105,23 @@ async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
     )
     await db_session.commit()
 
-    recovered = await service.recover_stale_queued(
+    recovered = await recover_stale_queued_runs(
+        service,
         created_before=datetime.now(UTC) - timedelta(minutes=30),
         timezone="Asia/Shanghai",
         locale="zh-CN",
     )
     await db_session.commit()
-    await db_session.refresh(stale)
-    await db_session.refresh(recent)
+    refreshed_stale = await service.get_run(tenant_context, stale.id)
+    refreshed_recent = await service.get_run(tenant_context, recent.id)
     events = await service.list_events(tenant_context, stale.id)
 
     assert recovered == [stale.id]
-    assert stale.status == AgentRunStatus.failed.value
-    assert stale.result_message == "排队超时，请重试"
-    assert recent.status == AgentRunStatus.queued.value
+    assert refreshed_stale is not None
+    assert refreshed_stale.status == AgentRunStatus.failed
+    assert refreshed_stale.result_message == "排队超时，请重试"
+    assert refreshed_recent is not None
+    assert refreshed_recent.status == AgentRunStatus.queued
     assert events[-1].event_type == "run_failed"
     assert events[-1].event_metadata["error_type"] == "QueueWaitTimeout"
 
@@ -123,7 +130,7 @@ async def test_queued_timeout_cannot_fail_a_run_that_has_started(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="正在启动")
     await service.mark_running(tenant_context, run)
 
@@ -136,9 +143,11 @@ async def test_queued_timeout_cannot_fail_a_run_that_has_started(
     )
     await db_session.commit()
     events = await service.list_events(tenant_context, run.id)
+    refreshed = await service.get_run(tenant_context, run.id)
 
     assert not transitioned
-    assert run.status == AgentRunStatus.running.value
+    assert refreshed is not None
+    assert refreshed.status == AgentRunStatus.running
     assert [event.event_type for event in events] == ["run_created", "run_started"]
 
 
@@ -146,19 +155,19 @@ async def test_run_reads_refresh_status_changed_by_another_session(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     await service.mark_running(tenant_context, run)
     await db_session.commit()
 
     async with SessionLocal() as cancelling_session:
-        cancelling = AgentRunService(cancelling_session)
-        other_run = await cancelling.get_run_row(tenant_context, run.id)
+        cancelling = build_run_service(cancelling_session)
+        other_run = await cancelling.get_run(tenant_context, run.id)
         assert other_run is not None
         await cancelling.mark_cancelled(tenant_context, other_run)
         await cancelling_session.commit()
 
-    refreshed = await service.get_run_row(tenant_context, run.id)
+    refreshed = await service.get_run(tenant_context, run.id)
 
     assert refreshed is not None
     assert refreshed.status == "cancelled"
@@ -168,16 +177,16 @@ async def test_cancelled_run_cannot_be_completed_by_worker_with_stale_state(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     await service.mark_running(tenant_context, run)
     await db_session.commit()
 
     async with SessionLocal() as worker_session, SessionLocal() as cancelling_session:
-        worker = AgentRunService(worker_session)
-        cancelling = AgentRunService(cancelling_session)
-        worker_run = await worker.get_run_row(tenant_context, run.id)
-        cancelling_run = await cancelling.get_run_row(tenant_context, run.id)
+        worker = build_run_service(worker_session)
+        cancelling = build_run_service(cancelling_session)
+        worker_run = await worker.get_run(tenant_context, run.id)
+        cancelling_run = await cancelling.get_run(tenant_context, run.id)
         assert worker_run is not None
         assert cancelling_run is not None
 
@@ -190,7 +199,7 @@ async def test_cancelled_run_cannot_be_completed_by_worker_with_stale_state(
         )
         await worker_session.commit()
 
-    refreshed = await service.get_run_row(tenant_context, run.id)
+    refreshed = await service.get_run(tenant_context, run.id)
     events = await service.list_events(tenant_context, run.id)
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.cancelled.value
@@ -205,16 +214,16 @@ async def test_completed_run_cannot_be_cancelled_by_request_with_stale_state(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     await service.mark_running(tenant_context, run)
     await db_session.commit()
 
     async with SessionLocal() as worker_session, SessionLocal() as cancelling_session:
-        worker = AgentRunService(worker_session)
-        cancelling = AgentRunService(cancelling_session)
-        worker_run = await worker.get_run_row(tenant_context, run.id)
-        cancelling_run = await cancelling.get_run_row(tenant_context, run.id)
+        worker = build_run_service(worker_session)
+        cancelling = build_run_service(cancelling_session)
+        worker_run = await worker.get_run(tenant_context, run.id)
+        cancelling_run = await cancelling.get_run(tenant_context, run.id)
         assert worker_run is not None
         assert cancelling_run is not None
 
@@ -227,7 +236,7 @@ async def test_completed_run_cannot_be_cancelled_by_request_with_stale_state(
         assert not await cancelling.mark_cancelled(tenant_context, cancelling_run)
         await cancelling_session.commit()
 
-    refreshed = await service.get_run_row(tenant_context, run.id)
+    refreshed = await service.get_run(tenant_context, run.id)
     events = await service.list_events(tenant_context, run.id)
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.completed.value
@@ -278,7 +287,7 @@ async def test_run_lookup_is_owner_scoped_within_a_tenant(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = AgentRunService(db_session)
+    service = build_run_service(db_session)
     run = await service.create_run(tenant_context, input_message="安排会议")
     other_context = TenantContext(
         tenant_id=tenant_context.tenant_id,

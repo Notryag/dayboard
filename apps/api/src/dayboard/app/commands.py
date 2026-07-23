@@ -25,9 +25,10 @@ from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversations import ConversationService
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.runs import AgentRunService
+from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings, get_settings
 from agent_platform.identity import TenantContext
+from agent_platform.run_service import AgentRunService
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal, get_session
@@ -124,7 +125,7 @@ class CommandService:
                     raise IdempotencyConflictError(
                         "Idempotency-Key was already used for a different request"
                     )
-                existing = await AgentRunService(self.session).get_run(context, record.run_id)
+                existing = await build_run_service(self.session).get_run(context, record.run_id)
                 if existing is None:
                     raise RuntimeError("Idempotency key references a missing run")
                 return CommandRunCreation(existing.id, existing.status, False, existing.thread_id)
@@ -144,7 +145,7 @@ class CommandService:
         }
         if run_id is not None:
             create_kwargs["run_id"] = run_id
-        run = await AgentRunService(self.session).create_run(context, **create_kwargs)
+        run = await build_run_service(self.session).create_run(context, **create_kwargs)
         await conversations.append_message(
             context,
             thread_id=thread_id,
@@ -168,8 +169,8 @@ class CommandService:
         request: CommandRequest,
         run_id: UUID,
     ) -> None:
-        runs = AgentRunService(self.session)
-        run = await runs.get_run_row(context, run_id)
+        runs = build_run_service(self.session)
+        run = await runs.get_run(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
         status = AgentRunStatus(run.status)
@@ -231,7 +232,7 @@ class CommandService:
                 content: str,
                 event_metadata: dict[str, Any],
             ) -> None:
-                latest = await runs.get_run_row(context, run.id)
+                latest = await runs.get_run(context, run.id)
                 if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
                     raise asyncio.CancelledError()
                 await runs.append_progress(
@@ -255,8 +256,8 @@ class CommandService:
                     return
                 async with runtime_event_lock:
                     async with self.runtime_event_session_factory() as event_session:
-                        event_runs = AgentRunService(event_session)
-                        latest = await event_runs.get_run_row(context, run.id)
+                        event_runs = build_run_service(event_session)
+                        latest = await event_runs.get_run(context, run.id)
                         if (
                             latest is not None
                             and AgentRunStatus(latest.status) == AgentRunStatus.cancelled
@@ -286,7 +287,7 @@ class CommandService:
                 if projected is None:
                     return
                 if projected.event_type in {"schedule_item_result", "schedule_items_result"}:
-                    latest = await runs.get_run_row_for_update(context, run.id)
+                    latest = await runs.get_run_for_update(context, run.id)
                     if latest is None or AgentRunStatus(latest.status) != AgentRunStatus.running:
                         await self.session.commit()
                         raise asyncio.CancelledError()
@@ -329,7 +330,7 @@ class CommandService:
                 )
 
             async def complete_run(result: Any) -> None:
-                latest = await runs.get_run_row(context, run.id)
+                latest = await runs.get_run(context, run.id)
                 if latest is not None and AgentRunStatus(latest.status) == AgentRunStatus.cancelled:
                     raise asyncio.CancelledError()
 
@@ -585,8 +586,8 @@ class CommandService:
         run_id: UUID,
         exc: Exception,
     ) -> None:
-        runs = AgentRunService(self.session)
-        run = await runs.get_run_row(context, run_id)
+        runs = build_run_service(self.session)
+        run = await runs.get_run(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
         transitioned = await runs.mark_failed(
@@ -621,7 +622,7 @@ async def _mark_run_failed(
 ) -> bool:
     try:
         await session.rollback()
-        run = await runs.get_run_row(context, run_id)
+        run = await runs.get_run(context, run_id)
         if run is None:
             return False
         transitioned = await runs.mark_failed(

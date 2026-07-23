@@ -455,7 +455,7 @@ async def test_command_service_maps_north_clarification_result_to_run(
                 del context, input_message
                 return SimpleNamespace(id=uuid4(), thread_id=thread_id)
 
-        async def get_run_row(self, context, run_id):
+        async def get_run(self, context, run_id):
             del context
             return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
@@ -488,7 +488,10 @@ async def test_command_service_maps_north_clarification_result_to_run(
         async def rollback(self) -> None:
             return None
 
-    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
+    monkeypatch.setattr(
+        "dayboard.app.commands.build_run_service",
+        lambda session: FakeRunService(session),
+    )
 
     def fake_build_dayboard_agent(*args, **kwargs):
         built["run_id"] = kwargs["run_id"]
@@ -539,7 +542,7 @@ async def test_command_service_logs_and_marks_failed_run(
                 del context, input_message
                 return SimpleNamespace(id=uuid4(), thread_id=thread_id)
 
-        async def get_run_row(self, context, run_id):
+        async def get_run(self, context, run_id):
             del context
             return SimpleNamespace(id=run_id, thread_id=uuid4(), status="queued")
 
@@ -576,7 +579,10 @@ async def test_command_service_logs_and_marks_failed_run(
         del kwargs
         raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr("dayboard.app.commands.AgentRunService", FakeRunService)
+    monkeypatch.setattr(
+        "dayboard.app.commands.build_run_service",
+        lambda session: FakeRunService(session),
+    )
     service = CommandService(
         FakeSession(),
         settings=Settings(

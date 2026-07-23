@@ -19,11 +19,11 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
         async def __aexit__(self, exc_type, exc, traceback):
             return False
 
-    class FakeRunRepository:
+    class FakeRunService:
         def __init__(self, session):
             del session
 
-        async def get_for_worker(self, requested_run_id):
+        async def get_run_for_worker(self, requested_run_id):
             assert requested_run_id == run_id
             return SimpleNamespace(
                 tenant_id=tenant_id,
@@ -47,8 +47,8 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
         lambda: FakeSessionContext(),
     )
     monkeypatch.setattr(
-        "dayboard.workers.commands.AgentRunRepository",
-        FakeRunRepository,
+        "dayboard.workers.commands.build_run_service",
+        lambda session: FakeRunService(session),
     )
     monkeypatch.setattr(
         "dayboard.workers.commands.CommandService",

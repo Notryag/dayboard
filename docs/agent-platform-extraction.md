@@ -31,7 +31,9 @@ other.
 | Conversation thread/message/state contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
 | Conversation repositories and service | Dayboard | Platform | Next part of the first vertical slice |
 | Run and Run-event contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
-| Run repositories, lifecycle and idempotency | Dayboard | Platform | Move with conversations so recovery remains atomic |
+| Run lifecycle service | Platform | Platform | Extracted; storage-independent state transitions and events |
+| PostgreSQL Run repositories | Dayboard adapter | Dayboard adapter | Implements platform Run store ports |
+| Command idempotency | Dayboard | Platform | Move with command submission after Conversation ports stabilize |
 | Command submission and dispatch | Mixed | Split | Platform owns generic lifecycle; Dayboard supplies agent/product adapters |
 | Persisted typed message artifacts | Mixed | Platform contract | Dayboard continues defining schedule artifact payloads |
 | Clarification interaction state | Dayboard | Platform | Extract after Conversation + Run |
@@ -95,7 +97,7 @@ A capability is considered extracted only when:
 
 1. Package skeleton, ADR, ownership map, and CI dependency check. Complete.
 2. Trusted identity plus Conversation/Run contracts and focused contract tests. Complete.
-3. Conversation/Run repository ports and platform lifecycle services.
-4. Dayboard migration to those services and removal of the original service path.
+3. Run repository ports and platform lifecycle service; remove original Run service. Complete.
+4. Conversation repository ports and platform service; remove original Conversation service path.
 5. Clarification and artifact interaction contracts.
 6. Usage accounting and notification delivery, only after adapters are demonstrated.

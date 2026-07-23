@@ -43,7 +43,7 @@ refresh and across devices.
 | FastAPI | auth, validation, tenant context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
 | Worker | queued Run execution, lifecycle hooks, stale-Run recovery, reminder delivery | browser sessions |
 | North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
-| Agent Platform | trusted identity and product-neutral Conversation/Run contracts | scheduling policy or Dayboard presentation |
+| Agent Platform | trusted identity, Conversation/Run contracts, Run lifecycle and storage ports | scheduling policy or Dayboard presentation |
 | Dayboard Agent | prompt, seven scheduling tools, safe result projection | tenant identity or direct model-authorized writes |
 | Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
@@ -61,6 +61,7 @@ The reusable application package currently owns shared identity and Conversation
 agent_platform.identity       trusted tenant and user context
 agent_platform.conversations product-neutral conversation contracts
 agent_platform.runs          product-neutral persisted Run contracts
+agent_platform.run_service   storage-independent Run lifecycle and repository ports
 ```
 
 The Dayboard API package is split by responsibility:
@@ -79,6 +80,10 @@ dayboard.integrations  ASR and external provider adapters
 Trusted `TenantContext` is resolved from the authenticated server session. Tenant, owner, timezone,
 thread, Run, operation keys, and permissions are injected by the runtime and never exposed as
 model-supplied tool arguments. Repository queries scope business data by tenant and owner.
+
+Dayboard's composition root connects the platform Run service to PostgreSQL adapters. The platform
+owns allowed state transitions and lifecycle event policy; the adapters own SQLAlchemy rows,
+constraint translation, tenant-scoped queries, and atomic database operations.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities.

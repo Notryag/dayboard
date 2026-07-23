@@ -6,12 +6,57 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
 
 from agent_platform.identity import TenantContext
+from agent_platform.run_service import ActiveThreadRunError
+from agent_platform.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
-from agent_platform.runs import AgentRunEventCategory, AgentRunStatus
+
+
+ACTIVE_THREAD_RUN_CONSTRAINT = "uq_agent_runs_active_thread"
+
+
+def _integrity_constraint_name(exc: IntegrityError) -> str | None:
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        constraint_name = getattr(current, "constraint_name", None)
+        if constraint_name is not None:
+            return str(constraint_name)
+        current = current.__cause__ or current.__context__
+    return None
+
+
+def agent_run_from_row(row: AgentRunRow) -> AgentRun:
+    return AgentRun(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        owner_user_id=row.owner_user_id,
+        thread_id=row.thread_id,
+        status=AgentRunStatus(row.status),
+        input_message=row.input_message,
+        result_message=row.result_message,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def agent_run_event_from_row(row: AgentRunEventRow) -> AgentRunEvent:
+    return AgentRunEvent(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        run_id=row.run_id,
+        seq=row.seq,
+        event_type=row.event_type,
+        category=AgentRunEventCategory(row.category),
+        content=row.content,
+        event_metadata=row.event_metadata,
+        created_at=row.created_at,
+    )
 
 
 class AgentRunRepository:
@@ -26,7 +71,7 @@ class AgentRunRepository:
         thread_id: UUID | None = None,
         status: AgentRunStatus = AgentRunStatus.queued,
         run_id: UUID | None = None,
-    ) -> AgentRunRow:
+    ) -> AgentRun:
         row = AgentRunRow(
             id=run_id or uuid4(),
             tenant_id=context.tenant_id,
@@ -35,26 +80,34 @@ class AgentRunRepository:
             status=status.value,
             input_message=input_message,
         )
-        self.session.add(row)
-        await self.session.flush()
-        return row
+        try:
+            async with self.session.begin_nested():
+                self.session.add(row)
+                await self.session.flush()
+        except IntegrityError as exc:
+            if _integrity_constraint_name(exc) != ACTIVE_THREAD_RUN_CONSTRAINT:
+                raise
+            raise ActiveThreadRunError(
+                "This conversation already has a command in progress"
+            ) from exc
+        return agent_run_from_row(row)
 
     async def transition_status(
         self,
         context: TenantContext,
-        run: AgentRunRow,
+        run_id: UUID,
         *,
         from_statuses: set[AgentRunStatus],
         status: AgentRunStatus,
         result_message: str | None = None,
-    ) -> bool:
+    ) -> AgentRun | None:
         values: dict[str, Any] = {"status": status.value}
         if result_message is not None:
             values["result_message"] = result_message
         result = await self.session.execute(
             update(AgentRunRow)
             .where(
-                AgentRunRow.id == run.id,
+                AgentRunRow.id == run_id,
                 AgentRunRow.tenant_id == context.tenant_id,
                 AgentRunRow.owner_user_id == context.user_id,
                 AgentRunRow.status.in_(status.value for status in from_statuses),
@@ -63,12 +116,15 @@ class AgentRunRepository:
             .values(**values)
             .execution_options(synchronize_session="fetch")
         )
-        transitioned = result.rowcount == 1
-        await self.session.refresh(run)
-        return transitioned
+        if result.rowcount != 1:
+            return None
+        row = await self.get(context, run_id)
+        if row is None:
+            raise RuntimeError("Transitioned Run could not be reloaded")
+        return row
 
-    async def get(self, context: TenantContext, run_id: UUID) -> AgentRunRow | None:
-        return await self.session.scalar(
+    async def get(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
+        row = await self.session.scalar(
             select(AgentRunRow)
             .where(
                 AgentRunRow.tenant_id == context.tenant_id,
@@ -78,13 +134,14 @@ class AgentRunRepository:
             )
             .execution_options(populate_existing=True)
         )
+        return agent_run_from_row(row) if row else None
 
     async def get_for_update(
         self,
         context: TenantContext,
         run_id: UUID,
-    ) -> AgentRunRow | None:
-        return await self.session.scalar(
+    ) -> AgentRun | None:
+        row = await self.session.scalar(
             select(AgentRunRow)
             .where(
                 AgentRunRow.tenant_id == context.tenant_id,
@@ -95,10 +152,11 @@ class AgentRunRepository:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
+        return agent_run_from_row(row) if row else None
 
-    async def get_for_worker(self, run_id: UUID) -> AgentRunRow | None:
+    async def get_for_worker(self, run_id: UUID) -> AgentRun | None:
         """Load persisted execution ownership before a worker creates TenantContext."""
-        return await self.session.scalar(
+        row = await self.session.scalar(
             select(AgentRunRow)
             .where(
                 AgentRunRow.id == run_id,
@@ -106,13 +164,14 @@ class AgentRunRepository:
             )
             .execution_options(populate_existing=True)
         )
+        return agent_run_from_row(row) if row else None
 
     async def get_active_for_thread(
         self,
         context: TenantContext,
         thread_id: UUID,
-    ) -> AgentRunRow | None:
-        return await self.session.scalar(
+    ) -> AgentRun | None:
+        row = await self.session.scalar(
             select(AgentRunRow)
             .where(
                 AgentRunRow.tenant_id == context.tenant_id,
@@ -127,8 +186,9 @@ class AgentRunRepository:
             .limit(1)
             .execution_options(populate_existing=True)
         )
+        return agent_run_from_row(row) if row else None
 
-    async def list_stale_running(self, *, updated_before: datetime) -> list[AgentRunRow]:
+    async def list_stale_running(self, *, updated_before: datetime) -> list[AgentRun]:
         result = await self.session.scalars(
             select(AgentRunRow).where(
                 AgentRunRow.status == AgentRunStatus.running.value,
@@ -136,9 +196,9 @@ class AgentRunRepository:
                 AgentRunRow.deleted_at.is_(None),
             )
         )
-        return list(result)
+        return [agent_run_from_row(row) for row in result]
 
-    async def list_stale_queued(self, *, created_before: datetime) -> list[AgentRunRow]:
+    async def list_stale_queued(self, *, created_before: datetime) -> list[AgentRun]:
         result = await self.session.scalars(
             select(AgentRunRow).where(
                 AgentRunRow.status == AgentRunStatus.queued.value,
@@ -146,7 +206,7 @@ class AgentRunRepository:
                 AgentRunRow.deleted_at.is_(None),
             )
         )
-        return list(result)
+        return [agent_run_from_row(row) for row in result]
 
 
 class IdempotencyKeyRepository:
@@ -208,7 +268,7 @@ class AgentRunEventRepository:
         category: AgentRunEventCategory,
         content: str | None = None,
         event_metadata: dict[str, Any] | None = None,
-    ) -> AgentRunEventRow:
+    ) -> AgentRunEvent:
         seq = await self._next_seq(context, run_id)
         row = AgentRunEventRow(
             tenant_id=context.tenant_id,
@@ -221,7 +281,7 @@ class AgentRunEventRepository:
         )
         self.session.add(row)
         await self.session.flush()
-        return row
+        return agent_run_event_from_row(row)
 
     async def list_for_run(
         self,
@@ -229,7 +289,7 @@ class AgentRunEventRepository:
         run_id: UUID,
         *,
         after_seq: int = 0,
-    ) -> list[AgentRunEventRow]:
+    ) -> list[AgentRunEvent]:
         result = await self.session.scalars(
             select(AgentRunEventRow)
             .where(
@@ -239,7 +299,7 @@ class AgentRunEventRepository:
             )
             .order_by(AgentRunEventRow.seq.asc())
         )
-        return list(result)
+        return [agent_run_event_from_row(row) for row in result]
 
     async def _next_seq(self, context: TenantContext, run_id: UUID) -> int:
         result = await self.session.scalar(

@@ -16,11 +16,11 @@ RUN apt-get update \
 COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md ./
 COPY packages/agent-platform /workspace/packages/agent-platform
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+    uv sync --frozen --no-dev --no-install-project --no-editable
 
 COPY apps/api/src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+    uv sync --frozen --no-dev --no-editable
 
 FROM python:3.11-slim
 
