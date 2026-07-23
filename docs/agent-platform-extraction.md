@@ -196,7 +196,7 @@ A capability is considered extracted only when:
 3. Run repository ports and platform lifecycle service; remove original Run service. Complete.
 4. Conversation repository ports and platform service; remove original service path. Complete.
 5. Correct dependency documentation and record the architecture hardening gaps. Complete.
-6. Add Platform Core and Dayboard internal dependency checks.
+6. Add Platform Core and Dayboard Domain dependency checks. Complete.
 7. Add Unit of Work and platform idempotency contracts; remove ORM records from command use cases.
 8. Add versioned presentation envelopes and atomically resolved Interaction contracts.
 9. Split generic command submission/Run coordination from Dayboard Agent and result projection.

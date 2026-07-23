@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.models import ProviderUsageRecordRow
 
 

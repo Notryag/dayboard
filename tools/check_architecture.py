@@ -15,7 +15,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 class LayerRule:
     name: str
     source_root: Path
-    forbidden_import_roots: tuple[str, ...]
+    forbidden_import_prefixes: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -34,7 +34,79 @@ RULES = (
         / "agent-platform"
         / "src"
         / "agent_platform",
-        forbidden_import_roots=("dayboard",),
+        forbidden_import_prefixes=("dayboard",),
+    ),
+    LayerRule(
+        name="agent_platform.core",
+        source_root=REPOSITORY_ROOT
+        / "packages"
+        / "agent-platform"
+        / "src"
+        / "agent_platform"
+        / "core",
+        forbidden_import_prefixes=(
+            "agent_platform.application",
+            "agent_platform.ports",
+            "agent_platform.adapters",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+    ),
+    LayerRule(
+        name="agent_platform.ports",
+        source_root=REPOSITORY_ROOT
+        / "packages"
+        / "agent-platform"
+        / "src"
+        / "agent_platform"
+        / "ports",
+        forbidden_import_prefixes=(
+            "agent_platform.application",
+            "agent_platform.adapters",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+    ),
+    LayerRule(
+        name="agent_platform.application",
+        source_root=REPOSITORY_ROOT
+        / "packages"
+        / "agent-platform"
+        / "src"
+        / "agent_platform"
+        / "application",
+        forbidden_import_prefixes=(
+            "agent_platform.adapters",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+    ),
+    LayerRule(
+        name="dayboard.domain",
+        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "domain",
+        forbidden_import_prefixes=(
+            "dayboard.agent",
+            "dayboard.api",
+            "dayboard.app",
+            "dayboard.db",
+            "dayboard.integrations",
+            "dayboard.tools",
+            "dayboard.workers",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
     ),
 )
 
@@ -57,8 +129,10 @@ def find_violations(rule: LayerRule) -> list[Violation]:
     violations: list[Violation] = []
     for path in sorted(rule.source_root.rglob("*.py")):
         for line, imported_module in imported_modules(path):
-            import_root = imported_module.partition(".")[0]
-            if import_root in rule.forbidden_import_roots:
+            if any(
+                imported_module == prefix or imported_module.startswith(f"{prefix}.")
+                for prefix in rule.forbidden_import_prefixes
+            ):
                 violations.append(
                     Violation(
                         path=path,

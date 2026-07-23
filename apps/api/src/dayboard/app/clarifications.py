@@ -8,9 +8,9 @@ import json
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from agent_platform.conversation_service import ConversationService
-from agent_platform.conversations import ConversationState
-from agent_platform.identity import TenantContext
+from agent_platform.application import ConversationService
+from agent_platform.core import ConversationState
+from agent_platform.core import TenantContext
 
 
 class ClarificationStateError(ValueError):

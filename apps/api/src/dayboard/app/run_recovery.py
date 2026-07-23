@@ -5,9 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from agent_platform.identity import TenantContext
-from agent_platform.run_service import AgentRunService
-from agent_platform.runs import AgentRunStatus
+from agent_platform.core import TenantContext
+from agent_platform.application import AgentRunService
+from agent_platform.core import AgentRunStatus
 
 
 async def recover_stale_running_runs(

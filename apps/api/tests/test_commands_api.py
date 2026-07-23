@@ -10,10 +10,10 @@ from dayboard.app.platform_services import build_run_service
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
-from agent_platform.conversations import ConversationRole
+from agent_platform.core import ConversationRole
 
 
 async def test_create_background_command_run_returns_before_execution(

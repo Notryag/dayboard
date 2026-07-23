@@ -17,7 +17,7 @@ from dayboard.app.reminders import ReminderService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import get_settings
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal
 

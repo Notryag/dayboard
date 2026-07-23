@@ -7,8 +7,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.identity import TenantContext
-from agent_platform.conversations import (
+from agent_platform.core import TenantContext
+from agent_platform.core import (
     ConversationMessage,
     ConversationRole,
     ConversationState,

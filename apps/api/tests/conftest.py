@@ -25,7 +25,7 @@ from dayboard.api.routes import get_command_dispatcher, get_stream_bridge
 from dayboard.app.commands import CommandService, get_command_service
 from dayboard.app.platform_services import build_run_service
 from north.runtime import END_SENTINEL, StreamEvent
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.models import (
     AgentRunEventRow,
@@ -77,7 +77,7 @@ class TestCommandService:
         thread_id: UUID | None = None,
     ):
         from dayboard.app.commands import CommandRunCreation
-        from agent_platform.runs import AgentRunStatus
+        from agent_platform.core import AgentRunStatus
 
         del idempotency_key
         run = await build_run_service(self.session).create_run(

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.config import Settings
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 
 

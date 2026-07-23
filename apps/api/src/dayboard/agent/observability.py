@@ -5,7 +5,7 @@ from typing import Any
 
 from north import RuntimeEvent
 
-from agent_platform.runs import AgentRunEventCategory
+from agent_platform.core import AgentRunEventCategory
 
 
 @dataclass(frozen=True, slots=True)

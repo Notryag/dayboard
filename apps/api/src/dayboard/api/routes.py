@@ -22,7 +22,7 @@ from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
-from agent_platform.run_service import ActiveThreadRunError
+from agent_platform.core import ActiveThreadRunError
 from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
@@ -38,9 +38,9 @@ from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
 from dayboard.config import Settings, get_settings
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.session import get_session
-from agent_platform.runs import AgentRun, AgentRunEvent
+from agent_platform.core import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery, ReminderInboxItem
 from dayboard.domain.tasks import TaskStatus
@@ -53,7 +53,7 @@ from dayboard.integrations.audio_probe import (
 )
 from dayboard.timezones import resolve_local_date_window
 from dayboard.domain.interactions import ClarificationChoiceRequest
-from agent_platform.conversations import (
+from agent_platform.core import (
     ConversationMessagePage,
     ConversationState,
     ConversationThread,

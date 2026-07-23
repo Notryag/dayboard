@@ -23,18 +23,18 @@ from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetExceeded
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
-from agent_platform.conversation_service import ConversationService
+from agent_platform.application import ConversationService
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.platform_services import build_conversation_service, build_run_service
 from dayboard.config import Settings, get_settings
-from agent_platform.identity import TenantContext
-from agent_platform.run_service import AgentRunService
+from agent_platform.core import TenantContext
+from agent_platform.application import AgentRunService
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal, get_session
-from agent_platform.runs import AgentRunStatus
-from agent_platform.conversations import ConversationRole
+from agent_platform.core import AgentRunStatus
+from agent_platform.core import ConversationRole
 
 logger = structlog.get_logger(__name__)
 

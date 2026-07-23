@@ -60,11 +60,9 @@ Platform does not understand calendars, tasks, scheduling prompts, or the Dayboa
 The reusable application package currently owns shared identity and Conversation/Run contracts:
 
 ```text
-agent_platform.identity       trusted tenant and user context
-agent_platform.conversations product-neutral conversation contracts
-agent_platform.conversation_service  conversation history, paging, state and storage ports
-agent_platform.runs          product-neutral persisted Run contracts
-agent_platform.run_service   storage-independent Run lifecycle and repository ports
+agent_platform.core          identity, Conversation/Run contracts, and shared errors
+agent_platform.ports         persistence-neutral Conversation and Run Store protocols
+agent_platform.application   Conversation persistence and Run lifecycle use cases
 ```
 
 The Dayboard API package is split by responsibility:
@@ -96,6 +94,10 @@ application boundary. Command idempotency still uses the Dayboard PostgreSQL rep
 and persisted presentation/interaction payloads are unversioned JSON mappings. These are active
 extraction gaps, not target platform contracts; the hardening sequence is tracked in
 [../agent-platform-extraction.md](../agent-platform-extraction.md).
+
+The architecture check separately enforces Platform Core, Ports, and Application import rules. It
+also prevents the Dayboard Domain from importing API, application orchestration, persistence,
+workers, Agent tools, North, FastAPI, or SQLAlchemy.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities.

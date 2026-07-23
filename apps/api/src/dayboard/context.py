@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 
 from dayboard.config import get_settings
 

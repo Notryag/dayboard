@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.reminders import ReminderService
 from dayboard.app.scheduling import SchedulingService
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.domain.calendar import CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.reminders import ReminderDeliveryStatus, ReminderSourceStatus
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus

@@ -5,14 +5,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from agent_platform.conversation_service import ConversationService
-from agent_platform.conversations import (
+from agent_platform.application import ConversationService
+from agent_platform.core import (
     ConversationMessage,
     ConversationRole,
     ConversationState,
     ConversationThread,
 )
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 
 
 class MemoryThreadStore:

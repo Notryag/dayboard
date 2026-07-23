@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 
 
 DAYBOARD_SUMMARY_PROMPT = """Summarize the scheduling conversation for future turns.

@@ -2,8 +2,8 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.conversation_service import ConversationService
-from agent_platform.run_service import AgentRunService
+from agent_platform.application import ConversationService
+from agent_platform.application import AgentRunService
 
 from dayboard.db.conversation_repositories import (
     ConversationMessageRepository,

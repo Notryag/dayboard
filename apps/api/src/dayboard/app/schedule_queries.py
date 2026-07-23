@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.scheduling import calendar_entry_from_row, task_item_from_row
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
 from dayboard.domain.calendar import CalendarEntry, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskStatus

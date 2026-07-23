@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.scheduling import SchedulingService
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.tools import (
     CancelCalendarEntryInput,
     CalendarEntryChangedError,

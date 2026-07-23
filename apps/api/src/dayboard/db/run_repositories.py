@@ -10,9 +10,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
 
-from agent_platform.identity import TenantContext
-from agent_platform.run_service import ActiveThreadRunError
-from agent_platform.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+from agent_platform.core import TenantContext
+from agent_platform.core import ActiveThreadRunError
+from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
 
 

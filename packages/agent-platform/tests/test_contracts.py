@@ -7,9 +7,9 @@ from uuid import uuid4
 from pydantic import ValidationError
 import pytest
 
-from agent_platform.conversations import ConversationMessage, ConversationRole
-from agent_platform.identity import TenantContext
-from agent_platform.runs import AgentRunEvent, AgentRunEventCategory
+from agent_platform.core import ConversationMessage, ConversationRole
+from agent_platform.core import TenantContext
+from agent_platform.core import AgentRunEvent, AgentRunEventCategory
 
 
 def test_tenant_context_is_trusted_immutable_data() -> None:

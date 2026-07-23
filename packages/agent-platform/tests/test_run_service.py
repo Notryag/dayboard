@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from agent_platform.identity import TenantContext
-from agent_platform.run_service import AgentRunService
-from agent_platform.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+from agent_platform.core import TenantContext
+from agent_platform.application import AgentRunService
+from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 
 
 class MemoryRunStore:

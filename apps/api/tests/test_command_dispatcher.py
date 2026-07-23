@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.app.command_schemas import CommandRequest
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 
 
 async def test_redis_dispatcher_enqueues_serializable_unique_job(

@@ -15,7 +15,7 @@ from dayboard.app.clarifications import ClarificationService
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
-from agent_platform.identity import TenantContext
+from agent_platform.core import TenantContext
 from dayboard.db.session import SessionLocal
 from fake_runtime import fake_executor_factory
 
