@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import TenantContext
+from dayboard.app.scheduling_services import build_scheduling_services
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
 from dayboard.timezones import resolve_local_datetime
@@ -49,8 +50,7 @@ def _parse_local_minute(value: str) -> datetime:
 class AgentCreateCalendarEntryInput(BaseModel):
     title: str = Field(min_length=1, max_length=240)
     local_date: date | None = Field(
-        default=None,
-        description="Local date for an anytime entry with no clock time."
+        default=None, description="Local date for an anytime entry with no clock time."
     )
     local_start: LocalMinute | None = Field(
         default=None,
@@ -82,13 +82,14 @@ class AgentCreateCalendarEntryInput(BaseModel):
             raise ValueError(
                 "anchor_entry_id and expected_anchor_row_version must be provided together"
             )
-        if sum(
-            value is not None
-            for value in (self.local_date, self.local_start, self.anchor_entry_id)
-        ) != 1:
-            raise ValueError(
-                "provide exactly one of local_date, local_start, or anchor_entry_id"
+        if (
+            sum(
+                value is not None
+                for value in (self.local_date, self.local_start, self.anchor_entry_id)
             )
+            != 1
+        ):
+            raise ValueError("provide exactly one of local_date, local_start, or anchor_entry_id")
         if self.local_date is not None and self.local_end is not None:
             raise ValueError("local_end requires local_start")
         if anchor_mode and self.local_end is not None:
@@ -178,9 +179,7 @@ def _calendar_entry_view(entry) -> dict[str, Any]:
             if entry.completed_at is not None
             else "scheduled"
         ),
-        "created_by_run_id": (
-            str(entry.created_by_run_id) if entry.created_by_run_id else None
-        ),
+        "created_by_run_id": (str(entry.created_by_run_id) if entry.created_by_run_id else None),
         "created_at": entry.created_at.isoformat(),
         "updated_at": entry.updated_at.isoformat(),
     }
@@ -289,16 +288,17 @@ def build_scheduling_tools(
     and run identity stay server-owned and are captured by these closures.
     """
     tool_lock = asyncio.Lock()
+    scheduling_scope = build_scheduling_services(session)
 
     def serialize_tool(function):
         async def serialized(**kwargs):
             async with tool_lock:
                 try:
                     result = await function(**kwargs)
-                    await session.commit()
+                    await scheduling_scope.unit_of_work.commit()
                     return result
                 except BaseException:
-                    await session.rollback()
+                    await scheduling_scope.unit_of_work.rollback()
                     raise
 
         return serialized
@@ -309,7 +309,9 @@ def build_scheduling_tools(
             title=input_data.title,
             scheduled_date=input_data.local_date,
             start_time=(
-                resolve_local_datetime(_parse_local_minute(input_data.local_start), context.timezone)
+                resolve_local_datetime(
+                    _parse_local_minute(input_data.local_start), context.timezone
+                )
                 if input_data.local_start
                 else None
             ),
@@ -517,9 +519,7 @@ def build_scheduling_tools(
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_calendar_entries),
             name="search_calendar_entries",
-            description=(
-                "List or search calendar entries overlapping an optional local interval."
-            ),
+            description=("List or search calendar entries overlapping an optional local interval."),
             args_schema=AgentSearchCalendarEntriesInput,
             response_format="content_and_artifact",
         ),
@@ -542,27 +542,21 @@ def build_scheduling_tools(
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_create_task_item),
             name="create_task_item",
-            description=(
-                "Create an action with no resolvable date or time."
-            ),
+            description=("Create an action with no resolvable date or time."),
             args_schema=AgentCreateTaskItemInput,
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_search_task_items),
             name="search_task_items",
-            description=(
-                "Search tasks by title and status before changing one."
-            ),
+            description=("Search tasks by title and status before changing one."),
             args_schema=SearchTaskItemsInput,
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
             coroutine=serialize_tool(agent_update_task_item),
             name="update_task_item",
-            description=(
-                "Update one identified task's title or status."
-            ),
+            description=("Update one identified task's title or status."),
             args_schema=AgentUpdateTaskItemInput,
             response_format="content_and_artifact",
         ),

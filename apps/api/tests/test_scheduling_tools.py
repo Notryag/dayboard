@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.scheduling import SchedulingService
+from dayboard.app.scheduling_services import build_scheduling_service
 from agent_platform.core import TenantContext
 from dayboard.tools import (
     CancelCalendarEntryInput,
@@ -625,7 +625,7 @@ async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
         2026, 7, 24, 16, 30, tzinfo=ZoneInfo("Asia/Shanghai")
     )
     assert shortened.conflicts == []
-    persisted_shopping = await SchedulingService(db_session).get_calendar_entry(
+    persisted_shopping = await build_scheduling_service(db_session).get_calendar_entry(
         tenant_context, shopping.calendar_entry.id
     )
     assert persisted_shopping is not None
@@ -766,14 +766,17 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     assert cancelled.calendar_entry.cancellation_reason == "客户改期"
     assert repeated.calendar_entry.id == cancelled.calendar_entry.id
     assert repeated_in_another_run.calendar_entry.id == cancelled.calendar_entry.id
-    assert await search_calendar_entries(
-        db_session,
-        tenant_context,
-        SearchCalendarEntriesInput(
-            start_time="2026-07-11T00:00:00+08:00",
-            end_time="2026-07-12T00:00:00+08:00",
-        ),
-    ) == []
+    assert (
+        await search_calendar_entries(
+            db_session,
+            tenant_context,
+            SearchCalendarEntriesInput(
+                start_time="2026-07-11T00:00:00+08:00",
+                end_time="2026-07-12T00:00:00+08:00",
+            ),
+        )
+        == []
+    )
 
 
 async def test_cancel_rejects_stale_selected_version(

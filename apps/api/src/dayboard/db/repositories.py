@@ -9,8 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
-from dayboard.domain.calendar import CalendarEntryCreate
-from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
+from dayboard.db.schedule_mappers import calendar_entry_from_row, task_item_from_row
+from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind
+from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
 SEARCH_RESULT_LIMIT = 50
@@ -20,7 +21,7 @@ class CalendarEntryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, context: TenantContext, data: CalendarEntryCreate) -> CalendarEntryRow:
+    async def create(self, context: TenantContext, data: CalendarEntryCreate) -> CalendarEntry:
         row = CalendarEntryRow(
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
@@ -37,20 +38,8 @@ class CalendarEntryRepository:
         )
         self.session.add(row)
         await self.session.flush()
-        return row
-
-    async def list_active(self, context: TenantContext) -> list[CalendarEntryRow]:
-        result = await self.session.scalars(
-            select(CalendarEntryRow)
-            .where(
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.deleted_at.is_(None),
-                CalendarEntryRow.completed_at.is_(None),
-            )
-            .order_by(CalendarEntryRow.start_time.asc())
-        )
-        return list(result)
+        await self.session.refresh(row)
+        return calendar_entry_from_row(row)
 
     async def list_page(
         self,
@@ -63,7 +52,7 @@ class CalendarEntryRepository:
         cursor_start_time: datetime | None,
         cursor_id: UUID | None,
         limit: int,
-    ) -> list[CalendarEntryRow]:
+    ) -> list[CalendarEntry]:
         conditions = [
             CalendarEntryRow.tenant_id == context.tenant_id,
             CalendarEntryRow.owner_user_id == context.user_id,
@@ -100,7 +89,7 @@ class CalendarEntryRepository:
             .order_by(sort_time.asc(), CalendarEntryRow.id.asc())
             .limit(limit)
         )
-        return list(result)
+        return [calendar_entry_from_row(row) for row in result]
 
     async def search_active(
         self,
@@ -111,7 +100,7 @@ class CalendarEntryRepository:
         start_date: date,
         end_date: date,
         title_query: str | None = None,
-    ) -> list[CalendarEntryRow]:
+    ) -> list[CalendarEntry]:
         conditions = [
             CalendarEntryRow.tenant_id == context.tenant_id,
             CalendarEntryRow.owner_user_id == context.user_id,
@@ -124,7 +113,8 @@ class CalendarEntryRepository:
                     func.coalesce(
                         CalendarEntryRow.end_time,
                         CalendarEntryRow.start_time + timedelta(hours=1),
-                    ) > start_time,
+                    )
+                    > start_time,
                 ),
                 and_(
                     CalendarEntryRow.timing_kind == "anytime",
@@ -146,10 +136,10 @@ class CalendarEntryRepository:
             )
             .limit(SEARCH_RESULT_LIMIT)
         )
-        return list(result)
+        return [calendar_entry_from_row(row) for row in result]
 
-    async def get(self, context: TenantContext, entry_id: UUID) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    async def get(self, context: TenantContext, entry_id: UUID) -> CalendarEntry | None:
+        row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
@@ -157,13 +147,14 @@ class CalendarEntryRepository:
                 CalendarEntryRow.deleted_at.is_(None),
             )
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def get_for_update(
         self,
         context: TenantContext,
         entry_id: UUID,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             select(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -173,27 +164,29 @@ class CalendarEntryRepository:
             )
             .with_for_update()
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def get_including_cancelled(
         self,
         context: TenantContext,
         entry_id: UUID,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.id == entry_id,
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
             )
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def get_by_updated_operation(
         self,
         context: TenantContext,
         run_id: UUID,
         operation_key: str,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
@@ -202,21 +195,22 @@ class CalendarEntryRepository:
                 CalendarEntryRow.deleted_at.is_(None),
             )
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def reschedule(
         self,
         context: TenantContext,
         *,
         entry_id: UUID,
-        timing_kind: str,
+        timing_kind: CalendarTimingKind,
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
         expected_row_version: int,
         updated_by_run_id: UUID,
         operation_key: str,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -227,11 +221,13 @@ class CalendarEntryRepository:
                 CalendarEntryRow.completed_at.is_(None),
             )
             .values(
-                timing_kind=timing_kind,
+                timing_kind=timing_kind.value,
                 scheduled_date=scheduled_date,
                 start_time=start_time,
                 end_time=end_time,
-                reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
+                reminder=(
+                    None if timing_kind is CalendarTimingKind.anytime else CalendarEntryRow.reminder
+                ),
                 updated_by_run_id=updated_by_run_id,
                 updated_operation_key=operation_key,
                 row_version=CalendarEntryRow.row_version + 1,
@@ -239,6 +235,7 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def update_from_ui(
         self,
@@ -246,13 +243,13 @@ class CalendarEntryRepository:
         *,
         entry_id: UUID,
         title: str,
-        timing_kind: str,
+        timing_kind: CalendarTimingKind,
         scheduled_date: date | None,
         start_time: datetime | None,
         end_time: datetime | None,
         expected_row_version: int,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -264,11 +261,13 @@ class CalendarEntryRepository:
             )
             .values(
                 title=title,
-                timing_kind=timing_kind,
+                timing_kind=timing_kind.value,
                 scheduled_date=scheduled_date,
                 start_time=start_time,
                 end_time=end_time,
-                reminder=None if timing_kind == "anytime" else CalendarEntryRow.reminder,
+                reminder=(
+                    None if timing_kind is CalendarTimingKind.anytime else CalendarEntryRow.reminder
+                ),
                 updated_by_run_id=None,
                 updated_operation_key=None,
                 row_version=CalendarEntryRow.row_version + 1,
@@ -276,14 +275,15 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def get_by_cancelled_operation(
         self,
         context: TenantContext,
         run_id: UUID,
         operation_key: str,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.tenant_id == context.tenant_id,
                 CalendarEntryRow.owner_user_id == context.user_id,
@@ -292,6 +292,7 @@ class CalendarEntryRepository:
                 CalendarEntryRow.deleted_at.is_not(None),
             )
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def cancel(
         self,
@@ -302,9 +303,9 @@ class CalendarEntryRepository:
         cancelled_by_run_id: UUID,
         operation_key: str,
         cancellation_reason: str | None,
-    ) -> CalendarEntryRow | None:
+    ) -> CalendarEntry | None:
         now = func.now()
-        return await self.session.scalar(
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -324,24 +325,24 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def get_by_created_run(
         self,
         context: TenantContext,
         run_id: UUID,
         operation_key: str | None = None,
-    ) -> CalendarEntryRow | None:
+    ) -> CalendarEntry | None:
         conditions = [
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.created_by_run_id == run_id,
-                CalendarEntryRow.deleted_at.is_(None),
+            CalendarEntryRow.tenant_id == context.tenant_id,
+            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.created_by_run_id == run_id,
+            CalendarEntryRow.deleted_at.is_(None),
         ]
         if operation_key is not None:
             conditions.append(CalendarEntryRow.created_operation_key == operation_key)
-        return await self.session.scalar(
-            select(CalendarEntryRow).where(*conditions)
-        )
+        row = await self.session.scalar(select(CalendarEntryRow).where(*conditions))
+        return calendar_entry_from_row(row) if row else None
 
     async def cancel_from_ui(
         self,
@@ -349,9 +350,9 @@ class CalendarEntryRepository:
         *,
         entry_id: UUID,
         expected_row_version: int,
-    ) -> CalendarEntryRow | None:
+    ) -> CalendarEntry | None:
         now = func.now()
-        return await self.session.scalar(
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -371,6 +372,7 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def complete_from_ui(
         self,
@@ -378,9 +380,9 @@ class CalendarEntryRepository:
         *,
         entry_id: UUID,
         expected_row_version: int,
-    ) -> CalendarEntryRow | None:
+    ) -> CalendarEntry | None:
         now = func.now()
-        return await self.session.scalar(
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -397,6 +399,7 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def reopen_from_ui(
         self,
@@ -404,8 +407,8 @@ class CalendarEntryRepository:
         *,
         entry_id: UUID,
         expected_row_version: int,
-    ) -> CalendarEntryRow | None:
-        return await self.session.scalar(
+    ) -> CalendarEntry | None:
+        row = await self.session.scalar(
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
@@ -422,6 +425,7 @@ class CalendarEntryRepository:
             )
             .returning(CalendarEntryRow)
         )
+        return calendar_entry_from_row(row) if row else None
 
     async def list_overlapping(
         self,
@@ -431,35 +435,33 @@ class CalendarEntryRepository:
         end_time: datetime,
         default_duration: timedelta,
         exclude_entry_id: UUID | None = None,
-    ) -> list[CalendarEntryRow]:
+    ) -> list[CalendarEntry]:
         effective_end = func.coalesce(
             CalendarEntryRow.end_time,
             CalendarEntryRow.start_time + default_duration,
         )
         conditions = [
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
-                CalendarEntryRow.deleted_at.is_(None),
-                CalendarEntryRow.completed_at.is_(None),
-                CalendarEntryRow.timing_kind == "timed",
-                CalendarEntryRow.start_time < end_time,
-                effective_end > start_time,
+            CalendarEntryRow.tenant_id == context.tenant_id,
+            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.deleted_at.is_(None),
+            CalendarEntryRow.completed_at.is_(None),
+            CalendarEntryRow.timing_kind == "timed",
+            CalendarEntryRow.start_time < end_time,
+            effective_end > start_time,
         ]
         if exclude_entry_id is not None:
             conditions.append(CalendarEntryRow.id != exclude_entry_id)
         result = await self.session.scalars(
-            select(CalendarEntryRow)
-            .where(*conditions)
-            .order_by(CalendarEntryRow.start_time.asc())
+            select(CalendarEntryRow).where(*conditions).order_by(CalendarEntryRow.start_time.asc())
         )
-        return list(result)
+        return [calendar_entry_from_row(row) for row in result]
 
 
 class TaskItemRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, context: TenantContext, data: TaskItemCreate) -> TaskItemRow:
+    async def create(self, context: TenantContext, data: TaskItemCreate) -> TaskItem:
         row = TaskItemRow(
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
@@ -473,19 +475,8 @@ class TaskItemRepository:
         )
         self.session.add(row)
         await self.session.flush()
-        return row
-
-    async def list_active(self, context: TenantContext) -> list[TaskItemRow]:
-        result = await self.session.scalars(
-            select(TaskItemRow)
-            .where(
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.deleted_at.is_(None),
-            )
-            .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
-        )
-        return list(result)
+        await self.session.refresh(row)
+        return task_item_from_row(row)
 
     async def list_page(
         self,
@@ -500,7 +491,7 @@ class TaskItemRepository:
         cursor_id: UUID | None,
         cursor_has_due_at: bool | None,
         limit: int,
-    ) -> list[TaskItemRow]:
+    ) -> list[TaskItem]:
         conditions = [
             TaskItemRow.tenant_id == context.tenant_id,
             TaskItemRow.owner_user_id == context.user_id,
@@ -541,7 +532,7 @@ class TaskItemRepository:
             )
             .limit(limit)
         )
-        return list(result)
+        return [task_item_from_row(row) for row in result]
 
     async def search(
         self,
@@ -549,7 +540,7 @@ class TaskItemRepository:
         *,
         title_query: str | None = None,
         status: TaskStatus | None = TaskStatus.open,
-    ) -> list[TaskItemRow]:
+    ) -> list[TaskItem]:
         conditions = [
             TaskItemRow.tenant_id == context.tenant_id,
             TaskItemRow.owner_user_id == context.user_id,
@@ -565,10 +556,10 @@ class TaskItemRepository:
             .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
             .limit(SEARCH_RESULT_LIMIT)
         )
-        return list(result)
+        return [task_item_from_row(row) for row in result]
 
-    async def get(self, context: TenantContext, task_id: UUID) -> TaskItemRow | None:
-        return await self.session.scalar(
+    async def get(self, context: TenantContext, task_id: UUID) -> TaskItem | None:
+        row = await self.session.scalar(
             select(TaskItemRow).where(
                 TaskItemRow.id == task_id,
                 TaskItemRow.tenant_id == context.tenant_id,
@@ -576,14 +567,15 @@ class TaskItemRepository:
                 TaskItemRow.deleted_at.is_(None),
             )
         )
+        return task_item_from_row(row) if row else None
 
     async def get_by_updated_operation(
         self,
         context: TenantContext,
         run_id: UUID,
         operation_key: str,
-    ) -> TaskItemRow | None:
-        return await self.session.scalar(
+    ) -> TaskItem | None:
+        row = await self.session.scalar(
             select(TaskItemRow).where(
                 TaskItemRow.tenant_id == context.tenant_id,
                 TaskItemRow.owner_user_id == context.user_id,
@@ -592,6 +584,7 @@ class TaskItemRepository:
                 TaskItemRow.deleted_at.is_(None),
             )
         )
+        return task_item_from_row(row) if row else None
 
     async def update(
         self,
@@ -600,7 +593,7 @@ class TaskItemRepository:
         task_id: UUID,
         data: TaskItemUpdate,
         expected_row_version: int,
-    ) -> TaskItemRow | None:
+    ) -> TaskItem | None:
         values = {
             "updated_by_run_id": data.updated_by_run_id,
             "updated_operation_key": data.updated_operation_key,
@@ -613,7 +606,7 @@ class TaskItemRepository:
             values["due_at"] = data.due_at
         if data.status is not None:
             values["status"] = data.status.value
-        return await self.session.scalar(
+        row = await self.session.scalar(
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
@@ -625,6 +618,7 @@ class TaskItemRepository:
             .values(**values)
             .returning(TaskItemRow)
         )
+        return task_item_from_row(row) if row else None
 
     async def update_from_ui(
         self,
@@ -634,8 +628,8 @@ class TaskItemRepository:
         title: str,
         due_at: datetime | None,
         expected_row_version: int,
-    ) -> TaskItemRow | None:
-        return await self.session.scalar(
+    ) -> TaskItem | None:
+        row = await self.session.scalar(
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
@@ -654,24 +648,24 @@ class TaskItemRepository:
             )
             .returning(TaskItemRow)
         )
+        return task_item_from_row(row) if row else None
 
     async def get_by_created_run(
         self,
         context: TenantContext,
         run_id: UUID,
         operation_key: str | None = None,
-    ) -> TaskItemRow | None:
+    ) -> TaskItem | None:
         conditions = [
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
-                TaskItemRow.created_by_run_id == run_id,
-                TaskItemRow.deleted_at.is_(None),
+            TaskItemRow.tenant_id == context.tenant_id,
+            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.created_by_run_id == run_id,
+            TaskItemRow.deleted_at.is_(None),
         ]
         if operation_key is not None:
             conditions.append(TaskItemRow.created_operation_key == operation_key)
-        return await self.session.scalar(
-            select(TaskItemRow).where(*conditions)
-        )
+        row = await self.session.scalar(select(TaskItemRow).where(*conditions))
+        return task_item_from_row(row) if row else None
 
     async def set_status_from_ui(
         self,
@@ -680,8 +674,8 @@ class TaskItemRepository:
         task_id: UUID,
         status: TaskStatus,
         expected_row_version: int,
-    ) -> TaskItemRow | None:
-        return await self.session.scalar(
+    ) -> TaskItem | None:
+        row = await self.session.scalar(
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
@@ -699,3 +693,4 @@ class TaskItemRepository:
             )
             .returning(TaskItemRow)
         )
+        return task_item_from_row(row) if row else None

@@ -9,11 +9,9 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.scheduling import calendar_entry_from_row, task_item_from_row
 from agent_platform.core import TenantContext
-from dayboard.db.repositories import CalendarEntryRepository, TaskItemRepository
+from dayboard.app.scheduling_ports import ScheduleStores
 from dayboard.domain.calendar import CalendarEntry, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskStatus
 
@@ -115,9 +113,9 @@ def _exclusive_local_end_date(value: datetime, timezone: str) -> date:
 
 
 class ScheduleQueryService:
-    def __init__(self, session: AsyncSession) -> None:
-        self.calendar_entries = CalendarEntryRepository(session)
-        self.task_items = TaskItemRepository(session)
+    def __init__(self, stores: ScheduleStores) -> None:
+        self.calendar_entries = stores.calendar_entries
+        self.task_items = stores.task_items
 
     async def list_calendar_entries(
         self,
@@ -137,25 +135,23 @@ class ScheduleQueryService:
                 cursor_id = UUID(payload["id"])
             except (KeyError, TypeError, ValueError, InvalidScheduleCursor) as exc:
                 raise InvalidScheduleCursor("Invalid pagination cursor") from exc
-        rows = await self.calendar_entries.list_page(
+        entries = await self.calendar_entries.list_page(
             context,
             start_time=start_time,
             end_time=end_time,
             start_date=(
                 start_time.astimezone(ZoneInfo(context.timezone)).date() if start_time else None
             ),
-            end_date=(
-                _exclusive_local_end_date(end_time, context.timezone) if end_time else None
-            ),
+            end_date=(_exclusive_local_end_date(end_time, context.timezone) if end_time else None),
             cursor_start_time=cursor_start,
             cursor_id=cursor_id,
             limit=limit + 1,
         )
-        has_more = len(rows) > limit
-        page_rows = rows[:limit]
+        has_more = len(entries) > limit
+        page_entries = entries[:limit]
         next_cursor = None
         if has_more:
-            last = page_rows[-1]
+            last = page_entries[-1]
             cursor_time = last.start_time or datetime.combine(
                 last.scheduled_date, time.min, tzinfo=UTC
             )
@@ -163,9 +159,10 @@ class ScheduleQueryService:
                 {"kind": "calendar", "start_time": cursor_time.isoformat(), "id": str(last.id)}
             )
         return SchedulePage(
-            items=[CalendarEntryView.from_domain(calendar_entry_from_row(row)) for row in page_rows],
+            items=[CalendarEntryView.from_domain(entry) for entry in page_entries],
             next_cursor=next_cursor,
         )
+
     async def list_task_items(
         self,
         context: TenantContext,
@@ -187,14 +184,12 @@ class ScheduleQueryService:
                 cursor_has_due = payload["has_due_at"]
                 if not isinstance(cursor_has_due, bool):
                     raise InvalidScheduleCursor("Invalid pagination cursor")
-                cursor_due = (
-                    _cursor_datetime(payload["due_at"]) if cursor_has_due else None
-                )
+                cursor_due = _cursor_datetime(payload["due_at"]) if cursor_has_due else None
                 cursor_created = _cursor_datetime(payload["created_at"])
                 cursor_id = UUID(payload["id"])
             except (KeyError, TypeError, ValueError, InvalidScheduleCursor) as exc:
                 raise InvalidScheduleCursor("Invalid pagination cursor") from exc
-        rows = await self.task_items.list_page(
+        tasks = await self.task_items.list_page(
             context,
             status=status,
             due_kind=due_kind,
@@ -206,11 +201,11 @@ class ScheduleQueryService:
             cursor_has_due_at=cursor_has_due,
             limit=limit + 1,
         )
-        has_more = len(rows) > limit
-        page_rows = rows[:limit]
+        has_more = len(tasks) > limit
+        page_tasks = tasks[:limit]
         next_cursor = None
         if has_more:
-            last = page_rows[-1]
+            last = page_tasks[-1]
             next_cursor = _encode_cursor(
                 {
                     "kind": "task",
@@ -221,6 +216,6 @@ class ScheduleQueryService:
                 }
             )
         return SchedulePage(
-            items=[TaskItemView.from_domain(task_item_from_row(row)) for row in page_rows],
+            items=[TaskItemView.from_domain(task) for task in page_tasks],
             next_cursor=next_cursor,
         )

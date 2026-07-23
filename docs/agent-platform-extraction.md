@@ -98,6 +98,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | ORM-independent idempotency record, validation, cleanup, and rollback | Complete; Dayboard application code no longer reads `IdempotencyKeyRow` |
 | Concurrent Run-event sequence allocation | Complete; the PostgreSQL adapter serializes allocation by locking the parent Run |
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
+| Dayboard Scheduling Unit of Work and ORM-independent application services | Complete; schedule writes and Reminder Outbox replacement commit atomically at API/Agent boundaries |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
@@ -120,6 +121,9 @@ Run transition
 
 interaction resolution
   compare-and-consume interaction version + continuation Run/message creation
+
+Dayboard schedule mutation
+  calendar/task CAS write + pending Reminder Outbox cancellation/replacement
 ```
 
 Agent execution remains outside a database transaction. Each durable checkpoint above uses a short

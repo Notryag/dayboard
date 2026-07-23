@@ -24,12 +24,12 @@ class ReminderDeliveryRepository:
         scheduled_for: datetime | None,
         payload: dict[str, object] | None = None,
         channel: str = "in_app",
-    ) -> ReminderDeliveryRow | None:
+    ) -> None:
         await self.cancel_active(
             context, source_type=source_type, source_id=source_id, channel=channel
         )
         if scheduled_for is None or payload is None:
-            return None
+            return
         row = ReminderDeliveryRow(
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
@@ -42,7 +42,6 @@ class ReminderDeliveryRepository:
         )
         self.session.add(row)
         await self.session.flush()
-        return row
 
     async def cancel_active(
         self,

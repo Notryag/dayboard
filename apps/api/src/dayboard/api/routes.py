@@ -34,15 +34,17 @@ from agent_platform.core import (
     IdempotencyConflictError,
     InteractionConflictError,
 )
-from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
     SchedulePage,
-    ScheduleQueryService,
     TaskItemView,
+)
+from dayboard.app.scheduling_services import (
+    build_schedule_query_service,
+    build_scheduling_services,
 )
 from dayboard.app.platform_services import (
     build_conversation_service,
@@ -59,6 +61,7 @@ from agent_platform.core import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery, ReminderInboxItem
 from dayboard.domain.tasks import TaskStatus
+from dayboard.domain.calendar import CalendarTimingKind
 from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.integrations.audio_probe import (
     AudioMetadataProbe,
@@ -109,9 +112,17 @@ class CalendarEntryUpdateRequest(ScheduleMutationRequest):
     @model_validator(mode="after")
     def validate_timing(self) -> CalendarEntryUpdateRequest:
         if self.timing_kind == "anytime":
-            if self.scheduled_date is None or self.start_time is not None or self.duration_minutes is not None:
+            if (
+                self.scheduled_date is None
+                or self.start_time is not None
+                or self.duration_minutes is not None
+            ):
                 raise ValueError("anytime entries require only scheduled_date")
-        elif self.start_time is None or self.duration_minutes is None or self.scheduled_date is not None:
+        elif (
+            self.start_time is None
+            or self.duration_minutes is None
+            or self.scheduled_date is not None
+        ):
             raise ValueError("timed entries require start_time and duration_minutes")
         return self
 
@@ -148,9 +159,7 @@ def _terminal_stream_event(
         "cancelled": "run_cancelled",
     }.get(run.status.value)
     return (
-        (event_type, {"content": run.result_message, "parts": parts or []})
-        if event_type
-        else None
+        (event_type, {"content": run.result_message, "parts": parts or []}) if event_type else None
     )
 
 
@@ -286,7 +295,7 @@ async def list_calendar_entries(
         )
     _validate_aware_range(from_time, to_time, "from", "to")
     try:
-        return await ScheduleQueryService(session).list_calendar_entries(
+        return await build_schedule_query_service(session).list_calendar_entries(
             tenant_context,
             start_time=from_time,
             end_time=to_time,
@@ -338,7 +347,7 @@ async def list_task_items(
     _validate_aware_range(due_from, due_to, "due_from", "due_to")
     resolved_status = None if task_status == "all" else TaskStatus(task_status)
     try:
-        return await ScheduleQueryService(session).list_task_items(
+        return await build_schedule_query_service(session).list_task_items(
             tenant_context,
             status=resolved_status,
             due_kind=due_kind,
@@ -358,7 +367,8 @@ async def cancel_calendar_entry_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> CalendarEntryView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_calendar_entry(tenant_context, entry_id)
     if current is None:
         raise ApiProblem(
@@ -377,6 +387,7 @@ async def cancel_calendar_entry_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Calendar entry changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return CalendarEntryView.from_domain(entry)
 
 
@@ -387,7 +398,8 @@ async def complete_calendar_entry_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> CalendarEntryView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_calendar_entry(tenant_context, entry_id)
     if current is None:
         raise ApiProblem(
@@ -408,6 +420,7 @@ async def complete_calendar_entry_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Calendar entry changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return CalendarEntryView.from_domain(entry)
 
 
@@ -418,7 +431,8 @@ async def reopen_calendar_entry_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> CalendarEntryView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_calendar_entry(tenant_context, entry_id)
     if current is None:
         raise ApiProblem(
@@ -439,6 +453,7 @@ async def reopen_calendar_entry_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Calendar entry changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return CalendarEntryView.from_domain(entry)
 
 
@@ -449,7 +464,8 @@ async def update_calendar_entry_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> CalendarEntryView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_calendar_entry(tenant_context, entry_id)
     if current is None:
         raise ApiProblem(
@@ -461,7 +477,7 @@ async def update_calendar_entry_from_ui(
         tenant_context,
         entry_id=entry_id,
         title=body.title,
-        timing_kind=body.timing_kind,
+        timing_kind=CalendarTimingKind(body.timing_kind),
         scheduled_date=body.scheduled_date,
         start_time=body.start_time,
         end_time=(
@@ -477,6 +493,7 @@ async def update_calendar_entry_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Calendar entry changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return CalendarEntryView.from_domain(entry)
 
 
@@ -487,7 +504,8 @@ async def _set_task_status_from_ui(
     session: AsyncSession,
     tenant_context: TenantContext,
 ) -> TaskItemView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_task_item(tenant_context, task_id)
     if current is None:
         raise ApiProblem(
@@ -509,6 +527,7 @@ async def _set_task_status_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Task item changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return TaskItemView.from_domain(task)
 
 
@@ -535,7 +554,8 @@ async def reopen_task_item_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> TaskItemView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_task_item(tenant_context, task_id)
     if current is None:
         raise ApiProblem(
@@ -563,6 +583,7 @@ async def reopen_task_item_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Task item changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return TaskItemView.from_domain(task)
 
 
@@ -573,7 +594,8 @@ async def update_task_item_from_ui(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> TaskItemView:
-    service = SchedulingService(session)
+    scope = build_scheduling_services(session)
+    service = scope.scheduling
     current = await service.get_task_item(tenant_context, task_id)
     if current is None:
         raise ApiProblem(
@@ -594,6 +616,7 @@ async def update_task_item_from_ui(
             code="SCHEDULE_ITEM_CONFLICT",
             message="Task item changed before this operation",
         )
+    await scope.unit_of_work.commit()
     return TaskItemView.from_domain(task)
 
 
@@ -1041,9 +1064,7 @@ async def cancel_run(
     )
     if transitioned:
         conversations = platform.conversations
-        existing_message = await conversations.get_assistant_message_for_run(
-            tenant_context, run.id
-        )
+        existing_message = await conversations.get_assistant_message_for_run(tenant_context, run.id)
         parts = dayboard_presentation_parts(
             existing_message.presentation if existing_message is not None else None
         )
@@ -1132,10 +1153,7 @@ async def stream_run_events(
         terminal = await terminal_event(run)
         if terminal is not None:
             event_type, data = terminal
-            yield (
-                f"event: {event_type}\n"
-                f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-            )
+            yield (f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n")
             return
 
         async for entry in stream_bridge.subscribe(
@@ -1150,10 +1168,7 @@ async def stream_run_events(
                 terminal = await terminal_event(latest) if latest is not None else None
                 if terminal is not None:
                     event_type, data = terminal
-                    yield (
-                        f"event: {event_type}\n"
-                        f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-                    )
+                    yield (f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n")
                     return
                 yield ": keep-alive\n\n"
                 continue

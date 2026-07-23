@@ -58,6 +58,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a product-neutral Platform Run execution coordinator with atomic terminal persistence,
   a Dayboard-owned North driver and result projector, database-authoritative `run_id`-only jobs, and
   no superseded execution compatibility path.
+- Added a product-owned Scheduling Unit of Work: application services now consume domain store
+  ports, SQLAlchemy repositories return domain objects, and calendar/task changes commit atomically
+  with Reminder Outbox replacement at the API or Agent boundary.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.

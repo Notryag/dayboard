@@ -7,9 +7,14 @@ from zoneinfo import ZoneInfo
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.scheduling import SchedulingService
+from dayboard.app.scheduling_services import build_scheduling_service
 from agent_platform.core import TenantContext
-from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind, Reminder
+from dayboard.domain.calendar import (
+    CalendarEntry,
+    CalendarEntryCreate,
+    CalendarTimingKind,
+    Reminder,
+)
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
@@ -31,14 +36,19 @@ class CreateCalendarEntryInput(BaseModel):
             raise ValueError(
                 "anchor_entry_id and expected_anchor_row_version must be provided together"
             )
-        if sum(
-            value is not None
-            for value in (self.scheduled_date, self.start_time, self.anchor_entry_id)
-        ) != 1:
+        if (
+            sum(
+                value is not None
+                for value in (self.scheduled_date, self.start_time, self.anchor_entry_id)
+            )
+            != 1
+        ):
             raise ValueError(
                 "provide exactly one of scheduled_date, start_time, or anchor_entry_id"
             )
-        if self.scheduled_date is not None and (self.end_time is not None or self.reminder is not None):
+        if self.scheduled_date is not None and (
+            self.end_time is not None or self.reminder is not None
+        ):
             raise ValueError("date-only entries cannot have end_time or reminder")
         if anchor_mode and self.end_time is not None:
             raise ValueError("anchor-based entries cannot provide end_time")
@@ -165,7 +175,7 @@ async def create_calendar_entry(
     created_by_run_id: UUID | None = None,
     operation_key: str | None = None,
 ) -> CalendarEntryToolResult:
-    service = SchedulingService(session)
+    service = build_scheduling_service(session)
     if created_by_run_id is not None:
         existing = await service.get_calendar_entry_created_by_run(
             context, created_by_run_id, operation_key
@@ -246,7 +256,7 @@ async def search_calendar_entries(
     data: SearchCalendarEntriesInput,
 ) -> list[CalendarEntry]:
     return list(
-        await SchedulingService(session).search_calendar_entries(
+        await build_scheduling_service(session).search_calendar_entries(
             context,
             start_time=data.start_time,
             end_time=data.end_time,
@@ -263,7 +273,7 @@ async def reschedule_calendar_entry(
     updated_by_run_id: UUID,
     operation_key: str,
 ) -> CalendarEntryRescheduleResult:
-    service = SchedulingService(session)
+    service = build_scheduling_service(session)
     repeated = await service.get_calendar_entry_updated_by_operation(
         context, updated_by_run_id, operation_key
     )
@@ -314,7 +324,9 @@ async def reschedule_calendar_entry(
             )
         duration = timedelta(hours=1)
     else:
-        duration = existing.end_time - existing.start_time if existing.end_time else timedelta(hours=1)
+        duration = (
+            existing.end_time - existing.start_time if existing.end_time else timedelta(hours=1)
+        )
     if data.new_start_time is not None:
         resolved_start_time = data.new_start_time
     elif data.new_date is not None:
@@ -333,10 +345,7 @@ async def reschedule_calendar_entry(
     )
     if resolved_end_time <= resolved_start_time:
         raise ValueError("new_end_time must be after the resolved start time")
-    if (
-        resolved_start_time == existing.start_time
-        and resolved_end_time == existing.end_time
-    ):
+    if resolved_start_time == existing.start_time and resolved_end_time == existing.end_time:
         raise ValueError("calendar entry already has the requested time range")
     conflicts = await service.list_calendar_conflicts(
         context,
@@ -383,7 +392,7 @@ async def cancel_calendar_entry(
     cancelled_by_run_id: UUID,
     operation_key: str,
 ) -> CalendarEntryCancellationResult:
-    service = SchedulingService(session)
+    service = build_scheduling_service(session)
     repeated = await service.get_calendar_entry_cancelled_by_operation(
         context, cancelled_by_run_id, operation_key
     )
@@ -393,9 +402,7 @@ async def cancel_calendar_entry(
             summary=f"{repeated.title} is already cancelled",
         )
 
-    existing = await service.get_calendar_entry_including_cancelled(
-        context, data.calendar_entry_id
-    )
+    existing = await service.get_calendar_entry_including_cancelled(context, data.calendar_entry_id)
     if existing is None:
         raise LookupError("Calendar entry not found")
     if existing.cancelled_at is not None:
@@ -412,9 +419,7 @@ async def cancel_calendar_entry(
         cancellation_reason=data.reason,
     )
     if cancelled is None:
-        current = await service.get_calendar_entry_including_cancelled(
-            context, existing.id
-        )
+        current = await service.get_calendar_entry_including_cancelled(context, existing.id)
         if current is not None and current.cancelled_at is not None:
             return CalendarEntryCancellationResult(
                 calendar_entry=current,
@@ -437,7 +442,7 @@ async def create_task_item(
     created_by_run_id: UUID | None = None,
     operation_key: str | None = None,
 ) -> TaskItemToolResult:
-    service = SchedulingService(session)
+    service = build_scheduling_service(session)
     if created_by_run_id is not None:
         existing = await service.get_task_item_created_by_run(
             context, created_by_run_id, operation_key
@@ -460,7 +465,9 @@ async def create_task_item(
         ),
     )
     return TaskItemToolResult(
-        summary=task.title if task.due_at is None else f"{task.title} due {task.due_at.isoformat()}",
+        summary=task.title
+        if task.due_at is None
+        else f"{task.title} due {task.due_at.isoformat()}",
         task_item=task,
     )
 
@@ -471,7 +478,7 @@ async def search_task_items(
     data: SearchTaskItemsInput,
 ) -> list[TaskItem]:
     return list(
-        await SchedulingService(session).search_task_items(
+        await build_scheduling_service(session).search_task_items(
             context, title_query=data.title_query, status=data.status
         )
     )
@@ -485,7 +492,7 @@ async def update_task_item(
     updated_by_run_id: UUID,
     operation_key: str,
 ) -> TaskItemUpdateResult:
-    service = SchedulingService(session)
+    service = build_scheduling_service(session)
     repeated = await service.get_task_item_updated_by_operation(
         context, updated_by_run_id, operation_key
     )

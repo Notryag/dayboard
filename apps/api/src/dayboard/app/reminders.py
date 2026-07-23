@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_platform.core import TenantContext
 from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow, TaskItemRow
 from dayboard.db.reminder_repositories import ReminderDeliveryRepository
-from dayboard.domain.calendar import Reminder
 from dayboard.domain.reminders import (
     ReminderDelivery,
     ReminderDeliveryStatus,
@@ -28,75 +27,6 @@ class ReminderService:
         self.session = session
         self.deliveries = ReminderDeliveryRepository(session)
 
-    async def sync_calendar_entry(self, context: TenantContext, row: CalendarEntryRow) -> None:
-        now = datetime.now(UTC)
-        active = (
-            row.start_time is not None
-            and row.start_time > now
-            and row.completed_at is None
-            and row.deleted_at is None
-        )
-        if not active:
-            await self.deliveries.replace_pending(
-                context,
-                source_type=ReminderSourceType.calendar_entry,
-                source_id=row.id,
-                scheduled_for=None,
-                payload=None,
-            )
-            return
-        assert row.start_time is not None
-        reminder = Reminder.model_validate(row.reminder) if row.reminder else None
-        scheduled_for = row.start_time - reminder.as_timedelta() if reminder else None
-        payload = (
-            {
-                "title": row.title,
-                "source_type": ReminderSourceType.calendar_entry.value,
-                "source_id": str(row.id),
-                "occurs_at": row.start_time.isoformat(),
-                "timezone": row.timezone,
-            }
-            if reminder
-            else None
-        )
-        await self.deliveries.replace_pending(
-            context,
-            source_type=ReminderSourceType.calendar_entry,
-            source_id=row.id,
-            scheduled_for=scheduled_for,
-            payload=payload,
-        )
-
-    async def sync_task_item(self, context: TenantContext, row: TaskItemRow) -> None:
-        reminder = Reminder.model_validate(row.reminder) if row.reminder else None
-        active = reminder is not None and row.due_at is not None and row.status == "open"
-        scheduled_for = row.due_at - reminder.as_timedelta() if active else None
-        payload = (
-            {
-                "title": row.title,
-                "source_type": ReminderSourceType.task_item.value,
-                "source_id": str(row.id),
-                "occurs_at": row.due_at.isoformat(),
-                "timezone": row.timezone,
-            }
-            if active
-            else None
-        )
-        await self.deliveries.replace_pending(
-            context,
-            source_type=ReminderSourceType.task_item,
-            source_id=row.id,
-            scheduled_for=scheduled_for,
-            payload=payload,
-        )
-
-    async def cancel_calendar_entry(self, context: TenantContext, row: CalendarEntryRow) -> None:
-        await self.deliveries.cancel_active(
-            context,
-            source_type=ReminderSourceType.calendar_entry,
-            source_id=row.id,
-        )
-
     async def list_for_user(self, context: TenantContext) -> list[ReminderDelivery]:
         return [
             reminder_delivery_from_row(row) for row in await self.deliveries.list_for_user(context)
@@ -114,26 +44,34 @@ class ReminderService:
             for row in deliveries
             if row.source_type == ReminderSourceType.task_item.value
         }
-        calendars = {
-            row.id: row
-            for row in await self.session.scalars(
-                select(CalendarEntryRow).where(
-                    CalendarEntryRow.tenant_id == context.tenant_id,
-                    CalendarEntryRow.owner_user_id == context.user_id,
-                    CalendarEntryRow.id.in_(calendar_ids),
+        calendars = (
+            {
+                row.id: row
+                for row in await self.session.scalars(
+                    select(CalendarEntryRow).where(
+                        CalendarEntryRow.tenant_id == context.tenant_id,
+                        CalendarEntryRow.owner_user_id == context.user_id,
+                        CalendarEntryRow.id.in_(calendar_ids),
+                    )
                 )
-            )
-        } if calendar_ids else {}
-        tasks = {
-            row.id: row
-            for row in await self.session.scalars(
-                select(TaskItemRow).where(
-                    TaskItemRow.tenant_id == context.tenant_id,
-                    TaskItemRow.owner_user_id == context.user_id,
-                    TaskItemRow.id.in_(task_ids),
+            }
+            if calendar_ids
+            else {}
+        )
+        tasks = (
+            {
+                row.id: row
+                for row in await self.session.scalars(
+                    select(TaskItemRow).where(
+                        TaskItemRow.tenant_id == context.tenant_id,
+                        TaskItemRow.owner_user_id == context.user_id,
+                        TaskItemRow.id.in_(task_ids),
+                    )
                 )
-            )
-        } if task_ids else {}
+            }
+            if task_ids
+            else {}
+        )
 
         items: list[ReminderInboxItem] = []
         for delivery in deliveries:
@@ -213,25 +151,33 @@ class ReminderService:
         task_ids = {
             row.source_id for row in rows if row.source_type == ReminderSourceType.task_item.value
         }
-        active_calendar_ids = set(
-            await self.session.scalars(
-                select(CalendarEntryRow.id).where(
-                    CalendarEntryRow.id.in_(calendar_ids),
-                    CalendarEntryRow.start_time > now,
-                    CalendarEntryRow.completed_at.is_(None),
-                    CalendarEntryRow.deleted_at.is_(None),
+        active_calendar_ids = (
+            set(
+                await self.session.scalars(
+                    select(CalendarEntryRow.id).where(
+                        CalendarEntryRow.id.in_(calendar_ids),
+                        CalendarEntryRow.start_time > now,
+                        CalendarEntryRow.completed_at.is_(None),
+                        CalendarEntryRow.deleted_at.is_(None),
+                    )
                 )
             )
-        ) if calendar_ids else set()
-        active_task_ids = set(
-            await self.session.scalars(
-                select(TaskItemRow.id).where(
-                    TaskItemRow.id.in_(task_ids),
-                    TaskItemRow.status == "open",
-                    TaskItemRow.deleted_at.is_(None),
+            if calendar_ids
+            else set()
+        )
+        active_task_ids = (
+            set(
+                await self.session.scalars(
+                    select(TaskItemRow.id).where(
+                        TaskItemRow.id.in_(task_ids),
+                        TaskItemRow.status == "open",
+                        TaskItemRow.deleted_at.is_(None),
+                    )
                 )
             )
-        ) if task_ids else set()
+            if task_ids
+            else set()
+        )
         delivered_ids: list[str] = []
         for row in rows:
             source_is_active = (

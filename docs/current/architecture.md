@@ -96,6 +96,15 @@ adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and
 operations. Dayboard's clarification service owns scheduling candidate validation, local-time
 projection, public state filtering, and user-facing choice text.
 
+Dayboard scheduling has a separate product-owned Unit of Work. `SchedulingService` and
+`ScheduleQueryService` depend only on scheduling store ports and domain objects; SQLAlchemy row
+mapping stays in `dayboard.db`. Calendar/task writes and the corresponding Reminder Outbox
+replacement share one `AsyncSession` through `SqlAlchemySchedulingUnitOfWork`. The application
+service never commits. The API commits after a complete direct mutation, while the serialized Agent
+tool boundary commits only after its receipt and presentation artifact have been built; either
+boundary rolls the whole transaction back on failure. There is no `SchedulingService(session)`
+compatibility constructor.
+
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
 submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
@@ -140,10 +149,14 @@ SSE receives only projected product status and never exposes the diagnostic exte
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
-workers, Agent tools, North, FastAPI, or SQLAlchemy.
+workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling application service, query
+service, and ports are additionally prohibited from importing Dayboard persistence adapters or
+framework/runtime layers; only the explicit composition module connects them.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
-`expected_row_version`; retryable Agent writes also use server-derived operation identities.
+`expected_row_version`; retryable Agent writes also use server-derived operation identities. A
+schedule mutation and its pending-reminder cancellation/replacement are one transaction, so neither
+can survive without the other.
 
 ## Agent Boundary
 

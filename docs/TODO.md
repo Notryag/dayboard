@@ -26,6 +26,21 @@ The Event Extension Envelope and Run execution coordination slices are complete.
 squashing remains deferred until every persistent environment has reached Alembic revision
 `202607230007` or later.
 
+## Architecture Hardening
+
+- [x] Introduce a Dayboard-owned Scheduling Unit of Work with storage-neutral calendar, task, and
+  reminder scheduling ports. Return domain objects from repositories, keep ORM mapping in `db`, and
+  remove the `SchedulingService(session)` path.
+- [x] Move scheduling transaction ownership to the outer API and serialized Agent tool boundaries.
+  Calendar/task writes and Reminder Outbox replacement now commit or roll back together; focused
+  tests cover hidden-commit prevention and reminder-failure rollback.
+- [ ] Move Reminder inbox/delivery lifecycle and Voice persistence behind explicit application
+  ports in separate vertical slices. Do not combine them into Scheduling merely because they share
+  the current database.
+- [ ] Continue splitting remaining application modules that directly construct sessions or concrete
+  repositories, prioritizing account recovery and provider usage by correctness risk rather than
+  moving files mechanically.
+
 ## Token Efficiency
 
 - [x] Implement compact ToolMessage receipts, validated presentation artifacts, Run-aware

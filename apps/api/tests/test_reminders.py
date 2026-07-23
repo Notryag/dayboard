@@ -9,12 +9,12 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.reminders import ReminderService
-from dayboard.app.scheduling import SchedulingService
+from dayboard.app.scheduling_services import build_scheduling_service
 from agent_platform.core import TenantContext
 from dayboard.domain.calendar import CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.reminders import ReminderDeliveryStatus, ReminderSourceStatus
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
-from dayboard.db.models import ReminderDeliveryRow
+from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow
 
 
 def test_reminder_accepts_zero_and_normalizes_short_fixed_duration() -> None:
@@ -30,7 +30,7 @@ async def test_calendar_reminder_reschedule_replaces_pending_delivery(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     start = datetime.now(UTC) + timedelta(days=2)
     entry = await scheduling.create_calendar_entry(
         tenant_context,
@@ -51,10 +51,10 @@ async def test_calendar_reminder_reschedule_replaces_pending_delivery(
     moved_start = start + timedelta(days=1)
     moved = await scheduling.reschedule_calendar_entry(
         tenant_context,
-            entry_id=entry.id,
-            timing_kind=CalendarTimingKind.timed,
-            scheduled_date=None,
-            start_time=moved_start,
+        entry_id=entry.id,
+        timing_kind=CalendarTimingKind.timed,
+        scheduled_date=None,
+        start_time=moved_start,
         end_time=moved_start + timedelta(hours=1),
         expected_row_version=entry.row_version,
         updated_by_run_id=uuid4(),
@@ -73,7 +73,7 @@ async def test_task_completion_cancels_pending_reminder(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     task = await scheduling.create_task_item(
         tenant_context,
         TaskItemCreate(
@@ -105,7 +105,7 @@ async def test_due_in_app_reminder_is_delivered_once_and_tenant_scoped(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     start = datetime.now(UTC) + timedelta(minutes=5)
     await scheduling.create_calendar_entry(
         tenant_context,
@@ -142,7 +142,7 @@ async def test_zero_offset_reminder_is_scheduled_at_calendar_start(
     tenant_context: TenantContext,
 ) -> None:
     start = datetime.now(UTC) + timedelta(hours=2)
-    await SchedulingService(db_session).create_calendar_entry(
+    await build_scheduling_service(db_session).create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="产品会",
@@ -162,7 +162,7 @@ async def test_past_calendar_entry_does_not_enqueue_a_late_reminder(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    await SchedulingService(db_session).create_calendar_entry(
+    await build_scheduling_service(db_session).create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="已经结束的日程",
@@ -180,7 +180,7 @@ async def test_future_calendar_entry_with_missed_offset_reminds_immediately(
     tenant_context: TenantContext,
 ) -> None:
     start = datetime.now(UTC) + timedelta(minutes=5)
-    await SchedulingService(db_session).create_calendar_entry(
+    await build_scheduling_service(db_session).create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="即将开始的日程",
@@ -198,7 +198,7 @@ async def test_worker_recovery_expires_reminder_after_calendar_start(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     entry = await scheduling.create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
@@ -208,7 +208,7 @@ async def test_worker_recovery_expires_reminder_after_calendar_start(
             reminder=Reminder(offset="PT2H"),
         ),
     )
-    row = await scheduling.calendar_entries.get(tenant_context, entry.id)
+    row = await db_session.get(CalendarEntryRow, entry.id)
     assert row is not None
     row.start_time = datetime.now(UTC) - timedelta(minutes=1)
     await db_session.commit()
@@ -222,7 +222,7 @@ async def test_reminder_inbox_uses_current_source_time_and_hides_pending_queue(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     start = datetime.now(UTC) + timedelta(minutes=5)
     entry = await scheduling.create_calendar_entry(
         tenant_context,
@@ -265,7 +265,7 @@ async def test_reminder_inbox_marks_deleted_source_unavailable(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    scheduling = SchedulingService(db_session)
+    scheduling = build_scheduling_service(db_session)
     start = datetime.now(UTC) + timedelta(minutes=5)
     entry = await scheduling.create_calendar_entry(
         tenant_context,
@@ -277,7 +277,7 @@ async def test_reminder_inbox_marks_deleted_source_unavailable(
         ),
     )
     await ReminderService(db_session).deliver_due_in_app()
-    row = await scheduling.calendar_entries.get(tenant_context, entry.id)
+    row = await db_session.get(CalendarEntryRow, entry.id)
     assert row is not None
     row.deleted_at = datetime.now(UTC)
     await db_session.commit()
@@ -293,7 +293,7 @@ async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant
     tenant_context: TenantContext,
 ) -> None:
     start = datetime.now(UTC) + timedelta(minutes=1)
-    await SchedulingService(db_session).create_calendar_entry(
+    await build_scheduling_service(db_session).create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="提醒中心验收",

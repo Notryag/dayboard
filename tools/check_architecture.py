@@ -16,6 +16,7 @@ class LayerRule:
     name: str
     source_root: Path
     forbidden_import_prefixes: tuple[str, ...]
+    included_relative_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -29,11 +30,7 @@ class Violation:
 RULES = (
     LayerRule(
         name="agent_platform",
-        source_root=REPOSITORY_ROOT
-        / "packages"
-        / "agent-platform"
-        / "src"
-        / "agent_platform",
+        source_root=REPOSITORY_ROOT / "packages" / "agent-platform" / "src" / "agent_platform",
         forbidden_import_prefixes=("dayboard",),
     ),
     LayerRule(
@@ -108,6 +105,28 @@ RULES = (
             "sqlalchemy",
         ),
     ),
+    LayerRule(
+        name="dayboard.scheduling_application",
+        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
+        forbidden_import_prefixes=(
+            "dayboard.agent",
+            "dayboard.api",
+            "dayboard.db",
+            "dayboard.integrations",
+            "dayboard.tools",
+            "dayboard.workers",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+        included_relative_paths=(
+            "schedule_queries.py",
+            "scheduling.py",
+            "scheduling_ports.py",
+        ),
+    ),
 )
 
 
@@ -127,7 +146,16 @@ def find_violations(rule: LayerRule) -> list[Violation]:
         raise FileNotFoundError(f"architecture source root is missing: {rule.source_root}")
 
     violations: list[Violation] = []
-    for path in sorted(rule.source_root.rglob("*.py")):
+    paths = (
+        [rule.source_root / relative_path for relative_path in rule.included_relative_paths]
+        if rule.included_relative_paths
+        else list(rule.source_root.rglob("*.py"))
+    )
+    missing_paths = [path for path in paths if not path.is_file()]
+    if missing_paths:
+        missing = ", ".join(str(path) for path in missing_paths)
+        raise FileNotFoundError(f"architecture source file is missing: {missing}")
+    for path in sorted(paths):
         for line, imported_module in imported_modules(path):
             if any(
                 imported_module == prefix or imported_module.startswith(f"{prefix}.")
