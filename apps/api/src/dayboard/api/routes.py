@@ -21,8 +21,8 @@ from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
-from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
-from agent_platform.core import ActiveThreadRunError
+from dayboard.app.commands import CommandService, get_command_service
+from agent_platform.core import ActiveThreadRunError, IdempotencyConflictError
 from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
@@ -33,7 +33,11 @@ from dayboard.app.schedule_queries import (
     ScheduleQueryService,
     TaskItemView,
 )
-from dayboard.app.platform_services import build_conversation_service, build_run_service
+from dayboard.app.platform_services import (
+    build_conversation_service,
+    build_platform_services,
+    build_run_service,
+)
 from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
@@ -664,11 +668,12 @@ async def create_thread(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationThread:
-    thread = await build_conversation_service(session).create_thread(
+    platform = build_platform_services(session)
+    thread = await platform.conversations.create_thread(
         tenant_context,
         title=body.title,
     )
-    await session.commit()
+    await platform.unit_of_work.commit()
     return thread
 
 
@@ -677,8 +682,9 @@ async def get_or_create_primary_conversation(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationThread:
-    thread = await build_conversation_service(session).get_or_create_primary_thread(tenant_context)
-    await session.commit()
+    platform = build_platform_services(session)
+    thread = await platform.conversations.get_or_create_primary_thread(tenant_context)
+    await platform.unit_of_work.commit()
     return thread
 
 
@@ -997,7 +1003,8 @@ async def cancel_run(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun:
-    service = build_run_service(session)
+    platform = build_platform_services(session)
+    service = platform.runs
     run = await service.get_run_for_update(tenant_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
@@ -1007,7 +1014,7 @@ async def cancel_run(
         event_content="请求已取消",
     )
     if transitioned:
-        conversations = build_conversation_service(session)
+        conversations = platform.conversations
         existing_message = await conversations.get_assistant_message_for_run(
             tenant_context, run.id
         )
@@ -1023,7 +1030,7 @@ async def cancel_run(
             content=run.result_message or "请求已取消",
             message_metadata={"status": "cancelled", "parts": parts},
         )
-    await session.commit()
+    await platform.unit_of_work.commit()
     if transitioned:
         try:
             await stream_bridge.publish(

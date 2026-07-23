@@ -8,6 +8,11 @@ imports these directly; its former duplicate domain and service modules have bee
 supplies PostgreSQL stores through its composition root and keeps scheduling clarification policy in
 its product layer.
 
+Command submission uses an explicit Unit of Work to persist an idempotency claim, Thread, Run,
+`run_created` event, and user message atomically. Idempotency records and validation remain
+persistence-neutral; the active PostgreSQL implementation is supplied by Dayboard until the adapter
+contract is ready to move into this package.
+
 The package is internally divided by dependency direction:
 
 ```text

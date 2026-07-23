@@ -89,28 +89,22 @@ Dayboard Pydantic model, SQLAlchemy row, tool name, prompt, or presentation type
 
 ## Architecture Review Findings
 
-The first extraction established the correct package direction, but it is not the final application
-boundary. The following gaps must be closed before moving more capabilities:
+The first extraction established the correct package direction. The review is tracked as current
+status rather than retaining stale findings as if they were still unresolved:
 
-1. `AgentRunService` updates a Run and appends its event through separate Store calls while Dayboard
-   callers currently control `commit()`. The shared Session makes today's PostgreSQL path atomic,
-   but the platform contract does not express or guarantee that invariant.
-2. `ConversationService` is intentionally thin, while primary-thread uniqueness, pagination, and
-   idempotent message persistence remain implemented in Dayboard PostgreSQL repositories. This is a
-   valid intermediate state, not yet a reusable persistence implementation.
-3. `message_metadata`, `state_data`, and `event_metadata` are currently unversioned mappings. They
-   are storage shapes, not an acceptable permanent cross-product contract.
-4. Command submission reads `IdempotencyKeyRow` directly, leaking an ORM model into the application
-   use case.
-5. Clarification validates a previously read state version but does not atomically consume that
-   version. Concurrent responses from two clients can race.
-6. `ConversationThread.status` is a free string and currently conflates lifecycle state with primary
-   versus isolated conversation role.
-7. The dependency check prevents only `agent_platform -> dayboard`; it does not yet enforce
-   framework-free Platform Core or Dayboard's internal dependency direction.
+| Finding | Status |
+| --- | --- |
+| Explicit Unit of Work for Conversation, Run, events, and idempotency | Complete; command submission and Run checkpoints use the shared boundary |
+| ORM-independent idempotency record, validation, cleanup, and rollback | Complete; Dayboard application code no longer reads `IdempotencyKeyRow` |
+| Concurrent Run-event sequence allocation | Complete; the PostgreSQL adapter serializes allocation by locking the parent Run |
+| Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
+| Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
+| Versioned presentation and event extension envelopes | Pending; current metadata remains unversioned mappings |
+| Atomic Interaction consumption by expected state version | Pending; concurrent clarification responses can still race |
+| Explicit Conversation Thread lifecycle and primary-role contracts | Pending; current `status` remains a free string |
 
-These findings do not require replacing the three-layer model. They define the hardening work needed
-to make that model robust rather than merely moving files between packages.
+The remaining findings do not require replacing the three-layer model. They define the hardening
+work needed before moving additional capabilities.
 
 ## Required Consistency Boundaries
 
@@ -198,6 +192,7 @@ A capability is considered extracted only when:
 5. Correct dependency documentation and record the architecture hardening gaps. Complete.
 6. Add Platform Core and Dayboard Domain dependency checks. Complete.
 7. Add Unit of Work and platform idempotency contracts; remove ORM records from command use cases.
+   Complete.
 8. Add versioned presentation envelopes and atomically resolved Interaction contracts.
 9. Split generic command submission/Run coordination from Dayboard Agent and result projection.
 10. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active

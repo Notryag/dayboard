@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from hashlib import sha256
 import asyncio
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import Depends
 from langchain_core.messages import HumanMessage, ToolMessage
@@ -23,15 +21,16 @@ from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetExceeded
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
-from agent_platform.application import ConversationService
+from agent_platform.application import AgentRunService, CommandSubmissionService, ConversationService
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.platform_services import build_conversation_service, build_run_service
+from dayboard.app.platform_services import (
+    build_platform_services,
+)
 from dayboard.config import Settings, get_settings
-from agent_platform.core import TenantContext
-from agent_platform.application import AgentRunService
+from agent_platform.core import CommandSubmission, TenantContext
+from agent_platform.ports import PlatformUnitOfWork
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
-from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal, get_session
 from agent_platform.core import AgentRunStatus
 from agent_platform.core import ConversationRole
@@ -45,18 +44,6 @@ USER_VISIBLE_RUNTIME_EVENTS = frozenset(
         "tool_call_error",
     }
 )
-
-
-class IdempotencyConflictError(ValueError):
-    pass
-
-
-@dataclass(frozen=True, slots=True)
-class CommandRunCreation:
-    run_id: UUID
-    status: AgentRunStatus
-    created: bool
-    thread_id: UUID
 
 
 def get_command_service(session: AsyncSession = Depends(get_session)) -> CommandService:
@@ -74,6 +61,8 @@ class CommandService:
         budget_guard: ProviderBudgetGuard | None = None,
         checkpointer=None,
         conversation_service: ConversationService | None = None,
+        run_service: AgentRunService | None = None,
+        submission_service: CommandSubmissionService | None = None,
         usage_session_factory=SessionLocal,
         runtime_event_session_factory=SessionLocal,
         stream_bridge: StreamBridge | None = None,
@@ -83,7 +72,11 @@ class CommandService:
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
         self.checkpointer = checkpointer
-        self.conversations = conversation_service or build_conversation_service(session)
+        platform = build_platform_services(session)
+        self.platform_unit_of_work = platform.unit_of_work
+        self.conversations = conversation_service or platform.conversations
+        self.runs = run_service or platform.runs
+        self.submissions = submission_service or platform.submissions
         self.clarifications = ClarificationService(self.conversations)
         self.usage_session_factory = usage_session_factory
         self.runtime_event_session_factory = runtime_event_session_factory
@@ -111,59 +104,29 @@ class CommandService:
         idempotency_key: str | None = None,
         thread_id: UUID | None = None,
         conversation_message: str | None = None,
-    ) -> CommandRunCreation:
-        run_id: UUID | None = None
-        if idempotency_key is not None:
-            request_identity = f"{thread_id or 'new'}:{request.model_dump_json()}"
-            request_hash = sha256(request_identity.encode("utf-8")).hexdigest()
-            record, claimed = await IdempotencyKeyRepository(self.session).claim(
-                context,
-                key=idempotency_key,
-                request_hash=request_hash,
-                run_id=uuid4(),
-            )
-            if not claimed:
-                if record.request_hash != request_hash:
-                    raise IdempotencyConflictError(
-                        "Idempotency-Key was already used for a different request"
-                    )
-                existing = await build_run_service(self.session).get_run(context, record.run_id)
-                if existing is None:
-                    raise RuntimeError("Idempotency key references a missing run")
-                return CommandRunCreation(existing.id, existing.status, False, existing.thread_id)
-            run_id = record.run_id
-        conversations = self.conversations
-        if thread_id is None:
-            thread = await conversations.create_thread(
-                context,
-                title=request.message[:80],
-            )
-            thread_id = thread.id
-        else:
-            await conversations.require_thread(context, thread_id)
-        create_kwargs: dict[str, Any] = {
-            "input_message": request.message,
-            "thread_id": thread_id,
-        }
-        if run_id is not None:
-            create_kwargs["run_id"] = run_id
-        run = await build_run_service(self.session).create_run(context, **create_kwargs)
-        await conversations.append_message(
+    ) -> CommandSubmission:
+        creation = await self.submissions.submit(
             context,
+            input_message=request.message,
             thread_id=thread_id,
-            run_id=run.id,
-            role=ConversationRole.user,
-            content=conversation_message or request.message,
+            thread_title=request.message[:80],
+            conversation_message=conversation_message,
+            idempotency_key=idempotency_key,
+            request_identity=(
+                f"{thread_id or 'new'}:{request.model_dump_json()}"
+                if idempotency_key is not None
+                else None
+            ),
         )
-        await self.session.commit()
         logger.info(
             "dayboard.command.run_queued",
-            run_id=str(run.id),
-            thread_id=str(run.thread_id),
+            run_id=str(creation.run_id),
+            thread_id=str(creation.thread_id),
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
+            created=creation.created,
         )
-        return CommandRunCreation(run.id, AgentRunStatus.queued, True, run.thread_id)
+        return creation
 
     async def execute_command_run(
         self,
@@ -171,7 +134,7 @@ class CommandService:
         request: CommandRequest,
         run_id: UUID,
     ) -> None:
-        runs = build_run_service(self.session)
+        runs = self.runs
         run = await runs.get_run(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
@@ -192,7 +155,7 @@ class CommandService:
             if status == AgentRunStatus.queued:
                 if not await runs.mark_running(context, run):
                     return
-                await self.session.commit()
+                await self.platform_unit_of_work.commit()
             logger.info(
                 "dayboard.command.run_started",
                 run_id=str(run.id),
@@ -244,7 +207,7 @@ class CommandService:
                     content=content,
                     event_metadata=event_metadata,
                 )
-                await self.session.commit()
+                await self.platform_unit_of_work.commit()
                 await self._publish_run_event(
                     run.id,
                     event_type,
@@ -258,7 +221,9 @@ class CommandService:
                     return
                 async with runtime_event_lock:
                     async with self.runtime_event_session_factory() as event_session:
-                        event_runs = build_run_service(event_session)
+                        event_platform = build_platform_services(event_session)
+                        event_unit_of_work = event_platform.unit_of_work
+                        event_runs = event_platform.runs
                         latest = await event_runs.get_run(context, run.id)
                         if (
                             latest is not None
@@ -273,7 +238,7 @@ class CommandService:
                             event_metadata=projected.metadata,
                             category=projected.category,
                         )
-                        await event_session.commit()
+                        await event_unit_of_work.commit()
                 if projected.event_type in USER_VISIBLE_RUNTIME_EVENTS:
                     await self._publish_run_event(
                         run.id,
@@ -291,7 +256,7 @@ class CommandService:
                 if projected.event_type in {"schedule_item_result", "schedule_items_result"}:
                     latest = await runs.get_run_for_update(context, run.id)
                     if latest is None or AgentRunStatus(latest.status) != AgentRunStatus.running:
-                        await self.session.commit()
+                        await self.platform_unit_of_work.commit()
                         raise asyncio.CancelledError()
                     projected_parts = (
                         projected.data.get("parts", [])
@@ -313,7 +278,7 @@ class CommandService:
                             "parts": presentation_parts,
                         },
                     )
-                    await self.session.commit()
+                    await self.platform_unit_of_work.commit()
                 # Live presentation is projected from the canonical bridge event by the API.
 
             async def record_compaction(event: CompactionEvent) -> None:
@@ -322,7 +287,7 @@ class CommandService:
                     run.thread_id,
                     event.summary_text,
                 )
-                await self.session.commit()
+                await self.platform_unit_of_work.commit()
                 logger.info(
                     "dayboard.command.context_compacted",
                     run_id=str(run.id),
@@ -354,7 +319,7 @@ class CommandService:
                             "interaction": pending.state_data.get("interaction"),
                         },
                     ):
-                        await self.session.rollback()
+                        await self.platform_unit_of_work.rollback()
                         raise asyncio.CancelledError()
                     await self.conversations.upsert_assistant_message(
                         context,
@@ -366,7 +331,7 @@ class CommandService:
                             "parts": presentation_parts,
                         },
                     )
-                    await self.session.commit()
+                    await self.platform_unit_of_work.commit()
                     await self._publish_run_event(
                         run.id,
                         "clarification_requested",
@@ -387,7 +352,7 @@ class CommandService:
                     result_message=message,
                     event_metadata={"runtime": "north"},
                 ):
-                    await self.session.rollback()
+                    await self.platform_unit_of_work.rollback()
                     raise asyncio.CancelledError()
                 await self.conversations.upsert_assistant_message(
                     context,
@@ -397,7 +362,7 @@ class CommandService:
                     message_metadata={"status": "completed", "parts": presentation_parts},
                 )
                 await self.conversations.clear_pending(context, run.thread_id)
-                await self.session.commit()
+                await self.platform_unit_of_work.commit()
                 await self._publish_run_event(
                     run.id,
                     "run_completed",
@@ -417,7 +382,7 @@ class CommandService:
                 transitioned = await _mark_run_failed(
                     runs,
                     self.conversations,
-                    self.session,
+                    self.platform_unit_of_work,
                     context,
                     run_id,
                     exc,
@@ -475,7 +440,7 @@ class CommandService:
                 transitioned_to_failed = await _mark_run_failed(
                     runs,
                     self.conversations,
-                    self.session,
+                    self.platform_unit_of_work,
                     context,
                     run_id,
                     exc,
@@ -588,7 +553,7 @@ class CommandService:
         run_id: UUID,
         exc: Exception,
     ) -> None:
-        runs = build_run_service(self.session)
+        runs = self.runs
         run = await runs.get_run(context, run_id)
         if run is None:
             raise LookupError(f"Run {run_id} not found")
@@ -599,7 +564,7 @@ class CommandService:
             error_message=_safe_error_message(exc),
         )
         if not transitioned:
-            await self.session.rollback()
+            await self.platform_unit_of_work.rollback()
             return
         await self.conversations.append_message(
             context,
@@ -609,13 +574,13 @@ class CommandService:
             content=_safe_error_message(exc),
             message_metadata={"status": "failed"},
         )
-        await self.session.commit()
+        await self.platform_unit_of_work.commit()
 
 
 async def _mark_run_failed(
     runs: AgentRunService,
     conversations: ConversationService,
-    session: AsyncSession,
+    unit_of_work: PlatformUnitOfWork,
     context: TenantContext,
     run_id: UUID,
     exc: Exception,
@@ -623,7 +588,7 @@ async def _mark_run_failed(
     presentation_parts: list[dict[str, Any]] | None = None,
 ) -> bool:
     try:
-        await session.rollback()
+        await unit_of_work.rollback()
         run = await runs.get_run(context, run_id)
         if run is None:
             return False
@@ -634,7 +599,7 @@ async def _mark_run_failed(
             error_message=_safe_error_message(exc),
         )
         if not transitioned:
-            await session.rollback()
+            await unit_of_work.rollback()
             return False
         await conversations.upsert_assistant_message(
             context,
@@ -646,9 +611,18 @@ async def _mark_run_failed(
                 "parts": presentation_parts or [],
             },
         )
-        await session.commit()
+        await unit_of_work.commit()
         return True
     except Exception:
+        try:
+            await unit_of_work.rollback()
+        except Exception:
+            logger.exception(
+                "dayboard.command.failed_status_rollback_failed",
+                run_id=str(run_id),
+                tenant_id=str(context.tenant_id),
+                user_id=str(context.user_id),
+            )
         logger.exception(
             "dayboard.command.failed_status_update_failed",
             run_id=str(run_id),

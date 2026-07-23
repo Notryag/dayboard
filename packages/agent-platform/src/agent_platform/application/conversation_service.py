@@ -15,23 +15,15 @@ from agent_platform.core.conversations import (
 )
 from agent_platform.core.errors import ConversationNotFoundError
 from agent_platform.core.identity import TenantContext
-from agent_platform.ports.conversations import (
-    ConversationMessageStore,
-    ConversationStateStore,
-    ConversationThreadStore,
-)
+from agent_platform.ports.unit_of_work import ConversationUnitOfWork
 
 
 class ConversationService:
-    def __init__(
-        self,
-        threads: ConversationThreadStore,
-        messages: ConversationMessageStore,
-        states: ConversationStateStore,
-    ) -> None:
-        self.threads = threads
-        self.messages = messages
-        self.states = states
+    def __init__(self, unit_of_work: ConversationUnitOfWork) -> None:
+        self.unit_of_work = unit_of_work
+        self.threads = unit_of_work.threads
+        self.messages = unit_of_work.messages
+        self.states = unit_of_work.states
 
     async def create_thread(
         self,

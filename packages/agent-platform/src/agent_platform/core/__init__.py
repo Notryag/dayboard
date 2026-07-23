@@ -7,8 +7,15 @@ from agent_platform.core.conversations import (
     ConversationState,
     ConversationThread,
 )
-from agent_platform.core.errors import ActiveThreadRunError, ConversationNotFoundError
+from agent_platform.core.commands import CommandSubmission
+from agent_platform.core.errors import (
+    ActiveThreadRunError,
+    ConversationNotFoundError,
+    IdempotencyConflictError,
+    IdempotencyTargetNotFoundError,
+)
 from agent_platform.core.identity import TenantContext, TenantIsolationMode
+from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
 from agent_platform.core.runs import (
     AgentRun,
     AgentRunEvent,
@@ -28,6 +35,11 @@ __all__ = [
     "ConversationRole",
     "ConversationState",
     "ConversationThread",
+    "CommandSubmission",
+    "IdempotencyClaim",
+    "IdempotencyConflictError",
+    "IdempotencyRecord",
+    "IdempotencyTargetNotFoundError",
     "TenantContext",
     "TenantIsolationMode",
 ]

@@ -1,28 +1,54 @@
 """Composition root for reusable application-platform services."""
 
+from dataclasses import dataclass
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.application import ConversationService
-from agent_platform.application import AgentRunService
-
-from dayboard.db.conversation_repositories import (
-    ConversationMessageRepository,
-    ConversationStateRepository,
-    ConversationThreadRepository,
+from agent_platform.application import (
+    AgentRunService,
+    CommandSubmissionService,
+    ConversationService,
+    IdempotencyService,
 )
-from dayboard.db.run_repositories import AgentRunEventRepository, AgentRunRepository
+
+from dayboard.db.platform_uow import SqlAlchemyPlatformUnitOfWork
+
+
+@dataclass(frozen=True, slots=True)
+class PlatformServiceScope:
+    unit_of_work: SqlAlchemyPlatformUnitOfWork
+    conversations: ConversationService
+    runs: AgentRunService
+    submissions: CommandSubmissionService
+    idempotency: IdempotencyService
+
+
+def build_platform_unit_of_work(session: AsyncSession) -> SqlAlchemyPlatformUnitOfWork:
+    return SqlAlchemyPlatformUnitOfWork(session)
+
+
+def build_platform_services(session: AsyncSession) -> PlatformServiceScope:
+    unit_of_work = build_platform_unit_of_work(session)
+    return PlatformServiceScope(
+        unit_of_work=unit_of_work,
+        conversations=ConversationService(unit_of_work),
+        runs=AgentRunService(unit_of_work),
+        submissions=CommandSubmissionService(unit_of_work),
+        idempotency=IdempotencyService(unit_of_work),
+    )
 
 
 def build_conversation_service(session: AsyncSession) -> ConversationService:
-    return ConversationService(
-        threads=ConversationThreadRepository(session),
-        messages=ConversationMessageRepository(session),
-        states=ConversationStateRepository(session),
-    )
+    return ConversationService(build_platform_unit_of_work(session))
 
 
 def build_run_service(session: AsyncSession) -> AgentRunService:
-    return AgentRunService(
-        runs=AgentRunRepository(session),
-        events=AgentRunEventRepository(session),
-    )
+    return AgentRunService(build_platform_unit_of_work(session))
+
+
+def build_command_submission_service(session: AsyncSession) -> CommandSubmissionService:
+    return CommandSubmissionService(build_platform_unit_of_work(session))
+
+
+def build_idempotency_service(session: AsyncSession) -> IdempotencyService:
+    return IdempotencyService(build_platform_unit_of_work(session))

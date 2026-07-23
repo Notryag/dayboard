@@ -76,8 +76,7 @@ class TestCommandService:
         idempotency_key: str | None = None,
         thread_id: UUID | None = None,
     ):
-        from dayboard.app.commands import CommandRunCreation
-        from agent_platform.core import AgentRunStatus
+        from agent_platform.core import CommandSubmission
 
         del idempotency_key
         run = await build_run_service(self.session).create_run(
@@ -86,7 +85,7 @@ class TestCommandService:
             thread_id=thread_id,
         )
         await self.session.commit()
-        return CommandRunCreation(run.id, AgentRunStatus.queued, True, run.thread_id)
+        return CommandSubmission(run.id, run.status, True, run.thread_id)
 
     async def fail_command_run(
         self,

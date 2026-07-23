@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.platform_services import build_run_service
+from dayboard.app.platform_services import build_platform_services, build_run_service
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
-from agent_platform.core import TenantContext
+from agent_platform.core import ActiveThreadRunError, TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
 from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
 from dayboard.db.session import SessionLocal
-from dayboard.db.run_repositories import IdempotencyKeyRepository
+from dayboard.db.run_repositories import PostgresIdempotencyStore
 from agent_platform.core import AgentRunStatus
 
 
@@ -60,6 +62,32 @@ async def test_run_event_metadata_serializes_datetime(
     events = await service.list_events(tenant_context, run.id)
 
     assert events[-1].event_metadata == {"start_time": aware_time.isoformat()}
+
+
+async def test_concurrent_run_events_receive_unique_ordered_sequences(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = build_run_service(db_session)
+    run = await service.create_run(tenant_context, input_message="并发事件")
+    await db_session.commit()
+
+    async def append_progress(content: str) -> None:
+        async with SessionLocal() as event_session:
+            event_service = build_run_service(event_session)
+            await event_service.append_progress(
+                tenant_context,
+                run.id,
+                event_type="parallel_progress",
+                content=content,
+            )
+            await event_session.commit()
+
+    await asyncio.gather(append_progress("first"), append_progress("second"))
+
+    events = await service.list_events(tenant_context, run.id)
+    assert [event.seq for event in events] == [1, 2, 3]
+    assert {event.content for event in events[1:]} == {"first", "second"}
 
 
 async def test_stale_running_runs_are_recovered_to_failed(
@@ -252,8 +280,8 @@ async def test_expired_idempotency_keys_are_deleted(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    repository = IdempotencyKeyRepository(db_session)
-    old, _ = await repository.claim(
+    repository = PostgresIdempotencyStore(db_session)
+    old = await repository.claim(
         tenant_context,
         key="old-key",
         request_hash="a" * 64,
@@ -268,7 +296,7 @@ async def test_expired_idempotency_keys_are_deleted(
     cutoff = datetime.now(UTC) - timedelta(days=7)
     await db_session.execute(
         update(IdempotencyKeyRow)
-        .where(IdempotencyKeyRow.id == old.id)
+        .where(IdempotencyKeyRow.id == old.record.id)
         .values(created_at=cutoff - timedelta(seconds=1))
     )
     await db_session.commit()
@@ -281,6 +309,49 @@ async def test_expired_idempotency_keys_are_deleted(
 
     assert deleted == 1
     assert list(remaining) == ["new-key"]
+
+
+async def test_failed_command_submission_rolls_back_its_idempotency_claim(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    platform = build_platform_services(db_session)
+    thread = await platform.conversations.create_thread(tenant_context, title="同一会话")
+    active = await platform.runs.create_run(
+        tenant_context,
+        input_message="正在执行",
+        thread_id=thread.id,
+    )
+    await platform.unit_of_work.commit()
+
+    with pytest.raises(ActiveThreadRunError):
+        await platform.submissions.submit(
+            tenant_context,
+            input_message="第二条命令",
+            thread_id=thread.id,
+            idempotency_key="retry-after-active-run",
+            request_identity="same-request",
+        )
+
+    persisted_key = await db_session.scalar(
+        select(IdempotencyKeyRow.id).where(
+            IdempotencyKeyRow.tenant_id == tenant_context.tenant_id,
+            IdempotencyKeyRow.owner_user_id == tenant_context.user_id,
+            IdempotencyKeyRow.key == "retry-after-active-run",
+        )
+    )
+    assert persisted_key is None
+
+    assert await platform.runs.mark_cancelled(tenant_context, active)
+    await platform.unit_of_work.commit()
+    retried = await platform.submissions.submit(
+        tenant_context,
+        input_message="第二条命令",
+        thread_id=thread.id,
+        idempotency_key="retry-after-active-run",
+        request_identity="same-request",
+    )
+    assert retried.created
 
 
 async def test_run_lookup_is_owner_scoped_within_a_tenant(

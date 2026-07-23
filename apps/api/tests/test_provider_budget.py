@@ -169,24 +169,21 @@ async def test_command_service_checks_budget_before_model_execution(
         async def rollback(self) -> None:
             return None
 
-    monkeypatch.setattr(
-        "dayboard.app.commands.build_run_service",
-        lambda session: FakeRunService(session),
-    )
-
+    fake_session = FakeSession()
     service = CommandService(
-        FakeSession(),
+        fake_session,
         settings=guard.settings,
         budget_guard=guard,
             executor_factory=fake_executor_factory(fake_invoker),
             conversation_service=FakeConversationService(),
+            run_service=FakeRunService(fake_session),
     )
 
     first = CommandRequest(message="安排明天开会")
-    first_run_id = await service.create_command_run(tenant_context, first)
+    first_run_id = uuid4()
     await service.execute_command_run(tenant_context, first, first_run_id)
 
     with pytest.raises(ProviderBudgetExceeded):
         second = CommandRequest(message="安排后天开会")
-        second_run_id = await service.create_command_run(tenant_context, second)
+        second_run_id = uuid4()
         await service.execute_command_run(tenant_context, second, second_run_id)

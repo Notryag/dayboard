@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
 
-from agent_platform.core import TenantContext
+from agent_platform.core import IdempotencyClaim, IdempotencyRecord, TenantContext
 from agent_platform.core import ActiveThreadRunError
 from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
@@ -55,6 +55,18 @@ def agent_run_event_from_row(row: AgentRunEventRow) -> AgentRunEvent:
         category=AgentRunEventCategory(row.category),
         content=row.content,
         event_metadata=row.event_metadata,
+        created_at=row.created_at,
+    )
+
+
+def idempotency_record_from_row(row: IdempotencyKeyRow) -> IdempotencyRecord:
+    return IdempotencyRecord(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        owner_user_id=row.owner_user_id,
+        key=row.key,
+        request_hash=row.request_hash,
+        run_id=row.run_id,
         created_at=row.created_at,
     )
 
@@ -209,7 +221,7 @@ class AgentRunRepository:
         return [agent_run_from_row(row) for row in result]
 
 
-class IdempotencyKeyRepository:
+class PostgresIdempotencyStore:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -220,7 +232,7 @@ class IdempotencyKeyRepository:
         key: str,
         request_hash: str,
         run_id: UUID,
-    ) -> tuple[IdempotencyKeyRow, bool]:
+    ) -> IdempotencyClaim:
         statement = (
             insert(IdempotencyKeyRow)
             .values(
@@ -237,7 +249,7 @@ class IdempotencyKeyRepository:
         )
         created = (await self.session.execute(statement)).scalar_one_or_none()
         if created is not None:
-            return created, True
+            return IdempotencyClaim(record=idempotency_record_from_row(created), created=True)
         existing = await self.session.scalar(
             select(IdempotencyKeyRow).where(
                 IdempotencyKeyRow.tenant_id == context.tenant_id,
@@ -247,7 +259,7 @@ class IdempotencyKeyRepository:
         )
         if existing is None:
             raise RuntimeError("Idempotency key claim was not persisted")
-        return existing, False
+        return IdempotencyClaim(record=idempotency_record_from_row(existing), created=False)
 
     async def delete_created_before(self, cutoff: datetime) -> int:
         result = await self.session.execute(
@@ -302,6 +314,18 @@ class AgentRunEventRepository:
         return [agent_run_event_from_row(row) for row in result]
 
     async def _next_seq(self, context: TenantContext, run_id: UUID) -> int:
+        locked_run_id = await self.session.scalar(
+            select(AgentRunRow.id)
+            .where(
+                AgentRunRow.id == run_id,
+                AgentRunRow.tenant_id == context.tenant_id,
+                AgentRunRow.owner_user_id == context.user_id,
+                AgentRunRow.deleted_at.is_(None),
+            )
+            .with_for_update()
+        )
+        if locked_run_id is None:
+            raise LookupError("Run not found while allocating event sequence")
         result = await self.session.scalar(
             select(func.coalesce(func.max(AgentRunEventRow.seq), 0) + 1).where(
                 AgentRunEventRow.tenant_id == context.tenant_id,

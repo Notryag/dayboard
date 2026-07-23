@@ -8,13 +8,14 @@ from uuid import UUID
 
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
-from agent_platform.ports.runs import RunEventStore, RunStore
+from agent_platform.ports.unit_of_work import RunUnitOfWork
 
 
 class AgentRunService:
-    def __init__(self, runs: RunStore, events: RunEventStore) -> None:
-        self.runs = runs
-        self.events = events
+    def __init__(self, unit_of_work: RunUnitOfWork) -> None:
+        self.unit_of_work = unit_of_work
+        self.runs = unit_of_work.runs
+        self.events = unit_of_work.events
 
     async def create_run(
         self,

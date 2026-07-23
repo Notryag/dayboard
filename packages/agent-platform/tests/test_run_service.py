@@ -160,6 +160,20 @@ class MemoryRunEventStore:
         ]
 
 
+class MemoryRunUnitOfWork:
+    def __init__(self) -> None:
+        self.runs = MemoryRunStore()
+        self.events = MemoryRunEventStore()
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
 def test_run_lifecycle_is_storage_independent() -> None:
     async def scenario() -> None:
         context = TenantContext(
@@ -168,9 +182,8 @@ def test_run_lifecycle_is_storage_independent() -> None:
             timezone="Asia/Shanghai",
             locale="zh-CN",
         )
-        runs = MemoryRunStore()
-        events = MemoryRunEventStore()
-        service = AgentRunService(runs, events)
+        unit_of_work = MemoryRunUnitOfWork()
+        service = AgentRunService(unit_of_work)
 
         run = await service.create_run(context, input_message="记录今天的饮食")
         assert await service.mark_running(context, run)

@@ -240,6 +240,21 @@ class MemoryStateStore:
         return state
 
 
+class MemoryConversationUnitOfWork:
+    def __init__(self) -> None:
+        self.threads = MemoryThreadStore()
+        self.messages = MemoryMessageStore()
+        self.states = MemoryStateStore()
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
 def test_conversation_history_and_state_are_storage_independent() -> None:
     async def scenario() -> None:
         context = TenantContext(
@@ -248,11 +263,7 @@ def test_conversation_history_and_state_are_storage_independent() -> None:
             timezone="Asia/Shanghai",
             locale="zh-CN",
         )
-        service = ConversationService(
-            threads=MemoryThreadStore(),
-            messages=MemoryMessageStore(),
-            states=MemoryStateStore(),
-        )
+        service = ConversationService(MemoryConversationUnitOfWork())
         thread = await service.create_thread(context, title="记录")
         run_id = uuid4()
         await service.append_message(

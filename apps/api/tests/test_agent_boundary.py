@@ -488,11 +488,6 @@ async def test_command_service_maps_north_clarification_result_to_run(
         async def rollback(self) -> None:
             return None
 
-    monkeypatch.setattr(
-        "dayboard.app.commands.build_run_service",
-        lambda session: FakeRunService(session),
-    )
-
     def fake_build_dayboard_agent(*args, **kwargs):
         built["run_id"] = kwargs["run_id"]
         built["context"] = kwargs["context"]
@@ -508,18 +503,20 @@ async def test_command_service_maps_north_clarification_result_to_run(
         return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
 
     monkeypatch.setattr("dayboard.app.commands.build_dayboard_agent", fake_build_dayboard_agent)
+    fake_session = FakeSession()
     service = CommandService(
-        FakeSession(),
+        fake_session,
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
             executor_factory=fake_executor_factory(fake_invoker),
             conversation_service=FakeConversationService(),
+            run_service=FakeRunService(fake_session),
     )
 
     request = CommandRequest(message="安排会议")
-    run_id = await service.create_command_run(tenant_context, request)
+    run_id = uuid4()
     await service.execute_command_run(tenant_context, request, run_id)
 
     assert built["context"] == tenant_context
@@ -579,24 +576,22 @@ async def test_command_service_logs_and_marks_failed_run(
         del kwargs
         raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr(
-        "dayboard.app.commands.build_run_service",
-        lambda session: FakeRunService(session),
-    )
+    fake_session = FakeSession()
     service = CommandService(
-        FakeSession(),
+        fake_session,
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
         ),
             executor_factory=fake_executor_factory(failing_invoker),
             conversation_service=FakeConversationService(),
+            run_service=FakeRunService(fake_session),
     )
 
     with caplog.at_level(logging.ERROR, logger="dayboard.app.commands"):
         with pytest.raises(RuntimeError, match="provider unavailable"):
             request = CommandRequest(message="安排会议")
-            run_id = await service.create_command_run(tenant_context, request)
+            run_id = uuid4()
             await service.execute_command_run(tenant_context, request, run_id)
 
     assert recorded_failures == [("RuntimeError", "provider unavailable")]

@@ -15,10 +15,13 @@ from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
 from dayboard.app.reminders import ReminderService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
-from dayboard.app.platform_services import build_run_service
+from dayboard.app.platform_services import (
+    build_idempotency_service,
+    build_platform_services,
+    build_run_service,
+)
 from dayboard.config import get_settings
 from agent_platform.core import TenantContext
-from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal
 
 logger = structlog.get_logger(__name__)
@@ -75,7 +78,8 @@ async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
     running_cutoff = now - timedelta(seconds=settings.stale_run_seconds)
     queued_cutoff = now - timedelta(seconds=settings.queued_run_timeout_seconds)
     async with SessionLocal() as session:
-        service = build_run_service(session)
+        platform = build_platform_services(session)
+        service = platform.runs
         recovered_running = await recover_stale_running_runs(
             service,
             updated_before=running_cutoff,
@@ -88,7 +92,7 @@ async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
-        await session.commit()
+        await platform.unit_of_work.commit()
     if recovered_running or recovered_queued:
         logger.warning(
             "dayboard.worker.stale_runs_recovered",
@@ -102,8 +106,7 @@ async def cleanup_expired_idempotency_keys(ctx: dict[str, Any]) -> None:
     del ctx
     cutoff = datetime.now(UTC) - timedelta(seconds=settings.idempotency_retention_seconds)
     async with SessionLocal() as session:
-        deleted = await IdempotencyKeyRepository(session).delete_created_before(cutoff)
-        await session.commit()
+        deleted = await build_idempotency_service(session).delete_created_before(cutoff)
     if deleted:
         logger.info("dayboard.worker.idempotency_keys_deleted", count=deleted)
 

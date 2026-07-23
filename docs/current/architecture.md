@@ -62,7 +62,7 @@ The reusable application package currently owns shared identity and Conversation
 ```text
 agent_platform.core          identity, Conversation/Run contracts, and shared errors
 agent_platform.ports         persistence-neutral Conversation and Run Store protocols
-agent_platform.application   Conversation persistence and Run lifecycle use cases
+agent_platform.application   Conversation/Run lifecycle, idempotency, and command submission
 ```
 
 The Dayboard API package is split by responsibility:
@@ -88,11 +88,16 @@ adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and
 operations. Dayboard's clarification service owns scheduling candidate validation, local-time
 projection, public state filtering, and user-facing choice text.
 
-The extracted services do not yet own an explicit Unit of Work. Multi-repository atomicity currently
-depends on Dayboard composing the repositories with one `AsyncSession` and committing at the
-application boundary. Command idempotency still uses the Dayboard PostgreSQL repository directly,
-and persisted presentation/interaction payloads are unversioned JSON mappings. These are active
-extraction gaps, not target platform contracts; the hardening sequence is tracked in
+The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
+transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
+submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
+and `run_created` event, and appends the user message. Run lifecycle checkpoints share that explicit
+Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation locks the
+parent Run, so concurrent writers cannot select the same `max(seq) + 1` value.
+
+Persisted presentation and interaction payloads remain unversioned JSON mappings, and clarification
+resolution does not yet atomically consume an expected state version. These are active extraction
+gaps, not target platform contracts; the hardening sequence is tracked in
 [../agent-platform-extraction.md](../agent-platform-extraction.md).
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
