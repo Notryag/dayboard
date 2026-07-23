@@ -11,8 +11,13 @@ from agent_platform.core.conversations import (
     ConversationRole,
     ConversationState,
     ConversationThread,
+    ConversationThreadStatus,
 )
-from agent_platform.core.errors import ConversationNotFoundError, InteractionConflictError
+from agent_platform.core.errors import (
+    ConversationArchivedError,
+    ConversationNotFoundError,
+    InteractionConflictError,
+)
 from agent_platform.core.identity import TenantContext
 from agent_platform.core.interactions import PendingInteraction
 from agent_platform.core.presentations import PresentationEnvelope
@@ -51,6 +56,16 @@ class ConversationService:
         thread_id: UUID,
     ) -> ConversationThread | None:
         return await self.threads.get(context, thread_id)
+
+    async def require_active_thread(
+        self,
+        context: TenantContext,
+        thread_id: UUID,
+    ) -> ConversationThread:
+        thread = await self.require_thread(context, thread_id)
+        if thread.status != ConversationThreadStatus.active:
+            raise ConversationArchivedError("Conversation thread is archived")
+        return thread
 
     async def get_or_create_primary_thread(self, context: TenantContext) -> ConversationThread:
         return await self.threads.get_or_create_primary(context)

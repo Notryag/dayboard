@@ -25,7 +25,7 @@ clarification response creates a follow-up Run on the same thread rather than re
 ```text
 POST /api/threads/{thread_id}/command-runs
   -> authenticate and resolve TenantContext
-  -> validate command and Idempotency-Key
+  -> validate command, Idempotency-Key, and active Thread lifecycle
   -> persist user message and queued agent_run in PostgreSQL
   -> commit
   -> enqueue only run_id in arq/Redis
@@ -35,6 +35,9 @@ POST /api/threads/{thread_id}/command-runs
 The request does not execute the model. Queue delivery is at least once, so the worker restores the
 Run from PostgreSQL and checks its state before doing work. The `run_id` is also the queue job
 identity, preventing duplicate queued jobs for the same Run.
+An archived Thread remains readable but rejects a new command or clarification continuation with a
+stable conflict response. An idempotent retry of an already accepted request still resolves its
+existing Run before this lifecycle check.
 
 ## Worker Execution
 

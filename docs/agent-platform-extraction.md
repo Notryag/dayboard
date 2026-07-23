@@ -102,7 +102,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Pending; RuntimeJournal metadata remains a generic diagnostic mapping |
 | Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
-| Explicit Conversation Thread lifecycle and primary-role contracts | Pending; current `status` remains a free string |
+| Explicit Conversation Thread lifecycle and primary-role contracts | Complete; lifecycle is `active | archived`, `is_primary` is independent, and archived writes are rejected |
 
 The remaining findings do not require replacing the three-layer model. They define the hardening
 work needed before moving additional capabilities.
@@ -199,9 +199,10 @@ A capability is considered extracted only when:
    Complete.
 8. Add versioned PendingInteraction envelopes and atomic continuation submission. Complete.
 9. Add versioned persisted presentation envelopes and typed Dayboard history projection. Complete.
-10. Add versioned durable event extension envelopes where product-specific replay requires them.
-11. Split generic Run coordination from Dayboard Agent execution and result projection.
-12. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
+10. Separate Thread lifecycle from primary role and reject archived command submission. Complete.
+11. Add versioned durable event extension envelopes where product-specific replay requires them.
+12. Split generic Run coordination from Dayboard Agent execution and result projection.
+13. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
    Dayboard path.
-13. Consider usage accounting and notification delivery only after the lifecycle adapters are
+14. Consider usage accounting and notification delivery only after the lifecycle adapters are
     demonstrated.

@@ -48,6 +48,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Replaced unversioned assistant message metadata with Platform-owned versioned Presentation
   envelopes, Dayboard-owned validated schedule payloads, generated Web history types, and identical
   live-versus-refresh schedule-card recovery.
+- Separated Conversation Thread lifecycle from primary identity with a constrained
+  `active | archived` status, explicit `is_primary`, one-time data migration, and active-only command
+  submission while preserving archived history reads and idempotent retries.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.

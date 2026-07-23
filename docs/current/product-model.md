@@ -92,8 +92,10 @@ Device-local storage never determines conversation ownership, so another device 
 the same durable history instead of silently creating a separate conversation.
 The product exposes one primary conversation per owner. The first screen loads the newest 30
 messages, and scrolling upward follows an owner-scoped `(created_at, id)` cursor to fetch older
-pages without shifting the visible scroll position. Isolated evaluation Threads are not product
-conversations and do not appear in this history.
+pages without shifting the visible scroll position. Isolated evaluation Threads are active,
+non-primary records (`is_primary = false`); they are not product conversations and do not appear in
+this history. `active | archived` describes lifecycle only, and archived Threads cannot accept new
+Runs.
 
 When missing information would materially change the result, the Agent uses structured
 clarification. Dayboard persists the question and trusted option mapping in `conversation_states`.

@@ -6,10 +6,12 @@ from agent_platform.core.conversations import (
     ConversationRole,
     ConversationState,
     ConversationThread,
+    ConversationThreadStatus,
 )
 from agent_platform.core.commands import CommandSubmission
 from agent_platform.core.errors import (
     ActiveThreadRunError,
+    ConversationArchivedError,
     ConversationNotFoundError,
     IdempotencyConflictError,
     IdempotencyTargetNotFoundError,
@@ -34,10 +36,12 @@ __all__ = [
     "AgentRunStatus",
     "ConversationMessage",
     "ConversationMessagePage",
+    "ConversationArchivedError",
     "ConversationNotFoundError",
     "ConversationRole",
     "ConversationState",
     "ConversationThread",
+    "ConversationThreadStatus",
     "CommandSubmission",
     "IdempotencyClaim",
     "IdempotencyConflictError",

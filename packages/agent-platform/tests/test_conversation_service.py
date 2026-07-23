@@ -12,6 +12,7 @@ from agent_platform.core import (
     ConversationRole,
     ConversationState,
     ConversationThread,
+    ConversationThreadStatus,
     InteractionConflictError,
     PendingInteraction,
     PresentationEnvelope,
@@ -35,8 +36,9 @@ class MemoryThreadStore:
             id=thread_id or uuid4(),
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
+            is_primary=False,
             title=title,
-            status="active",
+            status=ConversationThreadStatus.active,
             summary=None,
             created_at=now,
             updated_at=now,
@@ -64,14 +66,14 @@ class MemoryThreadStore:
                 for thread in self.records.values()
                 if thread.tenant_id == context.tenant_id
                 and thread.owner_user_id == context.user_id
-                and thread.status == "primary"
+                and thread.is_primary
             ),
             None,
         )
         if existing is not None:
             return existing
         thread = await self.create(context)
-        primary = thread.model_copy(update={"status": "primary"})
+        primary = thread.model_copy(update={"is_primary": True})
         self.records[primary.id] = primary
         return primary
 

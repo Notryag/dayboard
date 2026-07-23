@@ -17,12 +17,18 @@ class ConversationRole(StrEnum):
     assistant = "assistant"
 
 
+class ConversationThreadStatus(StrEnum):
+    active = "active"
+    archived = "archived"
+
+
 class ConversationThread(BaseModel):
     id: UUID
     tenant_id: UUID
     owner_user_id: UUID
+    is_primary: bool
     title: str | None
-    status: str
+    status: ConversationThreadStatus
     summary: str | None
     created_at: datetime
     updated_at: datetime

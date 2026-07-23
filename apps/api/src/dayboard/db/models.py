@@ -348,6 +348,10 @@ class ConversationThreadRow(TimestampMixin, Base):
             unique=True,
             postgresql_where=text("is_primary IS TRUE AND deleted_at IS NULL"),
         ),
+        CheckConstraint(
+            "status IN ('active', 'archived')",
+            name="ck_conversation_thread_status",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

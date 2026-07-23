@@ -9,6 +9,10 @@ class ConversationNotFoundError(LookupError):
     """Raised when a conversation is outside the caller's trusted scope or missing."""
 
 
+class ConversationArchivedError(RuntimeError):
+    """Raised when a write targets an archived conversation."""
+
+
 class IdempotencyConflictError(ValueError):
     """Raised when an idempotency key is reused for a different request."""
 

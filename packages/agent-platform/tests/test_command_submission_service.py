@@ -14,6 +14,8 @@ from agent_platform.core import (
     AgentRun,
     AgentRunStatus,
     ConversationThread,
+    ConversationThreadStatus,
+    ConversationArchivedError,
     IdempotencyClaim,
     IdempotencyConflictError,
     IdempotencyRecord,
@@ -37,8 +39,9 @@ def _thread(context: TenantContext) -> ConversationThread:
         id=uuid4(),
         tenant_id=context.tenant_id,
         owner_user_id=context.user_id,
+        is_primary=False,
         title="记录",
-        status="active",
+        status=ConversationThreadStatus.active,
         summary=None,
         created_at=now,
         updated_at=now,
@@ -236,6 +239,31 @@ def test_command_submission_consumes_interaction_in_the_creation_transaction() -
         unit_of_work.messages.append_once.assert_awaited_once()
         unit_of_work.commit.assert_awaited_once()
         unit_of_work.rollback.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_command_submission_rejects_an_archived_thread_before_writing() -> None:
+    async def scenario() -> None:
+        context = _context()
+        unit_of_work = _unit_of_work()
+        thread = _thread(context).model_copy(
+            update={"status": ConversationThreadStatus.archived}
+        )
+        unit_of_work.threads.get.return_value = thread
+
+        with pytest.raises(ConversationArchivedError):
+            await CommandSubmissionService(unit_of_work).submit(
+                context,
+                input_message="记录今天的数据",
+                thread_id=thread.id,
+            )
+
+        unit_of_work.runs.create.assert_not_awaited()
+        unit_of_work.events.append.assert_not_awaited()
+        unit_of_work.messages.append_once.assert_not_awaited()
+        unit_of_work.commit.assert_not_awaited()
+        unit_of_work.rollback.assert_awaited_once()
 
     asyncio.run(scenario())
 

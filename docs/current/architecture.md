@@ -34,6 +34,10 @@ cannot create a separate history boundary across devices.
 The primary Thread is protected by a partial unique database index. Conversation messages use
 cursor pagination rather than an unbounded history response; PostgreSQL remains authoritative on
 refresh and across devices.
+Thread lifecycle and role are orthogonal: `status` is the constrained `active | archived`
+lifecycle, while `is_primary` identifies the owner's single product conversation. Non-primary
+evaluation Threads are active lifecycle records rather than a third pseudo-status. New Runs require
+an active Thread; archived history remains readable but cannot accept new commands.
 
 ## Ownership
 

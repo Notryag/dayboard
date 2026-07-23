@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.platform_services import build_run_service
@@ -14,6 +15,7 @@ from dayboard.api.routes import get_command_dispatcher
 from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
+from dayboard.db.models import ConversationThreadRow
 from agent_platform.core import ConversationRole
 from dayboard.domain.interactions import (
     CalendarEntryChoiceCandidate,
@@ -98,8 +100,38 @@ async def test_primary_conversation_is_stable_for_the_owner(api_app: FastAPI) ->
     assert first.status_code == 200
     assert second.json()["id"] == first.json()["id"]
     assert first.json()["status"] == "active"
+    assert first.json()["is_primary"] is True
     assert isolated.json()["id"] != first.json()["id"]
-    assert isolated.json()["status"] == "isolated"
+    assert isolated.json()["status"] == "active"
+    assert isolated.json()["is_primary"] is False
+
+
+async def test_archived_thread_rejects_new_commands(
+    api_app: FastAPI,
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    conversations = build_conversation_service(db_session)
+    thread = await conversations.create_thread(tenant_context)
+    await db_session.execute(
+        update(ConversationThreadRow)
+        .where(ConversationThreadRow.id == thread.id)
+        .values(status="archived")
+    )
+    await db_session.commit()
+
+    async with AsyncClient(
+        transport=ASGITransport(app=api_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            f"/api/threads/{thread.id}/command-runs",
+            json={"message": "不应创建新的 Run"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "THREAD_ARCHIVED"
+    assert api_app.state.test_command_dispatcher.started == []
 
 
 async def test_conversation_messages_use_stable_cursor_pagination(

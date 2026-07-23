@@ -13,6 +13,7 @@ from agent_platform.core import (
     ConversationRole,
     ConversationState,
     ConversationThread,
+    ConversationThreadStatus,
     PendingInteraction,
     PresentationEnvelope,
 )
@@ -28,8 +29,9 @@ def conversation_thread_from_row(row: ConversationThreadRow) -> ConversationThre
         id=row.id,
         tenant_id=row.tenant_id,
         owner_user_id=row.owner_user_id,
+        is_primary=row.is_primary,
         title=row.title,
-        status=row.status,
+        status=ConversationThreadStatus(row.status),
         summary=row.summary,
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -97,7 +99,7 @@ class ConversationThreadRepository:
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
             title=title,
-            status="isolated",
+            status=ConversationThreadStatus.active.value,
             is_primary=False,
         )
         if thread_id is not None:
@@ -138,7 +140,7 @@ class ConversationThreadRepository:
                 tenant_id=context.tenant_id,
                 owner_user_id=context.user_id,
                 is_primary=True,
-                status="active",
+                status=ConversationThreadStatus.active.value,
             )
             .on_conflict_do_nothing(
                 index_elements=["tenant_id", "owner_user_id"],

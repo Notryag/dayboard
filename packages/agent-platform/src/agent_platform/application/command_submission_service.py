@@ -100,7 +100,7 @@ class CommandSubmissionService:
                 )
                 thread_id = thread.id
             else:
-                await self.conversations.require_thread(context, thread_id)
+                await self.conversations.require_active_thread(context, thread_id)
 
             if consume_interaction_version is not None:
                 await self.conversations.consume_interaction(

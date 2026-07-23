@@ -925,10 +925,11 @@ export interface components {
              * Format: uuid
              */
             owner_user_id: string;
+            /** Is Primary */
+            is_primary: boolean;
             /** Title */
             title: string | null;
-            /** Status */
-            status: string;
+            status: components["schemas"]["ConversationThreadStatus"];
             /** Summary */
             summary: string | null;
             /**
@@ -942,6 +943,11 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * ConversationThreadStatus
+         * @enum {string}
+         */
+        ConversationThreadStatus: "active" | "archived";
         /** DayboardConversationMessage */
         DayboardConversationMessage: {
             /**

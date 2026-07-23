@@ -30,6 +30,7 @@ from dayboard.app.conversation_presentations import (
 )
 from agent_platform.core import (
     ActiveThreadRunError,
+    ConversationArchivedError,
     IdempotencyConflictError,
     InteractionConflictError,
 )
@@ -885,6 +886,12 @@ async def create_thread_command_run(
             idempotency_key=idempotency_key,
             thread_id=thread_id,
         )
+    except ConversationArchivedError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="THREAD_ARCHIVED",
+            message=str(exc),
+        ) from exc
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
@@ -946,6 +953,12 @@ async def respond_to_clarification(
             idempotency_key=idempotency_key,
         )
         creation = submission.creation
+    except ConversationArchivedError as exc:
+        raise ApiProblem(
+            status_code=409,
+            code="THREAD_ARCHIVED",
+            message=str(exc),
+        ) from exc
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
