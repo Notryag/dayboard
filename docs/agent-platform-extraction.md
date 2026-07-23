@@ -29,7 +29,8 @@ other.
 | North agent loop, middleware, checkpoints, StreamBridge | North | North | Already correctly owned |
 | Trusted `TenantContext` contract | Platform | Platform | Extracted; Dayboard retains only development-context construction |
 | Conversation thread/message/state contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
-| Conversation repositories and service | Dayboard | Platform | Next part of the first vertical slice |
+| Conversation service | Platform | Platform | Extracted; storage-independent history, paging and state |
+| PostgreSQL Conversation repositories | Dayboard adapter | Dayboard adapter | Implements platform Conversation store ports |
 | Run and Run-event contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
 | Run lifecycle service | Platform | Platform | Extracted; storage-independent state transitions and events |
 | PostgreSQL Run repositories | Dayboard adapter | Dayboard adapter | Implements platform Run store ports |
@@ -98,6 +99,6 @@ A capability is considered extracted only when:
 1. Package skeleton, ADR, ownership map, and CI dependency check. Complete.
 2. Trusted identity plus Conversation/Run contracts and focused contract tests. Complete.
 3. Run repository ports and platform lifecycle service; remove original Run service. Complete.
-4. Conversation repository ports and platform service; remove original Conversation service path.
+4. Conversation repository ports and platform service; remove original service path. Complete.
 5. Clarification and artifact interaction contracts.
 6. Usage accounting and notification delivery, only after adapters are demonstrated.

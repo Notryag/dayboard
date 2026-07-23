@@ -36,7 +36,7 @@ class FakeConversationService:
         del context, thread_id, summary
         return None
 
-    async def set_pending_clarification(self, context, **kwargs):
+    async def set_pending(self, context, **kwargs):
         del context, kwargs
         return SimpleNamespace(version=1, state_data={})
 

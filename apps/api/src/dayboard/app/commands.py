@@ -23,9 +23,10 @@ from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetExceeded
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
-from dayboard.app.conversations import ConversationService
+from agent_platform.conversation_service import ConversationService
+from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.platform_services import build_run_service
+from dayboard.app.platform_services import build_conversation_service, build_run_service
 from dayboard.config import Settings, get_settings
 from agent_platform.identity import TenantContext
 from agent_platform.run_service import AgentRunService
@@ -82,7 +83,8 @@ class CommandService:
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
         self.checkpointer = checkpointer
-        self.conversations = conversation_service or ConversationService(session)
+        self.conversations = conversation_service or build_conversation_service(session)
+        self.clarifications = ClarificationService(self.conversations)
         self.usage_session_factory = usage_session_factory
         self.runtime_event_session_factory = runtime_event_session_factory
         self.stream_bridge = stream_bridge or MemoryStreamBridge()
@@ -336,7 +338,7 @@ class CommandService:
 
                 clarification_question = _extract_clarification_question(result)
                 if clarification_question:
-                    pending = await self.conversations.set_pending_clarification(
+                    pending = await self.clarifications.set_pending(
                         context,
                         thread_id=run.thread_id,
                         run_id=run.id,

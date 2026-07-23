@@ -8,12 +8,54 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.identity import TenantContext
+from agent_platform.conversations import (
+    ConversationMessage,
+    ConversationRole,
+    ConversationState,
+    ConversationThread,
+)
 from dayboard.db.models import (
     ConversationMessageRow,
     ConversationStateRow,
     ConversationThreadRow,
 )
-from agent_platform.conversations import ConversationRole
+
+
+def conversation_thread_from_row(row: ConversationThreadRow) -> ConversationThread:
+    return ConversationThread(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        owner_user_id=row.owner_user_id,
+        title=row.title,
+        status=row.status,
+        summary=row.summary,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMessage:
+    return ConversationMessage(
+        id=row.id,
+        thread_id=row.thread_id,
+        run_id=row.run_id,
+        role=ConversationRole(row.role),
+        content=row.content,
+        message_metadata=row.message_metadata,
+        created_at=row.created_at,
+    )
+
+
+def conversation_state_from_row(row: ConversationStateRow) -> ConversationState:
+    return ConversationState(
+        thread_id=row.thread_id,
+        pending_action=row.pending_action,
+        pending_question=row.pending_question,
+        state_data=row.state_data,
+        version=row.version,
+        expires_at=row.expires_at,
+        updated_at=row.updated_at,
+    )
 
 
 class ConversationThreadRepository:
@@ -26,7 +68,7 @@ class ConversationThreadRepository:
         *,
         thread_id: UUID | None = None,
         title: str | None = None,
-    ) -> ConversationThreadRow:
+    ) -> ConversationThread:
         values = dict(
             tenant_id=context.tenant_id,
             owner_user_id=context.user_id,
@@ -40,10 +82,10 @@ class ConversationThreadRepository:
         self.session.add(row)
         await self.session.flush()
         await self.session.refresh(row)
-        return row
+        return conversation_thread_from_row(row)
 
-    async def get(self, context: TenantContext, thread_id: UUID) -> ConversationThreadRow | None:
-        return await self.session.scalar(
+    async def get(self, context: TenantContext, thread_id: UUID) -> ConversationThread | None:
+        row = await self.session.scalar(
             select(ConversationThreadRow).where(
                 ConversationThreadRow.id == thread_id,
                 ConversationThreadRow.tenant_id == context.tenant_id,
@@ -51,9 +93,10 @@ class ConversationThreadRepository:
                 ConversationThreadRow.deleted_at.is_(None),
             )
         )
+        return conversation_thread_from_row(row) if row else None
 
-    async def get_primary(self, context: TenantContext) -> ConversationThreadRow | None:
-        return await self.session.scalar(
+    async def get_primary(self, context: TenantContext) -> ConversationThread | None:
+        row = await self.session.scalar(
             select(ConversationThreadRow)
             .where(
                 ConversationThreadRow.tenant_id == context.tenant_id,
@@ -62,8 +105,9 @@ class ConversationThreadRepository:
                 ConversationThreadRow.deleted_at.is_(None),
             )
         )
+        return conversation_thread_from_row(row) if row else None
 
-    async def get_or_create_primary(self, context: TenantContext) -> ConversationThreadRow:
+    async def get_or_create_primary(self, context: TenantContext) -> ConversationThread:
         statement = (
             insert(ConversationThreadRow)
             .values(
@@ -83,7 +127,7 @@ class ConversationThreadRepository:
         )
         row = (await self.session.execute(statement)).scalar_one_or_none()
         if row is not None:
-            return row
+            return conversation_thread_from_row(row)
         existing = await self.get_primary(context)
         if existing is None:
             raise RuntimeError("Primary conversation conflict was not persisted")
@@ -94,8 +138,8 @@ class ConversationThreadRepository:
         context: TenantContext,
         thread_id: UUID,
         summary: str,
-    ) -> ConversationThreadRow | None:
-        return await self.session.scalar(
+    ) -> ConversationThread | None:
+        row = await self.session.scalar(
             update(ConversationThreadRow)
             .where(
                 ConversationThreadRow.id == thread_id,
@@ -106,6 +150,7 @@ class ConversationThreadRepository:
             .values(summary=summary, updated_at=func.now())
             .returning(ConversationThreadRow)
         )
+        return conversation_thread_from_row(row) if row else None
 
 
 class ConversationMessageRepository:
@@ -121,7 +166,7 @@ class ConversationMessageRepository:
         role: ConversationRole,
         content: str,
         message_metadata: dict | None = None,
-    ) -> ConversationMessageRow:
+    ) -> ConversationMessage:
         statement = (
             insert(ConversationMessageRow)
             .values(
@@ -140,7 +185,7 @@ class ConversationMessageRepository:
         )
         row = (await self.session.execute(statement)).scalar_one_or_none()
         if row is not None:
-            return row
+            return conversation_message_from_row(row)
         existing = await self.session.scalar(
             select(ConversationMessageRow).where(
                 ConversationMessageRow.tenant_id == context.tenant_id,
@@ -150,7 +195,7 @@ class ConversationMessageRepository:
         )
         if existing is None:
             raise RuntimeError("Conversation message conflict was not persisted")
-        return existing
+        return conversation_message_from_row(existing)
 
     async def upsert_assistant(
         self,
@@ -160,7 +205,7 @@ class ConversationMessageRepository:
         run_id: UUID,
         content: str,
         message_metadata: dict,
-    ) -> ConversationMessageRow:
+    ) -> ConversationMessage:
         statement = (
             insert(ConversationMessageRow)
             .values(
@@ -178,14 +223,15 @@ class ConversationMessageRepository:
             )
             .returning(ConversationMessageRow)
         )
-        return (await self.session.execute(statement)).scalar_one()
+        row = (await self.session.execute(statement)).scalar_one()
+        return conversation_message_from_row(row)
 
     async def get_assistant_for_run(
         self,
         context: TenantContext,
         run_id: UUID,
-    ) -> ConversationMessageRow | None:
-        return await self.session.scalar(
+    ) -> ConversationMessage | None:
+        row = await self.session.scalar(
             select(ConversationMessageRow).where(
                 ConversationMessageRow.tenant_id == context.tenant_id,
                 ConversationMessageRow.owner_user_id == context.user_id,
@@ -193,12 +239,13 @@ class ConversationMessageRepository:
                 ConversationMessageRow.role == ConversationRole.assistant.value,
             )
         )
+        return conversation_message_from_row(row) if row else None
 
     async def list_for_thread(
         self,
         context: TenantContext,
         thread_id: UUID,
-    ) -> list[ConversationMessageRow]:
+    ) -> list[ConversationMessage]:
         result = await self.session.scalars(
             select(ConversationMessageRow)
             .where(
@@ -208,7 +255,7 @@ class ConversationMessageRepository:
             )
             .order_by(ConversationMessageRow.created_at.asc(), ConversationMessageRow.id.asc())
         )
-        return list(result)
+        return [conversation_message_from_row(row) for row in result]
 
     async def list_page_for_thread(
         self,
@@ -217,7 +264,7 @@ class ConversationMessageRepository:
         *,
         before: UUID | None,
         limit: int,
-    ) -> tuple[list[ConversationMessageRow], UUID | None]:
+    ) -> tuple[list[ConversationMessage], UUID | None]:
         statement = select(ConversationMessageRow).where(
             ConversationMessageRow.tenant_id == context.tenant_id,
             ConversationMessageRow.owner_user_id == context.user_id,
@@ -252,7 +299,10 @@ class ConversationMessageRepository:
         has_more = len(rows) > limit
         page = rows[:limit]
         page.reverse()
-        return page, page[0].id if has_more else None
+        return (
+            [conversation_message_from_row(row) for row in page],
+            page[0].id if has_more else None,
+        )
 
 
 class ConversationStateRepository:
@@ -263,14 +313,15 @@ class ConversationStateRepository:
         self,
         context: TenantContext,
         thread_id: UUID,
-    ) -> ConversationStateRow | None:
-        return await self.session.scalar(
+    ) -> ConversationState | None:
+        row = await self.session.scalar(
             select(ConversationStateRow).where(
                 ConversationStateRow.thread_id == thread_id,
                 ConversationStateRow.tenant_id == context.tenant_id,
                 ConversationStateRow.owner_user_id == context.user_id,
             )
         )
+        return conversation_state_from_row(row) if row else None
 
     async def set_pending(
         self,
@@ -281,8 +332,14 @@ class ConversationStateRepository:
         question: str,
         state_data: dict,
         expires_at: datetime,
-    ) -> ConversationStateRow:
-        row = await self.get(context, thread_id)
+    ) -> ConversationState:
+        row = await self.session.scalar(
+            select(ConversationStateRow).where(
+                ConversationStateRow.thread_id == thread_id,
+                ConversationStateRow.tenant_id == context.tenant_id,
+                ConversationStateRow.owner_user_id == context.user_id,
+            )
+        )
         if row is None:
             row = ConversationStateRow(
                 thread_id=thread_id,
@@ -302,16 +359,22 @@ class ConversationStateRepository:
             row.version += 1
         await self.session.flush()
         await self.session.refresh(row)
-        return row
+        return conversation_state_from_row(row)
 
     async def clear_pending(
         self,
         context: TenantContext,
         thread_id: UUID,
-    ) -> ConversationStateRow | None:
-        row = await self.get(context, thread_id)
+    ) -> ConversationState | None:
+        row = await self.session.scalar(
+            select(ConversationStateRow).where(
+                ConversationStateRow.thread_id == thread_id,
+                ConversationStateRow.tenant_id == context.tenant_id,
+                ConversationStateRow.owner_user_id == context.user_id,
+            )
+        )
         if row is None or row.pending_action is None:
-            return row
+            return conversation_state_from_row(row) if row else None
         row.pending_action = None
         row.pending_question = None
         row.state_data = {}
@@ -319,4 +382,4 @@ class ConversationStateRepository:
         row.version += 1
         await self.session.flush()
         await self.session.refresh(row)
-        return row
+        return conversation_state_from_row(row)

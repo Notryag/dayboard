@@ -43,7 +43,7 @@ refresh and across devices.
 | FastAPI | auth, validation, tenant context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
 | Worker | queued Run execution, lifecycle hooks, stale-Run recovery, reminder delivery | browser sessions |
 | North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
-| Agent Platform | trusted identity, Conversation/Run contracts, Run lifecycle and storage ports | scheduling policy or Dayboard presentation |
+| Agent Platform | identity, Conversation/Run contracts, persistence use cases and storage ports | scheduling policy or Dayboard presentation |
 | Dayboard Agent | prompt, seven scheduling tools, safe result projection | tenant identity or direct model-authorized writes |
 | Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
@@ -60,6 +60,7 @@ The reusable application package currently owns shared identity and Conversation
 ```text
 agent_platform.identity       trusted tenant and user context
 agent_platform.conversations product-neutral conversation contracts
+agent_platform.conversation_service  conversation history, paging, state and storage ports
 agent_platform.runs          product-neutral persisted Run contracts
 agent_platform.run_service   storage-independent Run lifecycle and repository ports
 ```
@@ -81,9 +82,11 @@ Trusted `TenantContext` is resolved from the authenticated server session. Tenan
 thread, Run, operation keys, and permissions are injected by the runtime and never exposed as
 model-supplied tool arguments. Repository queries scope business data by tenant and owner.
 
-Dayboard's composition root connects the platform Run service to PostgreSQL adapters. The platform
-owns allowed state transitions and lifecycle event policy; the adapters own SQLAlchemy rows,
-constraint translation, tenant-scoped queries, and atomic database operations.
+Dayboard's composition root connects platform Conversation and Run services to PostgreSQL adapters.
+The platform owns persistence use cases, paging, state transitions and lifecycle event policy; the
+adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and atomic database
+operations. Dayboard's clarification service owns scheduling candidate validation, local-time
+projection, public state filtering, and user-facing choice text.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities.

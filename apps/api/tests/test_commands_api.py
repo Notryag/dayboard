@@ -7,7 +7,8 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.platform_services import build_run_service
-from dayboard.app.conversations import ConversationService
+from dayboard.app.clarifications import ClarificationService
+from dayboard.app.platform_services import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
 from agent_platform.identity import TenantContext
 from dayboard.api.auth import get_tenant_context
@@ -96,7 +97,7 @@ async def test_conversation_messages_use_stable_cursor_pagination(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    conversations = ConversationService(db_session)
+    conversations = build_conversation_service(db_session)
     thread = await conversations.get_or_create_primary_thread(tenant_context)
     for index in range(35):
         await conversations.append_message(
@@ -259,10 +260,10 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    conversations = ConversationService(db_session)
+    conversations = build_conversation_service(db_session)
     thread = await conversations.create_thread(tenant_context, title="工作安排")
     source_run_id = uuid4()
-    pending = await conversations.set_pending_clarification(
+    pending = await ClarificationService(conversations).set_pending(
         tenant_context,
         thread_id=thread.id,
         run_id=source_run_id,
@@ -325,9 +326,9 @@ async def test_structured_clarification_rejects_stale_state_version(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    conversations = ConversationService(db_session)
+    conversations = build_conversation_service(db_session)
     thread = await conversations.create_thread(tenant_context)
-    pending = await conversations.set_pending_clarification(
+    pending = await ClarificationService(conversations).set_pending(
         tenant_context,
         thread_id=thread.id,
         run_id=uuid4(),
@@ -514,7 +515,7 @@ async def test_stream_run_events_returns_terminal_run_state(
     run = await runs.create_run(tenant_context, input_message="安排会议")
     await runs.mark_running(tenant_context, run)
     await runs.mark_needs_clarification(tenant_context, run, question="几点开始？")
-    await ConversationService(db_session).upsert_assistant_message(
+    await build_conversation_service(db_session).upsert_assistant_message(
         tenant_context,
         thread_id=run.thread_id,
         run_id=run.id,

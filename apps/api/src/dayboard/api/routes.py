@@ -19,11 +19,7 @@ from uuid import UUID
 
 from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.agent.presentation import project_runtime_stream_event
-from dayboard.app.conversations import (
-    ClarificationStateError,
-    ConversationService,
-    conversation_thread_from_row,
-)
+from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, IdempotencyConflictError, get_command_service
 from agent_platform.run_service import ActiveThreadRunError
@@ -37,7 +33,7 @@ from dayboard.app.schedule_queries import (
     ScheduleQueryService,
     TaskItemView,
 )
-from dayboard.app.platform_services import build_run_service
+from dayboard.app.platform_services import build_conversation_service, build_run_service
 from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
@@ -668,10 +664,12 @@ async def create_thread(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationThread:
-    row = await ConversationService(session).create_thread(tenant_context, title=body.title)
+    thread = await build_conversation_service(session).create_thread(
+        tenant_context,
+        title=body.title,
+    )
     await session.commit()
-    await session.refresh(row)
-    return conversation_thread_from_row(row)
+    return thread
 
 
 @router.put("/api/conversation", response_model=ConversationThread)
@@ -679,10 +677,9 @@ async def get_or_create_primary_conversation(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationThread:
-    row = await ConversationService(session).get_or_create_primary_thread(tenant_context)
+    thread = await build_conversation_service(session).get_or_create_primary_thread(tenant_context)
     await session.commit()
-    await session.refresh(row)
-    return conversation_thread_from_row(row)
+    return thread
 
 
 @router.get("/api/threads/{thread_id}/messages", response_model=ConversationMessagePage)
@@ -694,7 +691,7 @@ async def get_thread_messages(
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationMessagePage:
     try:
-        return await ConversationService(session).list_message_page(
+        return await build_conversation_service(session).list_message_page(
             tenant_context,
             thread_id,
             before=before,
@@ -715,7 +712,8 @@ async def get_thread_state(
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ConversationState | None:
     try:
-        return await ConversationService(session).get_state(tenant_context, thread_id)
+        state = await build_conversation_service(session).get_state(tenant_context, thread_id)
+        return public_conversation_state(state)
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
@@ -917,7 +915,7 @@ async def respond_to_clarification(
 ) -> CommandRunResponse:
     del request
     try:
-        choice = await service.conversations.resolve_clarification_choice(
+        choice = await service.clarifications.resolve_choice(
             tenant_context,
             thread_id=thread_id,
             state_version=body.state_version,
@@ -981,7 +979,7 @@ async def get_active_thread_run(
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> AgentRun | None:
     try:
-        await ConversationService(session).require_thread(tenant_context, thread_id)
+        await build_conversation_service(session).require_thread(tenant_context, thread_id)
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
@@ -1009,7 +1007,7 @@ async def cancel_run(
         event_content="请求已取消",
     )
     if transitioned:
-        conversations = ConversationService(session)
+        conversations = build_conversation_service(session)
         existing_message = await conversations.get_assistant_message_for_run(
             tenant_context, run.id
         )
@@ -1092,7 +1090,7 @@ async def stream_run_events(
                 "cancelled",
             }:
                 return None
-            assistant = await ConversationService(session).get_assistant_message_for_run(
+            assistant = await build_conversation_service(session).get_assistant_message_for_run(
                 tenant_context, run_id
             )
             raw_parts = (

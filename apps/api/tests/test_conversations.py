@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService
-from dayboard.app.conversations import ConversationService
+from dayboard.app.clarifications import ClarificationService
+from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
 from agent_platform.identity import TenantContext
@@ -80,7 +81,7 @@ async def test_two_runs_persist_complete_thread_history(
     )
     await service.execute_command_run(tenant_context, second_request, second.run_id)
 
-    messages = await ConversationService(db_session).list_messages(
+    messages = await build_conversation_service(db_session).list_messages(
         tenant_context, first.thread_id
     )
 
@@ -139,7 +140,7 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
     created = await service.create_or_get_command_run(tenant_context, request)
     await service.execute_command_run(tenant_context, request, created.run_id)
 
-    messages = await ConversationService(db_session).list_messages(
+    messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
     )
     assistant = messages[-1]
@@ -165,7 +166,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
             run = await cancel_runs.get_run_for_update(tenant_context, created.run_id)
             assert run is not None
             assert await cancel_runs.mark_cancelled(tenant_context, run)
-            await ConversationService(cancel_session).upsert_assistant_message(
+            await build_conversation_service(cancel_session).upsert_assistant_message(
                 tenant_context,
                 thread_id=created.thread_id,
                 run_id=created.run_id,
@@ -213,7 +214,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     with pytest.raises(asyncio.CancelledError):
         await service.execute_command_run(tenant_context, request, created.run_id)
 
-    messages = await ConversationService(db_session).list_messages(
+    messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
     )
     assistant = messages[-1]
@@ -227,11 +228,11 @@ async def test_pending_clarification_state_is_versioned_and_clearable(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = ConversationService(db_session)
+    service = build_conversation_service(db_session)
     thread = await service.create_thread(tenant_context)
     run_id = uuid4()
 
-    pending = await service.set_pending_clarification(
+    pending = await ClarificationService(service).set_pending(
         tenant_context,
         thread_id=thread.id,
         run_id=run_id,
@@ -258,9 +259,9 @@ async def test_conversation_state_is_owner_scoped(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    service = ConversationService(db_session)
+    service = build_conversation_service(db_session)
     thread = await service.create_thread(tenant_context)
-    await service.set_pending_clarification(
+    await ClarificationService(service).set_pending(
         tenant_context,
         thread_id=thread.id,
         run_id=uuid4(),
