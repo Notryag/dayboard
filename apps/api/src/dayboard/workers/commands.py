@@ -16,7 +16,7 @@ from dayboard.app.commands import CommandService
 from dayboard.app.reminders import ReminderService
 from dayboard.app.runs import AgentRunService
 from dayboard.config import get_settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.run_repositories import AgentRunRepository, IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal
 

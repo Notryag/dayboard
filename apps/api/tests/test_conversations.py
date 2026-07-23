@@ -14,7 +14,7 @@ from dayboard.app.commands import CommandService
 from dayboard.app.conversations import ConversationService
 from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.session import SessionLocal
 from fake_runtime import fake_executor_factory
 

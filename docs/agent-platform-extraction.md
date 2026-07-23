@@ -27,9 +27,11 @@ other.
 | Current scope | Current owner | Target owner | Migration note |
 | --- | --- | --- | --- |
 | North agent loop, middleware, checkpoints, StreamBridge | North | North | Already correctly owned |
-| `dayboard.context.TenantContext` | Dayboard | Platform | Extract only trusted identity contract; product defaults stay in Dayboard |
-| Conversation thread/message/state models and repositories | Dayboard | Platform | First extraction slice |
-| Run models, repositories, lifecycle and idempotency | Dayboard | Platform | Move with conversations so recovery remains atomic |
+| Trusted `TenantContext` contract | Platform | Platform | Extracted; Dayboard retains only development-context construction |
+| Conversation thread/message/state contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
+| Conversation repositories and service | Dayboard | Platform | Next part of the first vertical slice |
+| Run and Run-event contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
+| Run repositories, lifecycle and idempotency | Dayboard | Platform | Move with conversations so recovery remains atomic |
 | Command submission and dispatch | Mixed | Split | Platform owns generic lifecycle; Dayboard supplies agent/product adapters |
 | Persisted typed message artifacts | Mixed | Platform contract | Dayboard continues defining schedule artifact payloads |
 | Clarification interaction state | Dayboard | Platform | Extract after Conversation + Run |
@@ -91,8 +93,9 @@ A capability is considered extracted only when:
 
 ## Milestones
 
-1. Package skeleton, ADR, ownership map, and CI dependency check.
-2. Conversation/Run contracts and repository ports with focused contract tests.
-3. Dayboard migration to the platform implementation and removal of original modules.
-4. Clarification and artifact interaction contracts.
-5. Usage accounting and notification delivery, only after adapters are demonstrated.
+1. Package skeleton, ADR, ownership map, and CI dependency check. Complete.
+2. Trusted identity plus Conversation/Run contracts and focused contract tests. Complete.
+3. Conversation/Run repository ports and platform lifecycle services.
+4. Dayboard migration to those services and removal of the original service path.
+5. Clarification and artifact interaction contracts.
+6. Usage accounting and notification delivery, only after adapters are demonstrated.

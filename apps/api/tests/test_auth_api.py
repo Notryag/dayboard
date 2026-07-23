@@ -12,7 +12,7 @@ from dayboard.config import Settings, get_settings
 from dayboard.api.account_recovery import get_password_reset_mailer
 from dayboard.api.routes import get_command_dispatcher
 from dayboard.app.commands import CommandService, get_command_service
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import (
     PasswordResetTokenRow,
     UserCredentialRow,

@@ -6,7 +6,7 @@ ENV UV_LINK_MODE=copy \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /workspace/apps/api
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git \
@@ -14,6 +14,7 @@ RUN apt-get update \
     && pip install --no-cache-dir "uv==${UV_VERSION}"
 
 COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/README.md ./
+COPY packages/agent-platform /workspace/packages/agent-platform
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
@@ -36,7 +37,7 @@ RUN apt-get update \
     && groupadd --system dayboard \
     && useradd --system --create-home --home-dir /home/dayboard --gid dayboard --shell /usr/sbin/nologin dayboard
 
-COPY --from=build --chown=dayboard:dayboard /app/.venv ./.venv
+COPY --from=build --chown=dayboard:dayboard /workspace/apps/api/.venv ./.venv
 COPY --chown=dayboard:dayboard apps/api/src ./src
 COPY --chown=dayboard:dayboard apps/api/alembic.ini ./alembic.ini
 COPY --chown=dayboard:dayboard apps/api/alembic ./alembic

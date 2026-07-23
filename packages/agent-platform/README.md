@@ -2,9 +2,10 @@
 
 `agent_platform` is the reusable application layer between North and products such as Dayboard.
 
-The package currently establishes an installable boundary only. Runtime capabilities will move in
-tested vertical slices, beginning with Conversation + Run. Until a slice is complete, its Dayboard
-implementation remains authoritative.
+The first extraction slice provides the trusted `TenantContext` plus product-neutral Conversation
+and Run contracts. Dayboard imports these contracts directly; their former Dayboard definitions
+have been removed. Persistence and lifecycle services still live in Dayboard until their ports can
+be separated from scheduling-specific clarification and presentation behavior.
 
 Dependency direction:
 

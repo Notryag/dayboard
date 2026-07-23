@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import DateTime, and_, cast, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.domain.calendar import CalendarEntryCreate
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus

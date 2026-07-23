@@ -7,7 +7,7 @@ from limits.storage import MemoryStorage, storage_from_string
 from limits.strategies import FixedWindowRateLimiter
 
 from dayboard.config import Settings, get_settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 class ProviderBudgetExceeded(RuntimeError):

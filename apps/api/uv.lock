@@ -8,6 +8,17 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "agent-application-platform"
+version = "0.1.0"
+source = { directory = "../../packages/agent-platform" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11.0,<3.0.0" }]
+
+[[package]]
 name = "alembic"
 version = "1.18.5"
 source = { registry = "https://pypi.org/simple" }
@@ -398,6 +409,7 @@ name = "dayboard-api"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "agent-application-platform" },
     { name = "alembic" },
     { name = "arq" },
     { name = "asyncpg" },
@@ -424,6 +436,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "agent-application-platform", directory = "../../packages/agent-platform" },
     { name = "alembic", specifier = ">=1.16.0,<2.0.0" },
     { name = "arq", specifier = ">=0.28.0,<0.29.0" },
     { name = "asyncpg", specifier = ">=0.30.0,<1.0.0" },

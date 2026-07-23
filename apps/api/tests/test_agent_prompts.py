@@ -3,7 +3,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from dayboard.agent.prompts import build_dayboard_system_prompt
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:

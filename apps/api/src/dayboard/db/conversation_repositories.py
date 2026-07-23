@@ -7,13 +7,13 @@ from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import (
     ConversationMessageRow,
     ConversationStateRow,
     ConversationThreadRow,
 )
-from dayboard.domain.conversations import ConversationRole
+from agent_platform.conversations import ConversationRole
 
 
 class ConversationThreadRepository:

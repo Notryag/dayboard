@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 
 

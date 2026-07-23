@@ -7,10 +7,10 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import AgentRunEventRow, AgentRunRow
 from dayboard.db.run_repositories import AgentRunEventRepository, AgentRunRepository
-from dayboard.domain.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
+from agent_platform.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 
 
 ACTIVE_THREAD_RUN_CONSTRAINT = "uq_agent_runs_active_thread"

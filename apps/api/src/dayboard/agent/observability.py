@@ -5,7 +5,7 @@ from typing import Any
 
 from north import RuntimeEvent
 
-from dayboard.domain.runs import AgentRunEventCategory
+from agent_platform.runs import AgentRunEventCategory
 
 
 @dataclass(frozen=True, slots=True)

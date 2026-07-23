@@ -27,12 +27,12 @@ from dayboard.app.conversations import ConversationService
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.runs import AgentRunService
 from dayboard.config import Settings, get_settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.run_repositories import IdempotencyKeyRepository
 from dayboard.db.session import SessionLocal, get_session
-from dayboard.domain.runs import AgentRunStatus
-from dayboard.domain.conversations import ConversationRole
+from agent_platform.runs import AgentRunStatus
+from agent_platform.conversations import ConversationRole
 
 logger = structlog.get_logger(__name__)
 

@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import VoiceTranscriptRow
 from dayboard.db.voice_repositories import VoiceTranscriptRepository
 from dayboard.domain.voice import VoiceTranscript, VoiceTranscriptStatus

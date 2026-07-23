@@ -7,12 +7,12 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.runs import AgentRunService
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
 from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
 from dayboard.db.session import SessionLocal
 from dayboard.db.run_repositories import IdempotencyKeyRepository
-from dayboard.domain.runs import AgentRunStatus
+from agent_platform.runs import AgentRunStatus
 
 
 async def test_agent_run_service_records_lifecycle_events(

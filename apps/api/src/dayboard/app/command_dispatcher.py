@@ -6,7 +6,7 @@ from arq.connections import ArqRedis
 from arq.jobs import Job
 
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 class RedisCommandDispatcher:

@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import ReminderDeliveryRow
 from dayboard.domain.reminders import ReminderDeliveryStatus, ReminderSourceType
 

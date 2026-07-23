@@ -15,7 +15,7 @@ import structlog
 from dayboard.config import Settings, get_settings
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import (
     TenantMembershipRow,
     TenantRow,

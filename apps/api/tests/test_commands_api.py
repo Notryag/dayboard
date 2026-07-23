@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.app.runs import AgentRunService
 from dayboard.app.conversations import ConversationService
 from dayboard.api.routes import get_command_dispatcher
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
-from dayboard.domain.conversations import ConversationRole
+from agent_platform.conversations import ConversationRole
 
 
 async def test_create_background_command_run_returns_before_execution(

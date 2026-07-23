@@ -41,9 +41,9 @@ from dayboard.api.auth import get_tenant_context
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
 from dayboard.config import Settings, get_settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.session import get_session
-from dayboard.domain.runs import AgentRun, AgentRunEvent
+from agent_platform.runs import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery, ReminderInboxItem
 from dayboard.domain.tasks import TaskStatus
@@ -56,7 +56,7 @@ from dayboard.integrations.audio_probe import (
 )
 from dayboard.timezones import resolve_local_date_window
 from dayboard.domain.interactions import ClarificationChoiceRequest
-from dayboard.domain.conversations import (
+from agent_platform.conversations import (
     ConversationMessagePage,
     ConversationState,
     ConversationThread,

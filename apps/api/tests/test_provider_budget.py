@@ -10,7 +10,7 @@ from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, e
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService, _safe_error_message
 from dayboard.config import Settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 class FakeConversationService:

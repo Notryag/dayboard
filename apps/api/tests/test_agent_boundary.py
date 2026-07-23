@@ -12,7 +12,7 @@ from dayboard.agent.factory import build_dayboard_agent
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.commands import CommandService, _extract_clarification_state_data
 from dayboard.config import Settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 class FakeConversationService:

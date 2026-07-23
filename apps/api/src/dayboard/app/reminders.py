@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow, TaskItemRow
 from dayboard.db.reminder_repositories import ReminderDeliveryRepository
 from dayboard.domain.calendar import Reminder

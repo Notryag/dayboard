@@ -9,9 +9,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.encoders import jsonable_encoder
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.models import AgentRunEventRow, AgentRunRow, IdempotencyKeyRow
-from dayboard.domain.runs import AgentRunEventCategory, AgentRunStatus
+from agent_platform.runs import AgentRunEventCategory, AgentRunStatus
 
 
 class AgentRunRepository:

@@ -51,6 +51,7 @@ jobs:
       - run: uv run ruff check ../../packages/agent-platform/src ../../tools/check_architecture.py
       - run: uv run ruff check .
       - run: uv run alembic upgrade head
+      - run: uv run pytest -q ../../packages/agent-platform/tests
       - run: uv run pytest -q
       - run: uv run python scripts/export_openapi.py openapi.json
       - uses: actions/upload-artifact@v6

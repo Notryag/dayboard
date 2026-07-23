@@ -43,17 +43,27 @@ refresh and across devices.
 | FastAPI | auth, validation, tenant context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
 | Worker | queued Run execution, lifecycle hooks, stale-Run recovery, reminder delivery | browser sessions |
 | North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
+| Agent Platform | trusted identity and product-neutral Conversation/Run contracts | scheduling policy or Dayboard presentation |
 | Dayboard Agent | prompt, seven scheduling tools, safe result projection | tenant identity or direct model-authorized writes |
 | Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
 | Redis | arq queue, rate limits, locks, Redis Streams | durable product truth |
 
-Dayboard depends on North. North must not import Dayboard or understand calendars, tasks, tenants,
-FastAPI, or the Dayboard UI.
+The dependency direction is `North <- Agent Platform <- Dayboard`. Lower layers must not import
+higher layers. North does not understand application identity or persistence; Agent Platform does
+not understand calendars, tasks, scheduling prompts, or the Dayboard UI.
 
 ## Backend Shape
 
-The API package is split by responsibility:
+The reusable application package currently owns shared identity and Conversation/Run contracts:
+
+```text
+agent_platform.identity       trusted tenant and user context
+agent_platform.conversations product-neutral conversation contracts
+agent_platform.runs          product-neutral persisted Run contracts
+```
+
+The Dayboard API package is split by responsibility:
 
 ```text
 dayboard.api           HTTP, SSE, request and response schemas

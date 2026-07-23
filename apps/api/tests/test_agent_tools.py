@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.agent import build_scheduling_tools
 from dayboard.agent.tools import AgentCreateCalendarEntryInput
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.tools import (
     SearchCalendarEntriesInput,
     SearchTaskItemsInput,

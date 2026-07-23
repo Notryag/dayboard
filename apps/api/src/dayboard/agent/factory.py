@@ -15,7 +15,7 @@ from dayboard.agent.middleware import SchedulingToolBindingMiddleware
 from dayboard.agent.prompts import DAYBOARD_SUMMARY_PROMPT, build_dayboard_system_prompt
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 
 
 TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(

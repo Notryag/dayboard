@@ -8,14 +8,14 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.db.conversation_repositories import (
     ConversationMessageRepository,
     ConversationStateRepository,
     ConversationThreadRepository,
 )
 from dayboard.db.models import ConversationMessageRow, ConversationStateRow, ConversationThreadRow
-from dayboard.domain.conversations import (
+from agent_platform.conversations import (
     ConversationMessage,
     ConversationMessagePage,
     ConversationRole,

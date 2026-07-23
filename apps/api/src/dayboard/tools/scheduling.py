@@ -8,7 +8,7 @@ from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.scheduling import SchedulingService
-from dayboard.context import TenantContext
+from agent_platform.identity import TenantContext
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
