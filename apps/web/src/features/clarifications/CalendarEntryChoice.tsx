@@ -7,7 +7,11 @@ type CalendarEntryChoiceProps = {
   onSelect: (optionKey: string) => void;
 };
 
-function formatOptionTime(startTime?: string, timezone?: string, scheduledDate?: string) {
+function formatOptionTime(
+  startTime?: string | null,
+  timezone?: string | null,
+  scheduledDate?: string | null,
+) {
   if (!startTime) return scheduledDate ? `${scheduledDate} · 随时` : "随时";
   return new Intl.DateTimeFormat("zh-CN", {
     month: "short",
@@ -16,7 +20,7 @@ function formatOptionTime(startTime?: string, timezone?: string, scheduledDate?:
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: timezone,
+    timeZone: timezone ?? undefined,
   }).format(new Date(startTime));
 }
 

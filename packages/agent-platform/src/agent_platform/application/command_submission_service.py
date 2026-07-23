@@ -23,6 +23,38 @@ class CommandSubmissionService:
         self.runs = AgentRunService(unit_of_work)
         self.idempotency = IdempotencyService(unit_of_work)
 
+    async def find_existing(
+        self,
+        context: TenantContext,
+        *,
+        idempotency_key: str,
+        request_identity: str,
+    ) -> CommandSubmission | None:
+        try:
+            record = await self.idempotency.find_matching(
+                context,
+                key=idempotency_key,
+                request_identity=request_identity,
+            )
+            if record is None:
+                await self.unit_of_work.commit()
+                return None
+            run = await self.runs.get_run(context, record.run_id)
+            if run is None:
+                raise IdempotencyTargetNotFoundError(
+                    "Idempotency key references a missing run"
+                )
+            await self.unit_of_work.commit()
+            return CommandSubmission(
+                run_id=run.id,
+                status=run.status,
+                created=False,
+                thread_id=run.thread_id,
+            )
+        except BaseException:
+            await self.unit_of_work.rollback()
+            raise
+
     async def submit(
         self,
         context: TenantContext,
@@ -33,6 +65,7 @@ class CommandSubmissionService:
         conversation_message: str | None = None,
         idempotency_key: str | None = None,
         request_identity: str | None = None,
+        consume_interaction_version: int | None = None,
     ) -> CommandSubmission:
         try:
             run_id: UUID | None = None
@@ -68,6 +101,13 @@ class CommandSubmissionService:
                 thread_id = thread.id
             else:
                 await self.conversations.require_thread(context, thread_id)
+
+            if consume_interaction_version is not None:
+                await self.conversations.consume_interaction(
+                    context,
+                    thread_id=thread_id,
+                    expected_version=consume_interaction_version,
+                )
 
             run = await self.runs.create_run(
                 context,

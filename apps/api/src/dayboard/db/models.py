@@ -394,13 +394,34 @@ class ConversationMessageRow(Base):
 
 class ConversationStateRow(Base):
     __tablename__ = "conversation_states"
+    __table_args__ = (
+        CheckConstraint(
+            "interaction_schema_version IS NULL OR interaction_schema_version >= 1",
+            name="ck_conversation_state_interaction_schema_version",
+        ),
+        CheckConstraint(
+            "(interaction_type IS NULL AND interaction_schema_version IS NULL "
+            "AND interaction_source_run_id IS NULL AND interaction_prompt IS NULL "
+            "AND interaction_payload = '{}'::jsonb AND expires_at IS NULL) OR "
+            "(interaction_type IS NOT NULL AND interaction_schema_version IS NOT NULL "
+            "AND interaction_source_run_id IS NOT NULL AND interaction_prompt IS NOT NULL "
+            "AND expires_at IS NOT NULL)",
+            name="ck_conversation_state_interaction_complete",
+        ),
+    )
 
     thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     owner_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    pending_action: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    pending_question: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    state_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    interaction_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    interaction_schema_version: Mapped[int | None] = mapped_column(nullable=True)
+    interaction_source_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True
+    )
+    interaction_prompt: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    interaction_payload: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     version: Mapped[int] = mapped_column(nullable=False, default=1)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

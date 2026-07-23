@@ -1,4 +1,3 @@
-import { parseConversationState } from "@/features/clarifications/types";
 import type { ClarificationChoiceResponse } from "@/features/clarifications/types";
 import { apiClient, requireApiData } from "@/lib/api/typedClient";
 import type {
@@ -37,7 +36,7 @@ export async function getConversationState(threadId: string) {
   const { data } = await apiClient.GET("/api/threads/{thread_id}/state", {
     params: { path: { thread_id: threadId } },
   });
-  return parseConversationState(requireApiData(data));
+  return requireApiData(data);
 }
 
 export async function getActiveRun(threadId: string): Promise<AgentRun | null> {
@@ -77,7 +76,14 @@ export async function submitClarificationChoice(
     {
       params: {
         path: { thread_id: threadId },
-        header: { "Idempotency-Key": crypto.randomUUID() },
+        header: {
+          "Idempotency-Key": [
+            "clarification",
+            threadId,
+            body.state_version,
+            body.option_key,
+          ].join(":"),
+        },
       },
       body,
     },

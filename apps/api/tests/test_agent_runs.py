@@ -9,6 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.platform_services import build_platform_services, build_run_service
+from dayboard.app.clarifications import ClarificationService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from agent_platform.core import ActiveThreadRunError, TenantContext
 from dayboard.db.run_repositories import AgentRunEventRepository
@@ -16,6 +17,7 @@ from dayboard.db.models import AgentRunRow, IdempotencyKeyRow
 from dayboard.db.session import SessionLocal
 from dayboard.db.run_repositories import PostgresIdempotencyStore
 from agent_platform.core import AgentRunStatus
+from dayboard.domain.interactions import ClarificationPayload
 
 
 async def test_agent_run_service_records_lifecycle_events(
@@ -317,6 +319,24 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
 ) -> None:
     platform = build_platform_services(db_session)
     thread = await platform.conversations.create_thread(tenant_context, title="同一会话")
+    source = await platform.runs.create_run(
+        tenant_context,
+        input_message="需要选择",
+        thread_id=thread.id,
+    )
+    assert await platform.runs.mark_running(tenant_context, source)
+    assert await platform.runs.mark_needs_clarification(
+        tenant_context,
+        source,
+        question="选择哪一个？",
+    )
+    pending = await ClarificationService(platform.conversations).set_pending(
+        tenant_context,
+        thread_id=thread.id,
+        run_id=source.id,
+        question="选择哪一个？",
+        payload=ClarificationPayload(response_kind="free_text"),
+    )
     active = await platform.runs.create_run(
         tenant_context,
         input_message="正在执行",
@@ -331,6 +351,7 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
             thread_id=thread.id,
             idempotency_key="retry-after-active-run",
             request_identity="same-request",
+            consume_interaction_version=pending.version,
         )
 
     persisted_key = await db_session.scalar(
@@ -341,6 +362,10 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
         )
     )
     assert persisted_key is None
+    persisted_state = await platform.conversations.get_state(tenant_context, thread.id)
+    assert persisted_state is not None
+    assert persisted_state.interaction == pending.interaction
+    assert persisted_state.version == pending.version
 
     assert await platform.runs.mark_cancelled(tenant_context, active)
     await platform.unit_of_work.commit()
@@ -350,8 +375,13 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
         thread_id=thread.id,
         idempotency_key="retry-after-active-run",
         request_identity="same-request",
+        consume_interaction_version=pending.version,
     )
     assert retried.created
+    consumed_state = await platform.conversations.get_state(tenant_context, thread.id)
+    assert consumed_state is not None
+    assert consumed_state.interaction is None
+    assert consumed_state.version == pending.version + 1
 
 
 async def test_run_lookup_is_owner_scoped_within_a_tenant(

@@ -13,9 +13,11 @@ from agent_platform.core.errors import (
     ConversationNotFoundError,
     IdempotencyConflictError,
     IdempotencyTargetNotFoundError,
+    InteractionConflictError,
 )
 from agent_platform.core.identity import TenantContext, TenantIsolationMode
 from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
+from agent_platform.core.interactions import PendingInteraction
 from agent_platform.core.runs import (
     AgentRun,
     AgentRunEvent,
@@ -40,6 +42,8 @@ __all__ = [
     "IdempotencyConflictError",
     "IdempotencyRecord",
     "IdempotencyTargetNotFoundError",
+    "InteractionConflictError",
+    "PendingInteraction",
     "TenantContext",
     "TenantIsolationMode",
 ]

@@ -13,6 +13,7 @@ from agent_platform.core import (
     ConversationRole,
     ConversationState,
     ConversationThread,
+    PendingInteraction,
 )
 from dayboard.db.models import (
     ConversationMessageRow,
@@ -47,11 +48,24 @@ def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMe
 
 
 def conversation_state_from_row(row: ConversationStateRow) -> ConversationState:
+    interaction = None
+    if row.interaction_type is not None:
+        if (
+            row.interaction_schema_version is None
+            or row.interaction_source_run_id is None
+            or row.interaction_prompt is None
+        ):
+            raise RuntimeError("Persisted interaction is incomplete")
+        interaction = PendingInteraction(
+            interaction_type=row.interaction_type,
+            schema_version=row.interaction_schema_version,
+            source_run_id=row.interaction_source_run_id,
+            prompt=row.interaction_prompt,
+            payload=row.interaction_payload,
+        )
     return ConversationState(
         thread_id=row.thread_id,
-        pending_action=row.pending_action,
-        pending_question=row.pending_question,
-        state_data=row.state_data,
+        interaction=interaction,
         version=row.version,
         expires_at=row.expires_at,
         updated_at=row.updated_at,
@@ -323,14 +337,12 @@ class ConversationStateRepository:
         )
         return conversation_state_from_row(row) if row else None
 
-    async def set_pending(
+    async def set_interaction(
         self,
         context: TenantContext,
         *,
         thread_id: UUID,
-        action: str,
-        question: str,
-        state_data: dict,
+        interaction: PendingInteraction,
         expires_at: datetime,
     ) -> ConversationState:
         row = await self.session.scalar(
@@ -345,23 +357,60 @@ class ConversationStateRepository:
                 thread_id=thread_id,
                 tenant_id=context.tenant_id,
                 owner_user_id=context.user_id,
-                pending_action=action,
-                pending_question=question,
-                state_data=state_data,
+                interaction_type=interaction.interaction_type,
+                interaction_schema_version=interaction.schema_version,
+                interaction_source_run_id=interaction.source_run_id,
+                interaction_prompt=interaction.prompt,
+                interaction_payload=interaction.payload,
                 expires_at=expires_at,
             )
             self.session.add(row)
         else:
-            row.pending_action = action
-            row.pending_question = question
-            row.state_data = state_data
+            row.interaction_type = interaction.interaction_type
+            row.interaction_schema_version = interaction.schema_version
+            row.interaction_source_run_id = interaction.source_run_id
+            row.interaction_prompt = interaction.prompt
+            row.interaction_payload = interaction.payload
             row.expires_at = expires_at
             row.version += 1
         await self.session.flush()
         await self.session.refresh(row)
         return conversation_state_from_row(row)
 
-    async def clear_pending(
+    async def consume_interaction(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        expected_version: int,
+        consumed_at: datetime,
+    ) -> ConversationState | None:
+        row = await self.session.scalar(
+            update(ConversationStateRow)
+            .where(
+                ConversationStateRow.thread_id == thread_id,
+                ConversationStateRow.tenant_id == context.tenant_id,
+                ConversationStateRow.owner_user_id == context.user_id,
+                ConversationStateRow.version == expected_version,
+                ConversationStateRow.interaction_type.is_not(None),
+                ConversationStateRow.expires_at > consumed_at,
+            )
+            .values(
+                interaction_type=None,
+                interaction_schema_version=None,
+                interaction_source_run_id=None,
+                interaction_prompt=None,
+                interaction_payload={},
+                expires_at=None,
+                version=ConversationStateRow.version + 1,
+                updated_at=func.now(),
+            )
+            .returning(ConversationStateRow)
+            .execution_options(populate_existing=True)
+        )
+        return conversation_state_from_row(row) if row else None
+
+    async def clear_interaction(
         self,
         context: TenantContext,
         thread_id: UUID,
@@ -373,11 +422,13 @@ class ConversationStateRepository:
                 ConversationStateRow.owner_user_id == context.user_id,
             )
         )
-        if row is None or row.pending_action is None:
+        if row is None or row.interaction_type is None:
             return conversation_state_from_row(row) if row else None
-        row.pending_action = None
-        row.pending_question = None
-        row.state_data = {}
+        row.interaction_type = None
+        row.interaction_schema_version = None
+        row.interaction_source_run_id = None
+        row.interaction_prompt = None
+        row.interaction_payload = {}
         row.expires_at = None
         row.version += 1
         await self.session.flush()

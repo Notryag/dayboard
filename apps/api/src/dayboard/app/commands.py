@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -16,6 +17,7 @@ from north import (
 from north.runtime import MemoryStreamBridge, RunManager, StreamBridge
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
+from pydantic import ValidationError
 
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetExceeded, ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
@@ -34,6 +36,15 @@ from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.session import SessionLocal, get_session
 from agent_platform.core import AgentRunStatus
 from agent_platform.core import ConversationRole
+from dayboard.domain.interactions import (
+    CalendarEntryChoiceCandidate,
+    CalendarEntryChoiceOption,
+    CalendarEntryChoicePresentation,
+    ClarificationPayload,
+    SuggestedChoiceCandidate,
+    SuggestedChoiceOption,
+    SuggestedChoicePresentation,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -44,6 +55,12 @@ USER_VISIBLE_RUNTIME_EVENTS = frozenset(
         "tool_call_error",
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ClarificationRunSubmission:
+    creation: CommandSubmission
+    request: CommandRequest | None
 
 
 def get_command_service(session: AsyncSession = Depends(get_session)) -> CommandService:
@@ -127,6 +144,52 @@ class CommandService:
             created=creation.created,
         )
         return creation
+
+    async def create_or_get_clarification_run(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        state_version: int,
+        option_key: str,
+        idempotency_key: str | None = None,
+    ) -> ClarificationRunSubmission:
+        request_identity = f"{thread_id}:clarification:{state_version}:{option_key}"
+        if idempotency_key is not None:
+            existing = await self.submissions.find_existing(
+                context,
+                idempotency_key=idempotency_key,
+                request_identity=request_identity,
+            )
+            if existing is not None:
+                return ClarificationRunSubmission(creation=existing, request=None)
+
+        choice = await self.clarifications.resolve_choice(
+            context,
+            thread_id=thread_id,
+            state_version=state_version,
+            option_key=option_key,
+        )
+        request = CommandRequest(message=choice.agent_message)
+        creation = await self.submissions.submit(
+            context,
+            input_message=request.message,
+            thread_id=thread_id,
+            conversation_message=choice.display_message,
+            idempotency_key=idempotency_key,
+            request_identity=request_identity if idempotency_key is not None else None,
+            consume_interaction_version=state_version,
+        )
+        logger.info(
+            "dayboard.clarification.run_queued",
+            run_id=str(creation.run_id),
+            thread_id=str(creation.thread_id),
+            source_state_version=state_version,
+            tenant_id=str(context.tenant_id),
+            user_id=str(context.user_id),
+            created=creation.created,
+        )
+        return ClarificationRunSubmission(creation=creation, request=request)
 
     async def execute_command_run(
         self,
@@ -303,12 +366,13 @@ class CommandService:
 
                 clarification_question = _extract_clarification_question(result)
                 if clarification_question:
+                    clarification_payload = _extract_clarification_payload(result)
                     pending = await self.clarifications.set_pending(
                         context,
                         thread_id=run.thread_id,
                         run_id=run.id,
                         question=clarification_question,
-                        state_data=_extract_clarification_state_data(result),
+                        payload=clarification_payload,
                     )
                     if not await runs.mark_needs_clarification(
                         context,
@@ -316,7 +380,11 @@ class CommandService:
                         question=clarification_question,
                         event_metadata={
                             "state_version": pending.version,
-                            "interaction": pending.state_data.get("interaction"),
+                            "presentation": clarification_payload.presentation.model_dump(
+                                mode="json", exclude_none=True
+                            )
+                            if clarification_payload.presentation is not None
+                            else None,
                         },
                     ):
                         await self.platform_unit_of_work.rollback()
@@ -361,7 +429,7 @@ class CommandService:
                     content=message,
                     message_metadata={"status": "completed", "parts": presentation_parts},
                 )
-                await self.conversations.clear_pending(context, run.thread_id)
+                await self.conversations.clear_interaction(context, run.thread_id)
                 await self.platform_unit_of_work.commit()
                 await self._publish_run_event(
                     run.id,
@@ -694,37 +762,42 @@ def _extract_clarification_question(result: Any) -> str | None:
     return question if isinstance(question, str) and question else None
 
 
-def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
+def _extract_clarification_payload(result: Any) -> ClarificationPayload:
+    fallback = ClarificationPayload(response_kind="free_text")
     if not isinstance(result, dict):
-        return {}
+        return fallback
 
-    state_data: dict[str, Any] = {}
+    payload = fallback
     thread_data = result.get("thread_data")
     clarification = thread_data.get("clarification") if isinstance(thread_data, dict) else None
     if isinstance(clarification, dict) and clarification.get("response_kind") == "single_choice":
         options = clarification.get("options")
         if isinstance(options, list):
             choices = [
-                {"key": f"candidate_{index}", "value": option, "label": option}
+                SuggestedChoiceCandidate(
+                    key=f"candidate_{index}",
+                    value=option,
+                    label=option,
+                )
                 for index, option in enumerate(
                     (option for option in options[:10] if isinstance(option, str) and option.strip()),
                     start=1,
                 )
             ]
             if choices:
-                state_data = {
-                    "candidates": choices,
-                    "interaction": {
-                        "type": "suggested_choice",
-                        "options": [
-                            {"key": choice["key"], "label": choice["label"]}
+                payload = ClarificationPayload(
+                    response_kind="single_choice",
+                    candidates=choices,
+                    presentation=SuggestedChoicePresentation(
+                        options=[
+                            SuggestedChoiceOption(key=choice.key, label=choice.label)
                             for choice in choices
-                        ],
-                    },
-                }
+                        ]
+                    ),
+                )
 
     if not isinstance(result.get("messages"), list):
-        return state_data
+        return payload
 
     search_calls: dict[str, dict[str, Any]] = {}
     latest: Any | None = None
@@ -753,13 +826,13 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
             latest = artifact
 
     if latest is None:
-        return state_data
+        return payload
     artifact = latest
     if not isinstance(artifact, dict) or artifact.get("type") != "schedule_items_result":
-        return state_data
+        return payload
     artifact_items = artifact.get("items")
     if not isinstance(artifact_items, list):
-        return state_data
+        return payload
     content = [
         item["value"]
         for item in artifact_items
@@ -768,47 +841,32 @@ def _extract_clarification_state_data(result: Any) -> dict[str, Any]:
         and isinstance(item.get("value"), dict)
     ]
 
-    allowed = (
-        "id",
-        "row_version",
-        "title",
-        "timing_kind",
-        "scheduled_date",
-        "start_time",
-        "end_time",
-        "timezone",
-    )
-    candidates = [
-        {"key": f"candidate_{index}", **{key: item[key] for key in allowed if key in item}}
-        for index, item in enumerate(
-            (item for item in content[:10] if isinstance(item, dict)), start=1
-        )
-    ]
-    calendar_state_data: dict[str, Any] = {
-        "intent": "select",
-        "candidates": candidates,
-    }
-    if candidates:
-        calendar_state_data["interaction"] = {
-            "type": "calendar_entry_choice",
-            "options": [
-                {
-                    key: candidate[key]
-                    for key in (
-                        "key",
-                        "title",
-                        "timing_kind",
-                        "scheduled_date",
-                        "start_time",
-                        "end_time",
-                        "timezone",
+    candidates: list[CalendarEntryChoiceCandidate] = []
+    for index, item in enumerate(content[:10], start=1):
+        try:
+            candidates.append(
+                CalendarEntryChoiceCandidate.model_validate(
+                    {"kind": "calendar", "key": f"candidate_{index}", **item}
+                )
+            )
+        except ValidationError:
+            continue
+    if not candidates:
+        return payload
+    return ClarificationPayload(
+        response_kind="calendar_choice",
+        candidates=candidates,
+        presentation=CalendarEntryChoicePresentation(
+            options=[
+                CalendarEntryChoiceOption.model_validate(
+                    candidate.model_dump(
+                        exclude={"kind", "id", "row_version", "status"}
                     )
-                    if key in candidate
-                }
+                )
                 for candidate in candidates
-            ],
-        }
-    return calendar_state_data
+            ]
+        ),
+    )
 
 
 def _extract_final_message(result: Any) -> str:

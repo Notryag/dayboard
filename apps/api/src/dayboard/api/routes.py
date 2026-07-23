@@ -22,7 +22,11 @@ from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
 from dayboard.app.commands import CommandService, get_command_service
-from agent_platform.core import ActiveThreadRunError, IdempotencyConflictError
+from agent_platform.core import (
+    ActiveThreadRunError,
+    IdempotencyConflictError,
+    InteractionConflictError,
+)
 from dayboard.app.scheduling import SchedulingService
 from dayboard.app.voice import VoiceTranscriptionService
 from dayboard.app.reminders import ReminderService
@@ -56,10 +60,12 @@ from dayboard.integrations.audio_probe import (
     PyavAudioMetadataProbe,
 )
 from dayboard.timezones import resolve_local_date_window
-from dayboard.domain.interactions import ClarificationChoiceRequest
+from dayboard.domain.interactions import (
+    ClarificationChoiceRequest,
+    ClarificationConversationState,
+)
 from agent_platform.core import (
     ConversationMessagePage,
-    ConversationState,
     ConversationThread,
 )
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
@@ -711,12 +717,15 @@ async def get_thread_messages(
         ) from exc
 
 
-@router.get("/api/threads/{thread_id}/state", response_model=ConversationState | None)
+@router.get(
+    "/api/threads/{thread_id}/state",
+    response_model=ClarificationConversationState | None,
+)
 async def get_thread_state(
     thread_id: UUID,
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
-) -> ConversationState | None:
+) -> ClarificationConversationState | None:
     try:
         state = await build_conversation_service(session).get_state(tenant_context, thread_id)
         return public_conversation_state(state)
@@ -921,27 +930,26 @@ async def respond_to_clarification(
 ) -> CommandRunResponse:
     del request
     try:
-        choice = await service.clarifications.resolve_choice(
+        submission = await service.create_or_get_clarification_run(
             tenant_context,
             thread_id=thread_id,
             state_version=body.state_version,
             option_key=body.option_key,
-        )
-        request = CommandRequest(message=choice.agent_message)
-        creation = await service.create_or_get_command_run(
-            tenant_context,
-            request,
             idempotency_key=idempotency_key,
-            thread_id=thread_id,
-            conversation_message=choice.display_message,
         )
+        creation = submission.creation
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
             code="THREAD_NOT_FOUND",
             message="Conversation thread not found",
         ) from exc
-    except (ClarificationStateError, IdempotencyConflictError, ActiveThreadRunError) as exc:
+    except (
+        ClarificationStateError,
+        IdempotencyConflictError,
+        InteractionConflictError,
+        ActiveThreadRunError,
+    ) as exc:
         raise ApiProblem(
             status_code=409,
             code="CLARIFICATION_CONFLICT",
@@ -949,8 +957,10 @@ async def respond_to_clarification(
         ) from exc
 
     if creation.created:
+        if submission.request is None:
+            raise RuntimeError("Created clarification Run is missing its command request")
         try:
-            await dispatcher.enqueue(creation.run_id, tenant_context, request)
+            await dispatcher.enqueue(creation.run_id, tenant_context, submission.request)
         except Exception as exc:
             await service.fail_command_run(tenant_context, creation.run_id, exc)
             raise ApiProblem(

@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from agent_platform.core.interactions import PendingInteraction
+
 
 class ConversationRole(StrEnum):
     user = "user"
@@ -43,9 +45,7 @@ class ConversationMessagePage(BaseModel):
 
 class ConversationState(BaseModel):
     thread_id: UUID
-    pending_action: str | None
-    pending_question: str | None
-    state_data: dict[str, Any]
+    interaction: PendingInteraction | None
     version: int
     expires_at: datetime | None
     updated_at: datetime

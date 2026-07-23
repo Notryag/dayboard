@@ -734,6 +734,32 @@ export interface components {
              */
             language: string | null;
         };
+        /** CalendarEntryChoiceOption */
+        CalendarEntryChoiceOption: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            timing_kind: components["schemas"]["CalendarTimingKind"];
+            /** Scheduled Date */
+            scheduled_date?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** End Time */
+            end_time?: string | null;
+            /** Timezone */
+            timezone: string;
+        };
+        /** CalendarEntryChoicePresentation */
+        CalendarEntryChoicePresentation: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "calendar_entry_choice";
+            /** Options */
+            options: components["schemas"]["CalendarEntryChoiceOption"][];
+        };
         /** CalendarEntryUpdateRequest */
         CalendarEntryUpdateRequest: {
             /** Expected Row Version */
@@ -805,6 +831,55 @@ export interface components {
             /** Option Key */
             option_key: string;
         };
+        /** ClarificationConversationState */
+        ClarificationConversationState: {
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
+            interaction: components["schemas"]["ClarificationInteractionView"];
+            /** Version */
+            version: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ClarificationInteractionView */
+        ClarificationInteractionView: {
+            /**
+             * Interaction Type
+             * @default dayboard.clarification
+             * @constant
+             */
+            interaction_type: "dayboard.clarification";
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
+            /**
+             * Source Run Id
+             * Format: uuid
+             */
+            source_run_id: string;
+            /** Prompt */
+            prompt: string;
+            payload: components["schemas"]["ClarificationPublicPayload"];
+        };
+        /** ClarificationPublicPayload */
+        ClarificationPublicPayload: {
+            /** Presentation */
+            presentation?: (components["schemas"]["SuggestedChoicePresentation"] | components["schemas"]["CalendarEntryChoicePresentation"]) | null;
+        };
         /** CommandRequest */
         CommandRequest: {
             /** Message */
@@ -861,31 +936,6 @@ export interface components {
          * @enum {string}
          */
         ConversationRole: "user" | "assistant";
-        /** ConversationState */
-        ConversationState: {
-            /**
-             * Thread Id
-             * Format: uuid
-             */
-            thread_id: string;
-            /** Pending Action */
-            pending_action: string | null;
-            /** Pending Question */
-            pending_question: string | null;
-            /** State Data */
-            state_data: {
-                [key: string]: unknown;
-            };
-            /** Version */
-            version: number;
-            /** Expires At */
-            expires_at: string | null;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
         /** ConversationThread */
         ConversationThread: {
             /**
@@ -1137,6 +1187,23 @@ export interface components {
             items: components["schemas"]["TaskItemView"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /** SuggestedChoiceOption */
+        SuggestedChoiceOption: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /** SuggestedChoicePresentation */
+        SuggestedChoicePresentation: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "suggested_choice";
+            /** Options */
+            options: components["schemas"]["SuggestedChoiceOption"][];
         };
         /** TaskItemUpdateRequest */
         TaskItemUpdateRequest: {
@@ -2048,7 +2115,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ConversationState"] | null;
+                    "application/json": components["schemas"]["ClarificationConversationState"] | null;
                 };
             };
             /** @description Validation Error */

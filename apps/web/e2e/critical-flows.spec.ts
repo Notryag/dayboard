@@ -300,20 +300,23 @@ test("clarification choice resumes execution and writes the final item", async (
   state.onCommand = (_message, fixture, runId) => {
     fixture.clarification = {
       thread_id: fixture.threadId,
-      pending_action: "choose_time",
-      pending_question: "几点进行设计评审？",
-      state_data: {
+      interaction: {
+        interaction_type: "dayboard.clarification",
+        schema_version: 1,
         source_run_id: runId,
-        interaction: {
-          type: "suggested_choice",
-          options: [
-            { key: "morning", label: "上午 9 点" },
-            { key: "afternoon", label: "下午 2 点" },
-          ],
+        prompt: "几点进行设计评审？",
+        payload: {
+          presentation: {
+            type: "suggested_choice",
+            options: [
+              { key: "morning", label: "上午 9 点" },
+              { key: "afternoon", label: "下午 2 点" },
+            ],
+          },
         },
       },
       version: 1,
-      expires_at: null,
+      expires_at: "2026-07-28T08:00:00Z",
       updated_at: "2026-07-21T08:00:00Z",
     };
     return {

@@ -6,11 +6,18 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from agent_platform.core.idempotency import IdempotencyClaim
+from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
 from agent_platform.core.identity import TenantContext
 
 
 class IdempotencyStore(Protocol):
+    async def get(
+        self,
+        context: TenantContext,
+        *,
+        key: str,
+    ) -> IdempotencyRecord | None: ...
+
     async def claim(
         self,
         context: TenantContext,

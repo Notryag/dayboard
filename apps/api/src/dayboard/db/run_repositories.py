@@ -225,6 +225,21 @@ class PostgresIdempotencyStore:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def get(
+        self,
+        context: TenantContext,
+        *,
+        key: str,
+    ) -> IdempotencyRecord | None:
+        row = await self.session.scalar(
+            select(IdempotencyKeyRow).where(
+                IdempotencyKeyRow.tenant_id == context.tenant_id,
+                IdempotencyKeyRow.owner_user_id == context.user_id,
+                IdempotencyKeyRow.key == key,
+            )
+        )
+        return idempotency_record_from_row(row) if row else None
+
     async def claim(
         self,
         context: TenantContext,

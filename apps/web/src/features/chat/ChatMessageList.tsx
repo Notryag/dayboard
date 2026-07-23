@@ -14,7 +14,10 @@ import { createPortal } from "react-dom";
 import { Copy, ScanText, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
-import type { ConversationState } from "@/features/clarifications/types";
+import {
+  clarificationPresentation,
+  type ConversationState,
+} from "@/features/clarifications/types";
 import { ScheduleItem } from "@/features/schedule/ScheduleItem";
 import type { ScheduleChange, ScheduleResultPart } from "@/features/schedule/types";
 import styles from "./ChatMessageList.module.css";
@@ -72,6 +75,7 @@ export function ChatMessageList({
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const pressTimerRef = useRef<number | null>(null);
   const previousLayoutRef = useRef<{ firstMessageId: string | undefined; height: number } | null>(null);
+  const activeClarification = clarificationPresentation(conversationState);
 
   useLayoutEffect(() => {
     const container = scrollRef.current;
@@ -243,11 +247,11 @@ export function ChatMessageList({
               )}
               {conversationState &&
               !isUser &&
-              message.runId === conversationState.state_data.source_run_id &&
-              conversationState.state_data.interaction ? (
+              message.runId === conversationState.interaction.source_run_id &&
+              activeClarification ? (
                 <ClarificationInteraction
                   disabled={isSubmitting}
-                  interaction={conversationState.state_data.interaction}
+                  interaction={activeClarification}
                   onSelect={onClarificationChoice}
                 />
               ) : null}

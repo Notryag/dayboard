@@ -15,8 +15,9 @@ from dayboard.app.clarifications import ClarificationService
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
 from dayboard.config import Settings
-from agent_platform.core import TenantContext
+from agent_platform.core import InteractionConflictError, TenantContext
 from dayboard.db.session import SessionLocal
+from dayboard.domain.interactions import ClarificationPayload
 from fake_runtime import fake_executor_factory
 
 
@@ -237,21 +238,21 @@ async def test_pending_clarification_state_is_versioned_and_clearable(
         thread_id=thread.id,
         run_id=run_id,
         question="你指的是 8 点还是 10 点的会议？",
+        payload=ClarificationPayload(response_kind="free_text"),
     )
     await db_session.commit()
     loaded = await service.get_state(tenant_context, thread.id)
-    cleared = await service.clear_pending(tenant_context, thread.id)
+    cleared = await service.clear_interaction(tenant_context, thread.id)
     await db_session.commit()
 
     assert loaded == pending
-    assert pending.pending_action == "clarification"
-    assert pending.state_data == {"source_run_id": str(run_id)}
+    assert pending.interaction is not None
+    assert pending.interaction.source_run_id == run_id
+    assert pending.interaction.payload == {"response_kind": "free_text", "candidates": []}
     assert pending.expires_at is not None
     assert pending.expires_at > datetime.now(UTC)
     assert cleared is not None
-    assert cleared.pending_action is None
-    assert cleared.pending_question is None
-    assert cleared.state_data == {}
+    assert cleared.interaction is None
     assert cleared.version == pending.version + 1
 
 
@@ -266,6 +267,7 @@ async def test_conversation_state_is_owner_scoped(
         thread_id=thread.id,
         run_id=uuid4(),
         question="哪一个？",
+        payload=ClarificationPayload(response_kind="free_text"),
     )
     await db_session.commit()
     other_context = TenantContext(
@@ -281,3 +283,46 @@ async def test_conversation_state_is_owner_scoped(
         pass
     else:
         raise AssertionError("Another owner must not read conversation state")
+
+
+async def test_pending_interaction_can_only_be_consumed_once_concurrently(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    service = build_conversation_service(db_session)
+    thread = await service.create_thread(tenant_context)
+    pending = await ClarificationService(service).set_pending(
+        tenant_context,
+        thread_id=thread.id,
+        run_id=uuid4(),
+        question="选择哪一个？",
+        payload=ClarificationPayload(response_kind="free_text"),
+    )
+    await db_session.commit()
+
+    async def consume() -> bool:
+        async with SessionLocal() as session:
+            contender = build_conversation_service(session)
+            try:
+                await contender.consume_interaction(
+                    tenant_context,
+                    thread_id=thread.id,
+                    expected_version=pending.version,
+                )
+                await session.commit()
+                return True
+            except InteractionConflictError:
+                await session.rollback()
+                return False
+
+    results = await asyncio.gather(consume(), consume())
+
+    assert sorted(results) == [False, True]
+    async with SessionLocal() as verification_session:
+        consumed = await build_conversation_service(verification_session).get_state(
+            tenant_context,
+            thread.id,
+        )
+    assert consumed is not None
+    assert consumed.interaction is None
+    assert consumed.version == pending.version + 1

@@ -44,15 +44,15 @@ integration details from becoming dependencies of the reusable Core.
 | North agent loop, middleware, checkpoints, StreamBridge | North | North | Already correctly owned |
 | Trusted `TenantContext` contract | Platform | Platform | Extracted; Dayboard retains only development-context construction |
 | Conversation thread/message/state contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
-| Conversation service | Platform | Platform | Core service extracted; transaction and adapter reuse still need hardening |
+| Conversation service | Platform | Platform | Extracted with explicit Unit of Work and Interaction CAS |
 | PostgreSQL Conversation repositories | Dayboard adapter | Platform adapter | Move only after Unit of Work and Store contracts are proven |
 | Run and Run-event contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
-| Run lifecycle service | Platform | Platform | Core lifecycle extracted; Unit of Work is not yet explicit |
+| Run lifecycle service | Platform | Platform | Extracted with explicit Unit of Work checkpoints |
 | PostgreSQL Run repositories | Dayboard adapter | Platform adapter | Move only after lifecycle concurrency contracts are proven |
-| Command idempotency | Dayboard | Platform | Replace direct ORM Row access with a platform record, Store, and service |
-| Command submission and dispatch | Mixed | Split | Platform owns generic lifecycle; Dayboard supplies agent/product adapters |
+| Command idempotency | Platform | Platform | ORM-independent record, Store, validation, cleanup, and rollback are complete |
+| Command submission and dispatch | Split | Split | Platform owns atomic submission; Dayboard owns queue and product execution |
 | Persisted message artifacts | Mixed | Split | Platform owns a versioned envelope and lifecycle; Dayboard owns schedule payloads |
-| Clarification interaction state | Dayboard | Split | Platform owns concurrency/lifecycle; Dayboard owns scheduling choices and responses |
+| Clarification interaction state | Split | Split | Implemented: Platform owns envelope/CAS; Dayboard owns typed payload and response projection |
 | Voice/media ingestion lifecycle | Dayboard | Platform boundary | Provider and product interpretation remain adapters |
 | Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
 | Reminder delivery/outbox machinery | Mixed | Split | Platform may own delivery; Dayboard owns due-time and schedule policy |
@@ -100,7 +100,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned presentation and event extension envelopes | Pending; current metadata remains unversioned mappings |
-| Atomic Interaction consumption by expected state version | Pending; concurrent clarification responses can still race |
+| Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
 | Explicit Conversation Thread lifecycle and primary-role contracts | Pending; current `status` remains a free string |
 
 The remaining findings do not require replacing the three-layer model. They define the hardening
@@ -125,8 +125,8 @@ Agent execution remains outside a database transaction. Each durable checkpoint 
 transaction; no transaction is held open while waiting for a model, tool provider, Redis, or SSE
 consumer.
 
-Event ordering must also be safe under concurrent writers. PostgreSQL event sequence allocation
-cannot rely permanently on an unlocked `max(seq) + 1` calculation.
+PostgreSQL Run-event sequence allocation locks the parent Run before calculating the next sequence,
+so concurrent lifecycle writers cannot claim the same value.
 
 ## Versioned Extension Contracts
 
@@ -142,9 +142,12 @@ PendingInteraction
   interaction_type
   schema_version
   source_run_id
-  version
-  expires_at
   payload             validated by the product adapter
+
+ConversationState
+  version              compare-and-consume token
+  expires_at
+  interaction
 ```
 
 Dayboard continues to own `ScheduleResultPart`, scheduling receipts, candidate shapes, and local-time
@@ -193,9 +196,10 @@ A capability is considered extracted only when:
 6. Add Platform Core and Dayboard Domain dependency checks. Complete.
 7. Add Unit of Work and platform idempotency contracts; remove ORM records from command use cases.
    Complete.
-8. Add versioned presentation envelopes and atomically resolved Interaction contracts.
-9. Split generic command submission/Run coordination from Dayboard Agent and result projection.
-10. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
+8. Add versioned PendingInteraction envelopes and atomic continuation submission. Complete.
+9. Add versioned presentation and event extension envelopes.
+10. Split generic Run coordination from Dayboard Agent execution and result projection.
+11. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
    Dayboard path.
-11. Consider usage accounting and notification delivery only after the lifecycle adapters are
+12. Consider usage accounting and notification delivery only after the lifecycle adapters are
     demonstrated.

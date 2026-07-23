@@ -34,11 +34,11 @@ class FakeConversationService:
         del context, thread_id, summary
         return None
 
-    async def set_pending(self, context, **kwargs):
-        del context, kwargs
-        return SimpleNamespace(version=1, state_data={})
+    async def set_interaction(self, context, **kwargs):
+        del context
+        return SimpleNamespace(version=1, interaction=kwargs["interaction"])
 
-    async def clear_pending(self, context, thread_id):
+    async def clear_interaction(self, context, thread_id):
         del context, thread_id
         return None
 

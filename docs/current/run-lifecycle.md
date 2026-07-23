@@ -137,9 +137,12 @@ original conversation.
 ## Clarification
 
 `ask_clarification` interrupts execution after Dayboard persists a structured interaction. The Run
-finishes as `needs_clarification`; the SSE stream emits the question and option display data. A
-choice request carries the conversation-state version and stable option key. Dayboard resolves the
-key to trusted stored context and creates a new queued Run.
+finishes as `needs_clarification`; SSE emits the question and the typed Thread-state endpoint returns
+the safe option presentation. A choice request carries the conversation-state version and stable
+option key. Dayboard validates the hidden product-owned candidate, then the Platform atomically
+consumes the expected Interaction version and creates the idempotent continuation Run, user message,
+and `run_created` event. An identical `Idempotency-Key` retry resolves the existing Run before reading
+Interaction state; a different or stale choice receives a conflict.
 
 ## Cancellation And Failure
 

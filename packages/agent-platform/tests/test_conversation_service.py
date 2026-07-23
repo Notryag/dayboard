@@ -5,12 +5,16 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
+
 from agent_platform.application import ConversationService
 from agent_platform.core import (
     ConversationMessage,
     ConversationRole,
     ConversationState,
     ConversationThread,
+    InteractionConflictError,
+    PendingInteraction,
 )
 from agent_platform.core import TenantContext
 
@@ -193,23 +197,19 @@ class MemoryStateStore:
         del context
         return self.records.get(thread_id)
 
-    async def set_pending(
+    async def set_interaction(
         self,
         context: TenantContext,
         *,
         thread_id: UUID,
-        action: str,
-        question: str,
-        state_data: dict[str, Any],
+        interaction: PendingInteraction,
         expires_at: datetime,
     ) -> ConversationState:
         del context
         previous = self.records.get(thread_id)
         state = ConversationState(
             thread_id=thread_id,
-            pending_action=action,
-            pending_question=question,
-            state_data=state_data,
+            interaction=interaction,
             version=(previous.version + 1) if previous else 1,
             expires_at=expires_at,
             updated_at=datetime.now(UTC),
@@ -217,7 +217,35 @@ class MemoryStateStore:
         self.records[thread_id] = state
         return state
 
-    async def clear_pending(
+    async def consume_interaction(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        expected_version: int,
+        consumed_at: datetime,
+    ) -> ConversationState | None:
+        del context
+        previous = self.records.get(thread_id)
+        if (
+            previous is None
+            or previous.interaction is None
+            or previous.version != expected_version
+            or (previous.expires_at is not None and previous.expires_at <= consumed_at)
+        ):
+            return None
+        state = previous.model_copy(
+            update={
+                "interaction": None,
+                "version": previous.version + 1,
+                "expires_at": None,
+                "updated_at": consumed_at,
+            }
+        )
+        self.records[thread_id] = state
+        return state
+
+    async def clear_interaction(
         self,
         context: TenantContext,
         thread_id: UUID,
@@ -228,9 +256,7 @@ class MemoryStateStore:
             return None
         state = previous.model_copy(
             update={
-                "pending_action": None,
-                "pending_question": None,
-                "state_data": {},
+                "interaction": None,
                 "version": previous.version + 1,
                 "expires_at": None,
                 "updated_at": datetime.now(UTC),
@@ -280,12 +306,17 @@ def test_conversation_history_and_state_are_storage_independent() -> None:
             content="已记录",
             message_metadata={"parts": [{"type": "product_result"}]},
         )
-        pending = await service.set_pending(
+        interaction = PendingInteraction(
+            interaction_type="example.choice",
+            schema_version=1,
+            source_run_id=run_id,
+            prompt="选择哪一项？",
+            payload={"options": ["a", "b"]},
+        )
+        pending = await service.set_interaction(
             context,
             thread_id=thread.id,
-            action="choice",
-            question="选择哪一项？",
-            state_data={"options": ["a", "b"]},
+            interaction=interaction,
             expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
 
@@ -293,10 +324,19 @@ def test_conversation_history_and_state_are_storage_independent() -> None:
             ConversationRole.user,
             ConversationRole.assistant,
         ]
-        assert pending.state_data == {"options": ["a", "b"]}
-        cleared = await service.clear_pending(context, thread.id)
-        assert cleared is not None
-        assert cleared.pending_action is None
-        assert cleared.version == pending.version + 1
+        assert pending.interaction == interaction
+        consumed = await service.consume_interaction(
+            context,
+            thread_id=thread.id,
+            expected_version=pending.version,
+        )
+        assert consumed.interaction is None
+        assert consumed.version == pending.version + 1
+        with pytest.raises(InteractionConflictError):
+            await service.consume_interaction(
+                context,
+                thread_id=thread.id,
+                expected_version=pending.version,
+            )
 
     asyncio.run(scenario())

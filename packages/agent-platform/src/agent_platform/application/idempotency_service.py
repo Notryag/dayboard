@@ -7,7 +7,7 @@ from hashlib import sha256
 from uuid import UUID
 
 from agent_platform.core.errors import IdempotencyConflictError
-from agent_platform.core.idempotency import IdempotencyClaim
+from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
 from agent_platform.core.identity import TenantContext
 from agent_platform.ports.unit_of_work import IdempotencyUnitOfWork
 
@@ -17,6 +17,26 @@ class IdempotencyService:
         self.unit_of_work = unit_of_work
         self.store = unit_of_work.idempotency
 
+    @staticmethod
+    def request_hash(request_identity: str) -> str:
+        return sha256(request_identity.encode("utf-8")).hexdigest()
+
+    async def find_matching(
+        self,
+        context: TenantContext,
+        *,
+        key: str,
+        request_identity: str,
+    ) -> IdempotencyRecord | None:
+        record = await self.store.get(context, key=key)
+        if record is None:
+            return None
+        if record.request_hash != self.request_hash(request_identity):
+            raise IdempotencyConflictError(
+                "Idempotency-Key was already used for a different request"
+            )
+        return record
+
     async def claim(
         self,
         context: TenantContext,
@@ -25,7 +45,7 @@ class IdempotencyService:
         request_identity: str,
         run_id: UUID,
     ) -> IdempotencyClaim:
-        request_hash = sha256(request_identity.encode("utf-8")).hexdigest()
+        request_hash = self.request_hash(request_identity)
         claim = await self.store.claim(
             context,
             key=key,

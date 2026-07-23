@@ -283,8 +283,8 @@ foreground colors without decorative background tiles. Each active card has a se
 circular completion control; the rest of the card opens a bottom action sheet instead of a centered
 dialog. The sheet presents details and vertical edit, complete, and cancel actions, and editing
 replaces the sheet body without opening another layer. Calendar editing covers title, start time,
-and duration; task editing covers title and optional due time. Mutations use `updated_at` as an
-optimistic-concurrency boundary.
+and duration; task editing covers title and optional due time. Mutations use integer `row_version`
+as the optimistic-concurrency boundary; `updated_at` is audit metadata only.
 
 The direct circular completion control appears only in schedule/day-view contexts. Assistant
 confirmation cards reuse the same content and detail sheet but omit that control: a newly created

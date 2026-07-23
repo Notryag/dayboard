@@ -43,6 +43,8 @@ implementation chronology. Current facts live under [current](./current/README.m
   Conversation/Run contracts and services out of the Dayboard product namespace.
 - Added an explicit shared Unit of Work, atomic idempotent command submission, rollback-safe claim
   reuse, and concurrency-safe durable Run-event sequence allocation.
+- Added versioned resumable Interactions, Dayboard-owned typed clarification payloads, safe generated
+  Web state contracts, and atomic compare-and-consume continuation submission with retry recovery.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -52,8 +54,8 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Architecture hardening and public-release completion:
 
-1. Add versioned artifact envelopes and atomically resolved Interaction contracts before extracting
-   more product orchestration.
+1. Add versioned presentation and event extension envelopes before extracting more product
+   orchestration.
 2. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
 3. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
 4. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
@@ -72,8 +74,7 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
   per-round growth measurements are still incomplete.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model
   scoped budgets for all traffic.
-- Versioned presentation envelopes and atomically consumed Interaction state have not yet crossed
-  the Platform package boundary.
+- Persisted assistant presentation metadata still needs a versioned Platform envelope.
 - Scheduling defaults to trusted `Asia/Shanghai`; explicit foreign-timezone conversion is unsupported.
 - Browser voice behavior has provider smoke coverage but not the full Chrome/Safari release matrix.
 - Backups are host-local; encrypted off-host replication is pending.

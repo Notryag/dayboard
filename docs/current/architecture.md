@@ -95,10 +95,16 @@ and `run_created` event, and appends the user message. Run lifecycle checkpoints
 Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation locks the
 parent Run, so concurrent writers cannot select the same `max(seq) + 1` value.
 
-Persisted presentation and interaction payloads remain unversioned JSON mappings, and clarification
-resolution does not yet atomically consume an expected state version. These are active extraction
-gaps, not target platform contracts; the hardening sequence is tracked in
-[../agent-platform-extraction.md](../agent-platform-extraction.md).
+The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
+Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
+one transaction for the idempotency claim, expected-state-version consumption, Run and
+`run_created` event, and user message. Identical retries find the existing Run before requiring the
+now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
+state schema contains only presentation options, never trusted candidate IDs or row versions.
+
+Persisted assistant presentation metadata remains an unversioned mapping. A versioned presentation
+envelope is the next extraction gap; it is not conflated with the now-complete Interaction contract.
+The hardening sequence is tracked in [../agent-platform-extraction.md](../agent-platform-extraction.md).
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,

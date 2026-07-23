@@ -5,6 +5,7 @@ import type {
   ClarificationInteraction as Interaction,
   ConversationState,
 } from "@/features/clarifications/types";
+import { clarificationPresentation } from "@/features/clarifications/types";
 import { apiBaseUrl, userFacingApiError } from "@/lib/api/client";
 import {
   cancelRun,
@@ -134,8 +135,8 @@ export function useConversationSession() {
   }, [consumeRun, dispatch, isSubmitting, threadId]);
 
   const chooseClarification = useCallback(async (optionKey: string) => {
-    const interaction = conversationState?.state_data.interaction;
-    if (!threadId || !interaction || isSubmitting) return;
+    const interaction = clarificationPresentation(conversationState);
+    if (!threadId || !conversationState || !interaction || isSubmitting) return;
     const choiceLabel = clarificationChoiceLabel(interaction, optionKey);
     if (!choiceLabel) return;
 

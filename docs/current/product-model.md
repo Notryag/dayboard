@@ -98,7 +98,11 @@ conversations and do not appear in this history.
 When missing information would materially change the result, the Agent uses structured
 clarification. Dayboard persists the question and trusted option mapping in `conversation_states`.
 The browser receives stable option keys and display data, not database IDs or optimistic-lock
-versions. A selected option creates a normal follow-up Run on the same thread.
+versions. The persisted Interaction has a schema identity, source Run, expiry, and monotonically
+increasing state version. A selected option compare-and-consumes that exact version in the same
+transaction that creates the idempotent follow-up Run, lifecycle event, and user message. Two
+competing choices cannot both succeed, while retrying the same accepted request returns its existing
+Run even though the Interaction has already been consumed.
 
 The Agent does not ask for confirmation when the target and requested action are unambiguous.
 

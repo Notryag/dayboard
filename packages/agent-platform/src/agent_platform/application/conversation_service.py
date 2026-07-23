@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -13,8 +13,9 @@ from agent_platform.core.conversations import (
     ConversationState,
     ConversationThread,
 )
-from agent_platform.core.errors import ConversationNotFoundError
+from agent_platform.core.errors import ConversationNotFoundError, InteractionConflictError
 from agent_platform.core.identity import TenantContext
+from agent_platform.core.interactions import PendingInteraction
 from agent_platform.ports.unit_of_work import ConversationUnitOfWork
 
 
@@ -141,29 +142,44 @@ class ConversationService:
         await self.require_thread(context, thread_id)
         return await self.states.get(context, thread_id)
 
-    async def set_pending(
+    async def set_interaction(
         self,
         context: TenantContext,
         *,
         thread_id: UUID,
-        action: str,
-        question: str,
-        state_data: dict[str, Any],
+        interaction: PendingInteraction,
         expires_at: datetime,
     ) -> ConversationState:
         await self.require_thread(context, thread_id)
-        return await self.states.set_pending(
+        return await self.states.set_interaction(
             context,
             thread_id=thread_id,
-            action=action,
-            question=question,
-            state_data=state_data,
+            interaction=interaction,
             expires_at=expires_at,
         )
 
-    async def clear_pending(
+    async def consume_interaction(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        expected_version: int,
+    ) -> ConversationState:
+        state = await self.states.consume_interaction(
+            context,
+            thread_id=thread_id,
+            expected_version=expected_version,
+            consumed_at=datetime.now(UTC),
+        )
+        if state is None:
+            raise InteractionConflictError(
+                "Interaction is missing, expired, or changed; refresh and try again"
+            )
+        return state
+
+    async def clear_interaction(
         self,
         context: TenantContext,
         thread_id: UUID,
     ) -> ConversationState | None:
-        return await self.states.clear_pending(context, thread_id)
+        return await self.states.clear_interaction(context, thread_id)

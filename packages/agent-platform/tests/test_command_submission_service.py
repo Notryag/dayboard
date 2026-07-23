@@ -17,6 +17,7 @@ from agent_platform.core import (
     IdempotencyClaim,
     IdempotencyConflictError,
     IdempotencyRecord,
+    InteractionConflictError,
     TenantContext,
 )
 
@@ -91,8 +92,9 @@ def _unit_of_work():
         ),
         states=SimpleNamespace(
             get=AsyncMock(),
-            set_pending=AsyncMock(),
-            clear_pending=AsyncMock(),
+            set_interaction=AsyncMock(),
+            consume_interaction=AsyncMock(),
+            clear_interaction=AsyncMock(),
         ),
         runs=SimpleNamespace(
             create=AsyncMock(),
@@ -106,6 +108,7 @@ def _unit_of_work():
         ),
         events=SimpleNamespace(append=AsyncMock(), list_for_run=AsyncMock()),
         idempotency=SimpleNamespace(
+            get=AsyncMock(),
             claim=AsyncMock(),
             delete_created_before=AsyncMock(),
         ),
@@ -206,5 +209,87 @@ def test_command_submission_rolls_back_conflicts_and_partial_writes() -> None:
             )
         failed_uow.commit.assert_not_awaited()
         failed_uow.rollback.assert_awaited_once()
+
+    asyncio.run(scenario())
+
+
+def test_command_submission_consumes_interaction_in_the_creation_transaction() -> None:
+    async def scenario() -> None:
+        context = _context()
+        unit_of_work = _unit_of_work()
+        thread = _thread(context)
+        run = _run(context, thread.id)
+        unit_of_work.threads.get.return_value = thread
+        unit_of_work.states.consume_interaction.return_value = SimpleNamespace(version=2)
+        unit_of_work.runs.create.return_value = run
+
+        result = await CommandSubmissionService(unit_of_work).submit(
+            context,
+            input_message="continue",
+            thread_id=thread.id,
+            consume_interaction_version=1,
+        )
+
+        assert result.created
+        unit_of_work.states.consume_interaction.assert_awaited_once()
+        unit_of_work.runs.create.assert_awaited_once()
+        unit_of_work.messages.append_once.assert_awaited_once()
+        unit_of_work.commit.assert_awaited_once()
+        unit_of_work.rollback.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_command_submission_rolls_back_when_interaction_compare_and_swap_fails() -> None:
+    async def scenario() -> None:
+        context = _context()
+        unit_of_work = _unit_of_work()
+        thread = _thread(context)
+        unit_of_work.threads.get.return_value = thread
+        unit_of_work.states.consume_interaction.return_value = None
+
+        with pytest.raises(InteractionConflictError):
+            await CommandSubmissionService(unit_of_work).submit(
+                context,
+                input_message="continue",
+                thread_id=thread.id,
+                consume_interaction_version=1,
+            )
+
+        unit_of_work.runs.create.assert_not_awaited()
+        unit_of_work.events.append.assert_not_awaited()
+        unit_of_work.messages.append_once.assert_not_awaited()
+        unit_of_work.commit.assert_not_awaited()
+        unit_of_work.rollback.assert_awaited_once()
+
+    asyncio.run(scenario())
+
+
+def test_command_submission_finds_an_idempotent_retry_before_reading_interaction() -> None:
+    async def scenario() -> None:
+        context = _context()
+        unit_of_work = _unit_of_work()
+        request_identity = "thread:clarification:1:candidate_1"
+        record = _claim(
+            context,
+            request_hash=sha256(request_identity.encode("utf-8")).hexdigest(),
+            created=False,
+        ).record
+        existing = _run(context, uuid4(), record.run_id)
+        unit_of_work.idempotency.get.return_value = record
+        unit_of_work.runs.get.return_value = existing
+
+        result = await CommandSubmissionService(unit_of_work).find_existing(
+            context,
+            idempotency_key=record.key,
+            request_identity=request_identity,
+        )
+
+        assert result is not None
+        assert not result.created
+        assert result.run_id == existing.id
+        unit_of_work.states.get.assert_not_awaited()
+        unit_of_work.idempotency.claim.assert_not_awaited()
+        unit_of_work.commit.assert_awaited_once()
 
     asyncio.run(scenario())

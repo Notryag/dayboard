@@ -14,6 +14,15 @@ from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context
 from dayboard.db.run_repositories import AgentRunEventRepository
 from agent_platform.core import ConversationRole
+from dayboard.domain.interactions import (
+    CalendarEntryChoiceCandidate,
+    CalendarEntryChoiceOption,
+    CalendarEntryChoicePresentation,
+    ClarificationPayload,
+    SuggestedChoiceCandidate,
+    SuggestedChoiceOption,
+    SuggestedChoicePresentation,
+)
 
 
 async def test_create_background_command_run_returns_before_execution(
@@ -263,35 +272,40 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     conversations = build_conversation_service(db_session)
     thread = await conversations.create_thread(tenant_context, title="工作安排")
     source_run_id = uuid4()
+    entry_id = uuid4()
     pending = await ClarificationService(conversations).set_pending(
         tenant_context,
         thread_id=thread.id,
         run_id=source_run_id,
         question="你想修改哪一个日程？",
-        state_data={
-            "intent": "reschedule",
-            "candidates": [
-                {
-                    "key": "candidate_1",
-                    "id": "entry-secret-id",
-                    "title": "产品会议",
-                    "start_time": "2026-07-12T15:00:00+08:00",
-                    "timezone": "Asia/Shanghai",
-                    "updated_at": "2026-07-11T01:00:00Z",
-                }
+        payload=ClarificationPayload(
+            response_kind="calendar_choice",
+            candidates=[
+                CalendarEntryChoiceCandidate(
+                    key="candidate_1",
+                    id=entry_id,
+                    row_version=3,
+                    title="产品会议",
+                    timing_kind="timed",
+                    start_time="2026-07-12T15:00:00+08:00",
+                    end_time="2026-07-12T16:00:00+08:00",
+                    timezone="Asia/Shanghai",
+                    status="scheduled",
+                )
             ],
-            "interaction": {
-                "type": "calendar_entry_choice",
-                "options": [
-                    {
-                        "key": "candidate_1",
-                        "title": "产品会议",
-                        "start_time": "2026-07-12T15:00:00+08:00",
-                        "timezone": "Asia/Shanghai",
-                    }
-                ],
-            },
-        },
+            presentation=CalendarEntryChoicePresentation(
+                options=[
+                    CalendarEntryChoiceOption(
+                        key="candidate_1",
+                        title="产品会议",
+                        timing_kind="timed",
+                        start_time="2026-07-12T15:00:00+08:00",
+                        end_time="2026-07-12T16:00:00+08:00",
+                        timezone="Asia/Shanghai",
+                    )
+                ]
+            ),
+        ),
     )
     await db_session.commit()
 
@@ -299,9 +313,21 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
         transport=ASGITransport(app=api_app),
         base_url="http://test",
     ) as client:
+        public_state = await client.get(f"/api/threads/{thread.id}/state")
+        headers = {"Idempotency-Key": "choose-calendar-entry-1"}
         response = await client.post(
             f"/api/threads/{thread.id}/clarification-responses",
-            headers={"Idempotency-Key": "choose-calendar-entry-1"},
+            headers=headers,
+            json={"state_version": pending.version, "option_key": "candidate_1"},
+        )
+        repeated = await client.post(
+            f"/api/threads/{thread.id}/clarification-responses",
+            headers=headers,
+            json={"state_version": pending.version, "option_key": "candidate_1"},
+        )
+        conflicting_retry = await client.post(
+            f"/api/threads/{thread.id}/clarification-responses",
+            headers={"Idempotency-Key": "choose-calendar-entry-2"},
             json={"state_version": pending.version, "option_key": "candidate_1"},
         )
         messages = await client.get(f"/api/threads/{thread.id}/messages")
@@ -309,16 +335,23 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
 
     dispatcher = api_app.state.test_command_dispatcher
     queued_request = dispatcher.started[-1][2]
+    public_body = public_state.json()
+    assert "candidates" not in public_body["interaction"]["payload"]
+    assert public_body["interaction"]["payload"]["presentation"]["options"][0]["key"] == (
+        "candidate_1"
+    )
     assert response.status_code == 202
+    assert repeated.json() == response.json()
+    assert conflicting_retry.status_code == 409
     assert response.json()["thread_id"] == str(thread.id)
-    assert "entry-secret-id" in queued_request.message
+    assert str(entry_id) in queued_request.message
     assert '"local_start": "2026-07-12T15:00"' in queued_request.message
     assert '"start_time"' not in queued_request.message
     assert "Asia/Shanghai" not in queued_request.message
     assert messages.json()["items"][-1]["content"].startswith("选择“产品会议")
-    assert "entry-secret-id" not in messages.json()["items"][-1]["content"]
-    assert "candidates" not in state.json()["state_data"]
-    assert state.json()["state_data"]["interaction"]["options"][0]["key"] == "candidate_1"
+    assert str(entry_id) not in messages.json()["items"][-1]["content"]
+    assert len(dispatcher.started) == 1
+    assert state.json() is None
 
 
 async def test_structured_clarification_rejects_stale_state_version(
@@ -333,7 +366,19 @@ async def test_structured_clarification_rejects_stale_state_version(
         thread_id=thread.id,
         run_id=uuid4(),
         question="选择一个日程",
-        state_data={"candidates": [{"key": "candidate_1", "title": "会议"}]},
+        payload=ClarificationPayload(
+            response_kind="single_choice",
+            candidates=[
+                SuggestedChoiceCandidate(
+                    key="candidate_1",
+                    value="上午 9 点",
+                    label="上午 9 点",
+                )
+            ],
+            presentation=SuggestedChoicePresentation(
+                options=[SuggestedChoiceOption(key="candidate_1", label="上午 9 点")]
+            ),
+        ),
     )
     await db_session.commit()
 

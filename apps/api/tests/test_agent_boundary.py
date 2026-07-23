@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService, _extract_clarification_state_data
+from dayboard.app.commands import CommandService, _extract_clarification_payload
 from dayboard.config import Settings
 from agent_platform.core import TenantContext
 
@@ -36,16 +36,17 @@ class FakeConversationService:
         del context, thread_id, summary
         return None
 
-    async def set_pending(self, context, **kwargs):
-        del context, kwargs
-        return SimpleNamespace(version=1, state_data={})
+    async def set_interaction(self, context, **kwargs):
+        del context
+        return SimpleNamespace(version=1, interaction=kwargs["interaction"])
 
-    async def clear_pending(self, context, thread_id):
+    async def clear_interaction(self, context, thread_id):
         del context, thread_id
         return None
 
 
 def test_clarification_state_uses_real_search_tool_candidates() -> None:
+    entry_id = uuid4()
     result = {
         "messages": [
             AIMessage(
@@ -61,18 +62,22 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
             ToolMessage(
                 name="search_calendar_entries",
                 tool_call_id="search-1",
-                content='[{"id":"entry-1","title":"产品会议","local_start":"2026-07-11T08:00"}]',
+                content="compact model receipt",
                 artifact={
                     "type": "schedule_items_result",
                     "items": [
                         {
                             "kind": "calendar",
                             "value": {
-                                "id": "entry-1",
+                                "id": str(entry_id),
                                 "row_version": 4,
                                 "title": "产品会议",
+                                "timing_kind": "timed",
+                                "scheduled_date": None,
                                 "start_time": "2026-07-11T00:00:00+00:00",
+                                "end_time": "2026-07-11T01:00:00+00:00",
                                 "timezone": "Asia/Shanghai",
+                                "status": "scheduled",
                                 "tenant_id": "must-not-persist",
                             },
                         }
@@ -82,36 +87,21 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
         ]
     }
 
-    state_data = _extract_clarification_state_data(result)
+    payload = _extract_clarification_payload(result)
 
-    assert state_data == {
-        "intent": "select",
-        "candidates": [
-            {
-                "key": "candidate_1",
-                "id": "entry-1",
-                "row_version": 4,
-                "title": "产品会议",
-                "start_time": "2026-07-11T00:00:00+00:00",
-                "timezone": "Asia/Shanghai",
-            }
-        ],
-        "interaction": {
-            "type": "calendar_entry_choice",
-            "options": [
-                {
-                    "key": "candidate_1",
-                    "title": "产品会议",
-                    "start_time": "2026-07-11T00:00:00+00:00",
-                    "timezone": "Asia/Shanghai",
-                }
-            ],
-        },
-    }
+    assert payload.response_kind == "calendar_choice"
+    candidate = payload.candidates[0]
+    assert candidate.kind == "calendar"
+    assert candidate.id == entry_id
+    assert candidate.row_version == 4
+    assert payload.presentation is not None
+    assert payload.presentation.type == "calendar_entry_choice"
+    assert payload.presentation.options[0].title == "产品会议"
+    assert not hasattr(candidate, "tenant_id")
 
 
 def test_clarification_state_uses_agent_suggested_choices_without_search_results() -> None:
-    state_data = _extract_clarification_state_data(
+    payload = _extract_clarification_payload(
         {
             "thread_data": {
                 "clarification": {
@@ -125,21 +115,19 @@ def test_clarification_state_uses_agent_suggested_choices_without_search_results
         }
     )
 
-    assert state_data == {
-        "candidates": [
-            {"key": "candidate_1", "value": "09:00", "label": "09:00"},
-            {"key": "candidate_2", "value": "14:00", "label": "14:00"},
-            {"key": "candidate_3", "value": "其他时间", "label": "其他时间"},
-        ],
-        "interaction": {
-            "type": "suggested_choice",
-            "options": [
-                {"key": "candidate_1", "label": "09:00"},
-                {"key": "candidate_2", "label": "14:00"},
-                {"key": "candidate_3", "label": "其他时间"},
-            ],
-        },
-    }
+    assert payload.response_kind == "single_choice"
+    assert [candidate.value for candidate in payload.candidates] == [
+        "09:00",
+        "14:00",
+        "其他时间",
+    ]
+    assert payload.presentation is not None
+    assert payload.presentation.type == "suggested_choice"
+    assert [option.label for option in payload.presentation.options] == [
+        "09:00",
+        "14:00",
+        "其他时间",
+    ]
 
 def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     captured = {}

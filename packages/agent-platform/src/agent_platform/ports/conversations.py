@@ -13,6 +13,7 @@ from agent_platform.core.conversations import (
     ConversationThread,
 )
 from agent_platform.core.identity import TenantContext
+from agent_platform.core.interactions import PendingInteraction
 
 
 class ConversationThreadStore(Protocol):
@@ -91,18 +92,25 @@ class ConversationStateStore(Protocol):
         thread_id: UUID,
     ) -> ConversationState | None: ...
 
-    async def set_pending(
+    async def set_interaction(
         self,
         context: TenantContext,
         *,
         thread_id: UUID,
-        action: str,
-        question: str,
-        state_data: dict[str, Any],
+        interaction: PendingInteraction,
         expires_at: datetime,
     ) -> ConversationState: ...
 
-    async def clear_pending(
+    async def consume_interaction(
+        self,
+        context: TenantContext,
+        *,
+        thread_id: UUID,
+        expected_version: int,
+        consumed_at: datetime,
+    ) -> ConversationState | None: ...
+
+    async def clear_interaction(
         self,
         context: TenantContext,
         thread_id: UUID,

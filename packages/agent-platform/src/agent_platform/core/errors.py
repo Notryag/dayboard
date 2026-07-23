@@ -15,3 +15,7 @@ class IdempotencyConflictError(ValueError):
 
 class IdempotencyTargetNotFoundError(RuntimeError):
     """Raised when a persisted idempotency claim references a missing target."""
+
+
+class InteractionConflictError(RuntimeError):
+    """Raised when a resumable interaction is missing, expired, or changed."""
