@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   calendarEntry,
   installApiFixture,
@@ -10,6 +10,24 @@ import {
 async function openTextComposer(page: Page) {
   await page.getByRole("button", { name: "切换到键盘输入" }).click();
   return page.getByPlaceholder("输入日程或任务");
+}
+
+async function swipeWorkspace(
+  page: Page,
+  workspace: Locator,
+  direction: "left" | "right",
+) {
+  const box = await workspace.boundingBox();
+  if (!box) throw new Error("Workspace must be visible before swiping");
+
+  const startRatio = direction === "right" ? 0.25 : 0.75;
+  const endRatio = direction === "right" ? 0.8 : 0.2;
+  const y = box.y + box.height * 0.45;
+
+  await page.mouse.move(box.x + box.width * startRatio, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * endRatio, y, { steps: 12 });
+  await page.mouse.up();
 }
 
 test("register, login, and create a conversation thread", async ({ page }) => {
@@ -199,11 +217,7 @@ test("mobile content swipe switches between conversation and schedule", async ({
     return box ? box.x + box.width : Number.POSITIVE_INFINITY;
   }).toBeLessThanOrEqual(1);
 
-  await page.mouse.move(300, 360);
-  await page.mouse.down();
-  await page.mouse.move(365, 361, { steps: 3 });
-  await page.mouse.move(380, 363, { steps: 3 });
-  await page.mouse.up();
+  await swipeWorkspace(page, workspace, "right");
   await expect(workspace).toHaveAttribute("data-active-view", "schedule");
   await expect(page.getByRole("region", { name: "日程", exact: true })).toBeVisible();
 
@@ -211,11 +225,7 @@ test("mobile content swipe switches between conversation and schedule", async ({
     const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform);
     return matrix.m41;
   })).toBeGreaterThan(-10);
-  await page.mouse.move(90, 520);
-  await page.mouse.down();
-  await page.mouse.move(45, 519, { steps: 3 });
-  await page.mouse.move(10, 517, { steps: 3 });
-  await page.mouse.up();
+  await swipeWorkspace(page, workspace, "left");
   await expect(workspace).toHaveAttribute("data-active-view", "chat");
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
 });
