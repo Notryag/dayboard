@@ -49,9 +49,11 @@ refresh and across devices.
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
 | Redis | arq queue, rate limits, locks, Redis Streams | durable product truth |
 
-The dependency direction is `North <- Agent Platform <- Dayboard`. Lower layers must not import
-higher layers. North does not understand application identity or persistence; Agent Platform does
-not understand calendars, tasks, scheduling prompts, or the Dayboard UI.
+The source-code dependency direction is `Dayboard -> Agent Platform -> North`, equivalently
+`North <- Agent Platform <- Dayboard`. A consumer points toward what it imports. Runtime calls,
+events, and return values may flow in both directions through declared interfaces without changing
+that import direction. North does not understand application identity or persistence; Agent
+Platform does not understand calendars, tasks, scheduling prompts, or the Dayboard UI.
 
 ## Backend Shape
 
@@ -84,9 +86,16 @@ model-supplied tool arguments. Repository queries scope business data by tenant 
 
 Dayboard's composition root connects platform Conversation and Run services to PostgreSQL adapters.
 The platform owns persistence use cases, paging, state transitions and lifecycle event policy; the
-adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and atomic database
+adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and individual database
 operations. Dayboard's clarification service owns scheduling candidate validation, local-time
 projection, public state filtering, and user-facing choice text.
+
+The extracted services do not yet own an explicit Unit of Work. Multi-repository atomicity currently
+depends on Dayboard composing the repositories with one `AsyncSession` and committing at the
+application boundary. Command idempotency still uses the Dayboard PostgreSQL repository directly,
+and persisted presentation/interaction payloads are unversioned JSON mappings. These are active
+extraction gaps, not target platform contracts; the hardening sequence is tracked in
+[../agent-platform-extraction.md](../agent-platform-extraction.md).
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities.

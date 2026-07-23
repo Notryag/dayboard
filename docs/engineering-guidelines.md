@@ -158,11 +158,20 @@ Responsibilities:
 - `workers`: background jobs
 - `integrations`: ASR, object storage, external APIs
 
-Allowed dependency direction:
+Target internal dependency direction:
 
 ```text
-api -> app -> agent/tools/domain -> db/integrations
+api/workers --------> app
+agent/tools --------> app + domain + North
+app ----------------> domain + declared ports
+db/integrations ----> declared ports + domain
 ```
+
+Arrows point from a consumer to what it imports. `domain` must not import `app`, `api`, `db`,
+`workers`, Agent tools, FastAPI, SQLAlchemy, or North. Application use cases depend on ports rather
+than concrete repositories; infrastructure adapters implement those ports and are connected only at
+the composition root. Existing violations are removed in vertical slices and then locked down by
+the architecture checker.
 
 Avoid:
 
@@ -170,6 +179,9 @@ Avoid:
 - raw SQL scattered outside repositories
 - tool functions containing full business workflows
 - `north` importing Dayboard code
+- Platform Core importing SQLAlchemy, FastAPI, a product module, or a concrete provider
+- application services exposing SQLAlchemy rows or relying on an implicit shared Session contract
+- unversioned arbitrary mappings used as public artifact or interaction protocols
 - request context stored in global mutable state
 
 ## Tool Design
