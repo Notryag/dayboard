@@ -95,11 +95,12 @@ Dayboard's composition roots connect Platform Conversation and Run services to P
 `dayboard.composition.platform` builds an explicit per-session Platform scope and a fresh
 `PlatformUnitOfWorkFactory` for short runtime-journal transactions. `dayboard.composition.commands`
 builds the storage-free command application service, while `dayboard.composition.runs` builds one
-North driver per persisted Run with its stream bridge, trusted Agent factory, Provider Usage service,
-and budget guard. The platform owns persistence use cases, paging, state transitions and lifecycle
-event policy; adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and
-individual database operations. Dayboard's clarification service owns scheduling candidate
-validation, local-time projection, public state filtering, and user-facing choice text.
+North driver per persisted Run with its stream bridge, trusted Agent factory, Provider Usage
+settlement port, and budget guard. The platform owns persistence use cases, paging, state
+transitions and lifecycle event policy; adapters own SQLAlchemy rows, constraint translation,
+tenant-scoped queries, and individual database operations. Dayboard's clarification service owns
+scheduling candidate validation, local-time projection, public state filtering, and user-facing
+choice text.
 
 Dayboard scheduling has a separate product-owned Unit of Work. `SchedulingService` and
 `ScheduleQueryService` depend only on scheduling store ports and domain objects; SQLAlchemy row
@@ -167,8 +168,9 @@ row lock to atomically persist the terminal Run state, assistant message, and op
 The injected Dayboard driver owns North execution, runtime-event projection, schedule presentation
 assembly, usage settlement, and StreamBridge publication. Its runtime journal opens a fresh Platform
 Unit of Work for every durable event instead of sharing the Run's main session. North lifecycle
-callbacks project raw results into Platform outcomes before North emits its end sentinel, so
-PostgreSQL is already terminal when the browser observes stream completion. Redis carries only
+callbacks deliver a typed `RuntimeExecutionResult`; Dayboard projects it into a Platform outcome
+before North emits its end sentinel, so PostgreSQL is already terminal when the browser observes
+stream completion. Redis carries only
 `run_id`; the worker reloads tenant, owner, thread, and input from PostgreSQL and composes a new
 driver for that Run. The superseded queue/execution protocol has no compatibility path.
 
@@ -178,8 +180,10 @@ one transaction for the idempotency claim, expected-state-version consumption, R
 `run_created` event, and user message. Identical retries find the existing Run before requiring the
 now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
 state schema contains only presentation options, never trusted candidate IDs or row versions.
-North may retain a temporary clarification signal inside its per-Run graph state, but that signal is
-not durable application truth: the Platform `PendingInteraction` is the sole authority for refresh,
+North may retain a temporary `clarification_request` inside its per-Run graph state, but exposes it
+to Dayboard only as a typed `ClarificationRequest`. Dayboard combines it with already validated
+presentation parts instead of interpreting graph dictionaries or ToolMessages. The signal is not
+durable application truth: the Platform `PendingInteraction` is the sole authority for refresh,
 cross-device recovery, expiry, and CAS consumption.
 
 The Platform also owns the generic `PresentationEnvelope` identity, schema version, persistence,

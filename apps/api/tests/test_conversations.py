@@ -253,12 +253,10 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
     async def fake_invoker(**kwargs):
         del kwargs
         return {
-            "thread_data": {
-                "clarification": {
-                    "question": "上午还是下午？",
-                    "response_kind": "single_choice",
-                    "options": ["上午", "下午"],
-                }
+            "clarification_request": {
+                "question": "上午还是下午？",
+                "response_kind": "single_choice",
+                "options": ["上午", "下午"],
             },
             "messages": [],
         }

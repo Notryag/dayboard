@@ -13,6 +13,7 @@ from north import (
     CompactionHook,
     RunExecutor,
     RunLifecycleHooks,
+    RuntimeExecutionResult,
     RuntimeStreamEvent,
     RuntimeUsageAccumulator,
 )
@@ -183,7 +184,7 @@ class DayboardRunExecutionDriver:
                 preserved_message_count=len(event.preserved_messages),
             )
 
-        async def complete_run(result: object) -> None:
+        async def complete_run(result: RuntimeExecutionResult) -> None:
             nonlocal terminal_callback_called
             outcome = project_run_result(
                 result,

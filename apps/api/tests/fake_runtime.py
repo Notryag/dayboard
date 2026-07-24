@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 
+from north import RuntimeExecutionResult
+from north.runtime.results import clarification_from_values
+
 
 class FakeRunExecutor:
     """Unit-test adapter for legacy-shaped deterministic invocation fakes."""
@@ -18,7 +21,11 @@ class FakeRunExecutor:
         if observer is not None:
             kwargs["stream_sink"] = observer
         try:
-            result = await self._invoker(**kwargs)
+            values = await self._invoker(**kwargs)
+            result = RuntimeExecutionResult(
+                values=values,
+                clarification=clarification_from_values(values),
+            )
             if hooks.on_completed is not None:
                 await hooks.on_completed(result)
             return result

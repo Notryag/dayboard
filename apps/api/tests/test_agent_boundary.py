@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fake_runtime import fake_executor_factory
-from langchain_core.messages import AIMessage, ToolMessage
+from north import ClarificationRequest
 from north.runtime import MemoryStreamBridge
 
 from dayboard.agent.factory import build_dayboard_agent
@@ -20,47 +20,32 @@ from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
 
 def test_clarification_state_uses_real_search_tool_candidates() -> None:
     entry_id = uuid4()
-    result = {
-        "messages": [
-            AIMessage(
-                content="",
-                tool_calls=[
-                    {
-                        "id": "search-1",
-                        "name": "search_calendar_entries",
-                        "args": {"title_query": "产品会议"},
-                    }
-                ],
-            ),
-            ToolMessage(
-                name="search_calendar_entries",
-                tool_call_id="search-1",
-                content="compact model receipt",
-                artifact={
-                    "type": "schedule_items_result",
-                    "items": [
-                        {
-                            "kind": "calendar",
-                            "value": {
-                                "id": str(entry_id),
-                                "row_version": 4,
-                                "title": "产品会议",
-                                "timing_kind": "timed",
-                                "scheduled_date": None,
-                                "start_time": "2026-07-11T00:00:00+00:00",
-                                "end_time": "2026-07-11T01:00:00+00:00",
-                                "timezone": "Asia/Shanghai",
-                                "status": "scheduled",
-                                "tenant_id": "must-not-persist",
-                            },
-                        }
-                    ],
+    presentation_parts = [
+        {
+            "tool_call_id": "search-1",
+            "operation": "calendar_entry_found",
+            "item": {
+                "kind": "calendar",
+                "value": {
+                    "id": str(entry_id),
+                    "row_version": 4,
+                    "title": "产品会议",
+                    "timing_kind": "timed",
+                    "scheduled_date": None,
+                    "start_time": "2026-07-11T00:00:00+00:00",
+                    "end_time": "2026-07-11T01:00:00+00:00",
+                    "timezone": "Asia/Shanghai",
+                    "status": "scheduled",
+                    "tenant_id": "must-not-persist",
                 },
-            ),
-        ]
-    }
+            },
+        }
+    ]
 
-    payload = extract_clarification_payload(result)
+    payload = extract_clarification_payload(
+        ClarificationRequest(question="选择哪一个？"),
+        presentation_parts,
+    )
 
     assert payload.response_kind == "calendar_choice"
     candidate = payload.candidates[0]
@@ -75,17 +60,12 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
 
 def test_clarification_state_uses_agent_suggested_choices_without_search_results() -> None:
     payload = extract_clarification_payload(
-        {
-            "thread_data": {
-                "clarification": {
-                    "status": "pending",
-                    "question": "会议几点开始？",
-                    "response_kind": "single_choice",
-                    "options": ["09:00", "14:00", "其他时间"],
-                }
-            },
-            "messages": [],
-        }
+        ClarificationRequest(
+            question="会议几点开始？",
+            response_kind="single_choice",
+            options=("09:00", "14:00", "其他时间"),
+        ),
+        [],
     )
 
     assert payload.response_kind == "single_choice"
@@ -440,7 +420,14 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         assert kwargs["config"]["configurable"]["checkpoint_ns"] == "dayboard-time-v2"
         assert kwargs["context"]["run_id"] == str(run_id)
         assert len(built["compaction_hooks"]) == 1
-        return {"thread_data": {"clarification": {"question": "几点开始？"}}, "messages": []}
+        return {
+            "clarification_request": {
+                "question": "几点开始？",
+                "response_kind": "free_text",
+                "options": [],
+            },
+            "messages": [],
+        }
 
     async def complete(outcome) -> None:
         outcomes.append(outcome)

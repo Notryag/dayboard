@@ -22,9 +22,9 @@ Last reviewed: 2026-07-24
 - [ ] Re-evaluate an optional Platform SQLAlchemy adapter only after a second product proves the
   same schema, tenant, transaction, and lifecycle contract. Generalize a North adapter only after a
   second product proves a common runtime contract; Platform must not import North today.
-- [ ] Make Platform `PendingInteraction` the only durable clarification authority. North graph
-  state may signal one Run, but the Dayboard driver must eventually receive one structured outcome
-  rather than interpreting a second persisted clarification representation.
+- [x] Make Platform `PendingInteraction` the only durable clarification authority. North now emits
+  a typed `RuntimeExecutionResult.clarification` one-Run signal; the Dayboard driver maps it once
+  without interpreting `thread_data` or scanning final ToolMessages.
 - [ ] Evaluate provider usage accounting and notification delivery as later platform capabilities
   only when their lifecycle boundaries are stable or a second product needs them.
 

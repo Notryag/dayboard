@@ -129,7 +129,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
 | Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
 | Explicit Conversation Thread lifecycle and primary-role contracts | Complete; lifecycle is `active | archived`, `is_primary` is independent, and archived writes are rejected |
-| Clarification authority | Pending; Platform `PendingInteraction` is the only durable authority. North clarification state is temporary per-Run runtime state and must converge through one structured driver signal rather than create a second durable interpretation |
+| Clarification authority | Complete; North emits a typed per-Run `ClarificationRequest`, Dayboard maps it once, and Platform `PendingInteraction` is the only durable authority |
 
 The remaining findings do not require replacing the ownership model. They define the hardening work
 needed before moving additional capabilities.
