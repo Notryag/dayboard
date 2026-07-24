@@ -3,19 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from collections.abc import Callable, Sequence
+from typing import Any, Protocol
 from uuid import UUID
 
 from langchain_core.messages import HumanMessage
 from north import (
     CompactionEvent,
+    CompactionHook,
     RunExecutor,
     RunLifecycleHooks,
     RuntimeStreamEvent,
     RuntimeUsageAccumulator,
 )
-from north.runtime import MemoryStreamBridge, RunManager, StreamBridge
-from sqlalchemy.ext.asyncio import AsyncSession
+from north.runtime import RunManager, StreamBridge
 import structlog
 
 from agent_platform.application import AgentRunService, ConversationService
@@ -26,22 +27,19 @@ from agent_platform.core import (
     RunExecutionOutcomeKind,
     TenantContext,
 )
-from agent_platform.ports import PlatformUnitOfWork
+from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
-from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
-from dayboard.app.platform_services import build_platform_services
 from dayboard.app.provider_usage import ProviderUsageService
 from dayboard.app.provider_usage_ports import ProviderUsageAggregate, ProviderUsageCall
-from dayboard.app.run_result_projection import (
+from dayboard.agent.run_result_projection import (
     merge_presentation_parts,
     project_run_failure,
     project_run_result,
 )
-from dayboard.config import Settings
 
 
 logger = structlog.get_logger(__name__)
@@ -55,34 +53,44 @@ USER_VISIBLE_RUNTIME_EVENTS = frozenset(
 )
 
 
+class DayboardAgentFactory(Protocol):
+    def __call__(
+        self,
+        context: TenantContext,
+        run_id: UUID,
+        compaction_hooks: Sequence[CompactionHook],
+    ) -> object: ...
+
+
+RunExecutorFactory = Callable[[StreamBridge, RunManager], RunExecutor]
+
+
 class DayboardRunExecutionDriver:
     """Execute one persisted Dayboard Run while Platform owns its lifecycle."""
 
     def __init__(
         self,
-        session: AsyncSession,
         *,
-        settings: Settings,
         unit_of_work: PlatformUnitOfWork,
         conversations: ConversationService,
         runs: AgentRunService,
         budget_guard: ProviderBudgetGuard,
         provider_usage: ProviderUsageService,
-        checkpointer=None,
-        runtime_event_session_factory=None,
-        stream_bridge: StreamBridge | None = None,
-        executor_factory=RunExecutor,
+        runtime_event_uow_factory: PlatformUnitOfWorkFactory,
+        agent_factory: DayboardAgentFactory,
+        model_name: str,
+        stream_bridge: StreamBridge,
+        executor_factory: RunExecutorFactory = RunExecutor,
     ) -> None:
-        self.session = session
-        self.settings = settings
         self.unit_of_work = unit_of_work
         self.conversations = conversations
         self.runs = runs
         self.budget_guard = budget_guard
         self.provider_usage = provider_usage
-        self.checkpointer = checkpointer
-        self.runtime_event_session_factory = runtime_event_session_factory
-        self.stream_bridge = stream_bridge or MemoryStreamBridge()
+        self.runtime_event_uow_factory = runtime_event_uow_factory
+        self.agent_factory = agent_factory
+        self.model_name = model_name
+        self.stream_bridge = stream_bridge
         self.executor_factory = executor_factory
         self.presentation_parts: list[dict[str, Any]] = []
 
@@ -104,23 +112,25 @@ class DayboardRunExecutionDriver:
             projected = project_runtime_event(event)
             if projected is None:
                 return
-            if self.runtime_event_session_factory is None:
-                raise RuntimeError("Runtime event session factory is not configured")
             async with runtime_event_lock:
-                async with self.runtime_event_session_factory() as event_session:
-                    event_platform = build_platform_services(event_session)
-                    latest = await event_platform.runs.get_run(context, run.id)
-                    if latest is None or latest.status != AgentRunStatus.running:
-                        raise asyncio.CancelledError()
-                    await event_platform.runs.append_progress(
-                        context,
-                        run.id,
-                        event_type=projected.event_type,
-                        content=projected.content,
-                        extension=projected.extension,
-                        category=projected.category,
-                    )
-                    await event_platform.unit_of_work.commit()
+                async with self.runtime_event_uow_factory() as event_unit_of_work:
+                    event_runs = AgentRunService(event_unit_of_work)
+                    try:
+                        latest = await event_runs.get_run(context, run.id)
+                        if latest is None or latest.status != AgentRunStatus.running:
+                            raise asyncio.CancelledError()
+                        await event_runs.append_progress(
+                            context,
+                            run.id,
+                            event_type=projected.event_type,
+                            content=projected.content,
+                            extension=projected.extension,
+                            category=projected.category,
+                        )
+                        await event_unit_of_work.commit()
+                    except BaseException:
+                        await event_unit_of_work.rollback()
+                        raise
             if projected.event_type in USER_VISIBLE_RUNTIME_EVENTS:
                 await self._publish_run_event(
                     run.id,
@@ -170,7 +180,7 @@ class DayboardRunExecutionDriver:
                 preserved_message_count=len(event.preserved_messages),
             )
 
-        async def complete_run(result: Any) -> None:
+        async def complete_run(result: object) -> None:
             nonlocal terminal_callback_called
             outcome = project_run_result(
                 result,
@@ -223,7 +233,7 @@ class DayboardRunExecutionDriver:
                 thread_id=str(run.thread_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
-                model=self.settings.agent_model_name,
+                model=self.model_name,
                 message_length=len(run.input_message),
             )
             budget_estimate = self._check_budget(context, run)
@@ -233,7 +243,7 @@ class DayboardRunExecutionDriver:
                 thread_id=str(run.thread_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
-                model=self.settings.agent_model_name,
+                model=self.model_name,
             )
             north_runs = RunManager()
             north_record = north_runs.create(
@@ -243,13 +253,10 @@ class DayboardRunExecutionDriver:
             executor = self.executor_factory(self.stream_bridge, north_runs)
             await executor.execute(
                 north_record,
-                agent_factory=lambda: build_dayboard_agent(
-                    self.settings,
-                    session=self.session,
-                    context=context,
-                    run_id=run.id,
-                    checkpointer=self.checkpointer,
-                    compaction_hooks=[record_compaction],
+                agent_factory=lambda: self.agent_factory(
+                    context,
+                    run.id,
+                    [record_compaction],
                 ),
                 graph_input={"messages": [HumanMessage(content=run.input_message)]},
                 config={
@@ -291,7 +298,7 @@ class DayboardRunExecutionDriver:
                 run_id=str(run.id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
-                model=self.settings.agent_model_name,
+                model=self.model_name,
                 error_type=type(exc).__name__,
             )
             raise
@@ -318,13 +325,13 @@ class DayboardRunExecutionDriver:
             thread_id=str(run.thread_id),
             tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
-            model=self.settings.agent_model_name,
+            model=self.model_name,
             estimated_tokens=estimate.token_units,
             request_units=estimate.request_units,
         )
         self.budget_guard.check(
             context=context,
-            model_name=self.settings.agent_model_name,
+            model_name=self.model_name,
             estimate=estimate,
         )
         return estimate
@@ -339,12 +346,12 @@ class DayboardRunExecutionDriver:
         usage = usage_accumulator.total
         if usage is None:
             return
-        provider, _, _ = self.settings.agent_model_name.partition(":")
+        provider, _, _ = self.model_name.partition(":")
         try:
             aggregate = ProviderUsageAggregate(
                 run_id=run_id,
                 provider=provider or "unknown",
-                model=self.settings.agent_model_name,
+                model=self.model_name,
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 total_tokens=usage.total_tokens,
@@ -367,7 +374,7 @@ class DayboardRunExecutionDriver:
                 try:
                     reconciled_tokens = self.budget_guard.reconcile_actual(
                         context=context,
-                        model_name=self.settings.agent_model_name,
+                        model_name=self.model_name,
                         estimate=budget_estimate,
                         actual_tokens=usage.total_tokens,
                     )
@@ -377,14 +384,14 @@ class DayboardRunExecutionDriver:
                         run_id=str(run_id),
                         tenant_id=str(context.tenant_id),
                         user_id=str(context.user_id),
-                        model=self.settings.agent_model_name,
+                        model=self.model_name,
                     )
             logger.info(
                 "dayboard.command.provider_usage_settled",
                 run_id=str(run_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
-                model=self.settings.agent_model_name,
+                model=self.model_name,
                 input_tokens=usage.input_tokens,
                 output_tokens=usage.output_tokens,
                 total_tokens=usage.total_tokens,
@@ -397,7 +404,7 @@ class DayboardRunExecutionDriver:
                 run_id=str(run_id),
                 tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
-                model=self.settings.agent_model_name,
+                model=self.model_name,
             )
 
     async def _publish_run_event(

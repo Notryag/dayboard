@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from langchain_core.messages import AIMessage, HumanMessage
 from north import RuntimeEvent
+from north.runtime import MemoryStreamBridge
 import pytest
 from fake_runtime import fake_executor_factory
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,16 +14,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_platform.core import AgentRunStatus, TenantContext
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService
-from dayboard.app.platform_services import build_run_service
+from dayboard.composition.platform import build_run_service
 from dayboard.app.provider_usage_ports import (
     ProviderUsageAggregate,
     ProviderUsageCall,
     ProviderUsageRunNotFound,
     ProviderUsageSettlement,
 )
-from dayboard.app.run_execution import DayboardRunExecutionDriver
+from dayboard.agent.run_execution import DayboardRunExecutionDriver
 from dayboard.composition.provider_usage import build_provider_usage_service
+from dayboard.composition.commands import build_command_service
+from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
 from dayboard.db.provider_usage_repository import ProviderUsageRepository
 from dayboard.db.session import SessionLocal
@@ -49,6 +51,28 @@ def _aggregate(
                 total_tokens=total_tokens,
             ),
         ),
+    )
+
+
+def _run_scope(
+    session: AsyncSession,
+    invoker,
+    *,
+    provider_usage=None,
+    budget_guard=None,
+    stream_bridge=None,
+):
+    settings = Settings(
+        APP_MODEL_NAME="openai:gpt-test",
+        DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+    )
+    return build_run_execution_scope(
+        session,
+        stream_bridge=stream_bridge or MemoryStreamBridge(),
+        provider_usage=provider_usage or build_provider_usage_service(),
+        budget_guard=budget_guard,
+        settings=settings,
+        executor_factory=fake_executor_factory(invoker),
     )
 
 
@@ -92,19 +116,12 @@ async def test_command_service_records_provider_usage(
             ]
         }
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-    )
+    scope = _run_scope(db_session, fake_invoker)
+    service = scope.commands
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
     records = await ProviderUsageRepository(db_session).list_for_run(
         tenant_context,
         run_id,
@@ -146,20 +163,13 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
         )
         return {"messages": [AIMessage(content="完成")]}
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-    )
+    scope = _run_scope(db_session, fake_invoker)
+    service = scope.commands
     request = CommandRequest(message="创建两个任务")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
 
-    from dayboard.app.platform_services import build_run_service
+    from dayboard.composition.platform import build_run_service
 
     events = await build_run_service(db_session).list_events(tenant_context, run_id)
     starts = [event for event in events if event.event_type == "tool_call_started"]
@@ -210,21 +220,13 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
         return {"messages": [AIMessage(content="完成")]}
 
     bridge = RecordingBridge()
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-        stream_bridge=bridge,
-    )
+    scope = _run_scope(db_session, fake_invoker, stream_bridge=bridge)
+    service = scope.commands
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
 
-    from dayboard.app.platform_services import build_run_service
+    from dayboard.composition.platform import build_run_service
 
     events = await build_run_service(db_session).list_events(tenant_context, run_id)
     assert "agent_model_completed" in {event.event_type for event in events}
@@ -241,19 +243,12 @@ async def test_command_service_does_not_invent_missing_provider_usage(
         del kwargs
         return {"messages": [AIMessage(content="完成")]}
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-    )
+    scope = _run_scope(db_session, fake_invoker)
+    service = scope.commands
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
 
     assert await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id) == []
 
@@ -277,20 +272,13 @@ async def test_command_service_settles_usage_when_invocation_does_not_return(
         )
         raise error
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-    )
+    scope = _run_scope(db_session, fake_invoker)
+    service = scope.commands
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
 
     with pytest.raises(type(error)):
-        await service.execute_command_run(tenant_context, run_id)
+        await scope.execute(tenant_context, run_id)
 
     records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
     assert len(records) == 1
@@ -302,10 +290,10 @@ async def test_provider_usage_settlement_is_idempotent(
     tenant_context: TenantContext,
 ) -> None:
     repository = ProviderUsageRepository(db_session)
-    run_id = await CommandService(
-        db_session,
-        settings=Settings(DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://"),
-    ).create_command_run(tenant_context, CommandRequest(message="安排会议"))
+    run_id = await build_command_service(db_session).create_command_run(
+        tenant_context,
+        CommandRequest(message="安排会议"),
+    )
     first = await repository.settle(tenant_context, _aggregate(run_id))
     repeated = await repository.settle(
         tenant_context,
@@ -324,10 +312,10 @@ async def test_provider_usage_is_owner_scoped_within_a_tenant(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    run_id = await CommandService(
-        db_session,
-        settings=Settings(DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://"),
-    ).create_command_run(tenant_context, CommandRequest(message="安排会议"))
+    run_id = await build_command_service(db_session).create_command_run(
+        tenant_context,
+        CommandRequest(message="安排会议"),
+    )
     other_context = TenantContext(
         tenant_id=tenant_context.tenant_id,
         user_id=uuid4(),
@@ -354,10 +342,10 @@ async def test_provider_usage_settlement_is_concurrent_and_immutable(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
-    run_id = await CommandService(
-        db_session,
-        settings=Settings(DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://"),
-    ).create_command_run(tenant_context, CommandRequest(message="安排会议"))
+    run_id = await build_command_service(db_session).create_command_run(
+        tenant_context,
+        CommandRequest(message="安排会议"),
+    )
     start = asyncio.Event()
     ready_count = 0
 
@@ -414,21 +402,18 @@ async def test_usage_failure_does_not_replace_completed_run(
         )
         return {"messages": [AIMessage(content="完成")]}
 
-    service = CommandService(
+    scope = _run_scope(
         db_session,
+        fake_invoker,
         provider_usage=FailingProviderUsage(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
     )
+    service = scope.commands
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
     )
 
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
 
     run = await build_run_service(db_session).get_run(tenant_context, run_id)
     assert run is not None and run.status == AgentRunStatus.completed
@@ -457,22 +442,19 @@ async def test_usage_failure_does_not_replace_provider_exception(
         )
         raise ValueError("provider failed")
 
-    service = CommandService(
+    scope = _run_scope(
         db_session,
+        fake_invoker,
         provider_usage=FailingProviderUsage(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
     )
+    service = scope.commands
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
     )
 
     with pytest.raises(ValueError, match="provider failed"):
-        await service.execute_command_run(tenant_context, run_id)
+        await scope.execute(tenant_context, run_id)
 
     run = await build_run_service(db_session).get_run(tenant_context, run_id)
     assert run is not None and run.status == AgentRunStatus.failed
@@ -507,19 +489,21 @@ async def test_budget_reconciliation_failure_does_not_replace_completed_run(
         )
         return {"messages": [AIMessage(content="完成")]}
 
-    service = CommandService(
+    scope = build_run_execution_scope(
         db_session,
+        stream_bridge=MemoryStreamBridge(),
         provider_usage=build_provider_usage_service(),
         settings=settings,
         budget_guard=budget_guard,
         executor_factory=fake_executor_factory(fake_invoker),
     )
+    service = scope.commands
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
     )
 
-    await service.execute_command_run(tenant_context, run_id)
+    await scope.execute(tenant_context, run_id)
 
     run = await build_run_service(db_session).get_run(tenant_context, run_id)
     records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
@@ -550,16 +534,15 @@ async def test_duplicate_settlement_reconciles_budget_only_once(
     provider_usage = IdempotentProviderUsage()
     budget_guard = RecordingBudgetGuard()
     driver = DayboardRunExecutionDriver(
-        SimpleNamespace(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
         unit_of_work=SimpleNamespace(),
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=budget_guard,
         provider_usage=provider_usage,
+        runtime_event_uow_factory=lambda: None,
+        agent_factory=lambda context, run_id, compaction_hooks: object(),
+        model_name="openai:gpt-test",
+        stream_bridge=MemoryStreamBridge(),
     )
     usage_accumulator = SimpleNamespace(
         total=SimpleNamespace(input_tokens=10, output_tokens=2, total_tokens=12),

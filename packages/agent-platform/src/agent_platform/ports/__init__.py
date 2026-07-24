@@ -12,6 +12,7 @@ from agent_platform.ports.unit_of_work import (
     ConversationUnitOfWork,
     IdempotencyUnitOfWork,
     PlatformUnitOfWork,
+    PlatformUnitOfWorkFactory,
     RunUnitOfWork,
     TransactionBoundary,
 )
@@ -24,6 +25,7 @@ __all__ = [
     "IdempotencyStore",
     "IdempotencyUnitOfWork",
     "PlatformUnitOfWork",
+    "PlatformUnitOfWorkFactory",
     "RunEventStore",
     "RunExecutionDriver",
     "RunStore",

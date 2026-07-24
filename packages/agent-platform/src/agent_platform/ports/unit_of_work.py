@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
 from agent_platform.ports.conversations import (
@@ -41,3 +42,7 @@ class PlatformUnitOfWork(
     Protocol,
 ):
     """Stores sharing one atomic transaction boundary."""
+
+
+class PlatformUnitOfWorkFactory(Protocol):
+    def __call__(self) -> AbstractAsyncContextManager[PlatformUnitOfWork]: ...

@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.platform_services import build_platform_services, build_run_service
+from dayboard.composition.platform import build_platform_services, build_run_service
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from agent_platform.core import ActiveThreadRunError, EventExtensionEnvelope, TenantContext

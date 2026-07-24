@@ -77,9 +77,9 @@ The Dayboard API package is split by responsibility:
 
 ```text
 dayboard.api           HTTP, SSE, request and response schemas
-dayboard.app           product use cases, North execution adapter, result projection
-dayboard.composition   outer process wiring for application services and database adapters
-dayboard.agent         prompt, North assembly, presentation projection
+dayboard.app           product use cases and deterministic command orchestration
+dayboard.composition   outer process wiring, database adapters, and FastAPI dependencies
+dayboard.agent         prompt, North assembly, Run driver, and result projection
 dayboard.domain        product models and deterministic validation
 dayboard.tools         thin Agent-facing adapters
 dayboard.db            SQLAlchemy models, repositories, sessions
@@ -91,11 +91,15 @@ Trusted `TenantContext` is resolved from the authenticated server session. Tenan
 thread, Run, operation keys, and permissions are injected by the runtime and never exposed as
 model-supplied tool arguments. Repository queries scope business data by tenant and owner.
 
-Dayboard's composition root connects platform Conversation and Run services to PostgreSQL adapters.
-The platform owns persistence use cases, paging, state transitions and lifecycle event policy; the
-adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and individual database
-operations. Dayboard's clarification service owns scheduling candidate validation, local-time
-projection, public state filtering, and user-facing choice text.
+Dayboard's composition roots connect Platform Conversation and Run services to PostgreSQL adapters.
+`dayboard.composition.platform` builds an explicit per-session Platform scope and a fresh
+`PlatformUnitOfWorkFactory` for short runtime-journal transactions. `dayboard.composition.commands`
+builds the storage-free command application service, while `dayboard.composition.runs` builds one
+North driver per persisted Run with its stream bridge, trusted Agent factory, Provider Usage service,
+and budget guard. The platform owns persistence use cases, paging, state transitions and lifecycle
+event policy; adapters own SQLAlchemy rows, constraint translation, tenant-scoped queries, and
+individual database operations. Dayboard's clarification service owns scheduling candidate
+validation, local-time projection, public state filtering, and user-facing choice text.
 
 Dayboard scheduling has a separate product-owned Unit of Work. `SchedulingService` and
 `ScheduleQueryService` depend only on scheduling store ports and domain objects; SQLAlchemy row
@@ -156,12 +160,13 @@ parent Run, so concurrent writers cannot select the same `max(seq) + 1` value.
 `RunExecutionCoordinator` owns the generic execution lifecycle. It commits `queued -> running`
 before invoking external work, ends any read transaction before waiting on the model, and uses a
 row lock to atomically persist the terminal Run state, assistant message, and optional Interaction.
-The injected Dayboard driver owns North construction, runtime-event projection, schedule
-presentation assembly, usage settlement, and StreamBridge publication. North lifecycle callbacks
-project raw results into Platform outcomes before North emits its end sentinel, so PostgreSQL is
-already terminal when the browser observes stream completion. Redis carries only `run_id`; the
-worker reloads tenant, owner, thread, and input from PostgreSQL. The superseded queue/execution
-protocol has no compatibility path.
+The injected Dayboard driver owns North execution, runtime-event projection, schedule presentation
+assembly, usage settlement, and StreamBridge publication. Its runtime journal opens a fresh Platform
+Unit of Work for every durable event instead of sharing the Run's main session. North lifecycle
+callbacks project raw results into Platform outcomes before North emits its end sentinel, so
+PostgreSQL is already terminal when the browser observes stream completion. Redis carries only
+`run_id`; the worker reloads tenant, owner, thread, and input from PostgreSQL and composes a new
+driver for that Run. The superseded queue/execution protocol has no compatibility path.
 
 The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
 Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
@@ -191,9 +196,10 @@ SSE receives only projected product status and never exposes the diagnostic exte
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
 workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, Voice, and Account
-Recovery application services and ports, plus Provider Usage settlement, are additionally
-prohibited from importing Dayboard persistence adapters or framework/runtime layers; only explicit
-composition modules connect them.
+Recovery application services and ports, plus Provider Usage settlement and CommandService, are
+additionally prohibited from importing Dayboard persistence adapters or framework/runtime layers.
+The Run driver is separately prohibited from importing settings, persistence, or composition; only
+explicit composition modules connect those dependencies.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities. A

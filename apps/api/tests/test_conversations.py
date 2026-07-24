@@ -8,19 +8,20 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from langchain_core.messages import AIMessage
 from north import RuntimeStreamEvent
+from north.runtime import MemoryStreamBridge
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.commands import CommandService
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.conversation_presentations import (
     build_dayboard_presentation,
     dayboard_presentation_parts,
 )
-from dayboard.app.platform_services import build_conversation_service
-from dayboard.app.platform_services import build_run_service
+from dayboard.composition.platform import build_conversation_service
+from dayboard.composition.platform import build_run_service
 from dayboard.composition.provider_usage import build_provider_usage_service
+from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
 from agent_platform.core import AgentRunStatus, InteractionConflictError, TenantContext
 from dayboard.db.session import SessionLocal
@@ -35,6 +36,24 @@ class RecordingRunStream:
     async def publish(self, run_id, event_type, data):
         self.events.append((run_id, event_type, data))
         return f"{len(self.events)}-0"
+
+
+def _run_scope(
+    session: AsyncSession,
+    invoker,
+    *,
+    stream_bridge=None,
+):
+    return build_run_execution_scope(
+        session,
+        stream_bridge=stream_bridge or MemoryStreamBridge(),
+        provider_usage=build_provider_usage_service(),
+        settings=Settings(
+            APP_MODEL_NAME="openai:gpt-test",
+            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
+        ),
+        executor_factory=fake_executor_factory(invoker),
+    )
 
 
 def _task_artifact(*, task_id: str, title: str) -> dict:
@@ -70,25 +89,18 @@ async def test_two_runs_persist_complete_thread_history(
         invoked_threads.append(kwargs["config"]["configurable"]["thread_id"])
         return {"messages": [AIMessage(content=next(responses))]}
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-    )
+    scope = _run_scope(db_session, fake_invoker)
+    service = scope.commands
     first_request = CommandRequest(message="明天八点开会")
     first = await service.create_or_get_command_run(tenant_context, first_request)
-    await service.execute_command_run(tenant_context, first.run_id)
+    await scope.execute(tenant_context, first.run_id)
     second_request = CommandRequest(message="改到后天")
     second = await service.create_or_get_command_run(
         tenant_context,
         second_request,
         thread_id=first.thread_id,
     )
-    await service.execute_command_run(tenant_context, second.run_id)
+    await scope.execute(tenant_context, second.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, first.thread_id
@@ -137,19 +149,11 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
         )
         return {"messages": [AIMessage(content="任务已创建。")]}
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-        stream_bridge=run_stream,
-    )
+    scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
+    service = scope.commands
     request = CommandRequest(message="提醒我提交周报")
     created = await service.create_or_get_command_run(tenant_context, request)
-    await service.execute_command_run(tenant_context, created.run_id)
+    await scope.execute(tenant_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
@@ -221,21 +225,13 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
         )
         raise RuntimeError("provider disconnected after cancellation")
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-        stream_bridge=run_stream,
-    )
+    scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
+    service = scope.commands
     request = CommandRequest(message="创建任务")
     created = await service.create_or_get_command_run(tenant_context, request)
 
     with pytest.raises(asyncio.CancelledError):
-        await service.execute_command_run(tenant_context, created.run_id)
+        await scope.execute(tenant_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
         tenant_context, created.thread_id
@@ -266,22 +262,14 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
             "messages": [],
         }
 
-    service = CommandService(
-        db_session,
-        provider_usage=build_provider_usage_service(),
-        settings=Settings(
-            APP_MODEL_NAME="openai:gpt-test",
-            DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
-        ),
-        executor_factory=fake_executor_factory(fake_invoker),
-        stream_bridge=run_stream,
-    )
+    scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
+    service = scope.commands
     created = await service.create_or_get_command_run(
         tenant_context,
         CommandRequest(message="明天开会"),
     )
 
-    await service.execute_command_run(tenant_context, created.run_id)
+    await scope.execute(tenant_context, created.run_id)
 
     runs = build_run_service(db_session)
     conversations = build_conversation_service(db_session)

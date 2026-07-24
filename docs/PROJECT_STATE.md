@@ -73,6 +73,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a Dayboard-owned Provider Usage Unit of Work: typed aggregates cross the application
   boundary, owner-scoped PostgreSQL insertion is concurrent and idempotent, ORM rows stay in the
   adapter, and accounting failures cannot replace an authoritative terminal Run outcome.
+- Moved Platform and Run construction to explicit composition roots: FastAPI dependencies build the
+  storage-free command service, Workers build one North driver per Run, and runtime journal events
+  use fresh Platform Unit-of-Work sessions rather than sharing the execution session.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.

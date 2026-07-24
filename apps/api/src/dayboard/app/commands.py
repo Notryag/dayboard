@@ -1,57 +1,33 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from uuid import UUID
 
-from fastapi import Depends
-from north import RunExecutor
-from north.runtime import MemoryStreamBridge, StreamBridge
-from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
-from agent_platform.core import CommandSubmission, TenantContext
-from dayboard.agent.budget import ProviderBudgetGuard
+from agent_platform.application import CommandSubmissionService, RunExecutionCoordinator
+from agent_platform.core import CommandSubmission, RunExecutionFailure, TenantContext
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
-from dayboard.app.platform_services import build_platform_services
-from dayboard.app.provider_usage import ProviderUsageService
-from dayboard.app.run_execution import DayboardRunExecutionDriver
-from dayboard.app.run_result_projection import project_run_failure
-from dayboard.config import Settings, get_settings
-from dayboard.db.session import SessionLocal, get_session
 
 
 logger = structlog.get_logger(__name__)
 
 
-def get_command_service(session: AsyncSession = Depends(get_session)) -> CommandService:
-    return CommandService(session)
-
-
 class CommandService:
-    """Submit Dayboard commands and delegate persisted Run execution to Platform."""
+    """Submit or fail persisted Dayboard commands through Platform use cases."""
 
     def __init__(
         self,
-        session: AsyncSession,
-        *,
-        settings: Settings | None = None,
-        budget_guard: ProviderBudgetGuard | None = None,
-        provider_usage: ProviderUsageService | None = None,
-        checkpointer=None,
-        runtime_event_session_factory=SessionLocal,
-        stream_bridge: StreamBridge | None = None,
-        executor_factory=RunExecutor,
+        submissions: CommandSubmissionService,
+        clarifications: ClarificationService,
+        execution: RunExecutionCoordinator,
+        failure_projector: Callable[[Exception], RunExecutionFailure],
     ) -> None:
-        self.session = session
-        self.settings = settings or get_settings()
-        self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
-        self.provider_usage = provider_usage
-        self.checkpointer = checkpointer
-        self.platform = build_platform_services(session)
-        self.clarifications = ClarificationService(self.platform.conversations)
-        self.runtime_event_session_factory = runtime_event_session_factory
-        self.stream_bridge = stream_bridge or MemoryStreamBridge()
-        self.executor_factory = executor_factory
+        self.submissions = submissions
+        self.clarifications = clarifications
+        self.execution = execution
+        self.failure_projector = failure_projector
 
     async def create_command_run(
         self,
@@ -75,7 +51,7 @@ class CommandService:
         thread_id: UUID | None = None,
         conversation_message: str | None = None,
     ) -> CommandSubmission:
-        creation = await self.platform.submissions.submit(
+        creation = await self.submissions.submit(
             context,
             input_message=request.message,
             thread_id=thread_id,
@@ -109,7 +85,7 @@ class CommandService:
     ) -> CommandSubmission:
         request_identity = f"{thread_id}:clarification:{state_version}:{option_key}"
         if idempotency_key is not None:
-            existing = await self.platform.submissions.find_existing(
+            existing = await self.submissions.find_existing(
                 context,
                 idempotency_key=idempotency_key,
                 request_identity=request_identity,
@@ -123,7 +99,7 @@ class CommandService:
             state_version=state_version,
             option_key=option_key,
         )
-        creation = await self.platform.submissions.submit(
+        creation = await self.submissions.submit(
             context,
             input_message=choice.agent_message,
             thread_id=thread_id,
@@ -143,36 +119,14 @@ class CommandService:
         )
         return creation
 
-    async def execute_command_run(
-        self,
-        context: TenantContext,
-        run_id: UUID,
-    ) -> None:
-        if self.provider_usage is None:
-            raise RuntimeError("Provider usage service is required for Run execution")
-        driver = DayboardRunExecutionDriver(
-            self.session,
-            settings=self.settings,
-            unit_of_work=self.platform.unit_of_work,
-            conversations=self.platform.conversations,
-            runs=self.platform.runs,
-            budget_guard=self.budget_guard,
-            provider_usage=self.provider_usage,
-            checkpointer=self.checkpointer,
-            runtime_event_session_factory=self.runtime_event_session_factory,
-            stream_bridge=self.stream_bridge,
-            executor_factory=self.executor_factory,
-        )
-        await self.platform.execution.execute(context, run_id, driver)
-
     async def fail_command_run(
         self,
         context: TenantContext,
         run_id: UUID,
         exc: Exception,
     ) -> None:
-        await self.platform.execution.fail(
+        await self.execution.fail(
             context,
             run_id,
-            project_run_failure(exc, presentation_parts=[]),
+            self.failure_projector(exc),
         )

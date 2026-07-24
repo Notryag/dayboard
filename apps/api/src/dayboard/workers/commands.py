@@ -11,15 +11,13 @@ from north import CheckpointerConfig, make_checkpointer
 from north.runtime import RedisStreamBridge
 import structlog
 
-from dayboard.app.commands import CommandService
-from dayboard.composition.provider_usage import build_provider_usage_service
 from dayboard.composition.reminders import build_reminder_services
-from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
-from dayboard.app.platform_services import (
+from dayboard.composition.platform import (
     build_idempotency_service,
     build_platform_services,
-    build_run_service,
 )
+from dayboard.composition.runs import build_run_execution_scope
+from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from dayboard.config import get_settings
 from agent_platform.core import TenantContext
 from dayboard.db.session import SessionLocal
@@ -33,7 +31,15 @@ async def execute_command_run(
 ) -> None:
     resolved_run_id = UUID(run_id)
     async with SessionLocal() as session:
-        run = await build_run_service(session).get_run_for_worker(resolved_run_id)
+        scope = build_run_execution_scope(
+            session,
+            checkpointer=ctx.get("checkpointer"),
+            stream_bridge=RedisStreamBridge(
+                ctx["redis"],
+                key_prefix="dayboard:run-stream",
+            ),
+        )
+        run = await scope.platform.runs.get_run_for_worker(resolved_run_id)
         if run is None:
             raise LookupError(f"Run {resolved_run_id} not found")
         context = TenantContext(
@@ -42,15 +48,7 @@ async def execute_command_run(
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )
-        await CommandService(
-            session,
-            provider_usage=build_provider_usage_service(),
-            checkpointer=ctx.get("checkpointer"),
-            stream_bridge=RedisStreamBridge(
-                ctx["redis"],
-                key_prefix="dayboard:run-stream",
-            ),
-        ).execute_command_run(context, resolved_run_id)
+        await scope.execute(context, resolved_run_id)
 
 
 async def startup(ctx: dict[str, Any]) -> None:

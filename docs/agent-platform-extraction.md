@@ -103,6 +103,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Dayboard Voice Unit of Work and ORM-independent lifecycle service | Complete; processing commits before external ASR, terminal transitions use a second transaction, and extraction waits for a second consumer |
 | Dayboard Account Recovery Unit of Work and ORM-independent service | Complete; User-first locking serializes issue, confirm, and login while password/token/session changes commit atomically |
 | Dayboard Provider Usage Unit of Work and ORM-independent settlement | Complete; owner-scoped idempotent insertion returns typed aggregates and cannot alter an already-terminal Run |
+| Outer Platform and Run composition | Complete; CommandService and the Run driver no longer construct FastAPI, SQLAlchemy, North, Settings, or runtime adapters, and every Worker job receives a fresh driver |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |

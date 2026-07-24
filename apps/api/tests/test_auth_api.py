@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from dayboard.config import Settings, get_settings
 from dayboard.api.account_recovery import get_password_reset_mailer
 from dayboard.api.routes import get_command_dispatcher
-from dayboard.app.commands import CommandService, get_command_service
+from dayboard.api.dependencies import get_command_service
+from dayboard.composition.commands import build_command_service
 from dayboard.db.models import (
     PasswordResetTokenRow,
     UserCredentialRow,
@@ -291,7 +292,7 @@ async def test_password_sessions_isolate_run_status_events_stream_and_cancel(
 
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_settings] = lambda: settings
-    app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
+    app.dependency_overrides[get_command_service] = lambda: build_command_service(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
     from north.runtime import MemoryStreamBridge
     from dayboard.api.routes import get_stream_bridge

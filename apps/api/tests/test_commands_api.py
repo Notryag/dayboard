@@ -7,10 +7,10 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.platform_services import build_run_service
+from dayboard.composition.platform import build_run_service
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.conversation_presentations import build_dayboard_presentation
-from dayboard.app.platform_services import build_conversation_service
+from dayboard.composition.platform import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
 from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context

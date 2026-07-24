@@ -11,7 +11,6 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     user_id = uuid4()
     run_id = uuid4()
     captured = {}
-    provider_usage = object()
 
     class FakeSessionContext:
         async def __aenter__(self):
@@ -21,9 +20,6 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
             return False
 
     class FakeRunService:
-        def __init__(self, session):
-            del session
-
         async def get_run_for_worker(self, requested_run_id):
             assert requested_run_id == run_id
             return SimpleNamespace(
@@ -32,39 +28,25 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
                 input_message="数据库中的消息",
             )
 
-    class FakeCommandService:
-        def __init__(
-            self,
-            session,
-            *,
-            provider_usage=None,
-            checkpointer=None,
-            stream_bridge=None,
-        ):
-            captured["session"] = session
-            captured["provider_usage"] = provider_usage
-            captured["checkpointer"] = checkpointer
-            captured["stream_bridge"] = stream_bridge
+    class FakeRunExecutionScope:
+        def __init__(self) -> None:
+            self.platform = SimpleNamespace(runs=FakeRunService())
 
-        async def execute_command_run(self, context, requested_run_id):
+        async def execute(self, context, requested_run_id):
             captured["context"] = context
             captured["run_id"] = requested_run_id
+
+    scope = FakeRunExecutionScope()
 
     monkeypatch.setattr(
         "dayboard.workers.commands.SessionLocal",
         lambda: FakeSessionContext(),
     )
     monkeypatch.setattr(
-        "dayboard.workers.commands.build_run_service",
-        lambda session: FakeRunService(session),
-    )
-    monkeypatch.setattr(
-        "dayboard.workers.commands.CommandService",
-        FakeCommandService,
-    )
-    monkeypatch.setattr(
-        "dayboard.workers.commands.build_provider_usage_service",
-        lambda: provider_usage,
+        "dayboard.workers.commands.build_run_execution_scope",
+        lambda session, **kwargs: (
+            captured.update(session=session, **kwargs) or scope
+        ),
     )
 
     await execute_command_run(
@@ -75,5 +57,5 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     assert captured["context"].tenant_id == tenant_id
     assert captured["context"].user_id == user_id
     assert captured["run_id"] == run_id
-    assert captured["provider_usage"] is provider_usage
+    assert captured["session"] is not None
     assert captured["checkpointer"] == "checkpoint"

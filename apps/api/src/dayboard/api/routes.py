@@ -21,7 +21,7 @@ from dayboard.app.command_dispatcher import RedisCommandDispatcher
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.clarifications import ClarificationStateError, public_conversation_state
 from dayboard.app.command_schemas import CommandRequest, CommandRunResponse
-from dayboard.app.commands import CommandService, get_command_service
+from dayboard.app.commands import CommandService
 from dayboard.app.conversation_presentations import (
     DayboardConversationMessagePage,
     build_dayboard_presentation,
@@ -48,12 +48,13 @@ from dayboard.composition.scheduling import (
     build_schedule_query_service,
     build_scheduling_services,
 )
-from dayboard.app.platform_services import (
+from dayboard.composition.platform import (
     build_conversation_service,
     build_platform_services,
     build_run_service,
 )
 from dayboard.api.auth import get_tenant_context
+from dayboard.api.dependencies import get_command_service
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
 from dayboard.config import Settings, get_settings

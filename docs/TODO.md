@@ -47,8 +47,10 @@ squashing remains deferred until every persistent environment has reached Alembi
   reconciliation failures from replacing the authoritative Run outcome.
 - [x] Move the Scheduling composition root out of `dayboard.app` into the explicit outer
   `dayboard.composition` package without retaining an import wrapper.
-- [ ] Move the existing Platform and Run composition roots out of `dayboard.app` into the explicit
-  outer `dayboard.composition` package as their next vertical slices are touched.
+- [x] Move the Platform and Run composition roots out of `dayboard.app`. The storage-free
+  CommandService and Run driver no longer construct FastAPI, SQLAlchemy, Settings, or runtime
+  adapters. The FastAPI dependency, per-Run North driver, fresh runtime-event UoW factory, and Worker
+  wiring now meet only through explicit `dayboard.composition` modules; no old import wrapper remains.
 
 ## Token Efficiency
 

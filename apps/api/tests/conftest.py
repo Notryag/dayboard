@@ -22,8 +22,9 @@ os.environ["DATABASE_URL"] = test_database_url
 
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.api.routes import get_command_dispatcher, get_stream_bridge
-from dayboard.app.commands import CommandService, get_command_service
-from dayboard.app.platform_services import build_run_service
+from dayboard.api.dependencies import get_command_service
+from dayboard.composition.commands import build_command_service
+from dayboard.composition.platform import build_run_service
 from north.runtime import END_SENTINEL, StreamEvent
 from agent_platform.core import TenantContext
 from dayboard.api.auth import get_tenant_context
@@ -228,7 +229,7 @@ async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
     stream_bridge = TestStreamBridge()
     app.dependency_overrides[get_session] = override_session
     app.dependency_overrides[get_tenant_context] = override_tenant_context
-    app.dependency_overrides[get_command_service] = lambda: CommandService(db_session)
+    app.dependency_overrides[get_command_service] = lambda: build_command_service(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
     app.dependency_overrides[get_stream_bridge] = lambda: stream_bridge
     app.state.test_command_dispatcher = dispatcher

@@ -61,6 +61,10 @@ arq worker receives run_id
 Dayboard does not call `agent.astream` directly. There is no synchronous production worker or
 `stream_agent_once` path beside North `RunExecutor`.
 
+The Worker composes a new Run driver for each job and always supplies the Redis StreamBridge. Runtime
+journal callbacks open fresh Platform Unit-of-Work sessions, while the main coordinator keeps the
+Run lifecycle transaction boundary separate from those event writes.
+
 ## Live Stream
 
 North publishes canonical model and tool chunks through its Redis `StreamBridge`. The Worker and

@@ -8,11 +8,12 @@ from uuid import UUID, uuid4
 import pytest
 from fake_runtime import fake_executor_factory
 from langchain_core.messages import AIMessage, ToolMessage
+from north.runtime import MemoryStreamBridge
 
 from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.budget import ProviderBudgetGuard
-from dayboard.app.run_execution import DayboardRunExecutionDriver
-from dayboard.app.run_result_projection import extract_clarification_payload
+from dayboard.agent.run_execution import DayboardRunExecutionDriver
+from dayboard.agent.run_result_projection import extract_clarification_payload
 from dayboard.config import Settings
 from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
 
@@ -426,6 +427,13 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         built["compaction_hooks"] = kwargs["compaction_hooks"]
         return {"agent": "fake"}
 
+    def fake_agent_factory(context, run_id, compaction_hooks):
+        return fake_build_dayboard_agent(
+            context=context,
+            run_id=run_id,
+            compaction_hooks=list(compaction_hooks),
+        )
+
     async def fake_invoker(**kwargs):
         assert kwargs["agent_factory"]() == {"agent": "fake"}
         assert kwargs["config"]["configurable"]["thread_id"] != str(run_id)
@@ -445,15 +453,16 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         APP_MODEL_NAME="openai:gpt-test",
         DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
     )
-    monkeypatch.setattr("dayboard.app.run_execution.build_dayboard_agent", fake_build_dayboard_agent)
     driver = DayboardRunExecutionDriver(
-        SimpleNamespace(),
-        settings=settings,
         unit_of_work=SimpleNamespace(),
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),
         provider_usage=SimpleNamespace(),
+        runtime_event_uow_factory=lambda: None,
+        agent_factory=fake_agent_factory,
+        model_name=settings.agent_model_name,
+        stream_bridge=MemoryStreamBridge(),
         executor_factory=fake_executor_factory(fake_invoker),
     )
 
@@ -500,17 +509,19 @@ async def test_dayboard_driver_logs_and_projects_failure(
         DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
     )
     driver = DayboardRunExecutionDriver(
-        SimpleNamespace(),
-        settings=settings,
         unit_of_work=SimpleNamespace(),
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),
         provider_usage=SimpleNamespace(),
+        runtime_event_uow_factory=lambda: None,
+        agent_factory=lambda context, run_id, compaction_hooks: object(),
+        model_name=settings.agent_model_name,
+        stream_bridge=MemoryStreamBridge(),
         executor_factory=fake_executor_factory(failing_invoker),
     )
 
-    with caplog.at_level(logging.ERROR, logger="dayboard.app.run_execution"):
+    with caplog.at_level(logging.ERROR, logger="dayboard.agent.run_execution"):
         with pytest.raises(RuntimeError, match="provider unavailable"):
             await driver.execute(
                 tenant_context,

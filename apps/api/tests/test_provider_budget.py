@@ -6,10 +6,11 @@ from uuid import uuid4
 
 import pytest
 from fake_runtime import fake_executor_factory
+from north.runtime import MemoryStreamBridge
 
 from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, estimate_prompt_tokens
-from dayboard.app.run_execution import DayboardRunExecutionDriver
-from dayboard.app.run_result_projection import safe_error_message
+from dayboard.agent.run_execution import DayboardRunExecutionDriver
+from dayboard.agent.run_result_projection import safe_error_message
 from dayboard.config import Settings
 from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
 
@@ -108,13 +109,15 @@ async def test_command_service_checks_budget_before_model_execution(
 
     def build_driver() -> DayboardRunExecutionDriver:
         return DayboardRunExecutionDriver(
-            SimpleNamespace(),
-            settings=guard.settings,
             unit_of_work=SimpleNamespace(),
             conversations=SimpleNamespace(),
             runs=SimpleNamespace(),
             budget_guard=guard,
             provider_usage=SimpleNamespace(),
+            runtime_event_uow_factory=lambda: None,
+            agent_factory=lambda context, run_id, compaction_hooks: object(),
+            model_name=guard.settings.agent_model_name,
+            stream_bridge=MemoryStreamBridge(),
             executor_factory=fake_executor_factory(fake_invoker),
         )
 
