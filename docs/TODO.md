@@ -98,7 +98,10 @@ squashing remains deferred until every persistent environment has reached Alembi
 - [ ] Use Northgate's recorded `cached_prompt_tokens` to measure prompt-cache effectiveness by
   Dayboard `run_id`, including the effect of Dayboard's 32-way stable `prompt_cache_key`
   partitioning. Revisit the shard count from measured per-key RPM and hit rates. Keep Northgate
-  exact-response caching disabled for requests that can produce write-tool calls.
+  exact-response caching disabled for requests that can produce write-tool calls. The first
+  post-v0.3.21 `admin` sample on 2026-07-24 used one 3,954-token prompt and returned no provider
+  cached-token detail, so its reported 0% is only a lower bound and is not evidence for changing the
+  shard count. Collect multiple warm requests with provider cache detail before deciding.
 - [ ] Define and enforce a regression budget for a simple one-write scheduling command after the
   baseline is reproducible. The 2026-07-20 reference Run used 10,362 actual tokens over two calls.
 

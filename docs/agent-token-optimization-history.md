@@ -172,6 +172,30 @@ tokens and 55 completion tokens. Their 10,199 total tokens were 29.4% of the 34,
 by four Runs. Post-deployment provider measurements remain to be recorded before claiming realized
 savings.
 
+## 2026-07-24: First Post-v0.3.21 Admin Cache Sample
+
+Northgate CLI measured `admin` traffic from 09:00 through 17:01 Asia/Shanghai and found one
+correlated request for Run `79f86d9a-aa4d-40c4-bb54-93bc592f365d`. Dayboard and Northgate agreed
+on one model call: 3,954 prompt tokens, 6 completion tokens, and 3,960 total tokens. The Run had no
+tool events, no retry/fallback attempt, and no compaction event. This confirms that the earlier
+multi-call and repeated-summarization failure was not present in this sample.
+
+The fixed prompt/schema baseline remained 2,382 tokens, leaving about 1,572 tokens for bounded
+conversation/runtime context. The authoritative Conversation contained 134 older persisted
+messages and no persisted summary, but the North checkpoint namespace supplies a bounded runtime
+state; the durable message count is not evidence that all 134 messages entered this request. The
+3,954-token prompt remained below the 6,000-token normal compaction threshold.
+
+Prompt-cache reads remain unknown rather than zero. The provider omitted cached-prompt detail, so
+Northgate reported `CACHED_USAGE_MISSING` and labelled the 0% cache ratio as a lower bound. This
+single sample cannot prove whether the 32-way stable `prompt_cache_key` partition helped or hurt.
+Exact response caching was bypassed as expected for a semantic Agent request.
+
+Northgate reserved 12,676 tokens and released 8,716 after the 3,960-token settlement, an
+estimate-to-actual ratio of 3.201. Reservation is temporary admission capacity, not provider token
+consumption. Correlation metadata was present but classified as `legacy`; trusted dynamic metadata
+migration remains a separate Northgate prerequisite.
+
 ## Entry Template
 
 Append future optimizations with:
