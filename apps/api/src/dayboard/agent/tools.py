@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import TenantContext
-from dayboard.app.scheduling_services import build_scheduling_services
+from dayboard.composition.scheduling import build_scheduling_services
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
 from dayboard.timezones import resolve_local_datetime

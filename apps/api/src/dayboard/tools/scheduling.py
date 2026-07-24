@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.scheduling_services import build_scheduling_service
+from dayboard.composition.scheduling import build_scheduling_service
 from agent_platform.core import TenantContext
 from dayboard.domain.calendar import (
     CalendarEntry,

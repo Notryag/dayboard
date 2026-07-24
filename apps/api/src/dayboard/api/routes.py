@@ -44,7 +44,7 @@ from dayboard.app.schedule_queries import (
     SchedulePage,
     TaskItemView,
 )
-from dayboard.app.scheduling_services import (
+from dayboard.composition.scheduling import (
     build_schedule_query_service,
     build_scheduling_services,
 )
