@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.api.auth import _account_for_login
+from dayboard.api.auth import _account_for_login, _login_credential_snapshot
 from dayboard.app.account_recovery import AccountRecoveryService, token_digest
 from dayboard.composition.account_recovery import build_account_recovery_services
 from dayboard.db.account_recovery_uow import SqlAlchemyAccountRecoveryUnitOfWork
@@ -178,28 +178,19 @@ async def test_login_lookup_rejects_soft_deleted_credentials(
     await db_session.commit()
 
     async with SessionLocal() as login_session:
-        assert await _account_for_login(login_session, user.email or "") is None
+        assert await _login_credential_snapshot(login_session, user.email or "") is None
 
 
-async def test_concurrent_old_password_login_session_is_revoked_by_reset(
+async def test_password_reset_invalidates_an_unlocked_login_snapshot(
     db_session: AsyncSession,
 ) -> None:
     user = await _create_password_account(db_session)
     raw_token = await _issue_reset(db_session, user)
-    login_token_hash = "a" * 64
 
     async with SessionLocal() as login_session, SessionLocal() as reset_session:
-        account = await _account_for_login(login_session, user.email or "")
-        assert account is not None
-        assert account[1].password_hash == "test-hash:old-password"
-        login_session.add(
-            UserSessionRow(
-                user_id=user.id,
-                token_hash=login_token_hash,
-                expires_at=datetime.now(UTC) + timedelta(hours=1),
-            )
-        )
-        await login_session.flush()
+        snapshot = await _login_credential_snapshot(login_session, user.email or "")
+        assert snapshot == (user.id, "test-hash:old-password")
+        await login_session.rollback()
 
         async def reset_password() -> bool:
             unit_of_work = SqlAlchemyAccountRecoveryUnitOfWork(reset_session)
@@ -208,18 +199,11 @@ async def test_concurrent_old_password_login_session_is_revoked_by_reset(
             await unit_of_work.commit()
             return changed
 
-        reset_task = asyncio.create_task(reset_password())
-        with pytest.raises(TimeoutError):
-            await asyncio.wait_for(asyncio.shield(reset_task), timeout=0.05)
+        assert await asyncio.wait_for(reset_password(), timeout=1) is True
+        assert await _account_for_login(login_session, snapshot[0], snapshot[1]) is None
+        await login_session.rollback()
 
-        await login_session.commit()
-        assert await asyncio.wait_for(reset_task, timeout=1) is True
-
-    persisted_session = await db_session.scalar(
-        select(UserSessionRow).where(UserSessionRow.token_hash == login_token_hash)
-    )
     credential = await db_session.get(UserCredentialRow, user.id)
-    assert persisted_session is not None and persisted_session.revoked_at is not None
     assert credential is not None
     await db_session.refresh(credential)
     assert credential.password_hash == "test-hash:new-password"

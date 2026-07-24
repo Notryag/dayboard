@@ -69,7 +69,8 @@ implementation chronology. Current facts live under [current](./current/README.m
   while the external ASR provider runs.
 - Added a Dayboard-owned Account Recovery Unit of Work: reset issue/consumption return storage-free
   records, API boundaries own commit/rollback, and User-row locking serializes token replacement,
-  password reset, session revocation, and concurrent login.
+  password reset, and session revocation. Login verifies an unlocked credential snapshot outside
+  the database transaction, then briefly locks and revalidates it before creating a Session.
 - Added a Dayboard-owned Provider Usage Unit of Work: typed aggregates cross the application
   boundary, owner-scoped PostgreSQL insertion is concurrent and idempotent, ORM rows stay in the
   adapter, and accounting failures cannot replace an authoritative terminal Run outcome.

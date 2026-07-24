@@ -136,10 +136,12 @@ owns CSPRNG token generation, SHA-256 token digests, password-hasher orchestrati
 policy, but it never imports SQLAlchemy or commits. The API commits token issue or successful
 consumption before scheduling email delivery or deleting the browser cookie. Repository operations
 serialize by locking `UserRow` first, then revalidate and lock reset tokens and credentials. Login
-uses the same User-row gate before reading the current password hash and creating a Session, so a
-concurrent reset either rejects the old password or revokes the Session created immediately before
-it. Password update, all unused-token consumption, and all active-Session revocation commit or roll
-back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
+first reads only a credential snapshot, ends that read transaction, and verifies the password in a
+worker thread without holding a database lock. A short write transaction then takes the same
+User-row gate, revalidates the password hash and active account state, and creates the Session. A
+concurrent reset therefore either invalidates the snapshot or revokes a Session committed before
+the reset. Password update, all unused-token consumption, and all active-Session revocation commit
+or roll back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
 
 Provider Usage uses an independent Dayboard-owned Unit of Work after the Run has reached its
 authoritative terminal state. The application service receives typed call aggregates and returns a

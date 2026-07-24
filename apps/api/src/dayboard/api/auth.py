@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import secrets
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field
@@ -91,26 +93,37 @@ async def _account_for_session(
     return result if result is not None else None
 
 
-async def _account_for_login(
+async def _login_credential_snapshot(
     session: AsyncSession,
     identifier: str,
-) -> tuple[UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow] | None:
-    candidate_user_id = await session.scalar(
-        select(UserRow.id)
-        .where(
-            or_(UserRow.username == identifier, UserRow.email == identifier),
-            UserRow.is_active.is_(True),
-            UserRow.deleted_at.is_(None),
+) -> tuple[UUID, str] | None:
+    candidate = (
+        await session.execute(
+            select(UserRow.id, UserCredentialRow.password_hash)
+            .join(UserCredentialRow, UserCredentialRow.user_id == UserRow.id)
+            .where(
+                or_(UserRow.username == identifier, UserRow.email == identifier),
+                UserRow.is_active.is_(True),
+                UserRow.deleted_at.is_(None),
+                UserCredentialRow.deleted_at.is_(None),
+            )
+            .limit(1)
         )
-        .limit(1)
-    )
-    if candidate_user_id is None:
+    ).one_or_none()
+    if candidate is None:
         return None
+    return candidate.id, candidate.password_hash
 
+
+async def _account_for_login(
+    session: AsyncSession,
+    user_id: UUID,
+    expected_password_hash: str,
+) -> tuple[UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow] | None:
     locked_user_id = await session.scalar(
         select(UserRow.id)
         .where(
-            UserRow.id == candidate_user_id,
+            UserRow.id == user_id,
             UserRow.is_active.is_(True),
             UserRow.deleted_at.is_(None),
         )
@@ -127,6 +140,7 @@ async def _account_for_login(
         .where(
             UserRow.id == locked_user_id,
             UserCredentialRow.deleted_at.is_(None),
+            UserCredentialRow.password_hash == expected_password_hash,
             TenantMembershipRow.status == "active",
             TenantMembershipRow.deleted_at.is_(None),
         )
@@ -261,12 +275,21 @@ async def login(
 ) -> AccountResponse:
     del request
     identifier = _normalized(body.identifier)
-    account = await _account_for_login(session, identifier)
-    candidate_hash = account[1].password_hash if account else _dummy_password_hash
-    valid = password_hash.verify(body.password, candidate_hash)
-    if account is None or not valid:
-        await session.rollback()
+    candidate = await _login_credential_snapshot(session, identifier)
+    candidate_hash = candidate[1] if candidate else _dummy_password_hash
+    await session.rollback()
+    valid = await asyncio.to_thread(password_hash.verify, body.password, candidate_hash)
+    if candidate is None or not valid:
         logger.info("dayboard.auth.login_rejected", reason="invalid_credentials")
+        raise ApiProblem(
+            status_code=401,
+            code="INVALID_CREDENTIALS",
+            message="Invalid credentials",
+        )
+    account = await _account_for_login(session, candidate[0], candidate_hash)
+    if account is None:
+        await session.rollback()
+        logger.info("dayboard.auth.login_rejected", reason="credential_changed")
         raise ApiProblem(
             status_code=401,
             code="INVALID_CREDENTIALS",
