@@ -133,7 +133,7 @@ settings = get_settings()
 class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
-    functions = [func(execute_command_run, name="execute_command_run", max_tries=3, timeout=300)]
+    functions = [func(execute_command_run, name="execute_command_run", max_tries=1, timeout=300)]
     redis_settings = RedisSettings.from_dsn(settings.effective_command_queue_url)
     queue_name = settings.command_queue_name
     max_jobs = 10

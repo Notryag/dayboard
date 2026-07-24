@@ -3,7 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from uuid import uuid4
 
-from dayboard.workers.commands import execute_command_run
+from dayboard.workers.commands import WorkerSettings, execute_command_run
+
+
+def test_command_run_job_does_not_retry_a_terminal_failed_run() -> None:
+    [job] = WorkerSettings.functions
+
+    assert job.max_tries == 1
 
 
 async def test_worker_restores_execution_context_from_persisted_run(monkeypatch) -> None:

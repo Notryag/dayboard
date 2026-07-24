@@ -176,6 +176,11 @@ Provider, tool, queue, and unexpected runtime failures transition the Run to `fa
 user-facing result. Detailed correlation remains in structured logs and durable events without
 logging credentials, cookies, raw audio, or full command text.
 
+Each queued Run has one execution attempt. arq does not automatically replay a Run after the
+coordinator has persisted terminal `failed`, because scheduling tools can commit product side
+effects before a later model or runtime failure. A user retry creates a new idempotent command Run;
+automatic retries require an explicit attempt lifecycle and end-to-end tool-effect idempotency.
+
 The worker scans stale active Runs. Queued and running Runs have separate timeout rules and
 status-specific atomic failure transitions. A delayed job exits when it observes that recovery has
 already made the Run terminal.
