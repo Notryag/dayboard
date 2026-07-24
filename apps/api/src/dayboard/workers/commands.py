@@ -12,6 +12,7 @@ from north.runtime import RedisStreamBridge
 import structlog
 
 from dayboard.app.commands import CommandService
+from dayboard.composition.provider_usage import build_provider_usage_service
 from dayboard.composition.reminders import build_reminder_services
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from dayboard.app.platform_services import (
@@ -43,6 +44,7 @@ async def execute_command_run(
         )
         await CommandService(
             session,
+            provider_usage=build_provider_usage_service(),
             checkpointer=ctx.get("checkpointer"),
             stream_bridge=RedisStreamBridge(
                 ctx["redis"],

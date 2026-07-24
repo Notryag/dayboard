@@ -70,6 +70,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a Dayboard-owned Account Recovery Unit of Work: reset issue/consumption return storage-free
   records, API boundaries own commit/rollback, and User-row locking serializes token replacement,
   password reset, session revocation, and concurrent login.
+- Added a Dayboard-owned Provider Usage Unit of Work: typed aggregates cross the application
+  boundary, owner-scoped PostgreSQL insertion is concurrent and idempotent, ORM rows stay in the
+  adapter, and accounting failures cannot replace an authoritative terminal Run outcome.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -105,6 +108,9 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 - Password-reset mail delivery is best effort after the token transaction commits. Concurrent reset
   requests can deliver messages out of order; only the newest token remains valid until a durable
   mail Outbox is introduced.
+- A hard Worker exit before Provider Usage settlement can omit the aggregate. A crash after its
+  PostgreSQL commit but before Redis budget reconciliation can leave the reservation inaccurate;
+  durable usage recovery remains pending.
 - Backups are host-local; encrypted off-host replication is pending.
 
 ## Release Check

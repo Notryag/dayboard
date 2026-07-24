@@ -200,6 +200,28 @@ RULES = (
             "account_recovery_ports.py",
         ),
     ),
+    LayerRule(
+        name="dayboard.provider_usage_application",
+        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
+        forbidden_import_prefixes=(
+            "dayboard.agent",
+            "dayboard.api",
+            "dayboard.composition",
+            "dayboard.db",
+            "dayboard.integrations",
+            "dayboard.tools",
+            "dayboard.workers",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+        included_relative_paths=(
+            "provider_usage.py",
+            "provider_usage_ports.py",
+        ),
+    ),
 )
 
 

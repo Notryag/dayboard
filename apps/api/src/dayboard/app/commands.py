@@ -13,6 +13,7 @@ from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.app.platform_services import build_platform_services
+from dayboard.app.provider_usage import ProviderUsageService
 from dayboard.app.run_execution import DayboardRunExecutionDriver
 from dayboard.app.run_result_projection import project_run_failure
 from dayboard.config import Settings, get_settings
@@ -35,8 +36,8 @@ class CommandService:
         *,
         settings: Settings | None = None,
         budget_guard: ProviderBudgetGuard | None = None,
+        provider_usage: ProviderUsageService | None = None,
         checkpointer=None,
-        usage_session_factory=SessionLocal,
         runtime_event_session_factory=SessionLocal,
         stream_bridge: StreamBridge | None = None,
         executor_factory=RunExecutor,
@@ -44,10 +45,10 @@ class CommandService:
         self.session = session
         self.settings = settings or get_settings()
         self.budget_guard = budget_guard or ProviderBudgetGuard(self.settings)
+        self.provider_usage = provider_usage
         self.checkpointer = checkpointer
         self.platform = build_platform_services(session)
         self.clarifications = ClarificationService(self.platform.conversations)
-        self.usage_session_factory = usage_session_factory
         self.runtime_event_session_factory = runtime_event_session_factory
         self.stream_bridge = stream_bridge or MemoryStreamBridge()
         self.executor_factory = executor_factory
@@ -147,6 +148,8 @@ class CommandService:
         context: TenantContext,
         run_id: UUID,
     ) -> None:
+        if self.provider_usage is None:
+            raise RuntimeError("Provider usage service is required for Run execution")
         driver = DayboardRunExecutionDriver(
             self.session,
             settings=self.settings,
@@ -154,8 +157,8 @@ class CommandService:
             conversations=self.platform.conversations,
             runs=self.platform.runs,
             budget_guard=self.budget_guard,
+            provider_usage=self.provider_usage,
             checkpointer=self.checkpointer,
-            usage_session_factory=self.usage_session_factory,
             runtime_event_session_factory=self.runtime_event_session_factory,
             stream_bridge=self.stream_bridge,
             executor_factory=self.executor_factory,

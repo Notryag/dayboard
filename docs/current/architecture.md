@@ -137,6 +137,15 @@ concurrent reset either rejects the old password or revokes the Session created 
 it. Password update, all unused-token consumption, and all active-Session revocation commit or roll
 back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
 
+Provider Usage uses an independent Dayboard-owned Unit of Work after the Run has reached its
+authoritative terminal state. The application service receives typed call aggregates and returns a
+storage-neutral settlement result; SQLAlchemy rows remain inside `dayboard.db`. PostgreSQL inserts
+through an owner-scoped `INSERT ... SELECT` from the trusted Run, so an incorrect tenant or owner
+cannot create a record or occupy the unique `(tenant_id, run_id)` key. Concurrent settlement is
+idempotent and immutable: exactly one transaction creates the aggregate, and only that winner may
+reconcile the prior Redis budget reservation. Usage persistence or budget-reconciliation failures
+are logged without changing the completed or failed Run outcome.
+
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
 submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
@@ -182,8 +191,9 @@ SSE receives only projected product status and never exposes the diagnostic exte
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
 workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, Voice, and Account
-Recovery application services and ports are additionally prohibited from importing Dayboard
-persistence adapters or framework/runtime layers; only explicit composition modules connect them.
+Recovery application services and ports, plus Provider Usage settlement, are additionally
+prohibited from importing Dayboard persistence adapters or framework/runtime layers; only explicit
+composition modules connect them.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities. A

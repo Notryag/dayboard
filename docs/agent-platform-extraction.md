@@ -54,7 +54,7 @@ integration details from becoming dependencies of the reusable Core.
 | Persisted message artifacts | Split | Split | Implemented: Platform owns the versioned envelope/lifecycle; Dayboard owns and validates schedule payloads |
 | Clarification interaction state | Split | Split | Implemented: Platform owns envelope/CAS; Dayboard owns typed payload and response projection |
 | Voice/media ingestion lifecycle | Dayboard boundary | Platform candidate | Explicit Dayboard provider/store ports and UoW are implemented; extraction waits for a second consumer |
-| Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
+| Provider usage and budget accounting | Dayboard boundary | Platform candidate | Explicit typed ports and an independent UoW are implemented; extraction waits for a second consumer and durable recovery semantics |
 | Reminder delivery/outbox machinery | Dayboard boundary | Split candidate | Explicit Dayboard ports/UoW are implemented; Dayboard owns due-time and expiry policy, and Platform extraction waits for a second consumer |
 | Auth credentials and account recovery | Dayboard boundary | Platform candidate | Account Recovery ports/UoW are explicit; extraction still waits for a concrete second consumer or stable identity API |
 | Calendar/task domain, repositories and services | Dayboard | Dayboard | Never move to platform |
@@ -102,6 +102,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Dayboard Reminder Unit of Work and ORM-independent lifecycle service | Complete; inbox, source projection, claim, expiry, cancellation, and delivery use explicit ports with API/Worker-owned commits |
 | Dayboard Voice Unit of Work and ORM-independent lifecycle service | Complete; processing commits before external ASR, terminal transitions use a second transaction, and extraction waits for a second consumer |
 | Dayboard Account Recovery Unit of Work and ORM-independent service | Complete; User-first locking serializes issue, confirm, and login while password/token/session changes commit atomically |
+| Dayboard Provider Usage Unit of Work and ORM-independent settlement | Complete; owner-scoped idempotent insertion returns typed aggregates and cannot alter an already-terminal Run |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
@@ -130,11 +131,19 @@ Dayboard schedule mutation
 
 Dayboard voice transcription
   commit processing record -> external ASR without a transaction -> commit completed/failed state
+
+Dayboard provider usage
+  commit terminal Run -> independently insert immutable usage aggregate -> reconcile budget if created
 ```
 
 Agent execution remains outside a database transaction. Each durable checkpoint above uses a short
 transaction; no transaction is held open while waiting for a model, tool provider, Redis, or SSE
 consumer.
+
+Provider Usage is deliberately not atomic with the Run transaction. Its independent UoW prevents a
+diagnostic/accounting failure from rolling back the user-visible outcome. A durable outbox or repair
+job is still required to recover a hard exit before settlement or between the usage commit and Redis
+budget reconciliation.
 
 PostgreSQL Run-event sequence allocation locks the parent Run before calculating the next sequence,
 so concurrent lifecycle writers cannot claim the same value.

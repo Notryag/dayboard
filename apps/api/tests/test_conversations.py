@@ -20,6 +20,7 @@ from dayboard.app.conversation_presentations import (
 )
 from dayboard.app.platform_services import build_conversation_service
 from dayboard.app.platform_services import build_run_service
+from dayboard.composition.provider_usage import build_provider_usage_service
 from dayboard.config import Settings
 from agent_platform.core import AgentRunStatus, InteractionConflictError, TenantContext
 from dayboard.db.session import SessionLocal
@@ -71,6 +72,7 @@ async def test_two_runs_persist_complete_thread_history(
 
     service = CommandService(
         db_session,
+        provider_usage=build_provider_usage_service(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -137,6 +139,7 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
 
     service = CommandService(
         db_session,
+        provider_usage=build_provider_usage_service(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -220,6 +223,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
 
     service = CommandService(
         db_session,
+        provider_usage=build_provider_usage_service(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -264,6 +268,7 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
 
     service = CommandService(
         db_session,
+        provider_usage=build_provider_usage_service(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",

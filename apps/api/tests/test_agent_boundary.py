@@ -453,6 +453,7 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),
+        provider_usage=SimpleNamespace(),
         executor_factory=fake_executor_factory(fake_invoker),
     )
 
@@ -505,6 +506,7 @@ async def test_dayboard_driver_logs_and_projects_failure(
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),
+        provider_usage=SimpleNamespace(),
         executor_factory=fake_executor_factory(failing_invoker),
     )
 

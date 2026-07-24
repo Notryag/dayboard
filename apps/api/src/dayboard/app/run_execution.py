@@ -34,14 +34,14 @@ from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.app.platform_services import build_platform_services
+from dayboard.app.provider_usage import ProviderUsageService
+from dayboard.app.provider_usage_ports import ProviderUsageAggregate, ProviderUsageCall
 from dayboard.app.run_result_projection import (
     merge_presentation_parts,
     project_run_failure,
     project_run_result,
 )
 from dayboard.config import Settings
-from dayboard.db.provider_usage_repository import ProviderUsageRepository
-from dayboard.db.session import SessionLocal
 
 
 logger = structlog.get_logger(__name__)
@@ -67,9 +67,9 @@ class DayboardRunExecutionDriver:
         conversations: ConversationService,
         runs: AgentRunService,
         budget_guard: ProviderBudgetGuard,
+        provider_usage: ProviderUsageService,
         checkpointer=None,
-        usage_session_factory=SessionLocal,
-        runtime_event_session_factory=SessionLocal,
+        runtime_event_session_factory=None,
         stream_bridge: StreamBridge | None = None,
         executor_factory=RunExecutor,
     ) -> None:
@@ -79,8 +79,8 @@ class DayboardRunExecutionDriver:
         self.conversations = conversations
         self.runs = runs
         self.budget_guard = budget_guard
+        self.provider_usage = provider_usage
         self.checkpointer = checkpointer
-        self.usage_session_factory = usage_session_factory
         self.runtime_event_session_factory = runtime_event_session_factory
         self.stream_bridge = stream_bridge or MemoryStreamBridge()
         self.executor_factory = executor_factory
@@ -104,6 +104,8 @@ class DayboardRunExecutionDriver:
             projected = project_runtime_event(event)
             if projected is None:
                 return
+            if self.runtime_event_session_factory is None:
+                raise RuntimeError("Runtime event session factory is not configured")
             async with runtime_event_lock:
                 async with self.runtime_event_session_factory() as event_session:
                     event_platform = build_platform_services(event_session)
@@ -339,18 +341,27 @@ class DayboardRunExecutionDriver:
             return
         provider, _, _ = self.settings.agent_model_name.partition(":")
         try:
-            async with self.usage_session_factory() as usage_session:
-                settlement = await ProviderUsageRepository(usage_session).settle(
-                    context,
-                    run_id=run_id,
-                    provider=provider or "unknown",
-                    model=self.settings.agent_model_name,
-                    input_tokens=usage.input_tokens,
-                    output_tokens=usage.output_tokens,
-                    total_tokens=usage.total_tokens,
-                    usage_metadata={"calls": usage_accumulator.calls},
-                )
-                await usage_session.commit()
+            aggregate = ProviderUsageAggregate(
+                run_id=run_id,
+                provider=provider or "unknown",
+                model=self.settings.agent_model_name,
+                input_tokens=usage.input_tokens,
+                output_tokens=usage.output_tokens,
+                total_tokens=usage.total_tokens,
+                calls=tuple(
+                    ProviderUsageCall(
+                        call_id=call["call_id"],
+                        input_tokens=call["input_tokens"],
+                        output_tokens=call["output_tokens"],
+                        total_tokens=call["total_tokens"],
+                    )
+                    for call in usage_accumulator.calls
+                ),
+            )
+            settlement = await self.provider_usage.settle(
+                context,
+                aggregate,
+            )
             reconciled_tokens = 0
             if settlement.created and budget_estimate is not None:
                 try:

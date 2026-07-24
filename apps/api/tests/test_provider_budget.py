@@ -114,6 +114,7 @@ async def test_command_service_checks_budget_before_model_execution(
             conversations=SimpleNamespace(),
             runs=SimpleNamespace(),
             budget_guard=guard,
+            provider_usage=SimpleNamespace(),
             executor_factory=fake_executor_factory(fake_invoker),
         )
 

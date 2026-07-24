@@ -55,7 +55,7 @@ arq worker receives run_id
   -> Platform atomically persists message, Interaction, and terminal Run state
   -> Dayboard publishes the terminal product event
   -> North publishes its end sentinel
-  -> settle provider usage exactly once
+  -> independently settle provider usage idempotently after the terminal outcome
 ```
 
 Dayboard does not call `agent.astream` directly. There is no synchronous production worker or
@@ -178,10 +178,19 @@ already made the Run terminal.
 
 ## Usage And Budgets
 
-North normalizes usage per model call. Dayboard attributes and settles the aggregate once per
-`(tenant_id, run_id)` in a separate database session, including completion, clarification, failure,
-interruption, and cancellation paths. Admission currently occurs in Dayboard; migration of scoped
-provider-token policy to Northgate remains future work.
+North normalizes usage per model call. Dayboard attempts settlement after the Platform has committed
+the terminal Run outcome, using a fresh Unit of Work and an immutable unique aggregate per
+`(tenant_id, run_id)`. The PostgreSQL adapter derives tenant and owner from the trusted Run during
+insert, so a mismatched caller cannot occupy the idempotency key. Only the transaction that creates
+the row reconciles the prior Redis budget reservation; retries observe the existing aggregate and do
+not charge twice. Usage persistence and Redis reconciliation are ordered after, but are not atomic
+with, Run completion and cannot replace its outcome.
+
+A hard process exit before the settlement `finally` block can still omit usage. A crash after the
+PostgreSQL usage commit but before Redis reconciliation can leave the reservation inaccurate. Full
+recovery requires a durable usage outbox or reconciliation job; it is not hidden behind an in-memory
+retry. Admission currently occurs in Dayboard, while migration of scoped provider-token policy to
+Northgate remains future work.
 
 Operator diagnosis follows:
 

@@ -11,6 +11,7 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     user_id = uuid4()
     run_id = uuid4()
     captured = {}
+    provider_usage = object()
 
     class FakeSessionContext:
         async def __aenter__(self):
@@ -32,8 +33,16 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
             )
 
     class FakeCommandService:
-        def __init__(self, session, *, checkpointer=None, stream_bridge=None):
+        def __init__(
+            self,
+            session,
+            *,
+            provider_usage=None,
+            checkpointer=None,
+            stream_bridge=None,
+        ):
             captured["session"] = session
+            captured["provider_usage"] = provider_usage
             captured["checkpointer"] = checkpointer
             captured["stream_bridge"] = stream_bridge
 
@@ -53,6 +62,10 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
         "dayboard.workers.commands.CommandService",
         FakeCommandService,
     )
+    monkeypatch.setattr(
+        "dayboard.workers.commands.build_provider_usage_service",
+        lambda: provider_usage,
+    )
 
     await execute_command_run(
         {"checkpointer": "checkpoint", "redis": object()},
@@ -62,4 +75,5 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
     assert captured["context"].tenant_id == tenant_id
     assert captured["context"].user_id == user_id
     assert captured["run_id"] == run_id
+    assert captured["provider_usage"] is provider_usage
     assert captured["checkpointer"] == "checkpoint"
