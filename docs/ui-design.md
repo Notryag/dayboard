@@ -197,7 +197,7 @@ bar and the keyboard switch remains a compact icon on its right. Its stable stat
 ```text
 voice idle   -> neutral "hold to talk" bar, keyboard-mode icon on the right
 requesting   -> bar shows microphone permission progress
-recording    -> fuchsia bar with live level/timer, slide up to cancel, release to send
+recording    -> fuchsia bar with live level/timer and a floating cancel target above the composer
 transcribing -> upload/provider progress and cancel before command submission
 text         -> microphone-mode icon, editable text, send
 ```
@@ -206,6 +206,11 @@ Voice commands submit automatically after successful transcription; keyboard com
 an explicit send action. Preserve an existing draft by prepending it to the recognized voice command.
 After a completed command, return to voice mode when voice is available. Release microphone tracks,
 audio contexts, timers, and local blobs after stop, cancel, or unmount.
+
+While recording, dragging into the visible pill-shaped cancel target highlights only that target;
+releasing inside cancels and releasing elsewhere sends. Determine intent from the target's actual
+screen bounds rather than a generic upward-distance threshold. Keep a small exit tolerance once the
+target is active so minor finger movement near its edge does not flicker between send and cancel.
 
 ## Component Boundaries
 

@@ -32,6 +32,7 @@
 }
 
 .voiceComposer {
+  position: relative;
   min-height: var(--composer-voice-min-height);
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-size);
@@ -40,6 +41,62 @@
   padding: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.voiceCancelTarget {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: calc(100% + var(--space-5));
+  min-width: 164px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  border: var(--border-width) solid var(--dayboard-color-border);
+  border-radius: var(--radius-pill);
+  color: var(--dayboard-color-text-muted);
+  background: var(--dayboard-color-surface-raised);
+  box-shadow: var(--shadow-message);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-semibold);
+  pointer-events: none;
+  transform: translateX(-50%);
+  transform-origin: center;
+  animation: voice-cancel-target-in var(--motion-fast) ease-out both;
+  transition:
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+.voiceCancelTargetActive {
+  color: var(--dayboard-color-danger-foreground);
+  border-color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger);
+  transform: translateX(-50%) scale(1.05);
+}
+
+.voiceCancelIcon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-surface);
+  transition:
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+
+.voiceCancelTargetActive .voiceCancelIcon {
+  color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger-foreground);
 }
 
 .iconButton,
@@ -187,10 +244,8 @@
 }
 
 .voiceHoldButtonCancel {
-  color: var(--dayboard-color-danger-foreground);
-  border-color: var(--dayboard-color-danger);
-  background: var(--dayboard-color-danger);
-  box-shadow: none;
+  transform: scale(0.985);
+  opacity: 0.82;
 }
 
 .voiceButtonLabel {
@@ -298,8 +353,21 @@
   }
 }
 
+@keyframes voice-cancel-target-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .voiceHoldButton,
+  .voiceCancelTarget,
   .iconButton,
   .sendButton,
   .stopButton {
@@ -312,5 +380,9 @@
 
   .levelBars span {
     transition: none;
+  }
+
+  .voiceCancelTarget {
+    animation: none;
   }
 }

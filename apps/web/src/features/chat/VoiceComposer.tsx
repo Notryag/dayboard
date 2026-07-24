@@ -22,7 +22,7 @@ type VoiceComposerProps = {
   unavailableReason: string | null;
 };
 
-const CANCEL_DISTANCE_PX = 64;
+const CANCEL_TARGET_EXIT_PADDING_PX = 14;
 const LEVEL_WEIGHTS = [0.48, 0.76, 1, 0.68, 0.42];
 
 function formatDuration(seconds: number) {
@@ -47,11 +47,30 @@ export function VoiceComposer({
   const [cancelIntent, setCancelIntent] = useState(false);
   const activeRef = useRef(false);
   const cancelIntentRef = useRef(false);
+  const cancelTargetRef = useRef<HTMLDivElement>(null);
   const pointerIdRef = useRef<number | null>(null);
   const previousStatusRef = useRef(status);
   const startResolvedRef = useRef(false);
-  const startYRef = useRef(0);
   const pendingReleaseRef = useRef<ReleaseAction | null>(null);
+
+  function isInsideCancelTarget(clientX: number, clientY: number) {
+    const bounds = cancelTargetRef.current?.getBoundingClientRect();
+    if (!bounds) return false;
+    const padding = cancelIntentRef.current ? CANCEL_TARGET_EXIT_PADDING_PX : 0;
+    return (
+      clientX >= bounds.left - padding &&
+      clientX <= bounds.right + padding &&
+      clientY >= bounds.top - padding &&
+      clientY <= bounds.bottom + padding
+    );
+  }
+
+  function updateCancelIntent(clientX: number, clientY: number) {
+    const nextIntent = isInsideCancelTarget(clientX, clientY);
+    if (cancelIntentRef.current === nextIntent) return;
+    cancelIntentRef.current = nextIntent;
+    setCancelIntent(nextIntent);
+  }
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current;
@@ -129,6 +148,21 @@ export function VoiceComposer({
         {controlLabel}
       </span>
 
+      {status === "recording" ? (
+        <div
+          aria-hidden="true"
+          className={`${styles.voiceCancelTarget} ${
+            cancelIntent ? styles.voiceCancelTargetActive : ""
+          }`}
+          ref={cancelTargetRef}
+        >
+          <span className={styles.voiceCancelIcon}>
+            <X size={18} strokeWidth={2.4} />
+          </span>
+          <span>{cancelIntent ? "松开取消" : "移到这里取消"}</span>
+        </div>
+      ) : null}
+
       <button
         aria-label={controlLabel}
         aria-pressed={status === "requesting" || status === "recording"}
@@ -158,20 +192,16 @@ export function VoiceComposer({
           if (event.button !== 0 || disabled || status !== "idle") return;
           event.preventDefault();
           pointerIdRef.current = event.pointerId;
-          startYRef.current = event.clientY;
           event.currentTarget.setPointerCapture(event.pointerId);
           void beginRecording();
         }}
         onPointerMove={(event) => {
           if (pointerIdRef.current !== event.pointerId || !activeRef.current) return;
-          const nextIntent = startYRef.current - event.clientY >= CANCEL_DISTANCE_PX;
-          if (cancelIntentRef.current !== nextIntent) {
-            cancelIntentRef.current = nextIntent;
-            setCancelIntent(nextIntent);
-          }
+          updateCancelIntent(event.clientX, event.clientY);
         }}
         onPointerUp={(event) => {
           if (pointerIdRef.current !== event.pointerId) return;
+          updateCancelIntent(event.clientX, event.clientY);
           pointerIdRef.current = null;
           finishRecording("stop");
         }}
