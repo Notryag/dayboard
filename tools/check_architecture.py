@@ -9,6 +9,25 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+PLATFORM_ROOT = REPOSITORY_ROOT / "packages" / "agent-platform" / "src" / "agent_platform"
+DAYBOARD_ROOT = REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard"
+
+FRAMEWORK_IMPORTS = (
+    "fastapi",
+    "langchain",
+    "langchain_core",
+    "north",
+    "sqlalchemy",
+)
+DAYBOARD_OUTER_LAYERS = (
+    "dayboard.agent",
+    "dayboard.api",
+    "dayboard.composition",
+    "dayboard.db",
+    "dayboard.integrations",
+    "dayboard.tools",
+    "dayboard.workers",
+)
 
 
 @dataclass(frozen=True)
@@ -30,217 +49,56 @@ class Violation:
 RULES = (
     LayerRule(
         name="agent_platform",
-        source_root=REPOSITORY_ROOT / "packages" / "agent-platform" / "src" / "agent_platform",
+        source_root=PLATFORM_ROOT,
         forbidden_import_prefixes=("dayboard",),
     ),
     LayerRule(
         name="agent_platform.core",
-        source_root=REPOSITORY_ROOT
-        / "packages"
-        / "agent-platform"
-        / "src"
-        / "agent_platform"
-        / "core",
+        source_root=PLATFORM_ROOT / "core",
         forbidden_import_prefixes=(
             "agent_platform.application",
             "agent_platform.ports",
             "agent_platform.adapters",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
+            *FRAMEWORK_IMPORTS,
         ),
     ),
     LayerRule(
         name="agent_platform.ports",
-        source_root=REPOSITORY_ROOT
-        / "packages"
-        / "agent-platform"
-        / "src"
-        / "agent_platform"
-        / "ports",
+        source_root=PLATFORM_ROOT / "ports",
         forbidden_import_prefixes=(
             "agent_platform.application",
             "agent_platform.adapters",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
+            *FRAMEWORK_IMPORTS,
         ),
     ),
     LayerRule(
         name="agent_platform.application",
-        source_root=REPOSITORY_ROOT
-        / "packages"
-        / "agent-platform"
-        / "src"
-        / "agent_platform"
-        / "application",
+        source_root=PLATFORM_ROOT / "application",
         forbidden_import_prefixes=(
             "agent_platform.adapters",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
+            *FRAMEWORK_IMPORTS,
         ),
     ),
     LayerRule(
         name="dayboard.domain",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "domain",
+        source_root=DAYBOARD_ROOT / "domain",
         forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
             "dayboard.app",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
+            *DAYBOARD_OUTER_LAYERS,
+            *FRAMEWORK_IMPORTS,
         ),
     ),
     LayerRule(
         name="dayboard.app",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=("dayboard.composition",),
-    ),
-    LayerRule(
-        name="dayboard.scheduling_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
+        source_root=DAYBOARD_ROOT / "app",
         forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
+            *DAYBOARD_OUTER_LAYERS,
+            *FRAMEWORK_IMPORTS,
         ),
-        included_relative_paths=(
-            "schedule_queries.py",
-            "scheduling.py",
-            "scheduling_ports.py",
-        ),
-    ),
-    LayerRule(
-        name="dayboard.reminder_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
-        ),
-        included_relative_paths=(
-            "reminder_ports.py",
-            "reminders.py",
-        ),
-    ),
-    LayerRule(
-        name="dayboard.voice_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
-        ),
-        included_relative_paths=(
-            "voice.py",
-            "voice_ports.py",
-        ),
-    ),
-    LayerRule(
-        name="dayboard.account_recovery_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
-        ),
-        included_relative_paths=(
-            "account_recovery.py",
-            "account_recovery_ports.py",
-        ),
-    ),
-    LayerRule(
-        name="dayboard.commands_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
-        ),
-        included_relative_paths=("commands.py",),
-    ),
-    LayerRule(
-        name="dayboard.provider_usage_application",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
-        forbidden_import_prefixes=(
-            "dayboard.agent",
-            "dayboard.api",
-            "dayboard.composition",
-            "dayboard.db",
-            "dayboard.integrations",
-            "dayboard.tools",
-            "dayboard.workers",
-            "fastapi",
-            "langchain",
-            "langchain_core",
-            "north",
-            "sqlalchemy",
-        ),
-        included_relative_paths=("provider_usage_ports.py",),
     ),
     LayerRule(
         name="dayboard.agent_run_execution",
-        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "agent",
+        source_root=DAYBOARD_ROOT / "agent",
         forbidden_import_prefixes=(
             "dayboard.api",
             "dayboard.composition",
@@ -272,7 +130,6 @@ def find_violations(rule: LayerRule) -> list[Violation]:
     if not rule.source_root.is_dir():
         raise FileNotFoundError(f"architecture source root is missing: {rule.source_root}")
 
-    violations: list[Violation] = []
     paths = (
         [rule.source_root / relative_path for relative_path in rule.included_relative_paths]
         if rule.included_relative_paths
@@ -282,6 +139,8 @@ def find_violations(rule: LayerRule) -> list[Violation]:
     if missing_paths:
         missing = ", ".join(str(path) for path in missing_paths)
         raise FileNotFoundError(f"architecture source file is missing: {missing}")
+
+    violations: list[Violation] = []
     for path in sorted(paths):
         for line, imported_module in imported_modules(path):
             if any(

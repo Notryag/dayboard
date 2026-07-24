@@ -34,6 +34,13 @@ squashing remains deferred until every persistent environment has reached Alembi
 
 ## Architecture Hardening
 
+- [x] Align arq delivery with terminal Run semantics: execute each Run once and require a new
+  explicit command Run after failure rather than configuring ineffective automatic retries.
+- [x] Remove password verification from the login lock window. Verify an unlocked credential
+  snapshot in a worker thread, then use a short User/Credential revalidation transaction.
+- [x] Remove the unused CommandService from `RunExecutionScope`, collapse Provider Usage to one
+  settlement port plus a short-transaction SQLAlchemy adapter, and replace per-feature architecture
+  rules with global layer rules that automatically cover new application files.
 - [x] Introduce a Dayboard-owned Scheduling Unit of Work with storage-neutral calendar, task, and
   reminder scheduling ports. Return domain objects from repositories, keep ORM mapping in `db`, and
   remove the `SchedulingService(session)` path.
