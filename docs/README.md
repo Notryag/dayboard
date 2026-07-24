@@ -12,6 +12,8 @@ Read only what the task needs:
 ## Canonical Current Facts
 
 - [current/architecture.md](./current/architecture.md): system and ownership boundaries.
+- [current/module-map.md](./current/module-map.md): AI-friendly code placement, dependency,
+  transaction, and invariant map.
 - [current/product-model.md](./current/product-model.md): schedule/task semantics and product scope.
 - [current/run-lifecycle.md](./current/run-lifecycle.md): Run states, Redis Streams, SSE, and recovery.
 - [current/time-protocol.md](./current/time-protocol.md): Beijing local model protocol, UTC storage,
@@ -51,7 +53,7 @@ implementation that changes them.
 
 Backend or database changes:
 
-- current architecture and product model;
+- current architecture, module map, and product model;
 - engineering guidelines;
 - API errors or backup runbook when relevant.
 

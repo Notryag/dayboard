@@ -2,31 +2,67 @@
 
 This document describes the system implemented on `main`. It does not describe historical phases
 or speculative replacements. Run transport details live in [run-lifecycle.md](./run-lifecycle.md),
-and product semantics live in [product-model.md](./product-model.md).
+product semantics live in [product-model.md](./product-model.md), and code-placement contracts live
+in [module-map.md](./module-map.md).
 
-## System Map
+Each view below answers one question. System context shows external systems; deployment shows
+runtime processes; source dependencies show imports; ownership shows authority. Do not merge these
+views into one diagram.
+
+## System Context
+
+North and Agent Platform are libraries inside Dayboard's code boundary, not separately operated
+products. Northgate is an independent network service. Production model traffic can use the
+Northgate canary route or the configured direct-provider fallback until the gateway migration is
+complete.
 
 ```mermaid
 flowchart LR
-    User[User] --> Web[Next.js Web]
-    Web -->|REST and SSE| API[FastAPI API]
-    API --> DB[(PostgreSQL)]
+    User[User] --> Dayboard[Dayboard]
+    Dayboard -->|canary model traffic| Northgate[Northgate]
+    Dayboard -->|direct fallback| Provider[Model provider]
+    Northgate --> Provider
+    Dayboard --> ASR[ASR provider]
+```
+
+## Deployment And Runtime Components
+
+Docker Compose deploys one Web process, one API process, and one arq Worker process. North executes
+inside the Worker. Command jobs, stale-Run recovery, idempotency cleanup, and Reminder cron jobs all
+share that Worker; `Reminder Worker` is a logical role, not another container.
+
+```mermaid
+flowchart LR
+    User[User] --> Client[Browser client]
+    Client -->|HTTPS| Nginx[Nginx]
+    Nginx -->|HTML / assets| Web[Next.js Web process]
+    Nginx -->|REST / SSE| API[FastAPI API process]
+
+    API --> PG[(PostgreSQL)]
     API -->|enqueue run_id| Redis[(Redis)]
-    Redis --> Worker[arq Worker]
-    Worker --> Coordinator[Platform RunExecutionCoordinator]
-    Coordinator --> DB
-    Coordinator --> Driver[Dayboard RunExecutionDriver]
-    Driver --> North[North RunExecutor]
-    Driver -->|projected outcome| Coordinator
-    North --> Model[OpenAI-compatible model]
-    North --> Tools[Dayboard tools]
-    Tools --> Services[Application services]
-    Services --> DB
-    North -->|canonical chunks| RedisStream[Redis Stream]
-    RedisStream --> API
-    API -->|projected Run events| Web
-    API --> ASR[Cloudflare or Alibaba ASR]
-    ReminderWorker[Reminder worker] --> DB
+    API -->|join Run stream| Redis
+    API --> ASR[ASR provider]
+
+    Redis -->|arq job| Worker[arq Worker process]
+    Worker --> PG
+    Worker -->|cron roles| Reminder[Reminder / recovery jobs]
+    Reminder --> PG
+
+    subgraph WorkerRuntime[inside Worker]
+        Coordinator[Platform RunExecutionCoordinator]
+        Driver[Dayboard RunExecutionDriver]
+        North[North RunExecutor]
+        Tools[Dayboard scheduling tools]
+        Coordinator --> Driver
+        Driver --> North
+        North --> Tools
+    end
+
+    Worker --> Coordinator
+    North -->|canonical Run stream| Redis
+    North -->|canary| Northgate[Northgate]
+    North -->|configured fallback| Model[Model provider]
+    Northgate --> Model
 ```
 
 PostgreSQL is the source of truth for accounts, schedules, conversations, Runs, durable Run events,
@@ -62,6 +98,52 @@ Platform `RunExecutionDriver` port. Runtime callbacks and results flow through d
 without reversing source dependencies. North does not understand application identity or
 persistence; Agent Platform does not understand North events, calendars, tasks, scheduling prompts,
 or the Dayboard UI.
+
+## Source Dependency Direction
+
+Arrows below mean source imports, not runtime callbacks or data flow. Outer entry points and adapters
+depend inward on contracts. Composition is the only general-purpose place that connects concrete
+SQLAlchemy, North, settings, and provider implementations. The serialized Agent tool boundary is
+also an outer entry point and may request a composed Scheduling scope for one tool transaction.
+
+```mermaid
+flowchart TD
+    API[dayboard.api]
+    Workers[dayboard.workers]
+    ToolBoundary[dayboard.agent tools / dayboard.tools]
+    Composition[dayboard.composition]
+    AgentDriver[Dayboard Run driver]
+    App[dayboard.app]
+    Domain[dayboard.domain]
+    DB[dayboard.db]
+    Integrations[dayboard.integrations]
+    Platform[agent_platform core / application / ports]
+    North[North]
+
+    API --> App
+    API --> Composition
+    Workers --> App
+    Workers --> Composition
+    ToolBoundary --> Composition
+    ToolBoundary --> App
+    Composition --> App
+    Composition --> AgentDriver
+    Composition --> DB
+    Composition --> Integrations
+    Composition --> Platform
+    AgentDriver --> App
+    AgentDriver --> Platform
+    AgentDriver --> North
+    App --> Domain
+    App --> Platform
+    DB --> Domain
+    DB --> App
+    DB --> Platform
+    Integrations --> App
+```
+
+`dayboard.domain` imports none of the outer layers. `agent_platform` imports neither Dayboard nor
+North. Dayboard owns the driver that implements the Platform execution port with North.
 
 ## Backend Shape
 
@@ -282,6 +364,25 @@ Dayboard theme colors originate in `--dayboard-color-*` variables and map into s
 Feature CSS Modules and shared components therefore use the same light/dark theme source.
 
 ## Data And Infrastructure
+
+```mermaid
+flowchart TB
+    PG[(Dayboard PostgreSQL)] --> ProductData[Users, sessions, schedules, reminders]
+    PG --> PlatformData[Conversations, Runs, Interactions, presentations, durable events]
+    PG --> UsageData[Dayboard provider-usage settlement]
+    PG --> NorthCheckpoints[North-owned checkpoint tables]
+
+    Redis[(Redis)] --> Queue[arq queue]
+    Redis --> Live[bounded Run streams / replay]
+    Redis --> Coordination[rate limits, budgets, coordination]
+
+    NorthgateDB[(Northgate storage)] --> GatewayData[Routes, credentials, request ledger, gateway usage]
+    Provider[Model provider] --> NoAuthority[Request responses only; no product authority]
+```
+
+Dayboard PostgreSQL is authoritative for product and Platform lifecycle state. North owns only its
+checkpoint tables within that database. Redis state is operational and reconstructable; Northgate
+owns gateway accounting rather than Dayboard product state; model providers own no Dayboard truth.
 
 PostgreSQL stores:
 

@@ -65,6 +65,58 @@ The Worker composes a new Run driver for each job and always supplies the Redis 
 journal callbacks open fresh Platform Unit-of-Work sessions, while the main coordinator keeps the
 Run lifecycle transaction boundary separate from those event writes.
 
+### Command Sequence
+
+This sequence shows ordering and authority. Redis queue delivery and live streaming use the same
+Redis deployment but are separate roles.
+
+```mermaid
+sequenceDiagram
+    participant Web
+    participant API
+    participant Platform
+    participant PG as PostgreSQL
+    participant Queue as Redis queue
+    participant Worker
+    participant Driver as Dayboard driver
+    participant North
+    participant Tool
+    participant Stream as Redis Run stream
+
+    Web->>API: POST command + Idempotency-Key
+    API->>Platform: submit command
+    Platform->>PG: claim key + Thread + user message + queued Run + event
+    PG-->>Platform: commit
+    Platform-->>API: run_id
+    API->>Queue: enqueue(run_id)
+    API-->>Web: accepted run_id
+    Web->>API: join SSE(run_id)
+    API->>Stream: subscribe with replay cursor
+
+    Queue->>Worker: execute_command_run(run_id)
+    Worker->>Platform: CAS queued to running
+    Platform->>PG: running state + event commit
+    Worker->>Driver: execute persisted Run
+    Driver->>North: execute bounded context
+    North->>Stream: canonical progress and model events
+    North->>Tool: validated tool call
+    Tool->>PG: scoped product transaction
+    PG-->>Tool: commit authoritative object
+    Tool-->>North: compact receipt + presentation artifact
+    North->>Driver: typed RuntimeExecutionResult
+    Driver->>Platform: projected completion outcome
+    Platform->>PG: assistant message + presentation/interaction + terminal Run
+    PG-->>Platform: atomic commit
+    Driver->>Stream: terminal product event
+    North->>Stream: end sentinel
+    Stream-->>API: ordered Run events
+    API-->>Web: projected product SSE
+```
+
+Canonical stream events can arrive throughout execution; they are not delayed until the terminal
+database write. A successful tool result follows its product commit. The terminal product event and
+North end sentinel follow the Platform terminal transaction.
+
 ## Live Stream
 
 North publishes canonical model and tool chunks through its Redis `StreamBridge`. The Worker and
@@ -172,6 +224,39 @@ candidate, then the Platform atomically consumes the expected Interaction versio
 idempotent continuation Run, user message, and `run_created` event. An identical `Idempotency-Key`
 retry resolves the existing Run before reading Interaction state; a different or stale choice
 receives a conflict.
+
+```mermaid
+sequenceDiagram
+    participant North
+    participant Driver as Dayboard driver
+    participant Platform
+    participant PG as PostgreSQL
+    participant API
+    participant Web
+    participant Queue as Redis queue
+    participant Stream as Redis Run stream
+
+    North->>Driver: typed ClarificationRequest
+    Driver->>Platform: needs-interaction outcome
+    Platform->>PG: assistant message + PendingInteraction + old Run needs_clarification
+    PG-->>Platform: atomic commit
+    Driver->>Stream: clarification_requested
+    Stream-->>API: safe interaction event
+    API-->>Web: projected SSE
+
+    Web->>API: option_key + expected state version
+    API->>Platform: load current Interaction state
+    API->>API: validate Dayboard-owned candidate
+    API->>Platform: submit continuation and consume version
+    Platform->>PG: idempotency claim + CAS consume + new Run/message/event
+    PG-->>Platform: atomic commit
+    Platform-->>API: new run_id
+    API->>Queue: enqueue(new run_id)
+    API-->>Web: accepted continuation Run
+```
+
+The old Run remains terminal. Clarification never reopens or resumes it; the answer creates a new
+Run on the same Thread after the pending Interaction is consumed exactly once.
 
 ## Cancellation And Failure
 
