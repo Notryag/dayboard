@@ -19,9 +19,7 @@ from dayboard.agent.run_execution import (
     DayboardRunExecutionDriver,
     RunExecutorFactory,
 )
-from dayboard.app.commands import CommandService
 from dayboard.app.provider_usage import ProviderUsageService
-from dayboard.composition.commands import build_command_service_from_platform
 from dayboard.composition.platform import (
     PlatformServiceScope,
     build_platform_services,
@@ -34,7 +32,6 @@ from dayboard.config import Settings, get_settings
 @dataclass(frozen=True, slots=True)
 class RunExecutionScope:
     platform: PlatformServiceScope
-    commands: CommandService
     driver: DayboardRunExecutionDriver
 
     async def execute(self, context: TenantContext, run_id: UUID) -> None:
@@ -97,6 +94,5 @@ def build_run_execution_scope(
     )
     return RunExecutionScope(
         platform=platform,
-        commands=build_command_service_from_platform(platform),
         driver=driver,
     )

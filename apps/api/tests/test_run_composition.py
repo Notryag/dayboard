@@ -58,4 +58,3 @@ def test_run_execution_scope_creates_one_driver_per_run() -> None:
 
     assert first is not second
     assert first.driver is not second.driver
-    assert first.commands is not second.commands

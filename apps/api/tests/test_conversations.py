@@ -18,6 +18,7 @@ from dayboard.app.conversation_presentations import (
     build_dayboard_presentation,
     dayboard_presentation_parts,
 )
+from dayboard.composition.commands import build_command_service
 from dayboard.composition.platform import build_conversation_service
 from dayboard.composition.platform import build_run_service
 from dayboard.composition.provider_usage import build_provider_usage_service
@@ -90,7 +91,7 @@ async def test_two_runs_persist_complete_thread_history(
         return {"messages": [AIMessage(content=next(responses))]}
 
     scope = _run_scope(db_session, fake_invoker)
-    service = scope.commands
+    service = build_command_service(db_session)
     first_request = CommandRequest(message="明天八点开会")
     first = await service.create_or_get_command_run(tenant_context, first_request)
     await scope.execute(tenant_context, first.run_id)
@@ -150,7 +151,7 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
         return {"messages": [AIMessage(content="任务已创建。")]}
 
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
-    service = scope.commands
+    service = build_command_service(db_session)
     request = CommandRequest(message="提醒我提交周报")
     created = await service.create_or_get_command_run(tenant_context, request)
     await scope.execute(tenant_context, created.run_id)
@@ -226,7 +227,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
         raise RuntimeError("provider disconnected after cancellation")
 
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
-    service = scope.commands
+    service = build_command_service(db_session)
     request = CommandRequest(message="创建任务")
     created = await service.create_or_get_command_run(tenant_context, request)
 
@@ -263,7 +264,7 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
         }
 
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
-    service = scope.commands
+    service = build_command_service(db_session)
     created = await service.create_or_get_command_run(
         tenant_context,
         CommandRequest(message="明天开会"),

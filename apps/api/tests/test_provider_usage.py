@@ -117,7 +117,7 @@ async def test_command_service_records_provider_usage(
         }
 
     scope = _run_scope(db_session, fake_invoker)
-    service = scope.commands
+    service = build_command_service(db_session)
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
@@ -164,7 +164,7 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
         return {"messages": [AIMessage(content="完成")]}
 
     scope = _run_scope(db_session, fake_invoker)
-    service = scope.commands
+    service = build_command_service(db_session)
     request = CommandRequest(message="创建两个任务")
     run_id = await service.create_command_run(tenant_context, request)
     await scope.execute(tenant_context, run_id)
@@ -221,7 +221,7 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
 
     bridge = RecordingBridge()
     scope = _run_scope(db_session, fake_invoker, stream_bridge=bridge)
-    service = scope.commands
+    service = build_command_service(db_session)
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
     await scope.execute(tenant_context, run_id)
@@ -244,7 +244,7 @@ async def test_command_service_does_not_invent_missing_provider_usage(
         return {"messages": [AIMessage(content="完成")]}
 
     scope = _run_scope(db_session, fake_invoker)
-    service = scope.commands
+    service = build_command_service(db_session)
 
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
@@ -273,7 +273,7 @@ async def test_command_service_settles_usage_when_invocation_does_not_return(
         raise error
 
     scope = _run_scope(db_session, fake_invoker)
-    service = scope.commands
+    service = build_command_service(db_session)
     request = CommandRequest(message="安排会议")
     run_id = await service.create_command_run(tenant_context, request)
 
@@ -407,7 +407,7 @@ async def test_usage_failure_does_not_replace_completed_run(
         fake_invoker,
         provider_usage=FailingProviderUsage(),
     )
-    service = scope.commands
+    service = build_command_service(db_session)
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
@@ -447,7 +447,7 @@ async def test_usage_failure_does_not_replace_provider_exception(
         fake_invoker,
         provider_usage=FailingProviderUsage(),
     )
-    service = scope.commands
+    service = build_command_service(db_session)
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
@@ -497,7 +497,7 @@ async def test_budget_reconciliation_failure_does_not_replace_completed_run(
         budget_guard=budget_guard,
         executor_factory=fake_executor_factory(fake_invoker),
     )
-    service = scope.commands
+    service = build_command_service(db_session)
     run_id = await service.create_command_run(
         tenant_context,
         CommandRequest(message="安排会议"),
