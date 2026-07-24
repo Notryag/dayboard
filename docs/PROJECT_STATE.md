@@ -64,6 +64,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a separate product-owned Reminder Unit of Work: inbox and Worker services consume delivery
   and source-projection ports, queue state remains private, expired calendar notifications are
   distinct from cancelled sources, and inbox items use the current authoritative source snapshot.
+- Added a product-owned Voice Unit of Work and provider port: application code receives domain
+  transcripts, tenant-scoped repositories own ORM mapping, and no database transaction remains open
+  while the external ASR provider runs.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -93,6 +96,9 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
   scoped budgets for all traffic.
 - Scheduling defaults to trusted `Asia/Shanghai`; explicit foreign-timezone conversion is unsupported.
 - Browser voice behavior has provider smoke coverage but not the full Chrome/Safari release matrix.
+- An abrupt API process termination during an in-flight ASR request can leave its audit transcript
+  in `processing`; ordinary request cancellation is finalized as `failed`, but stale-process
+  recovery is deferred until Voice execution moves to a durable asynchronous lifecycle.
 - Backups are host-local; encrypted off-host replication is pending.
 
 ## Release Check

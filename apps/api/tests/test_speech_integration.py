@@ -1,4 +1,5 @@
-from dayboard.integrations.speech import AudioInput, SpeechProviderRegistry, Transcript
+from dayboard.app.voice_ports import AudioInput, SpeechTranscriptionResult
+from dayboard.integrations.speech import SpeechProviderRegistry
 
 
 class FakeSpeechProvider:
@@ -6,7 +7,7 @@ class FakeSpeechProvider:
 
     async def transcribe(self, audio, *, language=None, vocabulary=None):
         del audio, vocabulary
-        return Transcript(
+        return SpeechTranscriptionResult(
             text="明天九点开会，然后提醒我整理周报",
             provider=self.name,
             model="deterministic-test",

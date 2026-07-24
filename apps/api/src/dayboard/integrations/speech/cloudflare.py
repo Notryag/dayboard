@@ -5,7 +5,11 @@ from typing import Any
 
 import httpx
 
-from .base import AudioInput, Transcript, TranscriptionError
+from dayboard.app.voice_ports import (
+    AudioInput,
+    SpeechTranscriptionResult,
+    TranscriptionError,
+)
 
 
 class CloudflareSpeechProvider:
@@ -39,7 +43,7 @@ class CloudflareSpeechProvider:
         *,
         language: str | None = None,
         vocabulary: list[str] | None = None,
-    ) -> Transcript:
+    ) -> SpeechTranscriptionResult:
         payload: dict[str, Any] = {
             "audio": base64.b64encode(audio.content).decode("ascii"),
             "task": "transcribe",
@@ -67,7 +71,7 @@ class CloudflareSpeechProvider:
             raise TranscriptionError("Cloudflare speech transcription failed") from exc
 
         request_id = response.headers.get("cf-ray") or response.headers.get("x-request-id")
-        return Transcript(
+        return SpeechTranscriptionResult(
             text=text.strip(),
             provider=self.name,
             model=self.model,

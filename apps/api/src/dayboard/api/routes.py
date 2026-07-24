@@ -34,8 +34,10 @@ from agent_platform.core import (
     IdempotencyConflictError,
     InteractionConflictError,
 )
-from dayboard.app.voice import VoiceTranscriptionService
+from dayboard.app.voice import VoiceProviderFailure
+from dayboard.app.voice_ports import AudioInput, SpeechToTextProvider
 from dayboard.composition.reminders import build_reminder_services
+from dayboard.composition.voice import build_voice_services
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
@@ -62,7 +64,6 @@ from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
 from dayboard.domain.reminders import ReminderDelivery, ReminderInboxItem
 from dayboard.domain.tasks import TaskStatus
 from dayboard.domain.calendar import CalendarTimingKind
-from dayboard.integrations.speech import AudioInput, SpeechToTextProvider
 from dayboard.integrations.audio_probe import (
     AudioMetadataProbe,
     AudioProbeUnavailableError,
@@ -839,7 +840,7 @@ async def create_voice_transcription(
             details={"max_duration_seconds": settings.asr_max_audio_seconds},
         )
     try:
-        return await VoiceTranscriptionService(session).transcribe(
+        return await build_voice_services(session).transcriptions.transcribe(
             tenant_context,
             provider,
             AudioInput(
@@ -850,7 +851,7 @@ async def create_voice_transcription(
             ),
             language=language,
         )
-    except Exception as exc:
+    except VoiceProviderFailure as exc:
         raise ApiProblem(
             status_code=502,
             code="VOICE_TRANSCRIPTION_FAILED",
@@ -882,7 +883,10 @@ async def get_voice_transcription(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> VoiceTranscript:
-    transcript = await VoiceTranscriptionService(session).get(tenant_context, transcript_id)
+    transcript = await build_voice_services(session).transcriptions.get(
+        tenant_context,
+        transcript_id,
+    )
     if transcript is None:
         raise HTTPException(status_code=404, detail="Voice transcript not found")
     return transcript

@@ -2,7 +2,8 @@ import json
 
 import httpx
 
-from dayboard.integrations.speech import AliyunSpeechProvider, AudioInput, TranscriptionError
+from dayboard.app.voice_ports import AudioInput, TranscriptionError
+from dayboard.integrations.speech import AliyunSpeechProvider
 
 
 async def test_aliyun_provider_sends_base64_audio_and_normalizes_response() -> None:
@@ -17,13 +18,7 @@ async def test_aliyun_provider_sends_base64_audio_and_normalizes_response() -> N
             json={
                 "output": {
                     "choices": [
-                        {
-                            "message": {
-                                "content": [
-                                    {"text": "明天九点开会，然后提醒我整理周报"}
-                                ]
-                            }
-                        }
+                        {"message": {"content": [{"text": "明天九点开会，然后提醒我整理周报"}]}}
                     ]
                 }
             },

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from .base import SpeechToTextProvider
+from dayboard.app.voice_ports import SpeechToTextProvider
 
 ProviderFactory = Callable[[], SpeechToTextProvider]
 

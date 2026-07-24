@@ -156,6 +156,28 @@ RULES = (
             "reminders.py",
         ),
     ),
+    LayerRule(
+        name="dayboard.voice_application",
+        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
+        forbidden_import_prefixes=(
+            "dayboard.agent",
+            "dayboard.api",
+            "dayboard.composition",
+            "dayboard.db",
+            "dayboard.integrations",
+            "dayboard.tools",
+            "dayboard.workers",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+        included_relative_paths=(
+            "voice.py",
+            "voice_ports.py",
+        ),
+    ),
 )
 
 

@@ -118,6 +118,14 @@ short database transaction. No transaction is held across an external notificati
 future Web Push adapter must commit the claim before network delivery and finalize the result in a
 second transaction. Queue-only states are not exposed as inbox entries.
 
+Voice transcription uses its own product-owned Unit of Work and an application-owned ASR provider
+port. The application service first commits a tenant/owner-scoped `processing` transcript, calls the
+external provider without an open database transaction, and then commits exactly one terminal
+`completed` or `failed` transition. Terminal updates lock and match only rows that are still
+`processing`; repository adapters return domain transcripts and keep ORM rows plus provider request
+metadata inside `dayboard.db`. `dayboard.composition.voice` is the only module that connects the
+application service to the SQLAlchemy Unit of Work.
+
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
 submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
@@ -162,9 +170,9 @@ SSE receives only projected product status and never exposes the diagnostic exte
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
-workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling application service, query
-service, and ports are additionally prohibited from importing Dayboard persistence adapters or
-framework/runtime layers; only the explicit composition module connects them.
+workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, and Voice application
+services and ports are additionally prohibited from importing Dayboard persistence adapters or
+framework/runtime layers; only explicit composition modules connect them.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities. A
@@ -259,9 +267,10 @@ Redis provides:
 - short-lived coordination;
 - per-Run Redis Streams for cross-process canonical message fanout and bounded replay.
 
-Short voice commands are validated, sent synchronously to the configured ASR adapter, normalized to
-text, and then enter the normal command path. Raw audio is not persisted. Production currently uses
-Cloudflare `whisper-large-v3-turbo`; the Alibaba adapter remains available.
+Short voice commands are validated, sent synchronously through the application-owned ASR port,
+normalized to text, and then enter the normal command path. Only transcript lifecycle and provider
+metadata are persisted; raw audio is not persisted. Production currently uses Cloudflare
+`whisper-large-v3-turbo`; the Alibaba adapter remains available.
 
 Reminder intent is normalized into PostgreSQL delivery rows. Workers claim due in-app deliveries
 with `FOR UPDATE SKIP LOCKED`. The authenticated Web reminder center polls the typed reminder API,

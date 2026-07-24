@@ -1,6 +1,6 @@
 # Dayboard TODO
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-24
 
 ## Agent Platform Extraction
 
@@ -38,7 +38,7 @@ squashing remains deferred until every persistent environment has reached Alembi
   Work. Keep `read_at` separate from delivery status, distinguish `expired` from `cancelled`, and
   project current source title/time/status into the inbox. Do not combine this lifecycle into
   Scheduling merely because both use the current database.
-- [ ] Move Voice persistence behind explicit application ports as a separate vertical slice.
+- [x] Move Voice persistence behind explicit application ports as a separate vertical slice.
 - [ ] Continue splitting remaining application modules that directly construct sessions or concrete
   repositories, prioritizing account recovery and provider usage by correctness risk rather than
   moving files mechanically.

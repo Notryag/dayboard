@@ -5,7 +5,11 @@ from typing import Any
 
 import httpx
 
-from .base import AudioInput, Transcript, TranscriptionError
+from dayboard.app.voice_ports import (
+    AudioInput,
+    SpeechTranscriptionResult,
+    TranscriptionError,
+)
 
 
 class AliyunSpeechProvider:
@@ -33,11 +37,10 @@ class AliyunSpeechProvider:
         *,
         language: str | None = None,
         vocabulary: list[str] | None = None,
-    ) -> Transcript:
+    ) -> SpeechTranscriptionResult:
         del vocabulary
         data_uri = (
-            f"data:{audio.content_type};base64,"
-            f"{base64.b64encode(audio.content).decode('ascii')}"
+            f"data:{audio.content_type};base64,{base64.b64encode(audio.content).decode('ascii')}"
         )
         asr_options: dict[str, Any] = {"enable_itn": True}
         if language:
@@ -71,7 +74,7 @@ class AliyunSpeechProvider:
         request_id = body.get("request_id")
         if not isinstance(request_id, str):
             request_id = response.headers.get("x-request-id")
-        return Transcript(
+        return SpeechTranscriptionResult(
             text=text,
             provider=self.name,
             model=self.model,

@@ -3,11 +3,11 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from dayboard.app.voice_ports import SpeechTranscriptionResult, TranscriptionError
 from dayboard.api.routes import get_audio_metadata_probe, get_speech_provider
 from dayboard.config import Settings, get_settings
 from dayboard.db.models import VoiceTranscriptRow
 from dayboard.integrations.audio_probe import AudioMetadata, InvalidAudioError
-from dayboard.integrations.speech import Transcript, TranscriptionError
 
 
 class FixedAudioProbe:
@@ -28,7 +28,7 @@ class SuccessfulSpeechProvider:
         assert audio.content == b"short-audio"
         assert audio.content_type == "audio/webm"
         assert audio.duration_ms == 2400
-        return Transcript(
+        return SpeechTranscriptionResult(
             text="明天九点开会，然后提醒我整理周报",
             provider=self.name,
             model="test-model",
@@ -58,9 +58,7 @@ async def test_voice_upload_returns_editable_transcript_and_persists_metadata(
             },
             data={"language": "zh"},
         )
-        loaded = await client.get(
-            f"/api/voice/transcriptions/{created.json()['id']}"
-        )
+        loaded = await client.get(f"/api/voice/transcriptions/{created.json()['id']}")
 
     assert created.status_code == 201
     assert loaded.json() == created.json()

@@ -53,7 +53,7 @@ integration details from becoming dependencies of the reusable Core.
 | Command submission and dispatch | Split | Split | Platform owns atomic submission; Dayboard owns queue and product execution |
 | Persisted message artifacts | Split | Split | Implemented: Platform owns the versioned envelope/lifecycle; Dayboard owns and validates schedule payloads |
 | Clarification interaction state | Split | Split | Implemented: Platform owns envelope/CAS; Dayboard owns typed payload and response projection |
-| Voice/media ingestion lifecycle | Dayboard | Platform boundary | Provider and product interpretation remain adapters |
+| Voice/media ingestion lifecycle | Dayboard boundary | Platform candidate | Explicit Dayboard provider/store ports and UoW are implemented; extraction waits for a second consumer |
 | Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
 | Reminder delivery/outbox machinery | Dayboard boundary | Split candidate | Explicit Dayboard ports/UoW are implemented; Dayboard owns due-time and expiry policy, and Platform extraction waits for a second consumer |
 | Auth credentials and account recovery | Dayboard | Platform candidate | Extract only with a concrete second consumer or stable identity API |
@@ -100,6 +100,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
 | Dayboard Scheduling Unit of Work and ORM-independent application services | Complete; schedule writes and Reminder Outbox replacement commit atomically at API/Agent boundaries |
 | Dayboard Reminder Unit of Work and ORM-independent lifecycle service | Complete; inbox, source projection, claim, expiry, cancellation, and delivery use explicit ports with API/Worker-owned commits |
+| Dayboard Voice Unit of Work and ORM-independent lifecycle service | Complete; processing commits before external ASR, terminal transitions use a second transaction, and extraction waits for a second consumer |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
@@ -125,6 +126,9 @@ interaction resolution
 
 Dayboard schedule mutation
   calendar/task CAS write + pending Reminder Outbox cancellation/replacement
+
+Dayboard voice transcription
+  commit processing record -> external ASR without a transaction -> commit completed/failed state
 ```
 
 Agent execution remains outside a database transaction. Each durable checkpoint above uses a short
@@ -213,7 +217,7 @@ A capability is considered extracted only when:
 10. Separate Thread lifecycle from primary role and reject archived command submission. Complete.
 11. Add versioned durable event extension envelopes where product-specific replay requires them.
     Complete.
-12. Split generic Run coordination from Dayboard Agent execution and result projection.
+12. Split generic Run coordination from Dayboard Agent execution and result projection. Complete.
 13. Add reusable PostgreSQL/North adapters only where their contracts have been proven by the active
    Dayboard path.
 14. Consider usage accounting and notification delivery only after the lifecycle adapters are

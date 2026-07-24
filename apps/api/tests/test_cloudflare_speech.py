@@ -3,11 +3,8 @@ import json
 import httpx
 import pytest
 
-from dayboard.integrations.speech import (
-    AudioInput,
-    CloudflareSpeechProvider,
-    TranscriptionError,
-)
+from dayboard.app.voice_ports import AudioInput, TranscriptionError
+from dayboard.integrations.speech import CloudflareSpeechProvider
 
 
 async def test_cloudflare_provider_sends_base64_audio_and_normalizes_response() -> None:
@@ -45,9 +42,7 @@ async def test_cloudflare_provider_sends_base64_audio_and_normalizes_response() 
     await client.aclose()
 
     assert captured["authorization"] == "Bearer test-secret"
-    assert captured["path"].endswith(
-        "/accounts/account-1/ai/run/@cf/openai/whisper-large-v3-turbo"
-    )
+    assert captured["path"].endswith("/accounts/account-1/ai/run/@cf/openai/whisper-large-v3-turbo")
     assert captured["body"] == {
         "audio": "YXVkaW8tYnl0ZXM=",
         "task": "transcribe",
