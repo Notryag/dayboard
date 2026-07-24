@@ -6,7 +6,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Current Version
 
-- Development line: `0.3.x`; latest deployed release tag: `v0.3.20`.
+- Development line: `0.3.x`; latest deployed release tag: `v0.3.21`.
 - Product: self-service Dayboard web application at `/dayboard/` with a same-site FastAPI API.
 - Runtime: PostgreSQL, Redis, FastAPI, arq Worker, and Next.js managed by Docker Compose.
 - Scheduling policy: any resolvable date or time creates a calendar entry; date-only entries use the
