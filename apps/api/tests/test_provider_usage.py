@@ -22,7 +22,7 @@ from dayboard.app.provider_usage_ports import (
     ProviderUsageSettlement,
 )
 from dayboard.agent.run_execution import DayboardRunExecutionDriver
-from dayboard.composition.provider_usage import build_provider_usage_service
+from dayboard.composition.provider_usage import build_provider_usage_settlement
 from dayboard.composition.commands import build_command_service
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
@@ -69,7 +69,7 @@ def _run_scope(
     return build_run_execution_scope(
         session,
         stream_bridge=stream_bridge or MemoryStreamBridge(),
-        provider_usage=provider_usage or build_provider_usage_service(),
+        provider_usage=provider_usage or build_provider_usage_settlement(),
         budget_guard=budget_guard,
         settings=settings,
         executor_factory=fake_executor_factory(invoker),
@@ -492,7 +492,7 @@ async def test_budget_reconciliation_failure_does_not_replace_completed_run(
     scope = build_run_execution_scope(
         db_session,
         stream_bridge=MemoryStreamBridge(),
-        provider_usage=build_provider_usage_service(),
+        provider_usage=build_provider_usage_settlement(),
         settings=settings,
         budget_guard=budget_guard,
         executor_factory=fake_executor_factory(fake_invoker),

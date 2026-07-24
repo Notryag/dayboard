@@ -236,10 +236,7 @@ RULES = (
             "north",
             "sqlalchemy",
         ),
-        included_relative_paths=(
-            "provider_usage.py",
-            "provider_usage_ports.py",
-        ),
+        included_relative_paths=("provider_usage_ports.py",),
     ),
     LayerRule(
         name="dayboard.agent_run_execution",

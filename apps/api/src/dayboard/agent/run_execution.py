@@ -33,8 +33,11 @@ from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
 from dayboard.agent.observability import project_runtime_event
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
-from dayboard.app.provider_usage import ProviderUsageService
-from dayboard.app.provider_usage_ports import ProviderUsageAggregate, ProviderUsageCall
+from dayboard.app.provider_usage_ports import (
+    ProviderUsageAggregate,
+    ProviderUsageCall,
+    ProviderUsageSettlementPort,
+)
 from dayboard.agent.run_result_projection import (
     merge_presentation_parts,
     project_run_failure,
@@ -75,7 +78,7 @@ class DayboardRunExecutionDriver:
         conversations: ConversationService,
         runs: AgentRunService,
         budget_guard: ProviderBudgetGuard,
-        provider_usage: ProviderUsageService,
+        provider_usage: ProviderUsageSettlementPort,
         runtime_event_uow_factory: PlatformUnitOfWorkFactory,
         agent_factory: DayboardAgentFactory,
         model_name: str,

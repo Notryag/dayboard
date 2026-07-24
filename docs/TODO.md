@@ -48,9 +48,9 @@ squashing remains deferred until every persistent environment has reached Alembi
 - [x] Move Account Recovery persistence behind Dayboard-owned ports and a Unit of Work. Keep raw
   reset tokens out of storage, serialize issue/confirm/login through the User row, and leave mail
   delivery outside the database transaction.
-- [x] Move Provider Usage behind typed application ports and an independent Unit of Work. Enforce
-  owner-scoped idempotent insertion, return storage-neutral aggregates, and keep settlement or Redis
-  reconciliation failures from replacing the authoritative Run outcome.
+- [x] Move Provider Usage behind a typed settlement port and an independent short-transaction
+  adapter. Enforce owner-scoped idempotent insertion, return storage-neutral aggregates, and keep
+  settlement or Redis reconciliation failures from replacing the authoritative Run outcome.
 - [x] Move the Scheduling composition root out of `dayboard.app` into the explicit outer
   `dayboard.composition` package without retaining an import wrapper.
 - [x] Move the Platform and Run composition roots out of `dayboard.app`. The storage-free

@@ -21,7 +21,7 @@ from dayboard.app.conversation_presentations import (
 from dayboard.composition.commands import build_command_service
 from dayboard.composition.platform import build_conversation_service
 from dayboard.composition.platform import build_run_service
-from dayboard.composition.provider_usage import build_provider_usage_service
+from dayboard.composition.provider_usage import build_provider_usage_settlement
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
 from agent_platform.core import AgentRunStatus, InteractionConflictError, TenantContext
@@ -48,7 +48,7 @@ def _run_scope(
     return build_run_execution_scope(
         session,
         stream_bridge=stream_bridge or MemoryStreamBridge(),
-        provider_usage=build_provider_usage_service(),
+        provider_usage=build_provider_usage_settlement(),
         settings=Settings(
             APP_MODEL_NAME="openai:gpt-test",
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",

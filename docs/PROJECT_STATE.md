@@ -71,9 +71,9 @@ implementation chronology. Current facts live under [current](./current/README.m
   records, API boundaries own commit/rollback, and User-row locking serializes token replacement,
   password reset, and session revocation. Login verifies an unlocked credential snapshot outside
   the database transaction, then briefly locks and revalidates it before creating a Session.
-- Added a Dayboard-owned Provider Usage Unit of Work: typed aggregates cross the application
-  boundary, owner-scoped PostgreSQL insertion is concurrent and idempotent, ORM rows stay in the
-  adapter, and accounting failures cannot replace an authoritative terminal Run outcome.
+- Provider Usage crosses a narrow settlement port. Its SQLAlchemy adapter owns one independent
+  short transaction, owner-scoped insertion is concurrent and idempotent, ORM rows stay in the
+  repository, and accounting failures cannot replace an authoritative terminal Run outcome.
 - Moved Platform and Run construction to explicit composition roots: FastAPI dependencies build the
   storage-free command service, Workers build one North driver per Run, and runtime journal events
   use fresh Platform Unit-of-Work sessions rather than sharing the execution session.

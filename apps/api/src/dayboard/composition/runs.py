@@ -19,13 +19,13 @@ from dayboard.agent.run_execution import (
     DayboardRunExecutionDriver,
     RunExecutorFactory,
 )
-from dayboard.app.provider_usage import ProviderUsageService
+from dayboard.app.provider_usage_ports import ProviderUsageSettlementPort
 from dayboard.composition.platform import (
     PlatformServiceScope,
     build_platform_services,
     build_platform_unit_of_work_factory,
 )
-from dayboard.composition.provider_usage import build_provider_usage_service
+from dayboard.composition.provider_usage import build_provider_usage_settlement
 from dayboard.config import Settings, get_settings
 
 
@@ -67,7 +67,7 @@ def build_run_execution_scope(
     stream_bridge: StreamBridge,
     settings: Settings | None = None,
     budget_guard: ProviderBudgetGuard | None = None,
-    provider_usage: ProviderUsageService | None = None,
+    provider_usage: ProviderUsageSettlementPort | None = None,
     checkpointer: object | None = None,
     runtime_event_uow_factory: PlatformUnitOfWorkFactory | None = None,
     executor_factory: RunExecutorFactory = RunExecutor,
@@ -79,7 +79,7 @@ def build_run_execution_scope(
         conversations=platform.conversations,
         runs=platform.runs,
         budget_guard=budget_guard or ProviderBudgetGuard(resolved_settings),
-        provider_usage=provider_usage or build_provider_usage_service(),
+        provider_usage=provider_usage or build_provider_usage_settlement(),
         runtime_event_uow_factory=(
             runtime_event_uow_factory or build_platform_unit_of_work_factory()
         ),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -55,27 +54,9 @@ class ProviderUsageRunNotFound(LookupError):
     """The requested Run is not visible to the trusted tenant/owner context."""
 
 
-class ProviderUsageStore(Protocol):
+class ProviderUsageSettlementPort(Protocol):
     async def settle(
         self,
         context: TenantContext,
         aggregate: ProviderUsageAggregate,
     ) -> ProviderUsageSettlement: ...
-
-    async def list_for_run(
-        self,
-        context: TenantContext,
-        run_id: UUID,
-    ) -> list[ProviderUsageAggregate]: ...
-
-
-class ProviderUsageUnitOfWork(Protocol):
-    usage: ProviderUsageStore
-
-    async def commit(self) -> None: ...
-
-    async def rollback(self) -> None: ...
-
-
-class ProviderUsageUnitOfWorkFactory(Protocol):
-    def __call__(self) -> AbstractAsyncContextManager[ProviderUsageUnitOfWork]: ...

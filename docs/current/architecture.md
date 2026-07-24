@@ -143,14 +143,16 @@ concurrent reset therefore either invalidates the snapshot or revokes a Session 
 the reset. Password update, all unused-token consumption, and all active-Session revocation commit
 or roll back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
 
-Provider Usage uses an independent Dayboard-owned Unit of Work after the Run has reached its
-authoritative terminal state. The application service receives typed call aggregates and returns a
-storage-neutral settlement result; SQLAlchemy rows remain inside `dayboard.db`. PostgreSQL inserts
-through an owner-scoped `INSERT ... SELECT` from the trusted Run, so an incorrect tenant or owner
-cannot create a record or occupy the unique `(tenant_id, run_id)` key. Concurrent settlement is
-idempotent and immutable: exactly one transaction creates the aggregate, and only that winner may
-reconcile the prior Redis budget reservation. Usage persistence or budget-reconciliation failures
-are logged without changing the completed or failed Run outcome.
+Provider Usage crosses a narrow settlement port after the Run has reached its authoritative
+terminal state. The SQLAlchemy settlement adapter opens its own short Session, delegates SQL to the
+repository, and commits or rolls back without a feature-specific Unit-of-Work or application
+service. Typed aggregates and storage-neutral settlement results cross the port; SQLAlchemy rows
+remain inside `dayboard.db`. PostgreSQL inserts through an owner-scoped `INSERT ... SELECT` from the
+trusted Run, so an incorrect tenant or owner cannot create a record or occupy the unique
+`(tenant_id, run_id)` key. Concurrent settlement is idempotent and immutable: exactly one
+transaction creates the aggregate, and only that winner may reconcile the prior Redis budget
+reservation. Usage persistence or budget-reconciliation failures are logged without changing the
+completed or failed Run outcome.
 
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
