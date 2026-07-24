@@ -85,20 +85,19 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 Architecture hardening and public-release completion:
 
-1. Design Service Worker/Web Push subscriptions and delivery for installed PWA.
-2. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
-3. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
+1. Complete Chrome and Safari voice acceptance with non-sensitive Chinese schedule phrases.
+2. Finish live Agent acceptance for relative dates, reminders, and change/cancel flows after the
    provider budget window allows it.
-4. Measure Northgate prompt-cache effectiveness and move scoped provider-token policy to the
+3. Measure Northgate prompt-cache effectiveness and move scoped provider-token policy to the
    gateway only after all production traffic uses it without direct-provider fallback.
-5. Add encrypted off-host PostgreSQL backup replication and rehearse recovery from that copy.
+4. Add encrypted off-host PostgreSQL backup replication and rehearse recovery from that copy.
 
 Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 
 ## Known Issues
 
-- Installed-PWA background notifications are not implemented; browser Notifications currently
-  require the authenticated Web app to be active.
+- Installed-PWA background notifications are intentionally deferred; browser Notifications require
+  the authenticated Web app to be active.
 - The last reference one-write Agent Run used 10,362 tokens over two model calls; cache-hit and
   per-round growth measurements are still incomplete.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model

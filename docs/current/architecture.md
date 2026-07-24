@@ -304,10 +304,10 @@ metadata are persisted; raw audio is not persisted. Production currently uses Cl
 
 Reminder intent is normalized into PostgreSQL delivery rows. Workers claim due in-app deliveries
 with `FOR UPDATE SKIP LOCKED`. The authenticated Web reminder center polls the typed reminder API,
-persists read state, and can return failed rows to the Outbox queue. Browser/PWA background push
-requires a Service Worker, durable Push subscriptions, Web Push credentials, and a separate
-delivery channel; it remains unfinished. The current optional browser Notification is driven by
-authenticated foreground polling and is not represented as background delivery.
+persists read state, and can return failed rows to the Outbox queue. Browser/PWA background Push is
+intentionally deferred because it requires a Service Worker, durable Push subscriptions, Web Push
+credentials, and a separate device-delivery lifecycle. The current optional browser Notification is
+driven by authenticated foreground polling and is not represented as background delivery.
 
 ## Deployment
 

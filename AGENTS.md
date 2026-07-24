@@ -27,8 +27,8 @@ These notes are for coding agents working on Dayboard.
 
 - Prefer stable, mature dependencies over hand-rolled lightweight code when the dependency improves reliability, operability, or maintainability.
 - Do not avoid a good dependency just to keep the dependency count low.
-- Keep the dependency direction `north <- agent_platform <- dayboard`. A higher layer may import a
-  lower layer; a lower layer must never import a higher layer.
+- Follow [ADR-009](docs/adr/009-keep-platform-and-north-independent.md): Dayboard may import both
+  `north` and `agent_platform`; the two lower-level packages do not import each other or Dayboard.
 - Keep Dayboard product concepts out of both `north` and `agent_platform`. North owns runtime
   primitives, while `agent_platform` owns reusable application capabilities defined by ADR-008.
 - Keep PostgreSQL as the source of truth. Do not replace it with SQLite, JSON files, or in-memory storage for product behavior.

@@ -116,13 +116,10 @@ global cost guard, not a replacement for a Dayboard user budget.
 - [ ] Remove superseded paths during the migration. The product is still in development, so do not
   preserve compatibility layers for the old budget implementation.
 
-## Background Reminder Delivery
+## Deferred Background Notifications
 
-- [ ] Define a Dayboard Web Push contract before implementation: device-scoped subscriptions,
-  VAPID credentials, source deep links, subscription revocation, and per-subscription delivery
-  attempts must be independent from the existing in-app reminder delivery state.
-- [ ] Add a narrow Web Push vertical slice: manifest and Service Worker, authenticated subscribe /
-  unsubscribe APIs, durable subscription and attempt records, Worker delivery after a short claim
-  transaction, invalid-subscription cleanup, and notification-click navigation to the source item.
-- [ ] Keep foreground browser Notifications as an optional in-app enhancement. Do not present them
-  as installed-PWA background delivery.
+Installed-PWA and background Web Push are intentionally deferred. They require a Service Worker,
+VAPID credentials, encrypted device subscriptions, per-device delivery attempts, retry/cleanup, and
+notification-click navigation. Dayboard keeps the authenticated reminder center and optional
+foreground browser Notification while the app is active; do not represent that as background
+delivery. Reconsider this only when users need reminders while Dayboard is closed.

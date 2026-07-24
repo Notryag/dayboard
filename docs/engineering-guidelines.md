@@ -2,7 +2,8 @@
 
 ## Core Principles
 
-- Keep dependency direction `north <- agent_platform <- dayboard`.
+- Keep `north` and `agent_platform` independent lower-level dependencies. Dayboard owns their bridge
+  under ADR-009; neither lower layer imports the other or Dayboard.
 - Keep Dayboard product concepts out of `north` and `agent_platform`.
 - Keep `north` runtime concepts out of Dayboard business models unless they are references, such as `run_id`.
 - Treat PostgreSQL as the source of truth.
