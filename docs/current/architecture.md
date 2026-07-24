@@ -174,6 +174,9 @@ one transaction for the idempotency claim, expected-state-version consumption, R
 `run_created` event, and user message. Identical retries find the existing Run before requiring the
 now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
 state schema contains only presentation options, never trusted candidate IDs or row versions.
+North may retain a temporary clarification signal inside its per-Run graph state, but that signal is
+not durable application truth: the Platform `PendingInteraction` is the sole authority for refresh,
+cross-device recovery, expiry, and CAS consumption.
 
 The Platform also owns the generic `PresentationEnvelope` identity, schema version, persistence,
 and replay contract. Dayboard owns `dayboard.schedule-results@1`, validates every schedule part,

@@ -129,9 +129,11 @@ Dependency rules:
 ## Backend Layers
 
 Repository-level package ownership is defined by
-[ADR-008](./adr/008-introduce-agent-application-platform.md): North owns runtime primitives,
+[ADR-008](./adr/008-introduce-agent-application-platform.md) and
+[ADR-009](./adr/009-keep-platform-and-north-independent.md): North owns runtime primitives,
 `agent_platform` owns reusable application capabilities, and Dayboard owns scheduling product
-semantics. The package boundary sits above the internal Dayboard backend layers below.
+semantics. North and Platform are independent lower-level dependencies; Dayboard owns their bridge.
+The package boundary sits above the internal Dayboard backend layers below.
 
 Target backend layout:
 

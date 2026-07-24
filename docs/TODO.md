@@ -16,9 +16,15 @@ Last reviewed: 2026-07-24
   North implementation and Dayboard result projector in Dayboard, so Platform has no dependency on
   North or scheduling concepts. Queue jobs carry only `run_id`; workers restore trusted execution
   context and input from PostgreSQL.
-- [ ] Move reusable PostgreSQL Conversation/Run adapters into `agent_platform` only after their
-  active Dayboard contracts are explicit and covered through the platform ports. Generalize the
-  North adapter only if a second product proves a common contract; Platform must not import North.
+- [x] Decide whether to extract reusable PostgreSQL Conversation/Run adapters now. Keep them in
+  Dayboard: one product is not evidence for a shared schema or migration package, and Platform must
+  not import North merely to mirror the runtime.
+- [ ] Re-evaluate an optional Platform SQLAlchemy adapter only after a second product proves the
+  same schema, tenant, transaction, and lifecycle contract. Generalize a North adapter only after a
+  second product proves a common runtime contract; Platform must not import North today.
+- [ ] Make Platform `PendingInteraction` the only durable clarification authority. North graph
+  state may signal one Run, but the Dayboard driver must eventually receive one structured outcome
+  rather than interpreting a second persisted clarification representation.
 - [ ] Evaluate provider usage accounting and notification delivery as later platform capabilities
   only when their lifecycle boundaries are stable or a second product needs them.
 
@@ -91,6 +97,12 @@ squashing remains deferred until every persistent environment has reached Alembi
 
 ## Gateway Budget Ownership
 
+Northgate prerequisite: [northgate#3](https://github.com/Notryag/northgate/issues/3) tracks trusted
+tenant/user attribution and scoped policy enforcement. Its current gateway-wide policy is only a
+global cost guard, not a replacement for a Dayboard user budget.
+
+- [ ] Add signed, trusted dynamic tenant and user attribution to Northgate. Correlation metadata
+  alone must never authorize a policy scope.
 - [ ] Add Northgate policy scopes for authenticated metadata dimensions, at minimum gateway,
   tenant, user, and model. Policies must have explicit precedence and atomic reservation/settlement.
 - [ ] Expose scoped usage, rejection reason, remaining allowance, and reset time through Northgate's
@@ -103,3 +115,14 @@ squashing remains deferred until every persistent environment has reached Alembi
   other product endpoints; those are not provider-budget policies.
 - [ ] Remove superseded paths during the migration. The product is still in development, so do not
   preserve compatibility layers for the old budget implementation.
+
+## Background Reminder Delivery
+
+- [ ] Define a Dayboard Web Push contract before implementation: device-scoped subscriptions,
+  VAPID credentials, source deep links, subscription revocation, and per-subscription delivery
+  attempts must be independent from the existing in-app reminder delivery state.
+- [ ] Add a narrow Web Push vertical slice: manifest and Service Worker, authenticated subscribe /
+  unsubscribe APIs, durable subscription and attempt records, Worker delivery after a short claim
+  transaction, invalid-subscription cleanup, and notification-click navigation to the source item.
+- [ ] Keep foreground browser Notifications as an optional in-app enhancement. Do not present them
+  as installed-PWA background delivery.

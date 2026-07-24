@@ -1,28 +1,26 @@
 # Agent Application Platform Extraction
 
-This is the active migration guide for [ADR-008](./adr/008-introduce-agent-application-platform.md).
-It describes target ownership, not the currently deployed module layout. Canonical implemented
-facts remain in `docs/current/`.
+This is the active migration guide for
+[ADR-008](./adr/008-introduce-agent-application-platform.md) and
+[ADR-009](./adr/009-keep-platform-and-north-independent.md). It describes target ownership, not
+the currently deployed module layout. Canonical implemented facts remain in `docs/current/`.
 
 ## Layer Contract
 
 ```text
 Dayboard
-  scheduling product and UI
-    |
-    | imports
-    v
-Agent Application Platform
-  reusable application capabilities
-    |
-    | optional North adapter imports
-    v
-North
-  runtime primitives only
+  |---------------------> Agent Application Platform
+  |                        reusable application capabilities
+  |
+  +---------------------> North
+                           runtime primitives
 ```
 
 The same platform may be consumed by future sibling products. Sibling products never import each
-other. The arrows above show source-code imports, not runtime event or return-value flow.
+other. The arrows above show source-code imports, not runtime event or return-value flow. North and
+Agent Application Platform are independent lower-level capabilities; Dayboard's injected
+`RunExecutionDriver` bridges them. This is deliberately not a forced `Dayboard -> Platform -> North`
+chain.
 
 The Platform remains one logical layer while separating its own responsibilities:
 
@@ -31,11 +29,12 @@ agent_platform/
   core/          framework-free contracts and state rules
   application/   transaction-scoped use cases
   ports/         storage, runtime, publishing, and projection interfaces
-  adapters/      optional PostgreSQL and North implementations
 ```
 
-This internal structure does not introduce another product layer. It prevents persistence and North
-integration details from becoming dependencies of the reusable Core.
+Concrete technology adapters are not part of the current package. A future optional adapter package
+may depend inward on these interfaces after a second product proves the same persistence or runtime
+contract. This structure prevents persistence and North integration details from becoming
+dependencies of the reusable Core.
 
 ## Current Ownership Map
 
@@ -45,10 +44,10 @@ integration details from becoming dependencies of the reusable Core.
 | Trusted `TenantContext` contract | Platform | Platform | Extracted; Dayboard retains only development-context construction |
 | Conversation thread/message/state contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
 | Conversation service | Platform | Platform | Extracted with explicit Unit of Work and Interaction CAS |
-| PostgreSQL Conversation repositories | Dayboard adapter | Platform adapter | Move only after Unit of Work and Store contracts are proven |
+| PostgreSQL Conversation repositories | Dayboard adapter | Dayboard now; optional Platform SQLAlchemy adapter later | Do not move from one proven product alone; require a second product to demonstrate the same schema and transaction contract |
 | Run and Run-event contracts | Platform | Platform | Extracted; former Dayboard domain module removed |
 | Run lifecycle service | Platform | Platform | Extracted with explicit Unit of Work checkpoints |
-| PostgreSQL Run repositories | Dayboard adapter | Platform adapter | Move only after lifecycle concurrency contracts are proven |
+| PostgreSQL Run repositories | Dayboard adapter | Dayboard now; optional Platform SQLAlchemy adapter later | Do not move from one proven product alone; require a second product to demonstrate the same schema and lifecycle concurrency contract |
 | Command idempotency | Platform | Platform | ORM-independent record, Store, validation, cleanup, and rollback are complete |
 | Command submission and dispatch | Split | Split | Platform owns atomic submission; Dayboard owns queue and product execution |
 | Persisted message artifacts | Split | Split | Implemented: Platform owns the versioned envelope/lifecycle; Dayboard owns and validates schedule payloads |
@@ -61,6 +60,27 @@ integration details from becoming dependencies of the reusable Core.
 | Scheduling prompt, tools, time rules and receipts | Dayboard | Dayboard | Never move to platform |
 | Schedule cards and Dayboard web UI | Dayboard | Dayboard | Never move to platform |
 | Token diagnostics and cross-service budgets | Northgate | Northgate | Sidecar; no context mutation |
+
+## Reuse Decision
+
+`agent_platform` is retained as a small application-lifecycle package, not as a replacement for
+existing infrastructure. It owns the invariants that must survive a process, device, or runtime
+restart: trusted tenant scope, atomic idempotent submission, durable Conversation and Run lifecycle,
+versioned product envelopes, and interaction CAS.
+
+The following ownership is intentional:
+
+| Capability | Owner | Reason |
+| --- | --- | --- |
+| Agent loop, model invocation, LangGraph checkpoints, runtime stream | North | These are runtime concerns and already have a mature implementation |
+| ORM, migrations, row locks, `ON CONFLICT` | Dayboard SQLAlchemy adapter | The current PostgreSQL schema belongs to one product; extract an optional adapter only after a second consumer proves it |
+| Platform Conversation/Run/Idempotency/Interaction lifecycle | Agent Application Platform | These cross-product application invariants are not provided by a checkpoint or a generic state-machine library |
+| Scheduling semantics, local time, cards, reminders | Dayboard | Product-specific meaning must not become a generic `Item` model |
+| Provider traffic policy and cross-application token accounting | Northgate | Gateway policy must remain outside product context mutation |
+
+Do not add another Agent framework, state-machine library, or generic idempotency middleware merely
+to replace the Platform. None can express the required tenant-scoped claim, Thread, Run, user
+message, and durable event transaction as one product-owned unit of work.
 
 ## First Vertical Slice: Conversation + Run
 
@@ -104,14 +124,15 @@ status rather than retaining stale findings as if they were still unresolved:
 | Dayboard Account Recovery Unit of Work and ORM-independent service | Complete; User-first locking serializes issue, confirm, and login while password/token/session changes commit atomically |
 | Dayboard Provider Usage Unit of Work and ORM-independent settlement | Complete; owner-scoped idempotent insertion returns typed aggregates and cannot alter an already-terminal Run |
 | Outer Platform and Run composition | Complete; CommandService and the Run driver no longer construct FastAPI, SQLAlchemy, North, Settings, or runtime adapters, and every Worker job receives a fresh driver |
-| Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
+| Reusable PostgreSQL Conversation/Run adapters | Deferred by design; Dayboard remains the only proven consumer, so extracting a shared schema or migration package now would be speculative |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
 | Atomic Interaction consumption by expected state version | Complete; continuation claim, CAS, Run/event, and message commit together |
 | Explicit Conversation Thread lifecycle and primary-role contracts | Complete; lifecycle is `active | archived`, `is_primary` is independent, and archived writes are rejected |
+| Clarification authority | Pending; Platform `PendingInteraction` is the only durable authority. North clarification state is temporary per-Run runtime state and must converge through one structured driver signal rather than create a second durable interpretation |
 
-The remaining findings do not require replacing the three-layer model. They define the hardening
-work needed before moving additional capabilities.
+The remaining findings do not require replacing the ownership model. They define the hardening work
+needed before moving additional capabilities.
 
 ## Required Consistency Boundaries
 

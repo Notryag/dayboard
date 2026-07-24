@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted
+Accepted. The original strict dependency-chain diagram is superseded by
+[ADR-009](./009-keep-platform-and-north-independent.md); the ownership decision remains accepted.
 
 ## Context
 
@@ -25,6 +26,9 @@ reusable.
 
 ## Decision
 
+> The diagram below records the original ownership decision. Its strict Platform-to-North import
+> link is superseded by [ADR-009](./009-keep-platform-and-north-independent.md).
+
 Introduce a third, independently installable layer:
 
 ```text
@@ -32,10 +36,11 @@ North <- Agent Application Platform <- Dayboard
                                    <- future products
 ```
 
-The arrow is an import dependency: `Dayboard -> Agent Application Platform -> North`. A consumer
-points to the dependency it imports. Runtime calls and data may flow in both directions through
-declared interfaces, but that does not reverse the source-code dependency. A lower layer must never
-import a higher layer.
+The original proposal treated the arrows as an import dependency:
+`Dayboard -> Agent Application Platform -> North`. That strict direction is no longer current;
+ADR-009 retains the no-upward-import rule while making North and Platform independent lower-level
+dependencies. Runtime calls and data may flow in both directions through declared interfaces without
+reversing source-code dependency.
 
 ### North owns runtime primitives
 

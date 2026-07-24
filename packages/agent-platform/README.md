@@ -1,6 +1,7 @@
 # Agent Application Platform
 
-`agent_platform` is the reusable application layer between North and products such as Dayboard.
+`agent_platform` is the reusable application-lifecycle layer used alongside North by products such
+as Dayboard.
 
 The first extraction slice provides the trusted `TenantContext`, product-neutral Conversation and
 Run contracts, persistence ports, and storage-independent Conversation and Run services. Dayboard
@@ -22,15 +23,24 @@ agent_platform.application  product-neutral use cases
 ```
 
 Core cannot import Ports or Application. Ports depend only on Core. Application depends on Core and
-Ports. Concrete PostgreSQL and North adapters are added only after their contracts are proven.
+Ports. The package intentionally has no concrete PostgreSQL or North adapter today: a technology
+adapter belongs in an optional extra only after a second product proves the same contract.
 
 Dependency direction:
 
 ```text
-North <- agent_platform <- Dayboard
-                         <- future products
+Dayboard ------> agent_platform
+   |
+   +-----------> North
+
+future products -> agent_platform
+future products -> their chosen runtime
 ```
 
-This package must not import `dayboard` or contain scheduling, calorie, exercise, or other product
-domain semantics. See [ADR-008](../../docs/adr/008-introduce-agent-application-platform.md) and the
+North provides the Agent runtime, LangGraph checkpointing, and streaming. `agent_platform` provides
+durable application lifecycle rules through a `RunExecutionDriver` port. A product-owned adapter
+bridges the two, so neither lower-level package imports the other. This package must not import
+`dayboard` or contain scheduling, calorie, exercise, or other product domain semantics. See
+[ADR-008](../../docs/adr/008-introduce-agent-application-platform.md),
+[ADR-009](../../docs/adr/009-keep-platform-and-north-independent.md), and the
 [extraction guide](../../docs/agent-platform-extraction.md).

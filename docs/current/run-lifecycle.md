@@ -194,7 +194,9 @@ A hard process exit before the settlement `finally` block can still omit usage. 
 PostgreSQL usage commit but before Redis reconciliation can leave the reservation inaccurate. Full
 recovery requires a durable usage outbox or reconciliation job; it is not hidden behind an in-memory
 retry. Admission currently occurs in Dayboard, while migration of scoped provider-token policy to
-Northgate remains future work.
+Northgate remains future work. Northgate's current policy is gateway-scoped, so it cannot replace
+Dayboard's tenant/user/model admission until it accepts trusted dynamic identity and atomically
+enforces explicit policy scopes.
 
 Operator diagnosis follows:
 
