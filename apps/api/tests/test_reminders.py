@@ -6,15 +6,29 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.app.reminders import ReminderService
+from dayboard.composition.reminders import build_reminder_services
+from dayboard.app.reminders import (
+    DeliveryDisposition,
+    ReminderService,
+    delivery_disposition,
+)
 from dayboard.app.scheduling_services import build_scheduling_service
 from agent_platform.core import TenantContext
 from dayboard.domain.calendar import CalendarEntryCreate, CalendarTimingKind, Reminder
-from dayboard.domain.reminders import ReminderDeliveryStatus, ReminderSourceStatus
+from dayboard.domain.reminders import (
+    CALENDAR_REMINDER_DELIVERY_GRACE,
+    ReminderDelivery,
+    ReminderDeliveryStatus,
+    ReminderSourceSnapshot,
+    ReminderSourceStatus,
+    ReminderSourceType,
+)
 from dayboard.domain.tasks import TaskItemCreate, TaskItemUpdate, TaskStatus
 from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow
+from dayboard.db.reminder_repositories import ReminderDeliveryRepository, ReminderSourceRepository
 
 
 def test_reminder_accepts_zero_and_normalizes_short_fixed_duration() -> None:
@@ -24,6 +38,86 @@ def test_reminder_accepts_zero_and_normalizes_short_fixed_duration() -> None:
     assert Reminder(offset="1h").offset == "PT1H"
     with pytest.raises(ValidationError):
         Reminder(offset="P1M")
+
+
+def test_delivery_disposition_distinguishes_expiry_cancellation_and_overdue_tasks() -> None:
+    now = datetime.now(UTC)
+    common = {
+        "id": uuid4(),
+        "tenant_id": uuid4(),
+        "owner_user_id": uuid4(),
+        "channel": "in_app",
+        "scheduled_for": now - timedelta(minutes=1),
+        "status": ReminderDeliveryStatus.processing,
+        "attempt_count": 1,
+        "next_attempt_at": None,
+        "delivered_at": None,
+        "read_at": None,
+        "provider_message_id": None,
+        "last_error": None,
+        "payload": {},
+        "created_at": now,
+        "updated_at": now,
+    }
+    calendar = ReminderDelivery(
+        **common,
+        source_type=ReminderSourceType.calendar_entry,
+        source_id=uuid4(),
+    )
+    calendar_source = ReminderSourceSnapshot(
+        tenant_id=calendar.tenant_id,
+        owner_user_id=calendar.owner_user_id,
+        source_type=calendar.source_type,
+        source_id=calendar.source_id,
+        title="已经开始",
+        status=ReminderSourceStatus.scheduled,
+        occurs_at=now,
+    )
+    assert delivery_disposition(calendar, calendar_source, now=now) is DeliveryDisposition.deliver
+    assert (
+        delivery_disposition(
+            calendar,
+            calendar_source.model_copy(
+                update={"occurs_at": now - CALENDAR_REMINDER_DELIVERY_GRACE}
+            ),
+            now=now,
+        )
+        is DeliveryDisposition.deliver
+    )
+    assert (
+        delivery_disposition(
+            calendar,
+            calendar_source.model_copy(
+                update={"occurs_at": now - CALENDAR_REMINDER_DELIVERY_GRACE - timedelta(seconds=1)}
+            ),
+            now=now,
+        )
+        is DeliveryDisposition.expire
+    )
+    assert (
+        delivery_disposition(
+            calendar,
+            calendar_source.model_copy(update={"status": ReminderSourceStatus.completed}),
+            now=now,
+        )
+        is DeliveryDisposition.cancel
+    )
+
+    task = ReminderDelivery(
+        **common,
+        source_type=ReminderSourceType.task_item,
+        source_id=uuid4(),
+    )
+    task_source = ReminderSourceSnapshot(
+        tenant_id=task.tenant_id,
+        owner_user_id=task.owner_user_id,
+        source_type=task.source_type,
+        source_id=task.source_id,
+        title="逾期待办",
+        status=ReminderSourceStatus.open,
+        occurs_at=now - timedelta(days=1),
+    )
+    assert delivery_disposition(task, task_source, now=now) is DeliveryDisposition.deliver
 
 
 async def test_calendar_reminder_reschedule_replaces_pending_delivery(
@@ -43,7 +137,7 @@ async def test_calendar_reminder_reschedule_replaces_pending_delivery(
         ),
     )
 
-    before = await ReminderService(db_session).list_for_user(tenant_context)
+    before = await build_reminder_services(db_session).reminders.list_for_user(tenant_context)
     assert len(before) == 1
     assert before[0].scheduled_for == start - timedelta(minutes=30)
     assert before[0].status == ReminderDeliveryStatus.pending
@@ -62,11 +156,53 @@ async def test_calendar_reminder_reschedule_replaces_pending_delivery(
     )
     assert moved is not None
 
-    after = await ReminderService(db_session).list_for_user(tenant_context)
+    after = await build_reminder_services(db_session).reminders.list_for_user(tenant_context)
     assert [delivery.status for delivery in after].count(ReminderDeliveryStatus.cancelled) == 1
     pending = [delivery for delivery in after if delivery.status == ReminderDeliveryStatus.pending]
     assert len(pending) == 1
     assert pending[0].scheduled_for == moved_start - timedelta(minutes=30)
+
+
+async def test_calendar_reschedule_cancels_retryable_failed_delivery(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    scheduling = build_scheduling_service(db_session)
+    start = datetime.now(UTC) + timedelta(days=2)
+    entry = await scheduling.create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="改期前投递失败",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT30M"),
+        ),
+    )
+    delivery = await db_session.scalar(select(ReminderDeliveryRow))
+    assert delivery is not None
+    delivery.status = ReminderDeliveryStatus.failed.value
+    delivery.last_error = "temporary delivery failure"
+    await db_session.commit()
+
+    moved_start = start + timedelta(days=1)
+    moved = await scheduling.reschedule_calendar_entry(
+        tenant_context,
+        entry_id=entry.id,
+        timing_kind=CalendarTimingKind.timed,
+        scheduled_date=None,
+        start_time=moved_start,
+        end_time=moved_start + timedelta(hours=1),
+        expected_row_version=entry.row_version,
+        updated_by_run_id=uuid4(),
+        operation_key="replace-failed-reminder",
+    )
+    assert moved is not None
+
+    deliveries = await build_reminder_services(db_session).reminders.list_for_user(tenant_context)
+    assert {item.status for item in deliveries} == {
+        ReminderDeliveryStatus.cancelled,
+        ReminderDeliveryStatus.pending,
+    }
 
 
 async def test_task_completion_cancels_pending_reminder(
@@ -97,7 +233,7 @@ async def test_task_completion_cancels_pending_reminder(
         expected_row_version=task.row_version,
     )
     assert completed is not None
-    deliveries = await ReminderService(db_session).list_for_user(tenant_context)
+    deliveries = await build_reminder_services(db_session).reminders.list_for_user(tenant_context)
     assert [delivery.status for delivery in deliveries] == [ReminderDeliveryStatus.cancelled]
 
 
@@ -117,11 +253,13 @@ async def test_due_in_app_reminder_is_delivered_once_and_tenant_scoped(
         ),
     )
 
-    reminders = ReminderService(db_session)
-    first = await reminders.deliver_due_in_app()
-    second = await reminders.deliver_due_in_app()
-    assert len(first) == 1
-    assert second == []
+    reminders = build_reminder_services(db_session).reminders
+    first = await reminders.process_due_in_app()
+    second = await reminders.process_due_in_app()
+    assert len(first.delivered_ids) == 1
+    assert second.delivered_ids == []
+    assert second.expired_ids == []
+    assert second.cancelled_ids == []
 
     delivered = await reminders.list_for_user(tenant_context)
     assert delivered[0].status == ReminderDeliveryStatus.delivered
@@ -152,10 +290,36 @@ async def test_zero_offset_reminder_is_scheduled_at_calendar_start(
         ),
     )
 
-    deliveries = await ReminderService(db_session).list_for_user(tenant_context)
+    deliveries = await build_reminder_services(db_session).reminders.list_for_user(tenant_context)
     assert len(deliveries) == 1
     assert deliveries[0].scheduled_for == start
     assert deliveries[0].status == ReminderDeliveryStatus.pending
+
+
+async def test_zero_offset_reminder_is_delivered_within_worker_grace(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    start = datetime.now(UTC) + timedelta(hours=1)
+    await build_scheduling_service(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="按时提醒",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT0M"),
+        ),
+    )
+    scope = build_reminder_services(db_session)
+    reminders = ReminderService(
+        scope.unit_of_work,
+        clock=lambda: start + timedelta(seconds=15),
+    )
+
+    result = await reminders.process_due_in_app()
+    assert len(result.delivered_ids) == 1
+    deliveries = await reminders.list_for_user(tenant_context)
+    assert deliveries[0].status is ReminderDeliveryStatus.delivered
 
 
 async def test_past_calendar_entry_does_not_enqueue_a_late_reminder(
@@ -172,7 +336,26 @@ async def test_past_calendar_entry_does_not_enqueue_a_late_reminder(
         ),
     )
 
-    assert await ReminderService(db_session).list_for_user(tenant_context) == []
+    assert await build_reminder_services(db_session).reminders.list_for_user(tenant_context) == []
+
+
+async def test_calendar_entry_within_delivery_grace_enqueues_and_delivers_reminder(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    await build_scheduling_service(db_session).create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="刚刚开始",
+            start_time=datetime.now(UTC) - timedelta(minutes=1),
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT0M"),
+        ),
+    )
+
+    reminders = build_reminder_services(db_session).reminders
+    result = await reminders.process_due_in_app()
+    assert len(result.delivered_ids) == 1
 
 
 async def test_future_calendar_entry_with_missed_offset_reminds_immediately(
@@ -190,8 +373,8 @@ async def test_future_calendar_entry_with_missed_offset_reminds_immediately(
         ),
     )
 
-    delivered = await ReminderService(db_session).deliver_due_in_app()
-    assert len(delivered) == 1
+    delivered = await build_reminder_services(db_session).reminders.process_due_in_app()
+    assert len(delivered.delivered_ids) == 1
 
 
 async def test_worker_recovery_expires_reminder_after_calendar_start(
@@ -199,23 +382,27 @@ async def test_worker_recovery_expires_reminder_after_calendar_start(
     tenant_context: TenantContext,
 ) -> None:
     scheduling = build_scheduling_service(db_session)
-    entry = await scheduling.create_calendar_entry(
+    start = datetime.now(UTC) + timedelta(hours=1)
+    await scheduling.create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="恢复时已经结束",
-            start_time=datetime.now(UTC) + timedelta(hours=1),
+            start_time=start,
             timezone="Asia/Shanghai",
             reminder=Reminder(offset="PT2H"),
         ),
     )
-    row = await db_session.get(CalendarEntryRow, entry.id)
-    assert row is not None
-    row.start_time = datetime.now(UTC) - timedelta(minutes=1)
-    await db_session.commit()
+    scope = build_reminder_services(db_session)
+    reminders = ReminderService(
+        scope.unit_of_work,
+        clock=lambda: start + CALENDAR_REMINDER_DELIVERY_GRACE + timedelta(seconds=1),
+    )
 
-    assert await ReminderService(db_session).deliver_due_in_app() == []
-    deliveries = await ReminderService(db_session).list_for_user(tenant_context)
-    assert [delivery.status for delivery in deliveries] == [ReminderDeliveryStatus.cancelled]
+    result = await reminders.process_due_in_app()
+    assert result.delivered_ids == []
+    assert result.expired_ids != []
+    deliveries = await reminders.list_for_user(tenant_context)
+    assert [delivery.status for delivery in deliveries] == [ReminderDeliveryStatus.expired]
 
 
 async def test_reminder_inbox_uses_current_source_time_and_hides_pending_queue(
@@ -233,7 +420,7 @@ async def test_reminder_inbox_uses_current_source_time_and_hides_pending_queue(
             reminder=Reminder(offset="PT10M"),
         ),
     )
-    await ReminderService(db_session).deliver_due_in_app()
+    await build_reminder_services(db_session).reminders.process_due_in_app()
 
     moved_start = start + timedelta(days=1)
     moved = await scheduling.reschedule_calendar_entry(
@@ -249,8 +436,14 @@ async def test_reminder_inbox_uses_current_source_time_and_hides_pending_queue(
     )
     assert moved is not None
 
-    queue = await ReminderService(db_session).list_for_user(tenant_context)
-    inbox = await ReminderService(db_session).list_inbox(tenant_context)
+    row = await db_session.get(CalendarEntryRow, entry.id)
+    assert row is not None
+    row.title = "改名后的提醒"
+    await db_session.commit()
+
+    reminders = build_reminder_services(db_session).reminders
+    queue = await reminders.list_for_user(tenant_context)
+    inbox = await reminders.list_inbox(tenant_context)
     assert {item.status for item in queue} == {
         ReminderDeliveryStatus.delivered,
         ReminderDeliveryStatus.pending,
@@ -259,6 +452,8 @@ async def test_reminder_inbox_uses_current_source_time_and_hides_pending_queue(
     assert inbox[0].status == ReminderDeliveryStatus.delivered
     assert inbox[0].source_status == ReminderSourceStatus.scheduled
     assert inbox[0].source_occurs_at == moved_start
+    assert inbox[0].source_title == "改名后的提醒"
+    assert inbox[0].can_retry is False
 
 
 async def test_reminder_inbox_marks_deleted_source_unavailable(
@@ -276,15 +471,44 @@ async def test_reminder_inbox_marks_deleted_source_unavailable(
             reminder=Reminder(offset="PT10M"),
         ),
     )
-    await ReminderService(db_session).deliver_due_in_app()
+    await build_reminder_services(db_session).reminders.process_due_in_app()
     row = await db_session.get(CalendarEntryRow, entry.id)
     assert row is not None
-    row.deleted_at = datetime.now(UTC)
+    await db_session.delete(row)
     await db_session.commit()
 
-    inbox = await ReminderService(db_session).list_inbox(tenant_context)
+    inbox = await build_reminder_services(db_session).reminders.list_inbox(tenant_context)
     assert len(inbox) == 1
     assert inbox[0].source_status == ReminderSourceStatus.deleted
+
+
+async def test_reminder_inbox_distinguishes_cancelled_source_from_deleted_source(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    scheduling = build_scheduling_service(db_session)
+    start = datetime.now(UTC) + timedelta(minutes=5)
+    entry = await scheduling.create_calendar_entry(
+        tenant_context,
+        CalendarEntryCreate(
+            title="主动取消",
+            start_time=start,
+            timezone="Asia/Shanghai",
+            reminder=Reminder(offset="PT10M"),
+        ),
+    )
+    await build_reminder_services(db_session).reminders.process_due_in_app()
+    cancelled = await scheduling.cancel_calendar_entry_from_ui(
+        tenant_context,
+        entry_id=entry.id,
+        expected_row_version=entry.row_version,
+    )
+    assert cancelled is not None
+
+    inbox = await build_reminder_services(db_session).reminders.list_inbox(tenant_context)
+    assert len(inbox) == 1
+    assert inbox[0].source_status == ReminderSourceStatus.cancelled
+    assert inbox[0].source_title == "主动取消"
 
 
 async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant(
@@ -293,7 +517,7 @@ async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant
     tenant_context: TenantContext,
 ) -> None:
     start = datetime.now(UTC) + timedelta(minutes=1)
-    await build_scheduling_service(db_session).create_calendar_entry(
+    entry = await build_scheduling_service(db_session).create_calendar_entry(
         tenant_context,
         CalendarEntryCreate(
             title="提醒中心验收",
@@ -302,13 +526,19 @@ async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant
             reminder=Reminder(offset="PT10M"),
         ),
     )
-    await ReminderService(db_session).deliver_due_in_app()
+    await build_reminder_services(db_session).reminders.process_due_in_app()
 
-    foreign = ReminderDeliveryRow(
+    foreign_context = TenantContext(
         tenant_id=uuid4(),
-        owner_user_id=uuid4(),
+        user_id=uuid4(),
+        timezone="Asia/Shanghai",
+        locale="zh-CN",
+    )
+    foreign = ReminderDeliveryRow(
+        tenant_id=foreign_context.tenant_id,
+        owner_user_id=foreign_context.user_id,
         source_type="calendar_entry",
-        source_id=uuid4(),
+        source_id=entry.id,
         channel="in_app",
         scheduled_for=datetime.now(UTC),
         status=ReminderDeliveryStatus.delivered.value,
@@ -316,6 +546,14 @@ async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant
     )
     db_session.add(foreign)
     await db_session.commit()
+
+    foreign_delivery = (
+        await ReminderDeliveryRepository(db_session).list_for_user(foreign_context)
+    )[0]
+    assert await ReminderSourceRepository(db_session).list_for_deliveries([foreign_delivery]) == []
+    foreign_inbox = await build_reminder_services(db_session).reminders.list_inbox(foreign_context)
+    assert foreign_inbox[0].source_status is ReminderSourceStatus.deleted
+    assert foreign_inbox[0].source_title == "其他租户"
 
     async with AsyncClient(transport=ASGITransport(app=api_app), base_url="http://test") as client:
         listed = await client.get("/api/reminders")
@@ -325,6 +563,8 @@ async def test_reminder_inbox_api_marks_read_retries_failure_and_isolates_tenant
         assert listed.json()[0]["read_at"] is None
         assert listed.json()[0]["source_status"] == "scheduled"
         assert datetime.fromisoformat(listed.json()[0]["source_occurs_at"]) == start
+        assert listed.json()[0]["source_title"] == "提醒中心验收"
+        assert listed.json()[0]["can_retry"] is False
 
         marked = await client.post(f"/api/reminders/{reminder_id}/read")
         assert marked.status_code == 200

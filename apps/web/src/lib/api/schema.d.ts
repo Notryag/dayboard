@@ -1136,7 +1136,7 @@ export interface components {
          * ReminderDeliveryStatus
          * @enum {string}
          */
-        ReminderDeliveryStatus: "pending" | "processing" | "delivered" | "failed" | "cancelled";
+        ReminderDeliveryStatus: "pending" | "processing" | "delivered" | "failed" | "expired" | "cancelled";
         /** ReminderInboxItem */
         ReminderInboxItem: {
             /**
@@ -1200,6 +1200,10 @@ export interface components {
              * Format: date-time
              */
             source_occurs_at: string;
+            /** Source Title */
+            source_title: string | null;
+            /** Can Retry */
+            can_retry: boolean;
         };
         /**
          * ReminderSourceStatus

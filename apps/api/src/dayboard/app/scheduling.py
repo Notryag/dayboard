@@ -9,7 +9,7 @@ from agent_platform.core import TenantContext
 
 from dayboard.app.scheduling_ports import SchedulingUnitOfWork
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind
-from dayboard.domain.reminders import ReminderSourceType
+from dayboard.domain.reminders import CALENDAR_REMINDER_DELIVERY_GRACE, ReminderSourceType
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
@@ -26,7 +26,7 @@ class SchedulingService:
     ) -> None:
         active = (
             entry.start_time is not None
-            and entry.start_time > datetime.now(UTC)
+            and entry.start_time + CALENDAR_REMINDER_DELIVERY_GRACE >= datetime.now(UTC)
             and entry.completed_at is None
             and entry.cancelled_at is None
         )

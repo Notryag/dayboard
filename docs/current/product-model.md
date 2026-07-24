@@ -72,16 +72,35 @@ and failed-delivery retry. Users may opt into browser Notifications while the We
 the same reminder ID is shown once per browser session. Retry returns the row to `pending`; the
 worker remains the only delivery executor.
 
-Only future timed calendar entries can own a pending reminder. Once an entry has started, its
-reminder is expired: Dayboard does not create or redeliver a late notification. A future entry whose
-configured reminder offset has just passed may still be delivered immediately. Completing or
-cancelling an entry cancels pending delivery, while already delivered rows remain as reminder
+Delivery lifecycle is explicit:
+
+| State | Meaning | User inbox |
+| --- | --- | --- |
+| `pending` | Waiting for its delivery time or an explicit retry | Hidden |
+| `processing` | Claimed by one Worker | Hidden |
+| `delivered` | In-app delivery completed | Visible |
+| `failed` | Delivery attempted but failed and may be retried | Visible |
+| `expired` | A calendar reminder was not delivered before the entry started | Hidden |
+| `cancelled` | The source was completed, cancelled, deleted, or replaced | Hidden |
+
+`read_at` is independent inbox state, not another delivery status. Future timed calendar entries and
+entries still within the delivery grace can own a pending reminder. The Worker has a deterministic
+two-minute claim grace after the calendar start so an at-start `PT0M` reminder survives the
+15-second polling interval and brief scheduling jitter; exactly two minutes late is still
+deliverable, while anything later is `expired` and is never redelivered. A future entry whose
+configured reminder offset has just passed may be delivered immediately. Open task reminders remain
+actionable after their due time and may still be delivered.
+Completing, cancelling, rescheduling, or replacing a source changes every retryable active delivery
+(`pending`, `processing`, or `failed`) to `cancelled`; already delivered rows remain as reminder
 history. Completed calendar entries and tasks remain visible in the schedule view so users can
 inspect or reopen them.
-The delivery queue is not the user inbox. `pending`, `processing`, and `cancelled` rows remain
-internal operational state; the Web reminder center receives only delivered or failed items. Each
-inbox item carries the source's current occurrence time and lifecycle status so rescheduled items
-open on their current date, while deleted sources remain honest, non-actionable history.
+
+The delivery queue is not the user inbox. The Web reminder center receives only `delivered` and
+`failed` items. Each inbox item projects the source's current title, occurrence time, and lifecycle
+status from the authoritative calendar/task row. Rescheduled or renamed items therefore navigate
+to and display the current source; cancelled or deleted sources remain honest, non-actionable
+history. A missing source is reported as deleted rather than silently presenting stale payload data
+as a live schedule item.
 
 ## Conversation And Clarification
 
@@ -146,7 +165,7 @@ Not implemented:
 - billing;
 - native mobile applications;
 - foreign-timezone natural-language conversion;
-- user-visible reminder inbox and external notification delivery.
+- installed-PWA background notification delivery.
 
 The canonical tool contract is documented in [../tool-design.md](../tool-design.md). Historical
 product phases are retained only under [../archive](../archive/README.md).

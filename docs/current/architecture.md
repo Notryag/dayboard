@@ -78,6 +78,7 @@ The Dayboard API package is split by responsibility:
 ```text
 dayboard.api           HTTP, SSE, request and response schemas
 dayboard.app           product use cases, North execution adapter, result projection
+dayboard.composition   outer process wiring for application services and database adapters
 dayboard.agent         prompt, North assembly, presentation projection
 dayboard.domain        product models and deterministic validation
 dayboard.tools         thin Agent-facing adapters
@@ -104,6 +105,18 @@ service never commits. The API commits after a complete direct mutation, while t
 tool boundary commits only after its receipt and presentation artifact have been built; either
 boundary rolls the whole transaction back on failure. There is no `SchedulingService(session)`
 compatibility constructor.
+
+Reminder inbox and delivery processing use a separate product-owned Unit of Work. The application
+service depends on delivery and source-projection ports and receives domain snapshots rather than
+SQLAlchemy rows; `dayboard.composition` wires those ports to the SQLAlchemy Unit of Work for API and
+Worker processes. API mutations and the Worker own the commit boundary. Due processing first reads
+candidate deliveries, locks their tenant/owner-scoped source rows in stable order, and only then
+claims still-due Reminder rows. This matches Scheduling's source-then-delivery lock order and makes
+concurrent rescheduling linearizable rather than mixing an old reminder with an uncommitted new
+source. Source checking plus transitions to `delivered`, `expired`, or `cancelled` happen in one
+short database transaction. No transaction is held across an external notification provider; a
+future Web Push adapter must commit the claim before network delivery and finalize the result in a
+second transaction. Queue-only states are not exposed as inbox entries.
 
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command

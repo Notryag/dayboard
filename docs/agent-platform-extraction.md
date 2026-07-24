@@ -55,7 +55,7 @@ integration details from becoming dependencies of the reusable Core.
 | Clarification interaction state | Split | Split | Implemented: Platform owns envelope/CAS; Dayboard owns typed payload and response projection |
 | Voice/media ingestion lifecycle | Dayboard | Platform boundary | Provider and product interpretation remain adapters |
 | Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
-| Reminder delivery/outbox machinery | Mixed | Split | Platform may own delivery; Dayboard owns due-time and schedule policy |
+| Reminder delivery/outbox machinery | Dayboard boundary | Split candidate | Explicit Dayboard ports/UoW are implemented; Dayboard owns due-time and expiry policy, and Platform extraction waits for a second consumer |
 | Auth credentials and account recovery | Dayboard | Platform candidate | Extract only with a concrete second consumer or stable identity API |
 | Calendar/task domain, repositories and services | Dayboard | Dayboard | Never move to platform |
 | Scheduling prompt, tools, time rules and receipts | Dayboard | Dayboard | Never move to platform |
@@ -99,6 +99,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Concurrent Run-event sequence allocation | Complete; the PostgreSQL adapter serializes allocation by locking the parent Run |
 | Platform Core/Ports/Application and Dayboard Domain dependency checks | Complete |
 | Dayboard Scheduling Unit of Work and ORM-independent application services | Complete; schedule writes and Reminder Outbox replacement commit atomically at API/Agent boundaries |
+| Dayboard Reminder Unit of Work and ORM-independent lifecycle service | Complete; inbox, source projection, claim, expiry, cancellation, and delivery use explicit ports with API/Worker-owned commits |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |

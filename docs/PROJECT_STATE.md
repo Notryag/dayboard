@@ -6,7 +6,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Current Version
 
-- Development line: `0.3.x`; latest release tag: `v0.3.16`.
+- Development line: `0.3.x`; latest deployed release tag: `v0.3.19`.
 - Product: self-service Dayboard web application at `/dayboard/` with a same-site FastAPI API.
 - Runtime: PostgreSQL, Redis, FastAPI, arq Worker, and Next.js managed by Docker Compose.
 - Scheduling policy: any resolvable date or time creates a calendar entry; date-only entries use the
@@ -61,6 +61,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a product-owned Scheduling Unit of Work: application services now consume domain store
   ports, SQLAlchemy repositories return domain objects, and calendar/task changes commit atomically
   with Reminder Outbox replacement at the API or Agent boundary.
+- Added a separate product-owned Reminder Unit of Work: inbox and Worker services consume delivery
+  and source-projection ports, queue state remains private, expired calendar notifications are
+  distinct from cancelled sources, and inbox items use the current authoritative source snapshot.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.

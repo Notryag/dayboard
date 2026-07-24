@@ -12,7 +12,7 @@ from north.runtime import RedisStreamBridge
 import structlog
 
 from dayboard.app.commands import CommandService
-from dayboard.app.reminders import ReminderService
+from dayboard.composition.reminders import build_reminder_services
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from dayboard.app.platform_services import (
     build_idempotency_service,
@@ -111,13 +111,19 @@ async def cleanup_expired_idempotency_keys(ctx: dict[str, Any]) -> None:
 async def deliver_due_reminders(ctx: dict[str, Any]) -> None:
     del ctx
     async with SessionLocal() as session:
-        delivered_ids = await ReminderService(session).deliver_due_in_app()
-    if delivered_ids:
+        scope = build_reminder_services(session)
+        result = await scope.reminders.process_due_in_app()
+        await scope.unit_of_work.commit()
+    if result.delivered_ids or result.expired_ids or result.cancelled_ids:
         logger.info(
-            "dayboard.worker.reminders_delivered",
+            "dayboard.worker.reminders_processed",
             channel="in_app",
-            count=len(delivered_ids),
-            delivery_ids=delivered_ids,
+            delivered_count=len(result.delivered_ids),
+            delivered_ids=[str(delivery_id) for delivery_id in result.delivered_ids],
+            expired_count=len(result.expired_ids),
+            expired_ids=[str(delivery_id) for delivery_id in result.expired_ids],
+            cancelled_count=len(result.cancelled_ids),
+            cancelled_ids=[str(delivery_id) for delivery_id in result.cancelled_ids],
         )
 
 

@@ -1,107 +1,155 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime, timedelta
+from enum import StrEnum
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from agent_platform.core import TenantContext
-from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow, TaskItemRow
-from dayboard.db.reminder_repositories import ReminderDeliveryRepository
+
+from dayboard.app.reminder_ports import ReminderUnitOfWork
 from dayboard.domain.reminders import (
+    CALENDAR_REMINDER_DELIVERY_GRACE,
     ReminderDelivery,
     ReminderDeliveryStatus,
     ReminderInboxItem,
-    ReminderSourceType,
+    ReminderProcessingResult,
+    ReminderSourceSnapshot,
     ReminderSourceStatus,
+    ReminderSourceType,
 )
 
 
-def reminder_delivery_from_row(row: ReminderDeliveryRow) -> ReminderDelivery:
-    return ReminderDelivery.model_validate(row, from_attributes=True)
+SourceKey = tuple[UUID, UUID, ReminderSourceType, UUID]
+
+
+class DeliveryDisposition(StrEnum):
+    deliver = "deliver"
+    expire = "expire"
+    cancel = "cancel"
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _delivery_key(delivery: ReminderDelivery) -> SourceKey:
+    return (
+        delivery.tenant_id,
+        delivery.owner_user_id,
+        delivery.source_type,
+        delivery.source_id,
+    )
+
+
+def _source_key(source: ReminderSourceSnapshot) -> SourceKey:
+    return (source.tenant_id, source.owner_user_id, source.source_type, source.source_id)
+
+
+def _payload_string(delivery: ReminderDelivery, key: str) -> str | None:
+    value = delivery.payload.get(key)
+    return value if isinstance(value, str) else None
+
+
+def _payload_occurs_at(delivery: ReminderDelivery) -> datetime | None:
+    value = _payload_string(delivery, "occurs_at")
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.utcoffset() is not None else None
+
+
+def delivery_disposition(
+    delivery: ReminderDelivery,
+    source: ReminderSourceSnapshot | None,
+    *,
+    now: datetime,
+    calendar_delivery_grace: timedelta = CALENDAR_REMINDER_DELIVERY_GRACE,
+) -> DeliveryDisposition:
+    if source is None:
+        return DeliveryDisposition.cancel
+    if delivery.source_type is ReminderSourceType.calendar_entry:
+        if source.status is not ReminderSourceStatus.scheduled:
+            return DeliveryDisposition.cancel
+        if source.occurs_at is None or source.occurs_at + calendar_delivery_grace < now:
+            return DeliveryDisposition.expire
+        return DeliveryDisposition.deliver
+    return (
+        DeliveryDisposition.deliver
+        if source.status is ReminderSourceStatus.open
+        else DeliveryDisposition.cancel
+    )
 
 
 class ReminderService:
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-        self.deliveries = ReminderDeliveryRepository(session)
+    def __init__(
+        self,
+        unit_of_work: ReminderUnitOfWork,
+        *,
+        clock: Callable[[], datetime] = utc_now,
+        calendar_delivery_grace: timedelta = CALENDAR_REMINDER_DELIVERY_GRACE,
+    ) -> None:
+        self.unit_of_work = unit_of_work
+        self.deliveries = unit_of_work.deliveries
+        self.sources = unit_of_work.sources
+        self.clock = clock
+        self.calendar_delivery_grace = calendar_delivery_grace
+
+    async def _source_map(
+        self,
+        deliveries: Sequence[ReminderDelivery],
+    ) -> dict[SourceKey, ReminderSourceSnapshot]:
+        return {
+            _source_key(source): source
+            for source in await self.sources.list_for_deliveries(deliveries)
+        }
+
+    async def _locked_source_map(
+        self,
+        deliveries: Sequence[ReminderDelivery],
+    ) -> dict[SourceKey, ReminderSourceSnapshot]:
+        return {
+            _source_key(source): source
+            for source in await self.sources.lock_for_deliveries(deliveries)
+        }
 
     async def list_for_user(self, context: TenantContext) -> list[ReminderDelivery]:
-        return [
-            reminder_delivery_from_row(row) for row in await self.deliveries.list_for_user(context)
-        ]
+        return list(await self.deliveries.list_for_user(context))
 
     async def list_inbox(self, context: TenantContext) -> list[ReminderInboxItem]:
-        deliveries = await self.deliveries.list_inbox_for_user(context)
-        calendar_ids = {
-            row.source_id
-            for row in deliveries
-            if row.source_type == ReminderSourceType.calendar_entry.value
-        }
-        task_ids = {
-            row.source_id
-            for row in deliveries
-            if row.source_type == ReminderSourceType.task_item.value
-        }
-        calendars = (
-            {
-                row.id: row
-                for row in await self.session.scalars(
-                    select(CalendarEntryRow).where(
-                        CalendarEntryRow.tenant_id == context.tenant_id,
-                        CalendarEntryRow.owner_user_id == context.user_id,
-                        CalendarEntryRow.id.in_(calendar_ids),
-                    )
-                )
-            }
-            if calendar_ids
-            else {}
-        )
-        tasks = (
-            {
-                row.id: row
-                for row in await self.session.scalars(
-                    select(TaskItemRow).where(
-                        TaskItemRow.tenant_id == context.tenant_id,
-                        TaskItemRow.owner_user_id == context.user_id,
-                        TaskItemRow.id.in_(task_ids),
-                    )
-                )
-            }
-            if task_ids
-            else {}
-        )
-
+        deliveries = list(await self.deliveries.list_inbox_for_user(context))
+        sources = await self._source_map(deliveries)
+        now = self.clock()
         items: list[ReminderInboxItem] = []
         for delivery in deliveries:
-            source_status = ReminderSourceStatus.deleted
-            source_occurs_at = delivery.scheduled_for
-            if delivery.source_type == ReminderSourceType.calendar_entry.value:
-                entry = calendars.get(delivery.source_id)
-                if entry is not None:
-                    source_occurs_at = entry.start_time or delivery.scheduled_for
-                    source_status = (
-                        ReminderSourceStatus.deleted
-                        if entry.deleted_at is not None
-                        else ReminderSourceStatus.completed
-                        if entry.completed_at is not None
-                        else ReminderSourceStatus.scheduled
-                    )
-            else:
-                task = tasks.get(delivery.source_id)
-                if task is not None:
-                    source_occurs_at = task.due_at or delivery.scheduled_for
-                    source_status = (
-                        ReminderSourceStatus.deleted
-                        if task.deleted_at is not None
-                        else ReminderSourceStatus(task.status)
-                    )
+            source = sources.get(_delivery_key(delivery))
             items.append(
                 ReminderInboxItem(
-                    **reminder_delivery_from_row(delivery).model_dump(),
-                    source_status=source_status,
-                    source_occurs_at=source_occurs_at,
+                    **delivery.model_dump(),
+                    source_status=(
+                        source.status if source is not None else ReminderSourceStatus.deleted
+                    ),
+                    source_occurs_at=(
+                        source.occurs_at
+                        if source is not None and source.occurs_at is not None
+                        else _payload_occurs_at(delivery) or delivery.scheduled_for
+                    ),
+                    source_title=(
+                        source.title if source is not None else _payload_string(delivery, "title")
+                    ),
+                    can_retry=(
+                        delivery.status is ReminderDeliveryStatus.failed
+                        and delivery_disposition(
+                            delivery,
+                            source,
+                            now=now,
+                            calendar_delivery_grace=self.calendar_delivery_grace,
+                        )
+                        is DeliveryDisposition.deliver
+                    ),
                 )
             )
         return items
@@ -111,91 +159,96 @@ class ReminderService:
         context: TenantContext,
         delivery_id: UUID,
     ) -> tuple[ReminderDelivery | None, bool]:
-        row = await self.deliveries.get_for_user(context, delivery_id, for_update=True)
-        if row is None:
+        delivery = await self.deliveries.get_for_update(context, delivery_id)
+        if delivery is None:
             return None, False
-        if row.status != ReminderDeliveryStatus.delivered.value:
-            return reminder_delivery_from_row(row), False
-        if row.read_at is None:
-            row.read_at = datetime.now(UTC)
-        await self.session.commit()
-        await self.session.refresh(row)
-        return reminder_delivery_from_row(row), True
+        if delivery.status is not ReminderDeliveryStatus.delivered:
+            return delivery, False
+        if delivery.read_at is not None:
+            return delivery, True
+        updated = await self.deliveries.mark_read(
+            context,
+            delivery_id,
+            read_at=self.clock(),
+        )
+        return updated, updated is not None
 
     async def retry_failed(
         self,
         context: TenantContext,
         delivery_id: UUID,
     ) -> tuple[ReminderDelivery | None, bool]:
-        row = await self.deliveries.get_for_user(context, delivery_id, for_update=True)
-        if row is None:
+        candidate = await self.deliveries.get(context, delivery_id)
+        if candidate is None:
             return None, False
-        if row.status != ReminderDeliveryStatus.failed.value:
-            return reminder_delivery_from_row(row), False
-        row.status = ReminderDeliveryStatus.pending.value
-        row.next_attempt_at = datetime.now(UTC)
-        row.claimed_at = None
-        row.last_error = None
-        await self.session.commit()
-        await self.session.refresh(row)
-        return reminder_delivery_from_row(row), True
+        if candidate.status is not ReminderDeliveryStatus.failed:
+            return candidate, False
+        locked_sources = await self._locked_source_map([candidate])
+        delivery = await self.deliveries.get_for_update(context, delivery_id)
+        if delivery is None:
+            return None, False
+        if delivery.status is not ReminderDeliveryStatus.failed:
+            return delivery, False
+        source = locked_sources.get(_delivery_key(delivery))
+        now = self.clock()
+        if (
+            delivery_disposition(
+                delivery,
+                source,
+                now=now,
+                calendar_delivery_grace=self.calendar_delivery_grace,
+            )
+            is not DeliveryDisposition.deliver
+        ):
+            return delivery, False
+        updated = await self.deliveries.retry_failed(
+            context,
+            delivery_id,
+            retry_at=now,
+        )
+        return updated, updated is not None
 
-    async def deliver_due_in_app(self, *, limit: int = 100) -> list[str]:
-        now = datetime.now(UTC)
-        rows = await self.deliveries.claim_due(now=now, limit=limit, channel="in_app")
-        calendar_ids = {
-            row.source_id
-            for row in rows
-            if row.source_type == ReminderSourceType.calendar_entry.value
-        }
-        task_ids = {
-            row.source_id for row in rows if row.source_type == ReminderSourceType.task_item.value
-        }
-        active_calendar_ids = (
-            set(
-                await self.session.scalars(
-                    select(CalendarEntryRow.id).where(
-                        CalendarEntryRow.id.in_(calendar_ids),
-                        CalendarEntryRow.start_time > now,
-                        CalendarEntryRow.completed_at.is_(None),
-                        CalendarEntryRow.deleted_at.is_(None),
-                    )
-                )
+    async def process_due_in_app(self, *, limit: int = 100) -> ReminderProcessingResult:
+        now = self.clock()
+        candidates = list(
+            await self.deliveries.list_due_candidates(
+                now=now,
+                limit=limit,
+                channel="in_app",
             )
-            if calendar_ids
-            else set()
         )
-        active_task_ids = (
-            set(
-                await self.session.scalars(
-                    select(TaskItemRow.id).where(
-                        TaskItemRow.id.in_(task_ids),
-                        TaskItemRow.status == "open",
-                        TaskItemRow.deleted_at.is_(None),
-                    )
-                )
+        locked_sources = await self._locked_source_map(candidates)
+        deliveries = list(
+            await self.deliveries.claim_due(
+                [candidate.id for candidate in candidates],
+                now=now,
+                channel="in_app",
             )
-            if task_ids
-            else set()
         )
-        delivered_ids: list[str] = []
-        for row in rows:
-            source_is_active = (
-                row.source_type == ReminderSourceType.calendar_entry.value
-                and row.source_id in active_calendar_ids
-            ) or (
-                row.source_type == ReminderSourceType.task_item.value
-                and row.source_id in active_task_ids
+        result = ReminderProcessingResult(
+            delivered_ids=[],
+            expired_ids=[],
+            cancelled_ids=[],
+        )
+        for delivery in deliveries:
+            disposition = delivery_disposition(
+                delivery,
+                locked_sources.get(_delivery_key(delivery)),
+                now=now,
+                calendar_delivery_grace=self.calendar_delivery_grace,
             )
-            if not source_is_active:
-                row.status = ReminderDeliveryStatus.cancelled.value
-                row.claimed_at = None
+            if disposition is DeliveryDisposition.expire:
+                if await self.deliveries.mark_expired(delivery.id):
+                    result.expired_ids.append(delivery.id)
+                continue
+            if disposition is DeliveryDisposition.cancel:
+                if await self.deliveries.mark_cancelled(delivery.id):
+                    result.cancelled_ids.append(delivery.id)
                 continue
             if await self.deliveries.mark_delivered(
-                row.id,
+                delivery.id,
                 delivered_at=now,
-                provider_message_id=f"in_app:{row.id}",
+                provider_message_id=f"in_app:{delivery.id}",
             ):
-                delivered_ids.append(str(row.id))
-        await self.session.commit()
-        return delivered_ids
+                result.delivered_ids.append(delivery.id)
+        return result

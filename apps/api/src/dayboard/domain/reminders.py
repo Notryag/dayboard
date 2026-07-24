@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel
+
+
+CALENDAR_REMINDER_DELIVERY_GRACE = timedelta(minutes=2)
 
 
 class ReminderSourceType(StrEnum):
@@ -18,6 +21,7 @@ class ReminderDeliveryStatus(StrEnum):
     processing = "processing"
     delivered = "delivered"
     failed = "failed"
+    expired = "expired"
     cancelled = "cancelled"
 
 
@@ -52,3 +56,21 @@ class ReminderDelivery(BaseModel):
 class ReminderInboxItem(ReminderDelivery):
     source_status: ReminderSourceStatus
     source_occurs_at: AwareDatetime
+    source_title: str | None
+    can_retry: bool
+
+
+class ReminderSourceSnapshot(BaseModel):
+    tenant_id: UUID
+    owner_user_id: UUID
+    source_type: ReminderSourceType
+    source_id: UUID
+    title: str
+    status: ReminderSourceStatus
+    occurs_at: AwareDatetime | None
+
+
+class ReminderProcessingResult(BaseModel):
+    delivered_ids: list[UUID]
+    expired_ids: list[UUID]
+    cancelled_ids: list[UUID]

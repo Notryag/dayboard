@@ -34,7 +34,7 @@ function payloadString(reminder: ReminderInboxItem, key: string) {
 }
 
 function reminderTitle(reminder: ReminderInboxItem) {
-  return payloadString(reminder, "title") ?? "日程提醒";
+  return reminder.source_title ?? payloadString(reminder, "title") ?? "日程提醒";
 }
 
 function reminderDate(reminder: ReminderInboxItem, timezone: string) {
@@ -64,7 +64,10 @@ function sourceUnavailable(reminder: ReminderInboxItem) {
 }
 
 function statusLabel(reminder: ReminderInboxItem) {
-  if (sourceUnavailable(reminder)) return reminder.source_type === "task_item" ? "待办已删除" : "日程已删除";
+  const sourceName = reminder.source_type === "task_item" ? "待办" : "日程";
+  if (reminder.source_status === "deleted") return `${sourceName}已删除`;
+  if (reminder.source_status === "cancelled") return `${sourceName}已取消`;
+  if (reminder.source_status === "completed") return `${sourceName}已完成`;
   if (reminder.status === "failed") return "投递失败";
   return reminder.read_at ? "已读" : "新提醒";
 }
@@ -254,7 +257,7 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
                         </small>
                       </span>
                     </button>
-                    {reminder.status === "failed" ? (
+                    {reminder.status === "failed" && reminder.can_retry ? (
                       <Button
                         aria-label={`重新投递：${reminderTitle(reminder)}`}
                         disabled={retry.isPending && retry.variables === reminder.id}

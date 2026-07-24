@@ -35,7 +35,7 @@ from agent_platform.core import (
     InteractionConflictError,
 )
 from dayboard.app.voice import VoiceTranscriptionService
-from dayboard.app.reminders import ReminderService
+from dayboard.composition.reminders import build_reminder_services
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
@@ -224,7 +224,7 @@ async def list_reminders(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> list[ReminderInboxItem]:
-    return await ReminderService(session).list_inbox(tenant_context)
+    return await build_reminder_services(session).reminders.list_inbox(tenant_context)
 
 
 @router.post("/api/reminders/{delivery_id}/read", response_model=ReminderDelivery)
@@ -233,7 +233,8 @@ async def mark_reminder_read(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ReminderDelivery:
-    reminder, changed = await ReminderService(session).mark_read(tenant_context, delivery_id)
+    scope = build_reminder_services(session)
+    reminder, changed = await scope.reminders.mark_read(tenant_context, delivery_id)
     if reminder is None:
         raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
     if not changed:
@@ -242,6 +243,7 @@ async def mark_reminder_read(
             code="REMINDER_STATE_CONFLICT",
             message="Only delivered reminders can be marked read",
         )
+    await scope.unit_of_work.commit()
     return reminder
 
 
@@ -251,15 +253,17 @@ async def retry_failed_reminder(
     session: AsyncSession = Depends(get_session),
     tenant_context: TenantContext = Depends(get_tenant_context),
 ) -> ReminderDelivery:
-    reminder, changed = await ReminderService(session).retry_failed(tenant_context, delivery_id)
+    scope = build_reminder_services(session)
+    reminder, changed = await scope.reminders.retry_failed(tenant_context, delivery_id)
     if reminder is None:
         raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
     if not changed:
         raise ApiProblem(
             status_code=409,
             code="REMINDER_STATE_CONFLICT",
-            message="Only failed reminders can be retried",
+            message="Reminder cannot be retried in its current state",
         )
+    await scope.unit_of_work.commit()
     return reminder
 
 

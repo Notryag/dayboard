@@ -44,10 +44,12 @@ export type ReminderDelivery = {
   source_type: "calendar_entry" | "task_item";
   source_id: string;
   scheduled_for: string;
-  status: "pending" | "processing" | "delivered" | "failed" | "cancelled";
+  status: "pending" | "processing" | "delivered" | "failed" | "expired" | "cancelled";
   read_at: string | null;
   source_occurs_at: string;
+  source_title: string | null;
   source_status: "scheduled" | "open" | "completed" | "cancelled" | "deleted";
+  can_retry: boolean;
   payload: Record<string, unknown>;
   [key: string]: unknown;
 };

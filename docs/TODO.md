@@ -34,12 +34,16 @@ squashing remains deferred until every persistent environment has reached Alembi
 - [x] Move scheduling transaction ownership to the outer API and serialized Agent tool boundaries.
   Calendar/task writes and Reminder Outbox replacement now commit or roll back together; focused
   tests cover hidden-commit prevention and reminder-failure rollback.
-- [ ] Move Reminder inbox/delivery lifecycle and Voice persistence behind explicit application
-  ports in separate vertical slices. Do not combine them into Scheduling merely because they share
-  the current database.
+- [x] Move Reminder inbox/delivery lifecycle behind explicit application ports and its own Unit of
+  Work. Keep `read_at` separate from delivery status, distinguish `expired` from `cancelled`, and
+  project current source title/time/status into the inbox. Do not combine this lifecycle into
+  Scheduling merely because both use the current database.
+- [ ] Move Voice persistence behind explicit application ports as a separate vertical slice.
 - [ ] Continue splitting remaining application modules that directly construct sessions or concrete
   repositories, prioritizing account recovery and provider usage by correctness risk rather than
   moving files mechanically.
+- [ ] Move the existing Scheduling, Platform, and Run composition roots out of `dayboard.app` into
+  the explicit outer `dayboard.composition` package as their next vertical slices are touched.
 
 ## Token Efficiency
 
