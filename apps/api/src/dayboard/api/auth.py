@@ -91,6 +91,53 @@ async def _account_for_session(
     return result if result is not None else None
 
 
+async def _account_for_login(
+    session: AsyncSession,
+    identifier: str,
+) -> tuple[UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow] | None:
+    candidate_user_id = await session.scalar(
+        select(UserRow.id)
+        .where(
+            or_(UserRow.username == identifier, UserRow.email == identifier),
+            UserRow.is_active.is_(True),
+            UserRow.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    if candidate_user_id is None:
+        return None
+
+    locked_user_id = await session.scalar(
+        select(UserRow.id)
+        .where(
+            UserRow.id == candidate_user_id,
+            UserRow.is_active.is_(True),
+            UserRow.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
+    if locked_user_id is None:
+        return None
+
+    statement = (
+        select(UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow)
+        .join(UserCredentialRow, UserCredentialRow.user_id == UserRow.id)
+        .join(TenantMembershipRow, TenantMembershipRow.user_id == UserRow.id)
+        .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
+        .where(
+            UserRow.id == locked_user_id,
+            UserCredentialRow.deleted_at.is_(None),
+            TenantMembershipRow.status == "active",
+            TenantMembershipRow.deleted_at.is_(None),
+        )
+        .order_by(TenantMembershipRow.created_at)
+        .limit(1)
+        .with_for_update(of=UserCredentialRow)
+    )
+    account = (await session.execute(statement)).one_or_none()
+    return account if account is not None else None
+
+
 def _response(
     user: UserRow,
     membership: TenantMembershipRow,
@@ -214,25 +261,11 @@ async def login(
 ) -> AccountResponse:
     del request
     identifier = _normalized(body.identifier)
-    statement = (
-        select(UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow)
-        .join(UserCredentialRow, UserCredentialRow.user_id == UserRow.id)
-        .join(TenantMembershipRow, TenantMembershipRow.user_id == UserRow.id)
-        .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
-        .where(
-            or_(UserRow.username == identifier, UserRow.email == identifier),
-            UserRow.is_active.is_(True),
-            UserRow.deleted_at.is_(None),
-            TenantMembershipRow.status == "active",
-            TenantMembershipRow.deleted_at.is_(None),
-        )
-        .order_by(TenantMembershipRow.created_at)
-        .limit(1)
-    )
-    account = (await session.execute(statement)).one_or_none()
+    account = await _account_for_login(session, identifier)
     candidate_hash = account[1].password_hash if account else _dummy_password_hash
     valid = password_hash.verify(body.password, candidate_hash)
     if account is None or not valid:
+        await session.rollback()
         logger.info("dayboard.auth.login_rejected", reason="invalid_credentials")
         raise ApiProblem(
             status_code=401,

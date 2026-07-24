@@ -178,6 +178,28 @@ RULES = (
             "voice_ports.py",
         ),
     ),
+    LayerRule(
+        name="dayboard.account_recovery_application",
+        source_root=REPOSITORY_ROOT / "apps" / "api" / "src" / "dayboard" / "app",
+        forbidden_import_prefixes=(
+            "dayboard.agent",
+            "dayboard.api",
+            "dayboard.composition",
+            "dayboard.db",
+            "dayboard.integrations",
+            "dayboard.tools",
+            "dayboard.workers",
+            "fastapi",
+            "langchain",
+            "langchain_core",
+            "north",
+            "sqlalchemy",
+        ),
+        included_relative_paths=(
+            "account_recovery.py",
+            "account_recovery_ports.py",
+        ),
+    ),
 )
 
 

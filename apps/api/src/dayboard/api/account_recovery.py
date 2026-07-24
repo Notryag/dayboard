@@ -9,7 +9,7 @@ import structlog
 
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
-from dayboard.app.account_recovery import AccountRecoveryService
+from dayboard.composition.account_recovery import build_account_recovery_services
 from dayboard.config import Settings, get_settings
 from dayboard.db.session import get_session
 from dayboard.integrations.email import PasswordResetMailer, SmtpPasswordResetMailer
@@ -111,10 +111,16 @@ async def request_password_reset(
             message="Password reset email is not configured",
         )
 
-    issued = await AccountRecoveryService(session).issue_token(
-        str(body.email).strip().lower(),
-        ttl_seconds=settings.password_reset_ttl_seconds,
-    )
+    scope = build_account_recovery_services(session)
+    try:
+        issued = await scope.recovery.issue_token(
+            str(body.email),
+            ttl_seconds=settings.password_reset_ttl_seconds,
+        )
+        await scope.unit_of_work.commit()
+    except Exception:
+        await scope.unit_of_work.rollback()
+        raise
     if issued is None:
         logger.info("dayboard.auth.password_reset_requested", account_found=False)
         return generic
@@ -126,12 +132,12 @@ async def request_password_reset(
         recipient=issued.recipient,
         reset_url=reset_url,
         expires_minutes=max(1, settings.password_reset_ttl_seconds // 60),
-        user_id=issued.user_id,
+        user_id=str(issued.user_id),
     )
     logger.info(
         "dayboard.auth.password_reset_requested",
         account_found=True,
-        user_id=issued.user_id,
+        user_id=str(issued.user_id),
     )
     return generic
 
@@ -146,7 +152,16 @@ async def confirm_password_reset(
     settings: Settings = Depends(get_settings),
 ) -> None:
     del request
-    changed = await AccountRecoveryService(session).reset_password(body.token, body.password)
+    scope = build_account_recovery_services(session)
+    try:
+        changed = await scope.recovery.reset_password(body.token, body.password)
+        if changed:
+            await scope.unit_of_work.commit()
+        else:
+            await scope.unit_of_work.rollback()
+    except Exception:
+        await scope.unit_of_work.rollback()
+        raise
     if not changed:
         raise ApiProblem(
             status_code=400,

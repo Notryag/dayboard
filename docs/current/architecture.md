@@ -126,6 +126,17 @@ external provider without an open database transaction, and then commits exactly
 metadata inside `dayboard.db`. `dayboard.composition.voice` is the only module that connects the
 application service to the SQLAlchemy Unit of Work.
 
+Account Recovery uses a separate Dayboard-owned Unit of Work because credentials and reset tokens
+are global user identity data rather than tenant-scoped scheduling records. The application service
+owns CSPRNG token generation, SHA-256 token digests, password-hasher orchestration, and expiry
+policy, but it never imports SQLAlchemy or commits. The API commits token issue or successful
+consumption before scheduling email delivery or deleting the browser cookie. Repository operations
+serialize by locking `UserRow` first, then revalidate and lock reset tokens and credentials. Login
+uses the same User-row gate before reading the current password hash and creating a Session, so a
+concurrent reset either rejects the old password or revokes the Session created immediately before
+it. Password update, all unused-token consumption, and all active-Session revocation commit or roll
+back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
+
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
 submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
@@ -170,9 +181,9 @@ SSE receives only projected product status and never exposes the diagnostic exte
 
 The architecture check separately enforces Platform Core, Ports, and Application import rules. It
 also prevents the Dayboard Domain from importing API, application orchestration, persistence,
-workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, and Voice application
-services and ports are additionally prohibited from importing Dayboard persistence adapters or
-framework/runtime layers; only explicit composition modules connect them.
+workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, Voice, and Account
+Recovery application services and ports are additionally prohibited from importing Dayboard
+persistence adapters or framework/runtime layers; only explicit composition modules connect them.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities. A

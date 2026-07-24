@@ -39,11 +39,16 @@ squashing remains deferred until every persistent environment has reached Alembi
   project current source title/time/status into the inbox. Do not combine this lifecycle into
   Scheduling merely because both use the current database.
 - [x] Move Voice persistence behind explicit application ports as a separate vertical slice.
+- [x] Move Account Recovery persistence behind Dayboard-owned ports and a Unit of Work. Keep raw
+  reset tokens out of storage, serialize issue/confirm/login through the User row, and leave mail
+  delivery outside the database transaction.
 - [ ] Continue splitting remaining application modules that directly construct sessions or concrete
-  repositories, prioritizing account recovery and provider usage by correctness risk rather than
-  moving files mechanically.
-- [ ] Move the existing Scheduling, Platform, and Run composition roots out of `dayboard.app` into
-  the explicit outer `dayboard.composition` package as their next vertical slices are touched.
+  repositories, prioritizing provider usage by correctness risk rather than moving files
+  mechanically.
+- [x] Move the Scheduling composition root out of `dayboard.app` into the explicit outer
+  `dayboard.composition` package without retaining an import wrapper.
+- [ ] Move the existing Platform and Run composition roots out of `dayboard.app` into the explicit
+  outer `dayboard.composition` package as their next vertical slices are touched.
 
 ## Token Efficiency
 

@@ -67,6 +67,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added a product-owned Voice Unit of Work and provider port: application code receives domain
   transcripts, tenant-scoped repositories own ORM mapping, and no database transaction remains open
   while the external ASR provider runs.
+- Added a Dayboard-owned Account Recovery Unit of Work: reset issue/consumption return storage-free
+  records, API boundaries own commit/rollback, and User-row locking serializes token replacement,
+  password reset, session revocation, and concurrent login.
 - Responsive conversation/day-view UI with direct mobile view dragging, streamed search-result rows,
   voice recording and ASR adapters, direct schedule editing, dark mode, settings drawer, generated
   API schema, and 600-line frontend source enforcement.
@@ -99,6 +102,9 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 - An abrupt API process termination during an in-flight ASR request can leave its audit transcript
   in `processing`; ordinary request cancellation is finalized as `failed`, but stale-process
   recovery is deferred until Voice execution moves to a durable asynchronous lifecycle.
+- Password-reset mail delivery is best effort after the token transaction commits. Concurrent reset
+  requests can deliver messages out of order; only the newest token remains valid until a durable
+  mail Outbox is introduced.
 - Backups are host-local; encrypted off-host replication is pending.
 
 ## Release Check

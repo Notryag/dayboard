@@ -56,7 +56,7 @@ integration details from becoming dependencies of the reusable Core.
 | Voice/media ingestion lifecycle | Dayboard boundary | Platform candidate | Explicit Dayboard provider/store ports and UoW are implemented; extraction waits for a second consumer |
 | Provider usage and budget accounting | Dayboard | Platform | Extract after lifecycle ownership stabilizes |
 | Reminder delivery/outbox machinery | Dayboard boundary | Split candidate | Explicit Dayboard ports/UoW are implemented; Dayboard owns due-time and expiry policy, and Platform extraction waits for a second consumer |
-| Auth credentials and account recovery | Dayboard | Platform candidate | Extract only with a concrete second consumer or stable identity API |
+| Auth credentials and account recovery | Dayboard boundary | Platform candidate | Account Recovery ports/UoW are explicit; extraction still waits for a concrete second consumer or stable identity API |
 | Calendar/task domain, repositories and services | Dayboard | Dayboard | Never move to platform |
 | Scheduling prompt, tools, time rules and receipts | Dayboard | Dayboard | Never move to platform |
 | Schedule cards and Dayboard web UI | Dayboard | Dayboard | Never move to platform |
@@ -101,6 +101,7 @@ status rather than retaining stale findings as if they were still unresolved:
 | Dayboard Scheduling Unit of Work and ORM-independent application services | Complete; schedule writes and Reminder Outbox replacement commit atomically at API/Agent boundaries |
 | Dayboard Reminder Unit of Work and ORM-independent lifecycle service | Complete; inbox, source projection, claim, expiry, cancellation, and delivery use explicit ports with API/Worker-owned commits |
 | Dayboard Voice Unit of Work and ORM-independent lifecycle service | Complete; processing commits before external ASR, terminal transitions use a second transaction, and extraction waits for a second consumer |
+| Dayboard Account Recovery Unit of Work and ORM-independent service | Complete; User-first locking serializes issue, confirm, and login while password/token/session changes commit atomically |
 | Reusable PostgreSQL Conversation/Run adapters | Pending; persistence semantics still live in Dayboard adapters |
 | Versioned persisted presentation envelopes | Complete; unversioned message metadata was removed and migrated once |
 | Versioned durable event extension envelopes | Complete; RuntimeJournal extensions carry kind, schema version, and owner-validated payload |
