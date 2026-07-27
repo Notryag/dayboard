@@ -5,6 +5,16 @@
 Dayboard 可以理解“明天下午三点提醒我开会”“下班后拿快递”这类日常表达，
 自动创建、查询和调整日程或待办；信息不足时，它会先向你确认，而不是猜测后直接写入数据。
 
+<p align="center">
+  <img
+    alt="Dayboard 用中文创建会议日程，再把会议从下午三点改到四点"
+    src="./docs/assets/dayboard-create-reschedule.gif"
+    width="390"
+  />
+</p>
+
+<p align="center"><strong>一句话创建日程，再用上下文完成改期。</strong></p>
+
 [在线体验](https://dayboard.selfapi.art) ·
 [项目文档](./docs/README.md) ·
 [部署指南](./docs/deploy.md) ·
