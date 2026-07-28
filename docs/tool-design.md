@@ -1,7 +1,7 @@
 # Agent Tool Design
 
 Status: active contract  
-Last reviewed: 2026-07-20
+Last reviewed: 2026-07-27
 
 ## Ownership Boundary
 
@@ -120,6 +120,15 @@ model. Conflict counts returned by successful calendar writes remain visible in 
 completion.
 This avoids hiding a task merely because a mixed command happened to execute a calendar write
 first. A recovery marker must prevent unbounded restore/retry loops.
+
+Dynamic binding remains preferable to a fixed schema surface after production cache measurement.
+Using `count_tokens_approximately`, the complete seven-business-tool plus clarification surface is
+about 1,554 tokens, the calendar subset is 1,224 tokens, and the task subset is 505 tokens. Domain
+narrowing therefore avoids resending about 330 tokens after a calendar search and 1,049 tokens after
+a task search. A warmed production Eval reused the same 6,656-token provider prompt-cache prefix on
+the initial full surface and on the narrowed calendar surface, so fixing all tools in every round
+has no measured cache advantage. Revisit this decision only with provider measurements showing that
+schema stability saves more than the narrowed surface removes.
 
 ## Acceptance Contract
 

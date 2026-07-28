@@ -252,8 +252,13 @@ Rules:
 - Use soft deletion for business objects with `deleted_at`.
 - Store external files in object storage; store only URIs and metadata in PostgreSQL.
 - Keep migrations replayable and code-reviewed.
-- Never rewrite the meaning of a migration that may already have run. Correct deployed schema drift
-  with a new forward migration, even when a clean database built from edited history appears right.
+- After the first production release, never rewrite the meaning of a migration that may already
+  have run. Correct deployed schema drift with a new forward migration, even when a clean database
+  built from edited history appears right.
+- Before the first production release, migration history may be explicitly squashed into one
+  reviewed baseline. Reuse the deployed head revision for that baseline so existing development
+  databases and clean installations converge without runtime compatibility branches or manual
+  stamping. Validate both an existing database and an empty PostgreSQL database before merging.
 - Keep physical PostgreSQL types and indexes, SQLAlchemy metadata, and Alembic history aligned;
   enforce owned-schema drift with `alembic check` in CI.
 - Declare tables created by an external runtime or provider through an explicit ownership filter.

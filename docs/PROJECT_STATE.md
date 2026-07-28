@@ -53,6 +53,9 @@ implementation chronology. Current facts live under [current](./current/README.m
   submission while preserving archived history reads and idempotent retries.
 - Reconciled legacy JSON storage with the ORM's JSONB contract, declared North checkpoint tables as
   externally owned, and made `alembic check` a CI schema-drift gate.
+- Squashed the 12 pre-release Alembic revisions into one ORM-aligned initial schema while retaining
+  the deployed `202607230007` head identity, so existing development databases and fresh installs
+  share one migration path without a compatibility branch or manual stamp.
 - Replaced unversioned durable Run-event metadata with Platform-owned Event Extension envelopes and
   typed North model/tool plus Platform failure/interaction-state payloads.
 - Added a product-neutral Platform Run execution coordinator with atomic terminal persistence,

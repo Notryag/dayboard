@@ -28,9 +28,9 @@ Last reviewed: 2026-07-24
 - [ ] Evaluate provider usage accounting and notification delivery as later platform capabilities
   only when their lifecycle boundaries are stable or a second product needs them.
 
-The Event Extension Envelope and Run execution coordination slices are complete. Migration
-squashing remains deferred until every persistent environment has reached Alembic revision
-`202607230007` or later.
+The Event Extension Envelope, Run execution coordination, and pre-release migration squash are
+complete. Existing development databases and fresh installs retain the same Alembic head identity,
+`202607230007`.
 
 ## Architecture Hardening
 

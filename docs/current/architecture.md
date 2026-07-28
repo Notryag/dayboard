@@ -169,7 +169,10 @@ dayboard.workers       arq Run and reminder jobs
 dayboard.integrations  ASR and external provider adapters
 ```
 
-Trusted `TenantContext` is resolved from the authenticated server session. Tenant, owner, timezone,
+Trusted `TenantContext` is resolved from the authenticated server session or the dedicated Eval
+Bearer identity configured by token digest, tenant ID, and user ID. Eval authentication revalidates
+the active database user and tenant membership on every request; it does not accept caller-supplied
+identity fields. Tenant, owner, timezone,
 thread, Run, operation keys, and permissions are injected by the runtime and never exposed as
 model-supplied tool arguments. Repository queries scope business data by tenant and owner.
 

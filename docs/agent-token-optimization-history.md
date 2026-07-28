@@ -1,7 +1,7 @@
 # Agent Token Optimization History
 
 Status: append-only engineering record  
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-27
 
 This document preserves each measured Dayboard Agent token optimization as a product and
 engineering highlight. Do not replace older baselines when a new optimization lands. Append a new
@@ -20,12 +20,15 @@ stable system prompt and serialized model-visible tool schemas.
 | Native anytime calendar entries | 666 | 1,406 | 2,072 | -44.3% | pending deployment sample |
 | Compact tool receipts + sequence anchors | 772 | 1,487 | 2,259 | -39.2% | 2,523 |
 | Beijing-local protocol + integer versions | 913 | 1,469 | 2,382 | -35.9% | pending deployment sample |
+| Model-only system rules | 829 | 1,469 | 2,298 | -38.2% | pending deployment sample |
+| Late-bound runtime time context | 763 | 1,469 | 2,232 | -40.0% | 7,227; 6,656 cached when warm |
 
-The current fixed surface is 1,335 tokens smaller than the initial baseline. It is 123 tokens larger
-than the preceding version because the time protocol explicitly prevents UTC conversion and defines
-adjacent-entry behavior. Tool schemas became 18 tokens smaller after integer row versions replaced
-timestamp concurrency fields, despite adding a duration parameter. Live input includes provider
-protocol overhead and user messages, so it will not equal the offline fixed count.
+The current stable fixed surface is 1,485 tokens smaller than the initial baseline. The separate
+runtime context adds about 67 dynamic tokens per request, so this latest step improves prefix
+stability rather than materially reducing uncached input. Tool schemas became 18 tokens smaller
+after integer row versions replaced timestamp concurrency fields, despite adding a duration
+parameter. Live input includes runtime context, provider protocol overhead, and user messages, so it
+will not equal the offline fixed count.
 
 ## 2026-07-20: Incident Baseline
 
@@ -195,6 +198,67 @@ Northgate reserved 12,676 tokens and released 8,716 after the 3,960-token settle
 estimate-to-actual ratio of 3.201. Reservation is temporary admission capacity, not provider token
 consumption. Correlation metadata was present but classified as `legacy`; trusted dynamic metadata
 migration remains a separate Northgate prerequisite.
+
+## 2026-07-27: Model-Only System Rules
+
+The system prompt now contains only decisions and response behavior that the model must perform.
+Descriptions of internal conflict checking, PostgreSQL/UTC artifact ownership, trusted-context
+injection, and low-level tool failure handling were removed. Time classification, Beijing-local
+tool inputs, sequence references, search-before-change, clarification, optimistic-version
+selection, and grounded confirmations remain because code cannot choose those semantics for the
+model.
+
+The system prompt fell from 913 to 829 `o200k_base` tokens, a 9.2% prompt reduction. The eight
+model-visible schemas remain 1,469 tokens, so fixed input fell from 2,382 to 2,298 tokens, a 3.5%
+reduction for this step and 38.2% from the initial 3,717-token baseline. Provider usage and semantic
+acceptance measurements remain pending deployment.
+
+## 2026-07-27: Late-Bound Beijing Runtime Context
+
+The minute-level Beijing datetime, locale, and relative-date table no longer live in the stable
+system prompt. Dayboard captures them once when a Run creates its Agent and injects the resulting
+trusted `SystemMessage` immediately before the latest user message for every model call in that
+Run. The context is not persisted in conversation history, remains identical across tool rounds in
+one Run, and is injected for every command rather than relying on incomplete relative-time keyword
+detection.
+
+The stable system prompt is 763 `o200k_base` tokens, down from 829. The runtime context is about 67
+tokens for a typical `zh-CN` request, so this split primarily improves prefix structure rather than
+removing the required time context. Stable instructions and prior conversation can form a reusable
+prefix while the minute-varying context stays near the current command.
+
+The deployed `context-01` Eval passed both create and contextual-reschedule turns with exact tool
+behavior. Its cold Run used 22,189 input and 210 output tokens over three model calls; Northgate saw
+the upstream cache detail omitted on all three. A second Eval after propagation used 22,201 input
+and 215 output tokens. All three calls then reported 6,656 cached prompt tokens, for 19,968 cached
+tokens and an exact 89.94% prompt-cache ratio. At the configured `$1.00/M` input, `$0.10/M` cached
+input, and `$6.00/M` output prices, the warm Eval cost `$0.005521`; the same usage without prompt
+caching would cost about `$0.023491`, a 76.5% reduction.
+
+A third Eval at 16:18, across the minute boundary from the 16:16 warm sample, again passed both
+turns. Northgate reported one 6,656-token cache read and saw the provider omit cache detail on the
+other two calls. This proves that changing the injected minute no longer prevents the stable prefix
+from being reused; it does not prove that every request hits, because omitted usage remains unknown.
+
+Compared with the immediately preceding production sample, the cold deployed input fell from
+22,669 to 22,189 tokens, a 480-token or 2.1% reduction across three model calls. Dayboard's Eval
+event projection still reported cached usage as unknown even when Northgate recorded all three
+cache hits, so cached-token propagation into Run events remains a separate observability defect.
+
+## 2026-07-27: Cached Usage Event Projection
+
+North Runtime now preserves provider cache reads from direct cached-token fields and from the
+LangChain/OpenAI `input_token_details.cache_read` and `prompt_tokens_details.cached_tokens` shapes.
+It emits the normalized value as `cached_input_tokens`; omission remains `None` rather than an
+invented zero. Dayboard's existing typed Run-event extension and Eval aggregation can therefore
+consume the value without a second provider-specific parser.
+
+North regression tests cover the complete `LLMResult -> AIMessage.usage_metadata -> RuntimeJournal`
+path, and the deployed Worker normalized a synthetic 100-input/80-cache payload to
+`cached_input_tokens=80`. Two immediate post-deployment production Evals were not positive cache
+samples because Northgate independently confirmed that the upstream omitted cache detail on all
+six calls. Dayboard correctly kept those values unknown. A future naturally reported cache read
+must be compared between the Eval report and Northgate to complete live positive-path validation.
 
 ## Entry Template
 
