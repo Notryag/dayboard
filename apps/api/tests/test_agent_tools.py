@@ -413,6 +413,12 @@ async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
     db_session: AsyncSession,
     tenant_context: TenantContext,
 ) -> None:
+    tomorrow = (
+        datetime.now(ZoneInfo(tenant_context.timezone)) + timedelta(days=1)
+    ).date().isoformat()
+    local_start = f"{tomorrow}T16:00"
+    local_end = f"{tomorrow}T17:00"
+
     tools = build_scheduling_tools(
         session=db_session,
         context=tenant_context,
@@ -425,13 +431,13 @@ async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
     await create_entry.ainvoke(
         {
             "title": "钓鱼",
-            "local_start": "2026-07-24T16:00",
-            "local_end": "2026-07-24T17:00",
+            "local_start": local_start,
+            "local_end": local_end,
         }
     )
     matches = await search_entries.ainvoke({"title_query": "钓鱼"})
-    assert matches[0]["local_start"] == "2026-07-24T16:00"
-    assert matches[0]["local_end"] == "2026-07-24T17:00"
+    assert matches[0]["local_start"] == local_start
+    assert matches[0]["local_end"] == local_end
     assert "start_time" not in matches[0]
     assert "timezone" not in matches[0]
 
@@ -442,8 +448,8 @@ async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
             "expected_row_version": matches[0]["row_version"],
         }
     )
-    assert updated["calendar_entry"]["local_start"] == "2026-07-24T16:00"
-    assert updated["calendar_entry"]["local_end"] == "2026-07-24T16:30"
+    assert updated["calendar_entry"]["local_start"] == local_start
+    assert updated["calendar_entry"]["local_end"] == f"{tomorrow}T16:30"
 
 
 async def test_agent_task_updates_status_without_time_fields(
