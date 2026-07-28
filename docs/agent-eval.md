@@ -81,7 +81,10 @@ complete setup-plus-evaluated-turn token totals. Token metrics include input, ou
 model-call count, mean/p50/p95, cached input, missing-cache-detail calls, and prompt-cache percent.
 Cached input and cache percent are `null` whenever any provider call omits cache details; unknown
 cache usage is never reported as zero. Monetary cost remains Northgate-owned because it depends on
-the effective provider/model price version. The process exits non-zero when exact case accuracy is below
+the effective provider/model price version. A measured turn may define `max_total_tokens`; exceeding
+it sets `token_budget_match=false`, fails the case, and contributes to
+`token_budget_violation_rate`. Do not add a budget without a reproducible deployed baseline and
+reasonable variance headroom. The process exits non-zero when exact case accuracy is below
 `--min-accuracy`. Store reports as build artifacts or external benchmark history; do not commit
 reports containing production Thread or Run IDs.
 

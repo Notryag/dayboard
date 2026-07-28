@@ -6,8 +6,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Current Version
 
-- Development line: `0.3.x`; latest deployed release tag: `v0.3.21`.
-- Product: self-service Dayboard web application at `/dayboard/` with a same-site FastAPI API.
+- Development line: `0.3.x`; latest deployed release tag: `v0.3.22`.
+- Product: self-service Dayboard web application at the `dayboard.selfapi.art` root with a same-site
+  FastAPI API.
 - Runtime: PostgreSQL, Redis, FastAPI, arq Worker, and Next.js managed by Docker Compose.
 - Scheduling policy: any resolvable date or time creates a calendar entry; date-only entries use the
   native `anytime` shape; actions without a temporal anchor create tasks.
@@ -102,8 +103,9 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 
 - Installed-PWA background notifications are intentionally deferred; browser Notifications require
   the authenticated Web app to be active.
-- The last reference one-write Agent Run used 10,362 tokens over two model calls; cache-hit and
-  per-round growth measurements are still incomplete.
+- The v0.3.22 reference one-write Run used 2,069 tokens in one model call, including 1,536 cached
+  input tokens, and cost $0.000977. Broader per-case budgets remain intentionally unset until each
+  behavior has a reproducible production baseline.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model
   scoped budgets for all traffic.
 - Scheduling defaults to trusted `Asia/Shanghai`; explicit foreign-timezone conversion is unsupported.

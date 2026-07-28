@@ -95,15 +95,15 @@ complete. Existing development databases and fresh installs retain the same Alem
 - [ ] Re-evaluate provider-native deferred tool loading when the OpenAI-compatible gateway path
   proves the capability or the product grows beyond the current cohesive seven-tool scheduling set.
   A skill alone does not remove executable schemas, and a model-based selector adds a call.
-- [ ] Use Northgate's recorded `cached_prompt_tokens` to measure prompt-cache effectiveness by
+- [x] Use Northgate's recorded `cached_prompt_tokens` to measure prompt-cache effectiveness by
   Dayboard `run_id`, including the effect of Dayboard's 32-way stable `prompt_cache_key`
-  partitioning. Revisit the shard count from measured per-key RPM and hit rates. Keep Northgate
-  exact-response caching disabled for requests that can produce write-tool calls. The first
-  post-v0.3.21 `admin` sample on 2026-07-24 used one 3,954-token prompt and returned no provider
-  cached-token detail, so its reported 0% is only a lower bound and is not evidence for changing the
-  shard count. Collect multiple warm requests with provider cache detail before deciding.
-- [ ] Define and enforce a regression budget for a simple one-write scheduling command after the
-  baseline is reproducible. The 2026-07-20 reference Run used 10,362 actual tokens over two calls.
+  partitioning. The v0.3.22 `context-01` sample reported provider cache detail on all three calls:
+  4,608 of 6,336 input tokens were cached (72.73%), and Dayboard's Run events matched Northgate.
+  Keep exact-response caching disabled for requests that can produce write-tool calls. Revisit the
+  shard count only after multiple tenants provide enough per-key RPM and hit-rate data.
+- [x] Define and enforce a regression budget for a simple one-write scheduling command. The
+  v0.3.22 baseline used 2,069 total tokens and cost $0.000977; `context-01` now fails when its first
+  create turn exceeds 2,500 tokens. Add budgets to other cases only after reproducible measurements.
 
 ## Gateway Budget Ownership
 

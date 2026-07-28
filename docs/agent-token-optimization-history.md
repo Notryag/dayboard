@@ -260,6 +260,26 @@ samples because Northgate independently confirmed that the upstream omitted cach
 six calls. Dayboard correctly kept those values unknown. A future naturally reported cache read
 must be compared between the Eval report and Northgate to complete live positive-path validation.
 
+## 2026-07-28: v0.3.22 Positive Cache And Cost Baseline
+
+The deployed `context-01` Eval again passed the create and contextual-reschedule turns with the
+exact expected tools. Three model calls used 6,336 input and 193 output tokens, or 6,529 total.
+Every call reported provider cache detail through North and Dayboard: 4,608 cached input tokens,
+for an exact 72.73% prompt-cache ratio. Northgate independently recorded the same values from
+`prompt_tokens_details.cached_tokens` and priced all three requests.
+
+Northgate charged 3,348 microdollars, or `$0.003348`. The first create Run used 2,011 input and 58
+output tokens, including 1,536 cached input tokens, and cost `$0.000977`. The two-call contextual
+reschedule Run used 4,325 input and 135 output tokens, including 3,072 cached input tokens, and cost
+`$0.002371`. Exact-response caching remained bypassed as intended; these are provider prompt-cache
+reads, not replayed model responses.
+
+Compared with the previous warm `context-01` sample, total tokens fell from 22,416 to 6,529
+(`70.9%`) and exact cost fell from `$0.005521` to `$0.003348` (`39.4%`). The cost reduction is
+smaller than the token reduction because the prior sample had a higher prompt-cache ratio. The new
+Eval budget records the measured one-write baseline and fails `context-01` when its first turn
+exceeds 2,500 total tokens, leaving about 20.8% headroom over the 2,069-token result.
+
 ## Entry Template
 
 Append future optimizations with:
