@@ -18,6 +18,7 @@ class ModelUsageEventPayload(BaseModel):
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int | None = Field(default=None, ge=0)
+    cached_input_tokens: int | None = Field(default=None, ge=0)
 
 
 class NorthModelCallEventPayload(BaseModel):

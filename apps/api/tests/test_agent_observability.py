@@ -37,7 +37,12 @@ def test_model_projection_does_not_persist_message_or_reasoning_content() -> Non
                 "call_id": "model-1",
                 "caller": "lead_agent",
                 "latency_ms": 120,
-                "usage": {"input_tokens": 10, "output_tokens": 5, "secret": "hidden"},
+                "usage": {
+                    "input_tokens": 10,
+                    "output_tokens": 5,
+                    "cached_input_tokens": 8,
+                    "secret": "hidden",
+                },
             },
         )
     )
@@ -48,6 +53,7 @@ def test_model_projection_does_not_persist_message_or_reasoning_content() -> Non
     assert projected.extension.payload["usage"] == {
         "input_tokens": 10,
         "output_tokens": 5,
+        "cached_input_tokens": 8,
     }
     assert "private reasoning" not in str(projected)
     assert "raw answer" not in str(projected)

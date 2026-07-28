@@ -30,6 +30,12 @@ class Settings(BaseSettings):
         ge=3600,
     )
     auth_cookie_secure: bool = Field(default=False, alias="DAYBOARD_AUTH_COOKIE_SECURE")
+    eval_auth_token_sha256: SecretStr | None = Field(
+        default=None,
+        alias="DAYBOARD_EVAL_AUTH_TOKEN_SHA256",
+    )
+    eval_tenant_id: UUID | None = Field(default=None, alias="DAYBOARD_EVAL_TENANT_ID")
+    eval_user_id: UUID | None = Field(default=None, alias="DAYBOARD_EVAL_USER_ID")
     public_web_url: str = Field(
         default="http://localhost:3000",
         alias="DAYBOARD_PUBLIC_WEB_URL",
@@ -187,9 +193,7 @@ class Settings(BaseSettings):
     )
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
-    rate_limit_registration: str = Field(
-        default="5/hour", alias="DAYBOARD_RATE_LIMIT_REGISTRATION"
-    )
+    rate_limit_registration: str = Field(default="5/hour", alias="DAYBOARD_RATE_LIMIT_REGISTRATION")
     rate_limit_login: str = Field(default="10/minute", alias="DAYBOARD_RATE_LIMIT_LOGIN")
     rate_limit_password_reset_request: str = Field(
         default="3/hour",
@@ -252,6 +256,24 @@ class Settings(BaseSettings):
                 "Northgate canary tenants require DAYBOARD_NORTHGATE_BASE_URL and "
                 "DAYBOARD_NORTHGATE_APPLICATION_KEY"
             )
+        eval_token_sha256 = (
+            self.eval_auth_token_sha256.get_secret_value()
+            if self.eval_auth_token_sha256 is not None
+            else ""
+        )
+        eval_identity = (eval_token_sha256, self.eval_tenant_id, self.eval_user_id)
+        if any(value is not None and value != "" for value in eval_identity) and not all(
+            value is not None and value != "" for value in eval_identity
+        ):
+            raise ValueError(
+                "Eval authentication requires DAYBOARD_EVAL_AUTH_TOKEN_SHA256, "
+                "DAYBOARD_EVAL_TENANT_ID, and DAYBOARD_EVAL_USER_ID together"
+            )
+        if eval_token_sha256 and (
+            len(eval_token_sha256) != 64
+            or any(character not in "0123456789abcdefABCDEF" for character in eval_token_sha256)
+        ):
+            raise ValueError("DAYBOARD_EVAL_AUTH_TOKEN_SHA256 must be a SHA-256 hex digest")
         if self.environment.lower() != "production":
             return self
         if self.auth_mode != "password":
@@ -272,9 +294,7 @@ class Settings(BaseSettings):
             try:
                 tenants.add(UUID(value))
             except ValueError as exc:
-                raise ValueError(
-                    "DAYBOARD_NORTHGATE_CANARY_TENANT_IDS must contain UUIDs"
-                ) from exc
+                raise ValueError("DAYBOARD_NORTHGATE_CANARY_TENANT_IDS must contain UUIDs") from exc
         return frozenset(tenants)
 
     @property

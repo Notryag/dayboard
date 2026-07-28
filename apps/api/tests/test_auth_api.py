@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from hashlib import sha256
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -121,6 +122,65 @@ async def test_register_login_logout_and_resolve_tenant_context(
                 },
             )
             assert logged_in.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def test_eval_bearer_token_resolves_only_configured_active_identity(
+    db_session: AsyncSession,
+) -> None:
+    settings = Settings(
+        DAYBOARD_AUTH_MODE="password",
+        DAYBOARD_AUTH_COOKIE_SECURE=False,
+        DAYBOARD_RATE_LIMIT_ENABLED=False,
+    )
+
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_settings] = lambda: settings
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            registered = await client.post(
+                "/api/auth/register",
+                json={
+                    "username": "eval-runner",
+                    "password": "eval-runner-password",
+                },
+            )
+            assert registered.status_code == 201
+            identity = registered.json()
+            raw_token = "dayboard-eval-test-token"
+            settings = Settings(
+                DAYBOARD_AUTH_MODE="password",
+                DAYBOARD_AUTH_COOKIE_SECURE=False,
+                DAYBOARD_RATE_LIMIT_ENABLED=False,
+                DAYBOARD_EVAL_AUTH_TOKEN_SHA256=sha256(raw_token.encode()).hexdigest(),
+                DAYBOARD_EVAL_TENANT_ID=identity["tenant_id"],
+                DAYBOARD_EVAL_USER_ID=identity["user_id"],
+            )
+            client.cookies.clear()
+
+            me = await client.get(
+                "/api/auth/me",
+                headers={"Authorization": f"Bearer {raw_token}"},
+            )
+            thread = await client.post(
+                "/api/threads",
+                json={"title": "Eval isolation"},
+                headers={"Authorization": f"Bearer {raw_token}"},
+            )
+            rejected = await client.get(
+                "/api/auth/me",
+                headers={"Authorization": "Bearer wrong-token"},
+            )
+
+        assert me.status_code == 200
+        assert me.json()["username"] == "eval-runner"
+        assert thread.status_code == 201
+        assert rejected.status_code == 401
+        assert rejected.json()["error"]["code"] == "INVALID_EVAL_TOKEN"
     finally:
         app.dependency_overrides.clear()
 

@@ -8,7 +8,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 
 ToolDomain = Literal["calendar", "task"]
@@ -51,6 +51,7 @@ MODEL_HIDDEN_FIELDS = {
     "updated_by_run_id",
     "cancelled_by_run_id",
 }
+RUNTIME_CONTEXT_MARKER = "dayboard_runtime_context"
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,9 @@ class _ToolResult:
 
 class SchedulingToolBindingMiddleware(AgentMiddleware):
     """Bind the scheduling tool subset implied by canonical tool results."""
+
+    def __init__(self, *, runtime_context: str | None = None) -> None:
+        self.runtime_context = runtime_context
 
     def wrap_model_call(
         self,
@@ -79,14 +83,11 @@ class SchedulingToolBindingMiddleware(AgentMiddleware):
     ) -> ModelResponse | AIMessage:
         prepared = self._prepare_request(request)
         completion = _terminal_completion(prepared.messages)
-        return (
-            AIMessage(content=completion)
-            if completion is not None
-            else await handler(prepared)
-        )
+        return AIMessage(content=completion) if completion is not None else await handler(prepared)
 
     def _prepare_request(self, request: ModelRequest) -> ModelRequest:
         request = _sanitize_model_messages(request)
+        request = _inject_runtime_context(request, self.runtime_context)
         trailing = _trailing_tool_messages(request.messages)
         if not trailing:
             return request
@@ -107,6 +108,42 @@ class SchedulingToolBindingMiddleware(AgentMiddleware):
         return request.override(
             tools=[tool for tool in request.tools if getattr(tool, "name", None) in allowed]
         )
+
+
+def _inject_runtime_context(
+    request: ModelRequest,
+    runtime_context: str | None,
+) -> ModelRequest:
+    if not runtime_context:
+        return request
+
+    messages = [
+        message
+        for message in request.messages
+        if not (
+            isinstance(message, SystemMessage)
+            and message.additional_kwargs.get(RUNTIME_CONTEXT_MARKER) is True
+        )
+    ]
+    current_user_index = next(
+        (
+            index
+            for index in range(len(messages) - 1, -1, -1)
+            if isinstance(messages[index], HumanMessage)
+        ),
+        None,
+    )
+    if current_user_index is None:
+        return request
+
+    messages.insert(
+        current_user_index,
+        SystemMessage(
+            content=runtime_context,
+            additional_kwargs={RUNTIME_CONTEXT_MARKER: True},
+        ),
+    )
+    return request.override(messages=messages)
 
 
 def _sanitize_model_messages(request: ModelRequest) -> ModelRequest:
@@ -166,11 +203,7 @@ def _absolute_to_local_minute(value: str) -> str | None:
         return None
     if parsed.tzinfo is None:
         return parsed.isoformat(timespec="minutes")
-    return (
-        parsed.astimezone(MODEL_TIMEZONE)
-        .replace(tzinfo=None)
-        .isoformat(timespec="minutes")
-    )
+    return parsed.astimezone(MODEL_TIMEZONE).replace(tzinfo=None).isoformat(timespec="minutes")
 
 
 def _trailing_tool_messages(messages: Sequence[Any]) -> list[ToolMessage]:
@@ -257,7 +290,11 @@ def _parse_result(message: ToolMessage) -> _ToolResult | None:
         return None
 
     if name in SEARCH_TOOLS:
-        return _ToolResult(name=name, domain=domain, terminal=False) if isinstance(payload, list) else None
+        return (
+            _ToolResult(name=name, domain=domain, terminal=False)
+            if isinstance(payload, list)
+            else None
+        )
 
     expected_type = TERMINAL_WRITE_RESULTS.get(name)
     if expected_type is None or not isinstance(payload, dict):

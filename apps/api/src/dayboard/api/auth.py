@@ -93,6 +93,85 @@ async def _account_for_session(
     return result if result is not None else None
 
 
+async def _account_for_eval_identity(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    user_id: UUID,
+) -> tuple[UserRow, TenantMembershipRow, UserProfileRow] | None:
+    statement = (
+        select(UserRow, TenantMembershipRow, UserProfileRow)
+        .join(
+            TenantMembershipRow,
+            (TenantMembershipRow.user_id == UserRow.id)
+            & (TenantMembershipRow.tenant_id == tenant_id),
+        )
+        .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
+        .where(
+            UserRow.id == user_id,
+            UserRow.is_active.is_(True),
+            UserRow.deleted_at.is_(None),
+            TenantMembershipRow.status == "active",
+            TenantMembershipRow.deleted_at.is_(None),
+        )
+        .limit(1)
+    )
+    result = (await session.execute(statement)).one_or_none()
+    return result if result is not None else None
+
+
+def _bearer_token(request: Request) -> str | None:
+    authorization = request.headers.get("authorization")
+    if authorization is None:
+        return None
+    scheme, separator, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not token.strip():
+        raise ApiProblem(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="AUTHENTICATION_REQUIRED",
+            message="Authentication required",
+        )
+    return token.strip()
+
+
+async def _eval_account_for_request(
+    request: Request,
+    session: AsyncSession,
+    settings: Settings,
+) -> tuple[UserRow, TenantMembershipRow, UserProfileRow] | None:
+    token = _bearer_token(request)
+    if token is None:
+        return None
+    configured_digest = (
+        settings.eval_auth_token_sha256.get_secret_value().lower()
+        if settings.eval_auth_token_sha256 is not None
+        else ""
+    )
+    if (
+        not configured_digest
+        or settings.eval_tenant_id is None
+        or settings.eval_user_id is None
+        or not secrets.compare_digest(_token_digest(token), configured_digest)
+    ):
+        raise ApiProblem(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="INVALID_EVAL_TOKEN",
+            message="Invalid Eval token",
+        )
+    account = await _account_for_eval_identity(
+        session,
+        tenant_id=settings.eval_tenant_id,
+        user_id=settings.eval_user_id,
+    )
+    if account is None:
+        raise ApiProblem(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            code="INVALID_EVAL_IDENTITY",
+            message="Eval identity is unavailable",
+        )
+    return account
+
+
 async def _login_credential_snapshot(
     session: AsyncSession,
     identifier: str,
@@ -195,23 +274,30 @@ async def get_tenant_context(
             locale=settings.default_locale,
         )
     else:
-        token = request.cookies.get(settings.auth_session_cookie_name)
-        account = await _account_for_session(session, token) if token else None
-        if account is None:
-            raise ApiProblem(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                code="AUTHENTICATION_REQUIRED",
-                message="Authentication required",
-            )
-        user_session, user, membership, profile = account
-        user_session.last_seen_at = datetime.now(timezone.utc)
-        await session.commit()
+        eval_account = await _eval_account_for_request(request, session, settings)
+        if eval_account is not None:
+            user, membership, profile = eval_account
+            authentication_kind = "eval_token"
+        else:
+            token = request.cookies.get(settings.auth_session_cookie_name)
+            account = await _account_for_session(session, token) if token else None
+            if account is None:
+                raise ApiProblem(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    code="AUTHENTICATION_REQUIRED",
+                    message="Authentication required",
+                )
+            user_session, user, membership, profile = account
+            user_session.last_seen_at = datetime.now(timezone.utc)
+            await session.commit()
+            authentication_kind = "session_cookie"
         context = TenantContext(
             tenant_id=membership.tenant_id,
             user_id=user.id,
             timezone=settings.default_timezone,
             locale=profile.locale,
         )
+        request.state.authentication_kind = authentication_kind
     structlog.contextvars.bind_contextvars(
         tenant_id=str(context.tenant_id), user_id=str(context.user_id)
     )
@@ -338,6 +424,10 @@ async def me(
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> AccountResponse:
+    eval_account = await _eval_account_for_request(request, session, settings)
+    if eval_account is not None:
+        user, membership, profile = eval_account
+        return _response(user, membership, profile, timezone=settings.default_timezone)
     token = request.cookies.get(settings.auth_session_cookie_name)
     account = await _account_for_session(session, token) if token else None
     if account is None:

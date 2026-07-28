@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 
 from langchain.agents.middleware import ModelRequest
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from dayboard.agent.middleware import SchedulingToolBindingMiddleware
 
@@ -53,9 +53,7 @@ def _names(request: ModelRequest) -> list[str]:
 
 def test_terminal_single_domain_writes_remove_tools() -> None:
     middleware = SchedulingToolBindingMiddleware()
-    request = _request(
-        [_write_result("create_calendar_entry", "calendar_entry_created")]
-    )
+    request = _request([_write_result("create_calendar_entry", "calendar_entry_created")])
 
     assert middleware._prepare_request(request).tools == []
 
@@ -75,9 +73,7 @@ def test_mixed_domain_batch_retains_full_surface() -> None:
 def test_successful_search_narrows_to_domain_and_clarification() -> None:
     middleware = SchedulingToolBindingMiddleware()
 
-    calendar = middleware._prepare_request(
-        _request([_search_result("search_calendar_entries")])
-    )
+    calendar = middleware._prepare_request(_request([_search_result("search_calendar_entries")]))
     task = middleware._prepare_request(_request([_search_result("search_task_items")]))
 
     assert _names(calendar) == [
@@ -116,12 +112,8 @@ def test_error_or_malformed_result_restores_full_surface() -> None:
 
 def test_second_failure_in_one_user_turn_stops_tool_retries() -> None:
     middleware = SchedulingToolBindingMiddleware()
-    first_error = _write_result(
-        "create_calendar_entry", "calendar_entry_created", status="error"
-    )
-    second_error = _write_result(
-        "create_calendar_entry", "calendar_entry_created", status="error"
-    )
+    first_error = _write_result("create_calendar_entry", "calendar_entry_created", status="error")
+    second_error = _write_result("create_calendar_entry", "calendar_entry_created", status="error")
     request = _request(
         [
             HumanMessage(content="安排会议"),
@@ -146,6 +138,44 @@ def test_new_user_turn_restores_full_surface() -> None:
     )
 
     assert _names(middleware._prepare_request(request)) == TOOL_NAMES
+
+
+def test_runtime_context_is_inserted_immediately_before_current_user_message() -> None:
+    middleware = SchedulingToolBindingMiddleware(
+        runtime_context="Current Beijing datetime: 2026-07-27T16:20"
+    )
+    request = _request(
+        [
+            HumanMessage(content="昨天的消息"),
+            AIMessage(content="昨天的回复"),
+            HumanMessage(content="明天上午去跳舞"),
+            AIMessage(content=""),
+            _search_result("search_calendar_entries"),
+        ]
+    )
+
+    prepared = middleware._prepare_request(request)
+
+    assert [type(message) for message in prepared.messages] == [
+        HumanMessage,
+        AIMessage,
+        SystemMessage,
+        HumanMessage,
+        AIMessage,
+        ToolMessage,
+    ]
+    assert prepared.messages[2].content == ("Current Beijing datetime: 2026-07-27T16:20")
+
+
+def test_runtime_context_injection_is_idempotent() -> None:
+    middleware = SchedulingToolBindingMiddleware(
+        runtime_context="Current Beijing datetime: 2026-07-27T16:20"
+    )
+    prepared = middleware._prepare_request(_request([HumanMessage(content="明天上午去跳舞")]))
+
+    prepared_again = middleware._prepare_request(prepared)
+
+    assert sum(isinstance(message, SystemMessage) for message in prepared_again.messages) == 1
 
 
 def test_async_wrapper_completes_terminal_write_without_calling_model() -> None:
@@ -258,11 +288,7 @@ def test_provider_request_strips_artifact_and_rewrites_legacy_utc_receipt() -> N
                 },
             }
         ),
-        artifact={
-            "item": {
-                "value": {"start_time": "2026-07-24T08:00:00+00:00"}
-            }
-        },
+        artifact={"item": {"value": {"start_time": "2026-07-24T08:00:00+00:00"}}},
         tool_call_id="call-create",
         name="create_calendar_entry",
     )

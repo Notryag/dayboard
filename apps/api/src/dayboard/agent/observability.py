@@ -89,7 +89,12 @@ def _model_extension(
     usage = metadata.get("usage")
     safe_usage: dict[str, int] = {}
     if isinstance(usage, dict):
-        for key in ("input_tokens", "output_tokens", "total_tokens"):
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "total_tokens",
+            "cached_input_tokens",
+        ):
             value = usage.get(key)
             if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
                 safe_usage[key] = value

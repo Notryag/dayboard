@@ -10,7 +10,11 @@ from north.tools.builtin import ask_clarification
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.agent.middleware import SchedulingToolBindingMiddleware
-from dayboard.agent.prompts import DAYBOARD_SUMMARY_PROMPT, build_dayboard_system_prompt
+from dayboard.agent.prompts import (
+    DAYBOARD_SUMMARY_PROMPT,
+    build_dayboard_system_prompt,
+    build_runtime_scheduling_context,
+)
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
 from agent_platform.core import TenantContext
@@ -38,9 +42,7 @@ def _model_headers(
     context: TenantContext | None,
     run_id: UUID | None,
 ) -> dict[str, str]:
-    canary_selected = (
-        context is not None and context.tenant_id in settings.northgate_canary_tenants
-    )
+    canary_selected = context is not None and context.tenant_id in settings.northgate_canary_tenants
     if not settings.northgate_metadata_enabled and not canary_selected:
         return {}
     if context is None or run_id is None:
@@ -61,9 +63,7 @@ def _model_options(
     if context is not None and settings.agent_model_name.startswith("openai:"):
         identity = f"{context.tenant_id}:{context.user_id}".encode()
         shard = int.from_bytes(sha256(identity).digest()[:2], "big") % PROMPT_CACHE_KEY_SHARDS
-        options["model_kwargs"] = {
-            "prompt_cache_key": f"{PROMPT_CACHE_KEY_VERSION}-{shard:02d}"
-        }
+        options["model_kwargs"] = {"prompt_cache_key": f"{PROMPT_CACHE_KEY_VERSION}-{shard:02d}"}
 
     if context is not None and context.tenant_id in settings.northgate_canary_tenants:
         if settings.northgate_base_url is None or settings.northgate_application_key is None:
@@ -84,8 +84,7 @@ def _validate_model_visible_tool_fields(tools: list) -> None:
         if exposed:
             name = getattr(tool, "name", type(tool).__name__)
             raise ValueError(
-                f"Tool {name!r} exposes trusted server context to the model: "
-                f"{', '.join(exposed)}"
+                f"Tool {name!r} exposes trusted server context to the model: {', '.join(exposed)}"
             )
 
 
@@ -112,16 +111,17 @@ def build_dayboard_agent(
         resolved_tools.append(ask_clarification)
     _validate_model_visible_tool_fields(resolved_tools)
 
+    resolved_context = context or TenantContext(
+        tenant_id=resolved_settings.default_tenant_id,
+        user_id=resolved_settings.default_user_id,
+        timezone=resolved_settings.default_timezone,
+        locale=resolved_settings.default_locale,
+    )
     config = AppConfig(
         model_name=resolved_settings.agent_model_name,
         model_headers=_model_headers(resolved_settings, context, run_id),
         model_options=_model_options(resolved_settings, context),
-        system_prompt=build_dayboard_system_prompt(context or TenantContext(
-            tenant_id=resolved_settings.default_tenant_id,
-            user_id=resolved_settings.default_user_id,
-            timezone=resolved_settings.default_timezone,
-            locale=resolved_settings.default_locale,
-        )),
+        system_prompt=build_dayboard_system_prompt(),
         summarization_enabled=resolved_settings.agent_summarization_enabled,
         summarization_model_name=resolved_settings.agent_summarization_model_name,
         summarization_summary_prompt=DAYBOARD_SUMMARY_PROMPT,
@@ -131,13 +131,9 @@ def build_dayboard_agent(
         summarization_emergency_trigger_tokens=(
             resolved_settings.agent_summarization_emergency_trigger_tokens
         ),
-        summarization_message_ceiling=(
-            resolved_settings.agent_summarization_message_ceiling
-        ),
+        summarization_message_ceiling=(resolved_settings.agent_summarization_message_ceiling),
         summarization_target_tokens=resolved_settings.agent_summarization_target_tokens,
-        summarization_min_growth_tokens=(
-            resolved_settings.agent_summarization_min_growth_tokens
-        ),
+        summarization_min_growth_tokens=(resolved_settings.agent_summarization_min_growth_tokens),
         summarization_max_emergency_compactions=(
             resolved_settings.agent_summarization_max_emergency_compactions
         ),
@@ -145,7 +141,11 @@ def build_dayboard_agent(
     return build_agent(
         config,
         tools=resolved_tools,
-        additional_middlewares=[SchedulingToolBindingMiddleware()],
+        additional_middlewares=[
+            SchedulingToolBindingMiddleware(
+                runtime_context=build_runtime_scheduling_context(resolved_context)
+            )
+        ],
         checkpointer=checkpointer,
         compaction_hooks=compaction_hooks,
     )
