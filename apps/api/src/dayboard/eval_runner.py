@@ -25,6 +25,7 @@ class EvalTurn:
     expected_tools: dict[str, int]
     expected_status: str
     forbidden_tools: tuple[str, ...]
+    max_total_tokens: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,9 @@ def load_corpus(path: Path) -> list[EvalCase]:
                         forbidden_tools=tuple(
                             turn.get("forbidden_tools", defaults.get("forbidden_tools", []))
                         ),
+                        max_total_tokens=turn.get(
+                            "max_total_tokens", defaults.get("max_total_tokens")
+                        ),
                     )
                 )
             cases.append(
@@ -81,6 +85,19 @@ def validate_corpus(cases: list[EvalCase]) -> None:
         raise ValueError("Agent Eval case IDs must be unique")
     if any(not case.turns for case in cases):
         raise ValueError("every Agent Eval case must contain at least one evaluated turn")
+    invalid_budgets = [
+        (case.id, turn.max_total_tokens)
+        for case in cases
+        for turn in case.turns
+        if turn.max_total_tokens is not None
+        and (
+            isinstance(turn.max_total_tokens, bool)
+            or not isinstance(turn.max_total_tokens, int)
+            or turn.max_total_tokens <= 0
+        )
+    ]
+    if invalid_budgets:
+        raise ValueError(f"Agent Eval token budgets must be positive integers: {invalid_budgets}")
 
 
 def _read_token_file(path: Path) -> str:
@@ -235,6 +252,10 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             sum(bool(turn["forbidden_tools_used"]) for turn in turns) / len(turns) if turns else 0,
             4,
         ),
+        "token_budget_violation_rate": round(
+            sum(not turn["token_budget_match"] for turn in turns) / len(turns) if turns else 0,
+            4,
+        ),
         "clarification_accuracy": (
             sum(turn["status_match"] for turn in clarification_turns) / len(clarification_turns)
             if clarification_turns
@@ -354,7 +375,17 @@ async def _run_case(
             if actual_tools.get(name, 0)
         }
         status_match = run["status"] == expected.expected_status
-        passed = status_match and actual_tools == expected.expected_tools and not forbidden_used
+        token_usage = _token_usage(events)
+        token_budget_match = (
+            expected.max_total_tokens is None
+            or token_usage["total_tokens"] <= expected.max_total_tokens
+        )
+        passed = (
+            status_match
+            and actual_tools == expected.expected_tools
+            and not forbidden_used
+            and token_budget_match
+        )
         turns.append(
             {
                 "status": run["status"],
@@ -363,8 +394,10 @@ async def _run_case(
                 "expected_tools": expected.expected_tools,
                 "actual_tools": actual_tools,
                 "forbidden_tools_used": forbidden_used,
+                "max_total_tokens": expected.max_total_tokens,
+                "token_budget_match": token_budget_match,
                 "elapsed_ms": elapsed_ms,
-                "token_usage": _token_usage(events),
+                "token_usage": token_usage,
                 "passed": passed,
             }
         )

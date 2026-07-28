@@ -56,6 +56,7 @@ def test_agent_eval_metrics_measure_tools_status_safety_and_cost() -> None:
                     "expected_status": "completed",
                     "status_match": True,
                     "forbidden_tools_used": {},
+                    "token_budget_match": True,
                     "elapsed_ms": 120,
                     "token_usage": {
                         "input_tokens": 750,
@@ -75,6 +76,7 @@ def test_agent_eval_metrics_measure_tools_status_safety_and_cost() -> None:
     assert metrics["exact_case_accuracy"] == 1
     assert metrics["tool_f1"] == 1
     assert metrics["forbidden_tool_violation_rate"] == 0
+    assert metrics["token_budget_violation_rate"] == 0
     assert metrics["latency_ms"] == {"p50": 120, "p95": 120}
     assert metrics["tokens"] == {
         "input": 940,
@@ -133,3 +135,11 @@ def test_agent_eval_execution_id_scopes_idempotency_keys() -> None:
 
     assert first == "eval:execution-a:class-08:turn:1"
     assert second != first
+
+
+def test_agent_eval_corpus_defines_measured_token_budget() -> None:
+    cases = agent_eval.load_corpus(Path(__file__).parents[1] / "evals" / "agent_eval.json")
+    context_case = next(case for case in cases if case.id == "context-01")
+
+    assert context_case.turns[0].max_total_tokens == 2500
+    assert context_case.turns[1].max_total_tokens is None
