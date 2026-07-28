@@ -1,8 +1,8 @@
-"""initial schema
+"""initial Dayboard schema
 
-Revision ID: 202607140001
+Revision ID: 202607230007
 Revises:
-Create Date: 2026-07-14 09:51:23.626825
+Create Date: 2026-07-24 09:46:29.465192
 """
 
 from collections.abc import Sequence
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = "202607140001"
+revision: str = "202607230007"
 down_revision: str | Sequence[str] | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -28,12 +28,27 @@ def upgrade() -> None:
         sa.Column("event_type", sa.String(length=80), nullable=False),
         sa.Column("category", sa.String(length=40), nullable=False),
         sa.Column("content", sa.String(length=4000), nullable=True),
-        sa.Column("event_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("extension_kind", sa.String(length=80), nullable=True),
+        sa.Column("extension_schema_version", sa.Integer(), nullable=True),
+        sa.Column(
+            "extension_payload",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
+        ),
+        sa.CheckConstraint(
+            "(extension_kind IS NULL AND extension_schema_version IS NULL AND extension_payload = '{}'::jsonb) OR (extension_kind IS NOT NULL AND char_length(extension_kind) > 0 AND extension_schema_version IS NOT NULL)",
+            name="ck_agent_run_event_extension_complete",
+        ),
+        sa.CheckConstraint(
+            "extension_schema_version IS NULL OR extension_schema_version >= 1",
+            name="ck_agent_run_event_extension_schema_version",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -95,14 +110,24 @@ def upgrade() -> None:
     op.create_table(
         "calendar_entries",
         sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("row_version", sa.BigInteger(), server_default="1", nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("owner_user_id", sa.UUID(), nullable=False),
         sa.Column("title", sa.String(length=240), nullable=False),
-        sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("timing_kind", sa.String(length=16), nullable=False),
+        sa.Column("scheduled_date", sa.Date(), nullable=True),
+        sa.Column("start_time", sa.DateTime(timezone=True), nullable=True),
         sa.Column("end_time", sa.DateTime(timezone=True), nullable=True),
         sa.Column("timezone", sa.String(length=64), nullable=False),
-        sa.Column("participants", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("reminder", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "participants",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'[]'::jsonb"),
+            nullable=False,
+        ),
+        sa.Column(
+            "reminder", postgresql.JSONB(none_as_null=True, astext_type=sa.Text()), nullable=True
+        ),
         sa.Column("created_by_run_id", sa.UUID(), nullable=True),
         sa.Column("created_operation_key", sa.String(length=64), nullable=True),
         sa.Column("updated_by_run_id", sa.UUID(), nullable=True),
@@ -110,6 +135,7 @@ def upgrade() -> None:
         sa.Column("cancelled_by_run_id", sa.UUID(), nullable=True),
         sa.Column("cancelled_operation_key", sa.String(length=64), nullable=True),
         sa.Column("cancellation_reason", sa.String(length=500), nullable=True),
+        sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -123,6 +149,10 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint(
+            "(timing_kind = 'timed' AND scheduled_date IS NULL AND start_time IS NOT NULL) OR (timing_kind = 'anytime' AND scheduled_date IS NOT NULL AND start_time IS NULL AND end_time IS NULL AND reminder IS NULL)",
+            name="ck_calendar_entries_timing_shape",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -135,6 +165,12 @@ def upgrade() -> None:
         "ix_calendar_entries_tenant_created_by_run",
         "calendar_entries",
         ["tenant_id", "created_by_run_id"],
+        unique=False,
+    )
+    op.create_index(
+        "ix_calendar_entries_tenant_owner_date",
+        "calendar_entries",
+        ["tenant_id", "owner_user_id", "scheduled_date"],
         unique=False,
     )
     op.create_index(
@@ -185,12 +221,26 @@ def upgrade() -> None:
         sa.Column("run_id", sa.UUID(), nullable=False),
         sa.Column("role", sa.String(length=32), nullable=False),
         sa.Column("content", sa.String(length=4000), nullable=False),
-        sa.Column("message_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("presentation_kind", sa.String(length=80), nullable=True),
+        sa.Column("presentation_schema_version", sa.Integer(), nullable=True),
+        sa.Column("presentation_payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.text("now()"),
             nullable=False,
+        ),
+        sa.CheckConstraint(
+            "(presentation_kind IS NULL AND presentation_schema_version IS NULL AND presentation_payload = '{}'::jsonb) OR (presentation_kind IS NOT NULL AND presentation_schema_version IS NOT NULL)",
+            name="ck_conversation_message_presentation_complete",
+        ),
+        sa.CheckConstraint(
+            "presentation_kind IS NULL OR role = 'assistant'",
+            name="ck_conversation_message_presentation_assistant_only",
+        ),
+        sa.CheckConstraint(
+            "presentation_schema_version IS NULL OR presentation_schema_version >= 1",
+            name="ck_conversation_message_presentation_schema_version",
         ),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -211,9 +261,11 @@ def upgrade() -> None:
         sa.Column("thread_id", sa.UUID(), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("owner_user_id", sa.UUID(), nullable=False),
-        sa.Column("pending_action", sa.String(length=80), nullable=True),
-        sa.Column("pending_question", sa.String(length=1000), nullable=True),
-        sa.Column("state_data", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("interaction_type", sa.String(length=80), nullable=True),
+        sa.Column("interaction_schema_version", sa.Integer(), nullable=True),
+        sa.Column("interaction_source_run_id", sa.UUID(), nullable=True),
+        sa.Column("interaction_prompt", sa.String(length=1000), nullable=True),
+        sa.Column("interaction_payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -228,6 +280,14 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.CheckConstraint(
+            "(interaction_type IS NULL AND interaction_schema_version IS NULL AND interaction_source_run_id IS NULL AND interaction_prompt IS NULL AND interaction_payload = '{}'::jsonb AND expires_at IS NULL) OR (interaction_type IS NOT NULL AND interaction_schema_version IS NOT NULL AND interaction_source_run_id IS NOT NULL AND interaction_prompt IS NOT NULL AND expires_at IS NOT NULL)",
+            name="ck_conversation_state_interaction_complete",
+        ),
+        sa.CheckConstraint(
+            "interaction_schema_version IS NULL OR interaction_schema_version >= 1",
+            name="ck_conversation_state_interaction_schema_version",
+        ),
         sa.PrimaryKeyConstraint("thread_id"),
     )
     op.create_table(
@@ -235,6 +295,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("owner_user_id", sa.UUID(), nullable=False),
+        sa.Column("is_primary", sa.Boolean(), nullable=False),
         sa.Column("title", sa.String(length=240), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("summary", sa.String(length=8000), nullable=True),
@@ -252,6 +313,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+        sa.CheckConstraint(
+            "status IN ('active', 'archived')", name="ck_conversation_thread_status"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -259,6 +323,13 @@ def upgrade() -> None:
         "conversation_threads",
         ["tenant_id", "owner_user_id", "updated_at"],
         unique=False,
+    )
+    op.create_index(
+        "uq_conversation_threads_primary_owner",
+        "conversation_threads",
+        ["tenant_id", "owner_user_id"],
+        unique=True,
+        postgresql_where=sa.text("is_primary IS TRUE AND deleted_at IS NULL"),
     )
     op.create_table(
         "idempotency_keys",
@@ -296,7 +367,12 @@ def upgrade() -> None:
         sa.Column("input_tokens", sa.Integer(), nullable=False),
         sa.Column("output_tokens", sa.Integer(), nullable=False),
         sa.Column("total_tokens", sa.Integer(), nullable=False),
-        sa.Column("usage_metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "usage_metadata",
+            postgresql.JSONB(astext_type=sa.Text()),
+            server_default=sa.text("'{}'::jsonb"),
+            nullable=False,
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -331,6 +407,7 @@ def upgrade() -> None:
         sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("claimed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("read_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("provider_message_id", sa.String(length=240), nullable=True),
         sa.Column("last_error", sa.String(length=1000), nullable=True),
         sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -362,6 +439,13 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
+        "ix_reminder_deliveries_tenant_owner_unread",
+        "reminder_deliveries",
+        ["tenant_id", "owner_user_id", "read_at"],
+        unique=False,
+        postgresql_where=sa.text("status = 'delivered' AND deleted_at IS NULL"),
+    )
+    op.create_index(
         "uq_reminder_deliveries_active_source_channel",
         "reminder_deliveries",
         ["tenant_id", "source_type", "source_id", "channel"],
@@ -371,6 +455,7 @@ def upgrade() -> None:
     op.create_table(
         "task_items",
         sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("row_version", sa.BigInteger(), server_default="1", nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
         sa.Column("owner_user_id", sa.UUID(), nullable=False),
         sa.Column("title", sa.String(length=240), nullable=False),
@@ -525,6 +610,32 @@ def upgrade() -> None:
         sa.UniqueConstraint("issuer", "subject", name="uq_external_identity_subject"),
     )
     op.create_table(
+        "password_reset_tokens",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("user_id", sa.UUID(), nullable=False),
+        sa.Column("token_hash", sa.String(length=64), nullable=False),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_password_reset_tokens_token_hash", "password_reset_tokens", ["token_hash"], unique=True
+    )
+    op.create_index(
+        "uq_password_reset_tokens_active_user",
+        "password_reset_tokens",
+        ["user_id"],
+        unique=True,
+        postgresql_where=sa.text("used_at IS NULL"),
+    )
+    op.create_table(
         "tenant_memberships",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("tenant_id", sa.UUID(), nullable=False),
@@ -618,6 +729,13 @@ def downgrade() -> None:
     op.drop_table("user_profiles")
     op.drop_table("user_credentials")
     op.drop_table("tenant_memberships")
+    op.drop_index(
+        "uq_password_reset_tokens_active_user",
+        table_name="password_reset_tokens",
+        postgresql_where=sa.text("used_at IS NULL"),
+    )
+    op.drop_index("ix_password_reset_tokens_token_hash", table_name="password_reset_tokens")
+    op.drop_table("password_reset_tokens")
     op.drop_table("external_identities")
     op.drop_index("ix_voice_transcripts_tenant_owner_created", table_name="voice_transcripts")
     op.drop_table("voice_transcripts")
@@ -644,6 +762,11 @@ def downgrade() -> None:
         table_name="reminder_deliveries",
         postgresql_where=sa.text("status IN ('pending', 'processing') AND deleted_at IS NULL"),
     )
+    op.drop_index(
+        "ix_reminder_deliveries_tenant_owner_unread",
+        table_name="reminder_deliveries",
+        postgresql_where=sa.text("status = 'delivered' AND deleted_at IS NULL"),
+    )
     op.drop_index("ix_reminder_deliveries_tenant_owner_created", table_name="reminder_deliveries")
     op.drop_index("ix_reminder_deliveries_due", table_name="reminder_deliveries")
     op.drop_table("reminder_deliveries")
@@ -653,6 +776,11 @@ def downgrade() -> None:
     op.drop_index("uq_idempotency_keys_tenant_owner_key", table_name="idempotency_keys")
     op.drop_index("ix_idempotency_keys_tenant_run", table_name="idempotency_keys")
     op.drop_table("idempotency_keys")
+    op.drop_index(
+        "uq_conversation_threads_primary_owner",
+        table_name="conversation_threads",
+        postgresql_where=sa.text("is_primary IS TRUE AND deleted_at IS NULL"),
+    )
     op.drop_index("ix_conversation_threads_tenant_owner_updated", table_name="conversation_threads")
     op.drop_table("conversation_threads")
     op.drop_table("conversation_states")
@@ -684,6 +812,7 @@ def downgrade() -> None:
     )
     op.drop_index("ix_calendar_entries_tenant_start", table_name="calendar_entries")
     op.drop_index("ix_calendar_entries_tenant_owner_start", table_name="calendar_entries")
+    op.drop_index("ix_calendar_entries_tenant_owner_date", table_name="calendar_entries")
     op.drop_index("ix_calendar_entries_tenant_created_by_run", table_name="calendar_entries")
     op.drop_index("ix_calendar_entries_tenant_cancelled_by_run", table_name="calendar_entries")
     op.drop_table("calendar_entries")
