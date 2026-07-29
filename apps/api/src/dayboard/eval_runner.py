@@ -14,6 +14,19 @@ from uuid import uuid4
 
 import httpx
 
+from dayboard.eval_clarifications import (
+    ClarificationFlowExpectation,
+    clarification_is_consumed,
+    inspect_clarification,
+)
+from dayboard.eval_oracles import (
+    EvalTemplateContext,
+    ExpectedScheduleItem,
+    evaluate_schedule_expectations,
+    render_expectation,
+    render_template,
+)
+
 
 TERMINAL_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
 DEFAULT_TOKEN_FILE = Path.home() / ".config" / "dayboard-eval" / "token"
@@ -26,14 +39,46 @@ class EvalTurn:
     expected_status: str
     forbidden_tools: tuple[str, ...]
     max_total_tokens: int | None
+    expected_schedule: tuple[ExpectedScheduleItem, ...]
+    forbidden_response_substrings: tuple[str, ...] = ()
+    clarification: ClarificationFlowExpectation | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class EvalCase:
     id: str
     category: str
-    setup: tuple[str, ...]
+    setup: tuple[EvalTurn, ...]
     turns: tuple[EvalTurn, ...]
+    category_min_accuracy: float | None = None
+
+
+def _parse_eval_turn(raw: object, defaults: dict[str, Any]) -> EvalTurn:
+    turn = {"message": raw} if isinstance(raw, str) else raw
+    if not isinstance(turn, dict) or not isinstance(turn.get("message"), str):
+        raise ValueError("every Agent Eval step must be a string or an object with message")
+    return EvalTurn(
+        message=turn["message"],
+        expected_tools=dict(turn.get("expected_tools", defaults.get("expected_tools", {}))),
+        expected_status=turn.get("expected_status", defaults.get("expected_status", "completed")),
+        forbidden_tools=tuple(turn.get("forbidden_tools", defaults.get("forbidden_tools", []))),
+        max_total_tokens=turn.get("max_total_tokens", defaults.get("max_total_tokens")),
+        expected_schedule=tuple(
+            ExpectedScheduleItem.model_validate(expectation)
+            for expectation in turn.get("expected_schedule", defaults.get("expected_schedule", []))
+        ),
+        forbidden_response_substrings=tuple(
+            turn.get(
+                "forbidden_response_substrings",
+                defaults.get("forbidden_response_substrings", []),
+            )
+        ),
+        clarification=(
+            ClarificationFlowExpectation.model_validate(turn["clarification"])
+            if turn.get("clarification") is not None
+            else None
+        ),
+    )
 
 
 def load_corpus(path: Path) -> list[EvalCase]:
@@ -45,32 +90,15 @@ def load_corpus(path: Path) -> list[EvalCase]:
         category_name = category["name"]
         defaults = category.get("defaults", {})
         for raw_case in category.get("cases", []):
-            turns = []
-            for raw_turn in raw_case["turns"]:
-                turn = {"message": raw_turn} if isinstance(raw_turn, str) else raw_turn
-                turns.append(
-                    EvalTurn(
-                        message=turn["message"],
-                        expected_tools=dict(
-                            turn.get("expected_tools", defaults.get("expected_tools", {}))
-                        ),
-                        expected_status=turn.get(
-                            "expected_status", defaults.get("expected_status", "completed")
-                        ),
-                        forbidden_tools=tuple(
-                            turn.get("forbidden_tools", defaults.get("forbidden_tools", []))
-                        ),
-                        max_total_tokens=turn.get(
-                            "max_total_tokens", defaults.get("max_total_tokens")
-                        ),
-                    )
-                )
+            turns = [_parse_eval_turn(raw_turn, defaults) for raw_turn in raw_case["turns"]]
+            setup = [_parse_eval_turn(raw_setup, {}) for raw_setup in raw_case.get("setup", [])]
             cases.append(
                 EvalCase(
                     id=raw_case["id"],
                     category=category_name,
-                    setup=tuple(raw_case.get("setup", [])),
+                    setup=tuple(setup),
                     turns=tuple(turns),
+                    category_min_accuracy=category.get("min_accuracy"),
                 )
             )
     validate_corpus(cases)
@@ -85,6 +113,20 @@ def validate_corpus(cases: list[EvalCase]) -> None:
         raise ValueError("Agent Eval case IDs must be unique")
     if any(not case.turns for case in cases):
         raise ValueError("every Agent Eval case must contain at least one evaluated turn")
+    invalid_category_gates = [
+        (case.category, case.category_min_accuracy)
+        for case in cases
+        if case.category_min_accuracy is not None
+        and (
+            isinstance(case.category_min_accuracy, bool)
+            or not isinstance(case.category_min_accuracy, (int, float))
+            or not 0 <= case.category_min_accuracy <= 1
+        )
+    ]
+    if invalid_category_gates:
+        raise ValueError(
+            f"category accuracy gates must be between 0 and 1: {invalid_category_gates}"
+        )
     invalid_budgets = [
         (case.id, turn.max_total_tokens)
         for case in cases
@@ -98,6 +140,23 @@ def validate_corpus(cases: list[EvalCase]) -> None:
     ]
     if invalid_budgets:
         raise ValueError(f"Agent Eval token budgets must be positive integers: {invalid_budgets}")
+    variables = EvalTemplateContext.capture().variables(tag="validation")
+    for case in cases:
+        for turn in (*case.setup, *case.turns):
+            render_template(turn.message, variables)
+            for value in turn.forbidden_response_substrings:
+                render_template(value, variables)
+            for expectation in turn.expected_schedule:
+                render_expectation(expectation, variables)
+            if turn.clarification is not None:
+                for values in (
+                    turn.clarification.option_titles,
+                    turn.clarification.option_local_starts,
+                ):
+                    for value in values or ():
+                        render_template(value, variables)
+                for expectation in turn.clarification.resume.expected_schedule:
+                    render_expectation(expectation, variables)
 
 
 def _read_token_file(path: Path) -> str:
@@ -199,14 +258,25 @@ def _percentile(values: list[int], percentile: float) -> int:
 
 
 def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
-    turns = [turn for result in results for turn in result["turns"]]
+    primary_turns = [turn for result in results for turn in result["turns"]]
+    continuation_turns = [
+        turn["clarification"]["resume"]
+        for turn in primary_turns
+        if isinstance(turn.get("clarification"), dict)
+        and isinstance(turn["clarification"].get("resume"), dict)
+    ]
+    turns = [*primary_turns, *continuation_turns]
     usage_turns = [
         turn for result in results for turn in (*result.get("setup", []), *result["turns"])
     ]
+    usage_turns.extend(continuation_turns)
     true_positive = false_positive = false_negative = 0
     category_counts: dict[str, list[bool]] = {}
+    category_gates: dict[str, float] = {}
     for result in results:
         category_counts.setdefault(result["category"], []).append(result["passed"])
+        if result.get("category_min_accuracy") is not None:
+            category_gates[result["category"]] = result["category_min_accuracy"]
         for turn in result["turns"]:
             expected = Counter(turn["expected_tools"])
             actual = Counter(turn["actual_tools"])
@@ -234,11 +304,15 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
         else None
     )
     clarification_turns = [
-        turn for turn in turns if turn["expected_status"] == "needs_clarification"
+        turn for turn in primary_turns if turn["expected_status"] == "needs_clarification"
+    ]
+    schedule_assertions = [
+        assertion for turn in turns for assertion in turn.get("schedule_assertions", [])
     ]
     return {
         "cases": len(results),
-        "turns": len(turns),
+        "turns": len(primary_turns),
+        "continuations": len(continuation_turns),
         "exact_case_accuracy": sum(result["passed"] for result in results) / len(results),
         "status_accuracy": (
             sum(turn["status_match"] for turn in turns) / len(turns) if turns else 0
@@ -252,12 +326,29 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             sum(bool(turn["forbidden_tools_used"]) for turn in turns) / len(turns) if turns else 0,
             4,
         ),
+        "response_safety_violation_rate": round(
+            sum(not turn["response_safety_match"] for turn in turns) / len(turns) if turns else 0,
+            4,
+        ),
         "token_budget_violation_rate": round(
             sum(not turn["token_budget_match"] for turn in turns) / len(turns) if turns else 0,
             4,
         ),
+        "schedule_assertion_accuracy": (
+            sum(assertion["passed"] for assertion in schedule_assertions) / len(schedule_assertions)
+            if schedule_assertions
+            else 1.0
+        ),
         "clarification_accuracy": (
-            sum(turn["status_match"] for turn in clarification_turns) / len(clarification_turns)
+            sum(
+                (
+                    turn["clarification"]["passed"]
+                    if isinstance(turn.get("clarification"), dict)
+                    else turn["status_match"]
+                )
+                for turn in clarification_turns
+            )
+            / len(clarification_turns)
             if clarification_turns
             else 1.0
         ),
@@ -279,12 +370,40 @@ def calculate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             ),
         },
         "by_category": {
-            category: {
-                "passed": sum(outcomes),
-                "total": len(outcomes),
-                "accuracy": round(sum(outcomes) / len(outcomes), 4),
-            }
+            category: _category_metrics(outcomes, category_gates.get(category))
             for category, outcomes in sorted(category_counts.items())
+        },
+        "stability": _stability_metrics(results),
+    }
+
+
+def _category_metrics(outcomes: list[bool], required_accuracy: float | None) -> dict[str, Any]:
+    accuracy = sum(outcomes) / len(outcomes)
+    return {
+        "passed": sum(outcomes),
+        "total": len(outcomes),
+        "accuracy": round(accuracy, 4),
+        "required_accuracy": required_accuracy,
+        "gate_passed": required_accuracy is None or accuracy >= required_accuracy,
+    }
+
+
+def _stability_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    grouped: dict[str, list[bool]] = {}
+    for result in results:
+        grouped.setdefault(result["id"], []).append(result["passed"])
+    repeated = {case_id: outcomes for case_id, outcomes in grouped.items() if len(outcomes) > 1}
+    return {
+        "repeated_cases": len(repeated),
+        "all_attempts_passed": all(all(outcomes) for outcomes in repeated.values()),
+        "by_case": {
+            case_id: {
+                "passed": sum(outcomes),
+                "attempts": len(outcomes),
+                "pass_rate": round(sum(outcomes) / len(outcomes), 4),
+                "all_passed": all(outcomes),
+            }
+            for case_id, outcomes in sorted(repeated.items())
         },
     }
 
@@ -319,41 +438,195 @@ async def _submit(
     return run, events, int((time.monotonic() - started) * 1000)
 
 
+async def _submit_clarification(
+    client: httpx.AsyncClient,
+    *,
+    thread_id: str,
+    state_version: int,
+    option_key: str,
+    operation_key: str,
+    timeout: float,
+) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+    started = time.monotonic()
+    response = await client.post(
+        f"/api/threads/{thread_id}/clarification-responses",
+        json={"state_version": state_version, "option_key": option_key},
+        headers={"Idempotency-Key": operation_key},
+    )
+    response.raise_for_status()
+    run, events = await _wait_for_terminal(client, response.json()["run_id"], timeout)
+    return run, events, int((time.monotonic() - started) * 1000)
+
+
+async def _evaluate_step(
+    client: httpx.AsyncClient,
+    *,
+    expected: EvalTurn,
+    run: dict[str, Any],
+    events: list[dict[str, Any]],
+    elapsed_ms: int,
+    variables: dict[str, str],
+) -> dict[str, Any]:
+    actual_tools = _tool_counts(events)
+    forbidden_used = {
+        name: actual_tools[name] for name in expected.forbidden_tools if actual_tools.get(name, 0)
+    }
+    status_match = run["status"] == expected.expected_status
+    token_usage = _token_usage(events)
+    token_budget_match = (
+        expected.max_total_tokens is None
+        or token_usage["total_tokens"] <= expected.max_total_tokens
+    )
+    schedule_assertions = await evaluate_schedule_expectations(
+        client,
+        expected.expected_schedule,
+        variables,
+    )
+    schedule_match = all(assertion["passed"] for assertion in schedule_assertions)
+    result_message = run.get("result_message")
+    normalized_result = result_message.casefold() if isinstance(result_message, str) else ""
+    forbidden_response_matches = [
+        render_template(value, variables)
+        for value in expected.forbidden_response_substrings
+        if render_template(value, variables).casefold() in normalized_result
+    ]
+    response_safety_match = not forbidden_response_matches
+    passed = (
+        status_match
+        and actual_tools == expected.expected_tools
+        and not forbidden_used
+        and token_budget_match
+        and schedule_match
+        and response_safety_match
+    )
+    return {
+        "run_id": run["id"],
+        "status": run["status"],
+        "expected_status": expected.expected_status,
+        "status_match": status_match,
+        "expected_tools": expected.expected_tools,
+        "actual_tools": actual_tools,
+        "forbidden_tools_used": forbidden_used,
+        "max_total_tokens": expected.max_total_tokens,
+        "token_budget_match": token_budget_match,
+        "schedule_match": schedule_match,
+        "schedule_assertions": schedule_assertions,
+        "result_message": result_message,
+        "forbidden_response_matches": forbidden_response_matches,
+        "response_safety_match": response_safety_match,
+        "elapsed_ms": elapsed_ms,
+        "token_usage": token_usage,
+        "passed": passed,
+    }
+
+
+def _clarification_resume_turn(flow: ClarificationFlowExpectation) -> EvalTurn:
+    resume = flow.resume
+    return EvalTurn(
+        message="<clarification-response>",
+        expected_tools=resume.expected_tools,
+        expected_status=resume.expected_status,
+        forbidden_tools=resume.forbidden_tools,
+        max_total_tokens=resume.max_total_tokens,
+        expected_schedule=resume.expected_schedule,
+        forbidden_response_substrings=(),
+    )
+
+
+async def _run_clarification_flow(
+    client: httpx.AsyncClient,
+    *,
+    thread_id: str,
+    source_run_id: str,
+    flow: ClarificationFlowExpectation,
+    variables: dict[str, str],
+    execution_id: str,
+    case_id: str,
+    turn_index: int,
+    timeout: float,
+) -> dict[str, Any]:
+    inspection = await inspect_clarification(
+        client,
+        thread_id=thread_id,
+        source_run_id=source_run_id,
+        expectation=flow,
+        variables=variables,
+    )
+    state_version = inspection.get("state_version")
+    option_key = inspection.get("selected_option_key")
+    if (
+        not inspection["passed"]
+        or not isinstance(state_version, int)
+        or not isinstance(option_key, str)
+    ):
+        return {"passed": False, "inspection": inspection, "resume": None}
+
+    run, events, elapsed_ms = await _submit_clarification(
+        client,
+        thread_id=thread_id,
+        state_version=state_version,
+        option_key=option_key,
+        operation_key=_operation_key(execution_id, case_id, "clarification", turn_index),
+        timeout=timeout,
+    )
+    resume = await _evaluate_step(
+        client,
+        expected=_clarification_resume_turn(flow),
+        run=run,
+        events=events,
+        elapsed_ms=elapsed_ms,
+        variables=variables,
+    )
+    interaction_consumed = await clarification_is_consumed(client, thread_id=thread_id)
+    return {
+        "passed": resume["passed"] and interaction_consumed,
+        "inspection": inspection,
+        "interaction_consumed": interaction_consumed,
+        "resume": resume,
+    }
+
+
 async def _run_case(
     client: httpx.AsyncClient,
     case: EvalCase,
     timeout: float,
     execution_id: str,
+    templates: EvalTemplateContext,
+    attempt: int = 1,
 ) -> dict[str, Any]:
+    case_execution_id = f"{case.id}:attempt-{attempt}"
     response = await client.post(
         "/api/threads",
-        json={"title": f"[EVAL {execution_id[:8]}] {case.id}"},
+        json={"title": f"[EVAL {execution_id[:8]}] {case.id} #{attempt}"},
     )
     response.raise_for_status()
     thread_id = response.json()["id"]
     tag = thread_id[:8]
+    variables = templates.variables(tag=tag)
     setup = []
-    for index, message in enumerate(case.setup, start=1):
+    for index, expected in enumerate(case.setup, start=1):
         run, events, elapsed_ms = await _submit(
             client,
             thread_id,
-            message.format(tag=tag),
-            _operation_key(execution_id, case.id, "setup", index),
+            render_template(expected.message, variables),
+            _operation_key(execution_id, case_execution_id, "setup", index),
             timeout,
         )
-        setup.append(
-            {
-                "status": run["status"],
-                "actual_tools": _tool_counts(events),
-                "elapsed_ms": elapsed_ms,
-                "token_usage": _token_usage(events),
-                "passed": run["status"] == "completed",
-            }
+        setup_result = await _evaluate_step(
+            client,
+            expected=expected,
+            run=run,
+            events=events,
+            elapsed_ms=elapsed_ms,
+            variables=variables,
         )
-        if run["status"] != "completed":
+        setup.append(setup_result)
+        if not setup_result["passed"]:
             return {
                 "id": case.id,
+                "attempt": attempt,
                 "category": case.category,
+                "category_min_accuracy": case.category_min_accuracy,
                 "thread_id": thread_id,
                 "passed": False,
                 "setup": setup,
@@ -364,48 +637,40 @@ async def _run_case(
         run, events, elapsed_ms = await _submit(
             client,
             thread_id,
-            expected.message.format(tag=tag),
-            _operation_key(execution_id, case.id, "turn", index),
+            render_template(expected.message, variables),
+            _operation_key(execution_id, case_execution_id, "turn", index),
             timeout,
         )
-        actual_tools = _tool_counts(events)
-        forbidden_used = {
-            name: actual_tools[name]
-            for name in expected.forbidden_tools
-            if actual_tools.get(name, 0)
-        }
-        status_match = run["status"] == expected.expected_status
-        token_usage = _token_usage(events)
-        token_budget_match = (
-            expected.max_total_tokens is None
-            or token_usage["total_tokens"] <= expected.max_total_tokens
+        turn_result = await _evaluate_step(
+            client,
+            expected=expected,
+            run=run,
+            events=events,
+            elapsed_ms=elapsed_ms,
+            variables=variables,
         )
-        passed = (
-            status_match
-            and actual_tools == expected.expected_tools
-            and not forbidden_used
-            and token_budget_match
-        )
-        turns.append(
-            {
-                "status": run["status"],
-                "expected_status": expected.expected_status,
-                "status_match": status_match,
-                "expected_tools": expected.expected_tools,
-                "actual_tools": actual_tools,
-                "forbidden_tools_used": forbidden_used,
-                "max_total_tokens": expected.max_total_tokens,
-                "token_budget_match": token_budget_match,
-                "elapsed_ms": elapsed_ms,
-                "token_usage": token_usage,
-                "passed": passed,
-            }
-        )
-        if not passed:
+        if expected.clarification is not None and turn_result["passed"]:
+            clarification = await _run_clarification_flow(
+                client,
+                thread_id=thread_id,
+                source_run_id=run["id"],
+                flow=expected.clarification,
+                variables=variables,
+                execution_id=execution_id,
+                case_id=case_execution_id,
+                turn_index=index,
+                timeout=timeout,
+            )
+            turn_result["clarification"] = clarification
+            turn_result["passed"] = clarification["passed"]
+        turns.append(turn_result)
+        if not turn_result["passed"]:
             break
     return {
         "id": case.id,
+        "attempt": attempt,
         "category": case.category,
+        "category_min_accuracy": case.category_min_accuracy,
         "thread_id": thread_id,
         "passed": (
             all(item["passed"] for item in setup)
@@ -425,11 +690,27 @@ async def _main(args: argparse.Namespace) -> int:
         if (not args.category or case.category in args.category)
         and (not args.case or case.id in args.case)
     ][: args.limit]
+    if not 1 <= args.repeat <= 10:
+        raise SystemExit("--repeat must be between 1 and 10")
+    if args.repeat > 1 and not args.case:
+        raise SystemExit("--repeat requires at least one explicit --case selection")
     if not args.execute:
         counts = Counter(case.category for case in cases)
-        print(json.dumps({"cases": len(cases), "categories": counts}, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "cases": len(cases),
+                    "planned_runs": len(cases) * args.repeat,
+                    "repeat": args.repeat,
+                    "categories": counts,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     execution_id = uuid4().hex
+    templates = EvalTemplateContext.capture()
     try:
         eval_token = _resolve_eval_token(args.token_file)
     except ValueError as exc:
@@ -450,9 +731,27 @@ async def _main(args: argparse.Namespace) -> int:
                 "/api/auth/login", json={"identifier": args.login_identifier, "password": password}
             )
             login.raise_for_status()
-        results = [await _run_case(client, case, args.timeout, execution_id) for case in cases]
+        results = []
+        for case in cases:
+            for attempt in range(1, args.repeat + 1):
+                results.append(
+                    await _run_case(
+                        client,
+                        case,
+                        args.timeout,
+                        execution_id,
+                        templates,
+                        attempt,
+                    )
+                )
     report = {
         "execution_id": execution_id,
+        "template_context": {
+            "today": templates.today,
+            "tomorrow": templates.tomorrow,
+            "day_after_tomorrow": templates.day_after_tomorrow,
+            "future_date": templates.future_date,
+        },
         "metrics": calculate_metrics(results),
         "results": results,
     }
@@ -460,7 +759,11 @@ async def _main(args: argparse.Namespace) -> int:
     print(rendered)
     if args.output:
         args.output.write_text(rendered + "\n")
-    return 0 if report["metrics"]["exact_case_accuracy"] >= args.min_accuracy else 1
+    overall_passed = report["metrics"]["exact_case_accuracy"] >= args.min_accuracy
+    category_gates_passed = all(
+        category["gate_passed"] for category in report["metrics"]["by_category"].values()
+    )
+    return 0 if overall_passed and category_gates_passed else 1
 
 
 def main() -> None:
@@ -485,6 +788,12 @@ def main() -> None:
     parser.add_argument("--category", action="append")
     parser.add_argument("--case", action="append")
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Repeat explicitly selected cases 1-10 times using isolated Threads.",
+    )
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--min-accuracy", type=float, default=0.85)
     parser.add_argument("--output", type=Path)

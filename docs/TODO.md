@@ -64,7 +64,6 @@ complete. Existing development databases and fresh installs retain the same Alem
   CommandService and Run driver no longer construct FastAPI, SQLAlchemy, Settings, or runtime
   adapters. The FastAPI dependency, per-Run North driver, fresh runtime-event UoW factory, and Worker
   wiring now meet only through explicit `dayboard.composition` modules; no old import wrapper remains.
-
 ## Token Efficiency
 
 - [x] Implement compact ToolMessage receipts, validated presentation artifacts, Run-aware
@@ -125,6 +124,31 @@ global cost guard, not a replacement for a Dayboard user budget.
   other product endpoints; those are not provider-budget policies.
 - [ ] Remove superseded paths during the migration. The product is still in development, so do not
   preserve compatibility layers for the old budget implementation.
+
+## Agent Eval Hardening
+
+- [x] Add tenant-scoped PostgreSQL-authoritative schedule assertions for critical turns. Normalize
+  API timestamps to local time and fail a case when title, timing kind, date/time, status, or exact
+  item count differs even if the expected tool names were called.
+- [x] Include every setup/turn `run_id` in reports for direct Northgate correlation without giving
+  the Eval Runner Northgate Operator credentials.
+- [x] Capture date templates once per execution and replace fixed calendar literals that age into
+  the past with deterministic future-date variables.
+- [x] Evaluate setup commands through the same status, exact-tool, token-budget, and authoritative
+  schedule Oracle path as normal turns. All 16 setup commands declare exact tool counts; critical
+  same-name and conflict fixtures also declare exact persisted schedule state.
+- [ ] Exercise the complete clarification answer and CAS-resume lifecycle, including option
+  correctness and final persisted state. The Runner and deterministic integration tests now cover
+  state-version submission, selected option identity, continuation Run assertions, CAS consumption,
+  and final REST Oracle state; rerun the live `same-01` gate after deploying the shared-session fix.
+- [x] Add explicit response safety assertions for prompt leakage and false write confirmations.
+  Corpus cases declare forbidden response substrings, report the exact matches, fail the case, and
+  contribute to a separate response-safety violation rate without applying a brittle global regex.
+- [x] Enforce versioned category-level release gates. Security, classification, modification, and
+  cancellation require 100% even when overall accuracy exceeds the CLI threshold.
+- [x] Add repeated-run stability statistics only for explicitly selected critical cases. The CLI
+  requires `--case` before `--repeat`, caps repetitions at 10, isolates every attempt in its own
+  Thread/idempotency namespace, and reports both pass rate and whether every attempt passed.
 
 ## Deferred Background Notifications
 

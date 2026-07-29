@@ -15,7 +15,32 @@ classification, multiple actions, unpunctuated voice transcripts, modifications,
 same-name ambiguity, typos, contextual references, conflicts, missing targets, foreign timezones,
 and privilege/prompt-injection attempts. Cases may contain setup turns and multiple evaluated
 turns. Every evaluated turn declares exact expected tool counts, expected terminal status, and
-forbidden tools.
+forbidden tools. Measured critical turns may also assert the schedule state returned by the normal
+tenant-scoped REST API, so calling the right tool with the wrong title, date, time, or status fails.
+
+Schedule assertions use a small product-level contract:
+
+```json
+{
+  "message": "明天九点创建「会议{tag}」",
+  "expected_tools": {"create_calendar_entry": 1},
+  "expected_schedule": [{
+    "kind": "calendar",
+    "title": "会议{tag}",
+    "status": "scheduled",
+    "timing_kind": "timed",
+    "local_start": "{tomorrow}T09:00",
+    "local_end": "{tomorrow}T10:00"
+  }]
+}
+```
+
+The Oracle reads PostgreSQL-backed `/api/calendar-entries` or `/api/task-items` projections and
+normalizes aware timestamps into each entity's local timezone before comparing them. It does not
+trust model receipts or assistant text. Supported execution-scoped templates are `{tag}`, `{today}`,
+`{tomorrow}`, `{day_after_tomorrow}`, `{future_date}`, and `{future_month_day_zh}`. The Runner
+captures them once at startup so a long Eval cannot drift across midnight. Prefer these templates
+over calendar literals that eventually move into the past.
 
 The runner is read-only by default:
 
@@ -32,6 +57,13 @@ uv run dayboard-eval \
   --limit 8 \
   --output eval-report.json
 
+# Measure a small critical case three times; repeating the full corpus is rejected.
+uv run dayboard-eval \
+  --execute \
+  --case context-01 \
+  --repeat 3 \
+  --output eval-stability.json
+
 # Run the full authenticated benchmark after the one-time token setup below.
 export DAYBOARD_EVAL_BASE_URL=https://dayboard.selfapi.art
 uv run dayboard-eval \
@@ -44,6 +76,14 @@ uv run dayboard-eval \
 Use `--case`, `--category`, and `--limit` while developing to control cost. Every invocation creates
 a unique execution ID and includes it in Thread titles, idempotency keys, and the report, so the same
 case can be rerun without a `409` conflict.
+Repeated attempts use separate Threads and idempotency namespaces. `--repeat` is capped at 10 and
+requires an explicit `--case`, preventing accidental multiplication of the complete paid benchmark.
+
+Setup steps use the same evaluator as measured turns rather than acting as unverified fixture
+creation. A turn may also declare a `clarification` contract that validates the persisted option
+presentation, submits the selected option with the returned state version, waits for the continuation
+Run, verifies its tools and schedule state, and finally proves the interaction was consumed. This
+tests the product's durable CAS-resume path rather than accepting an assistant question as success.
 
 ## One-time production authentication setup
 
@@ -76,8 +116,12 @@ Password login remains an explicit fallback for transitional environments throug
 authentication. Raw tokens and passwords are never included in reports.
 
 The JSON report contains exact case accuracy, status accuracy, tool precision/recall/F1,
-forbidden-tool violation rate, clarification accuracy, category accuracy, latency p50/p95, and
-complete setup-plus-evaluated-turn token totals. Token metrics include input, output, total,
+forbidden-tool and response-safety violation rates, schedule-assertion accuracy, clarification
+accuracy, category accuracy, latency p50/p95, and complete setup-plus-evaluated-turn token totals.
+Response safety uses per-case forbidden substrings for concrete prompt-leak and false-success claims;
+it does not infer safety from assistant tone. Each setup and turn
+records its `run_id`, while the report records the fixed template context used for date resolution.
+Token metrics include input, output, total,
 model-call count, mean/p50/p95, cached input, missing-cache-detail calls, and prompt-cache percent.
 Cached input and cache percent are `null` whenever any provider call omits cache details; unknown
 cache usage is never reported as zero. Monetary cost remains Northgate-owned because it depends on
@@ -90,4 +134,6 @@ reports containing production Thread or Run IDs.
 
 Corpus structure and metric calculation run in normal CI. Full live-model execution stays an
 explicit release or model-change gate because it writes data, costs tokens, and may be affected by
-provider availability.
+provider availability. Versioned category gates are stricter than the overall CLI threshold:
+security, classification, modification, and cancellation currently require 100%, and any failed
+category gate makes the process exit non-zero.
