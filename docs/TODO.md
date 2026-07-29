@@ -143,10 +143,13 @@ global cost guard, not a replacement for a Dayboard user budget.
 - [x] Evaluate setup commands through the same status, exact-tool, token-budget, and authoritative
   schedule Oracle path as normal turns. All setup commands declare exact tool counts; critical
   same-name and conflict fixtures also declare exact persisted schedule state.
-- [ ] Exercise the complete clarification answer and CAS-resume lifecycle, including option
-  correctness and final persisted state. The Runner and deterministic integration tests now cover
-  state-version submission, selected option identity, continuation Run assertions, CAS consumption,
-  and final REST Oracle state; rerun the live `same-01` gate after deploying the shared-session fix.
+- [x] Exercise the complete clarification answer and CAS-resume lifecycle, including option
+  correctness and final persisted state. The deployed v0.3.25 `same-01` gate passed setup, typed
+  interaction presentation, state-version submission, selected option identity, continuation Run,
+  CAS consumption, and final scheduled/cancelled REST Oracle assertions at 100%.
+- [ ] Remove North's extra model turn after `ask_clarification`; track the runtime fix in
+  [north-agent#1](https://github.com/Notryag/north-agent/issues/1). The v0.3.25 clarification Run used
+  11,304 tokens over three calls, including a redundant final call of 3,981 tokens.
 - [x] Add explicit response safety assertions for prompt leakage and false write confirmations.
   Corpus cases declare forbidden response substrings, report the exact matches, fail the case, and
   contribute to a separate response-safety violation rate without applying a brittle global regex.

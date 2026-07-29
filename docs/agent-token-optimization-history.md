@@ -280,6 +280,28 @@ smaller than the token reduction because the prior sample had a higher prompt-ca
 Eval budget records the measured one-write baseline and fails `context-01` when its first turn
 exceeds 2,500 total tokens, leaving about 20.8% headroom over the 2,069-token result.
 
+## 2026-07-29: v0.3.25 Clarification CAS Baseline
+
+The deployed `same-01` Eval passed setup, same-name option projection, typed clarification,
+state-version CAS submission, continuation cancellation, interaction consumption, and final
+scheduled/cancelled REST Oracle assertions at 100%. The complete four-Run flow used 21,315 input
+and 362 output tokens, or 21,677 total, across six model calls.
+
+The two fixture creation Runs used 2,919 and 3,287 tokens. The continuation cancellation used 4,167
+tokens. The clarification Run was the outlier at 11,304 tokens across three calls: search, the model
+decision to call `ask_clarification`, and an unnecessary model call after that tool. The redundant
+third call alone used 3,932 input and 49 output tokens. Cache detail was missing on three of the six
+calls. Northgate measured at least 6,656 cached input tokens and priced three calls at 6,330
+microdollars (`$0.006330`); both values are lower bounds because the remaining three calls omitted
+cache detail and price settlement. The exact aggregate cost remains unknown rather than being
+reported as zero.
+
+North's `ClarificationMiddleware` currently records the typed request with a LangGraph `Command`
+but does not terminate the graph. [north-agent#1](https://github.com/Notryag/north-agent/issues/1)
+now includes this production evidence and a regression requirement that `ask_clarification` end the
+current Run without losing the typed outcome. After that fix, rerun `same-01` and compare model-call
+count, tokens, latency, and exact Northgate cost against this baseline.
+
 ## Entry Template
 
 Append future optimizations with:

@@ -6,7 +6,7 @@ implementation chronology. Current facts live under [current](./current/README.m
 
 ## Current Version
 
-- Development line: `0.3.x`; latest deployed release tag: `v0.3.22`.
+- Development line: `0.3.x`; latest deployed release tag: `v0.3.25`.
 - Product: self-service Dayboard web application at the `dayboard.selfapi.art` root with a same-site
   FastAPI API.
 - Runtime: PostgreSQL, Redis, FastAPI, arq Worker, and Next.js managed by Docker Compose.
@@ -28,8 +28,9 @@ implementation chronology. Current facts live under [current](./current/README.m
 - Added the critical Playwright browser gate, including deterministic SSE, active-Run recovery,
   clarification resume, optimistic edit/undo, and fixed-audio voice coverage.
 - Expanded CI and release quality jobs to run the complete PostgreSQL API suite and browser E2E.
-- Added a versioned 128-case Chinese scheduling Agent Eval with quantitative quality, safety,
-  latency, and token metrics.
+- Added a versioned 128-case Chinese scheduling Agent Eval with PostgreSQL-authoritative schedule
+  assertions, typed clarification CAS-resume coverage, category release gates, quantitative quality,
+  safety, latency, cache, and token metrics.
 - Password registration/login, server sessions, password recovery, tenant/owner isolation, and
   endpoint-specific abuse limits.
 - Natural-language create, search, reschedule, cancel, complete, multi-command execution, and
@@ -106,6 +107,10 @@ Detailed active token and gateway work is tracked in [TODO.md](./TODO.md).
 - The v0.3.22 reference one-write Run used 2,069 tokens in one model call, including 1,536 cached
   input tokens, and cost $0.000977. Broader per-case budgets remain intentionally unset until each
   behavior has a reproducible production baseline.
+- North currently performs one unnecessary model call after `ask_clarification` before returning
+  its typed outcome. The v0.3.25 `same-01` clarification Run used 11,304 tokens over three calls;
+  [north-agent#1](https://github.com/Notryag/north-agent/issues/1) tracks terminating the Run at the
+  clarification command.
 - Dayboard still owns provider-token admission; Northgate does not yet enforce tenant/user/model
   scoped budgets for all traffic.
 - Scheduling defaults to trusted `Asia/Shanghai`; explicit foreign-timezone conversion is unsupported.
