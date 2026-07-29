@@ -76,6 +76,11 @@ uv run dayboard-eval \
 Use `--case`, `--category`, and `--limit` while developing to control cost. Every invocation creates
 a unique execution ID and includes it in Thread titles, idempotency keys, and the report, so the same
 case can be rerun without a `409` conflict.
+When authenticated by the dedicated Eval Token, the Runner first cancels that identity's still-active
+calendar entries and tasks through the normal CAS-protected product APIs. This keeps earlier Eval
+runs from introducing unrelated conflict results while retaining their history. Password-login
+fallback never performs this reset. Use `--preserve-active-schedule` only when a scenario deliberately
+needs existing Eval-tenant data.
 Repeated attempts use separate Threads and idempotency namespaces. `--repeat` is capped at 10 and
 requires an explicit `--case`, preventing accidental multiplication of the complete paid benchmark.
 

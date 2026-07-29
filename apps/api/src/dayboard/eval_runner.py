@@ -26,6 +26,7 @@ from dayboard.eval_oracles import (
     render_expectation,
     render_template,
 )
+from dayboard.eval_state import reset_active_schedule
 
 
 TERMINAL_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
@@ -726,6 +727,7 @@ async def _main(args: argparse.Namespace) -> int:
         timeout=args.timeout,
         headers=headers,
     ) as client:
+        preflight = {"performed": False, "reason": "password_login"}
         if args.login_identifier:
             password = os.getenv("DAYBOARD_EVAL_PASSWORD")
             if not password:
@@ -734,6 +736,13 @@ async def _main(args: argparse.Namespace) -> int:
                 "/api/auth/login", json={"identifier": args.login_identifier, "password": password}
             )
             login.raise_for_status()
+        elif eval_token:
+            if args.preserve_active_schedule:
+                preflight = {"performed": False, "reason": "preserved_by_request"}
+            else:
+                preflight = await reset_active_schedule(client)
+        else:
+            preflight = {"performed": False, "reason": "no_eval_token"}
         results = []
         for case in cases:
             for attempt in range(1, args.repeat + 1):
@@ -755,6 +764,7 @@ async def _main(args: argparse.Namespace) -> int:
             "day_after_tomorrow": templates.day_after_tomorrow,
             "future_date": templates.future_date,
         },
+        "preflight_schedule_reset": preflight,
         "metrics": calculate_metrics(results),
         "results": results,
     }
@@ -800,6 +810,11 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--min-accuracy", type=float, default=0.85)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--preserve-active-schedule",
+        action="store_true",
+        help="Do not cancel active data in the dedicated Eval tenant before execution.",
+    )
     parser.add_argument("--execute", action="store_true")
     raise SystemExit(asyncio.run(_main(parser.parse_args())))
 
