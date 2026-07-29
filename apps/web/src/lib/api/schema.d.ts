@@ -1693,6 +1693,7 @@ export interface operations {
     list_calendar_entries_api_calendar_entries_get: {
         parameters: {
             query?: {
+                status?: "current" | "scheduled" | "completed" | "cancelled" | "all";
                 period?: ("today" | "tomorrow") | null;
                 date?: string | null;
                 from?: string | null;
