@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 from north.runtime import MemoryStreamBridge
 
 from dayboard.composition.platform import build_platform_unit_of_work_factory
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
+from agent_platform.core import TenantContext
 
 
 class FakeSessionContext:
@@ -38,7 +40,15 @@ async def test_platform_unit_of_work_factory_opens_a_fresh_session_each_time() -
     assert sessions[0] is not sessions[1]
 
 
-def test_run_execution_scope_creates_one_driver_per_run() -> None:
+def test_run_execution_scope_creates_one_driver_per_run(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_agent(*args, **kwargs):
+        del args
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("dayboard.composition.runs.build_dayboard_agent", fake_build_agent)
     settings = Settings(
         APP_MODEL_NAME="openai:gpt-test",
         DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -58,3 +68,14 @@ def test_run_execution_scope_creates_one_driver_per_run() -> None:
 
     assert first is not second
     assert first.driver is not second.driver
+    first.driver.agent_factory(
+        TenantContext(
+            tenant_id=uuid4(),
+            user_id=uuid4(),
+            timezone="Asia/Shanghai",
+            locale="zh-CN",
+        ),
+        uuid4(),
+        [],
+    )
+    assert captured["session_lock"] is first.driver.session_lock

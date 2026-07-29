@@ -179,6 +179,57 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
     assert "message_metadata" not in persisted
 
 
+async def test_artifact_projection_waits_for_shared_session_transaction(
+    db_session: AsyncSession,
+    tenant_context: TenantContext,
+) -> None:
+    scope = None
+
+    async def fake_invoker(**kwargs):
+        assert scope is not None
+        async with scope.driver.session_lock:
+            projection = asyncio.create_task(
+                kwargs["stream_sink"](
+                    RuntimeStreamEvent(
+                        mode="messages",
+                        data=[
+                            {
+                                "type": "tool",
+                                "name": "create_task_item",
+                                "tool_call_id": "concurrent-call",
+                                "content": "{}",
+                                "artifact": _task_artifact(
+                                    task_id="33333333-3333-4333-8333-333333333333",
+                                    title="并行事务保护",
+                                ),
+                            },
+                            {},
+                        ],
+                    )
+                )
+            )
+            await asyncio.sleep(0)
+            assert not projection.done()
+        await projection
+        return {"messages": [AIMessage(content="任务已创建。")]}
+
+    scope = _run_scope(db_session, fake_invoker)
+    created = await build_command_service(db_session).create_or_get_command_run(
+        tenant_context,
+        CommandRequest(message="创建并行事务保护任务"),
+    )
+
+    await scope.execute(tenant_context, created.run_id)
+
+    messages = await build_conversation_service(db_session).list_messages(
+        tenant_context, created.thread_id
+    )
+    assert (
+        dayboard_presentation_parts(messages[-1].presentation)[0]["item"]["value"]["title"]
+        == "并行事务保护"
+    )
+
+
 async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     db_session: AsyncSession,
     tenant_context: TenantContext,
@@ -286,9 +337,7 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
     assert events[-1].extension is not None
     assert events[-1].extension.kind == "agent-platform.interaction-state"
     assert events[-1].extension.payload == {"state_version": state.version}
-    assert [event_type for _, event_type, _ in run_stream.events] == [
-        "clarification_requested"
-    ]
+    assert [event_type for _, event_type, _ in run_stream.events] == ["clarification_requested"]
 
 
 async def test_pending_clarification_state_is_versioned_and_clearable(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
@@ -43,6 +44,7 @@ def build_dayboard_agent_factory(
     session: AsyncSession,
     *,
     checkpointer: object | None = None,
+    session_lock: asyncio.Lock | None = None,
 ) -> DayboardAgentFactory:
     def create_agent(
         context: TenantContext,
@@ -54,6 +56,7 @@ def build_dayboard_agent_factory(
             session=session,
             context=context,
             run_id=run_id,
+            session_lock=session_lock,
             checkpointer=checkpointer,
             compaction_hooks=list(compaction_hooks),
         )
@@ -73,6 +76,7 @@ def build_run_execution_scope(
     executor_factory: RunExecutorFactory = RunExecutor,
 ) -> RunExecutionScope:
     resolved_settings = settings or get_settings()
+    session_lock = asyncio.Lock()
     platform = build_platform_services(session)
     driver = DayboardRunExecutionDriver(
         unit_of_work=platform.unit_of_work,
@@ -87,10 +91,12 @@ def build_run_execution_scope(
             resolved_settings,
             session,
             checkpointer=checkpointer,
+            session_lock=session_lock,
         ),
         model_name=resolved_settings.agent_model_name,
         stream_bridge=stream_bridge,
         executor_factory=executor_factory,
+        session_lock=session_lock,
     )
     return RunExecutionScope(
         platform=platform,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from hashlib import sha256
 from uuid import UUID
@@ -95,6 +96,7 @@ def build_dayboard_agent(
     session: AsyncSession | None = None,
     context: TenantContext | None = None,
     run_id: UUID | None = None,
+    session_lock: asyncio.Lock | None = None,
     checkpointer=None,
     compaction_hooks: list[CompactionHook] | None = None,
 ):
@@ -105,6 +107,7 @@ def build_dayboard_agent(
             session=session,
             context=context,
             run_id=run_id,
+            session_lock=session_lock,
         )
     resolved_tools = list(resolved_tools or [])
     if not any(getattr(tool, "name", None) == ask_clarification.name for tool in resolved_tools):

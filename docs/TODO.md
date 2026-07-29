@@ -64,6 +64,12 @@ complete. Existing development databases and fresh installs retain the same Alem
   CommandService and Run driver no longer construct FastAPI, SQLAlchemy, Settings, or runtime
   adapters. The FastAPI dependency, per-Run North driver, fresh runtime-event UoW factory, and Worker
   wiring now meet only through explicit `dayboard.composition` modules; no old import wrapper remains.
+
+- [x] Serialize every database operation that shares one Run's SQLAlchemy session, including Agent
+  tools, live artifact projection, compaction persistence, and terminal settlement. A live Eval with
+  two parallel calendar writes exposed that tool-only locking was insufficient: both writes could
+  commit while artifact persistence collided with the same session and incorrectly failed the Run.
+
 ## Token Efficiency
 
 - [x] Implement compact ToolMessage receipts, validated presentation artifacts, Run-aware

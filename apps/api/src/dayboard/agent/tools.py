@@ -281,13 +281,14 @@ def build_scheduling_tools(
     session: AsyncSession,
     context: TenantContext,
     run_id: UUID | None,
+    session_lock: asyncio.Lock | None = None,
 ) -> list[StructuredTool]:
     """Build agent-safe scheduling tools with trusted context injected.
 
     The model only sees product fields. Database session, tenant/user context,
     and run identity stay server-owned and are captured by these closures.
     """
-    tool_lock = asyncio.Lock()
+    tool_lock = session_lock or asyncio.Lock()
     scheduling_scope = build_scheduling_services(session)
 
     def serialize_tool(function):

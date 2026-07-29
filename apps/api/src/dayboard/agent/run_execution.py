@@ -85,6 +85,7 @@ class DayboardRunExecutionDriver:
         model_name: str,
         stream_bridge: StreamBridge,
         executor_factory: RunExecutorFactory = RunExecutor,
+        session_lock: asyncio.Lock | None = None,
     ) -> None:
         self.unit_of_work = unit_of_work
         self.conversations = conversations
@@ -96,6 +97,7 @@ class DayboardRunExecutionDriver:
         self.model_name = model_name
         self.stream_bridge = stream_bridge
         self.executor_factory = executor_factory
+        self.session_lock = session_lock or asyncio.Lock()
         self.presentation_parts: list[dict[str, Any]] = []
 
     async def execute(
@@ -154,28 +156,38 @@ class DayboardRunExecutionDriver:
                 if projected.event_type == "schedule_items_result"
                 else [projected.data]
             )
-            if not merge_presentation_parts(self.presentation_parts, projected_parts):
-                return
-            latest = await self.runs.get_run_for_update(context, run.id)
-            if latest is None or latest.status != AgentRunStatus.running:
-                await self.unit_of_work.rollback()
-                raise asyncio.CancelledError()
-            await self.conversations.upsert_assistant_message(
-                context,
-                thread_id=run.thread_id,
-                run_id=run.id,
-                content="",
-                presentation=build_dayboard_presentation(self.presentation_parts),
-            )
-            await self.unit_of_work.commit()
+            async with self.session_lock:
+                if not merge_presentation_parts(self.presentation_parts, projected_parts):
+                    return
+                try:
+                    latest = await self.runs.get_run_for_update(context, run.id)
+                    if latest is None or latest.status != AgentRunStatus.running:
+                        await self.unit_of_work.rollback()
+                        raise asyncio.CancelledError()
+                    await self.conversations.upsert_assistant_message(
+                        context,
+                        thread_id=run.thread_id,
+                        run_id=run.id,
+                        content="",
+                        presentation=build_dayboard_presentation(self.presentation_parts),
+                    )
+                    await self.unit_of_work.commit()
+                except BaseException:
+                    await self.unit_of_work.rollback()
+                    raise
 
         async def record_compaction(event: CompactionEvent) -> None:
-            await self.conversations.update_summary(
-                context,
-                run.thread_id,
-                event.summary_text,
-            )
-            await self.unit_of_work.commit()
+            async with self.session_lock:
+                try:
+                    await self.conversations.update_summary(
+                        context,
+                        run.thread_id,
+                        event.summary_text,
+                    )
+                    await self.unit_of_work.commit()
+                except BaseException:
+                    await self.unit_of_work.rollback()
+                    raise
             logger.info(
                 "dayboard.command.context_compacted",
                 run_id=str(run.id),
@@ -191,7 +203,8 @@ class DayboardRunExecutionDriver:
                 run_id=run.id,
                 presentation_parts=self.presentation_parts,
             )
-            await on_completed(outcome)
+            async with self.session_lock:
+                await on_completed(outcome)
             terminal_callback_called = True
             event_type = (
                 "clarification_requested"
@@ -218,7 +231,8 @@ class DayboardRunExecutionDriver:
         async def fail_run(exc: Exception) -> None:
             nonlocal terminal_callback_called
             failure = self.failure_from_exception(exc)
-            transitioned = await on_failed(failure)
+            async with self.session_lock:
+                transitioned = await on_failed(failure)
             terminal_callback_called = True
             if transitioned:
                 await self._publish_run_event(
@@ -285,7 +299,8 @@ class DayboardRunExecutionDriver:
             raise
         except Exception as exc:
             if not terminal_callback_called:
-                transitioned = await on_failed(self.failure_from_exception(exc))
+                async with self.session_lock:
+                    transitioned = await on_failed(self.failure_from_exception(exc))
                 terminal_callback_called = True
                 if transitioned:
                     failure = self.failure_from_exception(exc)
