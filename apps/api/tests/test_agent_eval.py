@@ -123,6 +123,31 @@ def test_agent_eval_preserves_missing_cached_usage() -> None:
     assert usage["cached_usage_missing_calls"] == 1
 
 
+def test_agent_eval_counts_typed_clarification_outcome_as_builtin_tool() -> None:
+    counts = agent_eval._tool_counts(
+        [
+            {
+                "event_type": "tool_call_completed",
+                "extension": {
+                    "kind": "north.tool-call",
+                    "schema_version": 1,
+                    "payload": {"tool_name": "search_calendar_entries"},
+                },
+            },
+            {
+                "event_type": "clarification_requested",
+                "extension": {
+                    "kind": "agent-platform.interaction-state",
+                    "schema_version": 1,
+                    "payload": {"state_version": 1},
+                },
+            },
+        ]
+    )
+
+    assert counts == {"search_calendar_entries": 1, "ask_clarification": 1}
+
+
 def test_agent_eval_reads_only_protected_token_files(tmp_path: Path) -> None:
     token_file = tmp_path / "token"
     token_file.write_text("eval-secret\n", encoding="utf-8")

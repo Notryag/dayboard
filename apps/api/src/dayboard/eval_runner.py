@@ -195,6 +195,9 @@ def _operation_key(execution_id: str, case_id: str, phase: str, index: int) -> s
 def _tool_counts(events: list[dict[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for event in events:
+        if event.get("event_type") == "clarification_requested":
+            counts["ask_clarification"] += 1
+            continue
         if event.get("event_type") != "tool_call_completed":
             continue
         tool_name = _event_extension_payload(event, "north.tool-call").get("tool_name")
