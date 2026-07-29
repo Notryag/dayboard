@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -166,6 +167,12 @@ def test_agent_eval_execution_id_scopes_idempotency_keys() -> None:
 
     assert first == "eval:execution-a:class-08:turn:1"
     assert second != first
+
+
+def test_agent_eval_limit_requires_a_positive_integer() -> None:
+    assert agent_eval._positive_int("1") == 1
+    with pytest.raises(argparse.ArgumentTypeError, match="at least 1"):
+        agent_eval._positive_int("0")
 
 
 def test_agent_eval_corpus_defines_measured_token_budget() -> None:

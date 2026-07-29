@@ -33,6 +33,13 @@ TERMINAL_STATUSES = {"completed", "failed", "cancelled", "needs_clarification"}
 DEFAULT_TOKEN_FILE = Path.home() / ".config" / "dayboard-eval" / "token"
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
+
+
 @dataclass(frozen=True, slots=True)
 class EvalTurn:
     message: str
@@ -800,7 +807,7 @@ def main() -> None:
     )
     parser.add_argument("--category", action="append")
     parser.add_argument("--case", action="append")
-    parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--limit", type=_positive_int, default=200)
     parser.add_argument(
         "--repeat",
         type=int,
