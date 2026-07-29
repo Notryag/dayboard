@@ -141,7 +141,7 @@ global cost guard, not a replacement for a Dayboard user budget.
 - [x] Capture date templates once per execution and replace fixed calendar literals that age into
   the past with deterministic future-date variables.
 - [x] Evaluate setup commands through the same status, exact-tool, token-budget, and authoritative
-  schedule Oracle path as normal turns. All 16 setup commands declare exact tool counts; critical
+  schedule Oracle path as normal turns. All setup commands declare exact tool counts; critical
   same-name and conflict fixtures also declare exact persisted schedule state.
 - [ ] Exercise the complete clarification answer and CAS-resume lifecycle, including option
   correctness and final persisted state. The Runner and deterministic integration tests now cover

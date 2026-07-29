@@ -202,9 +202,10 @@ def test_agent_eval_setup_and_clarification_contracts_are_explicit() -> None:
     setup_steps = [step for case in cases for step in case.setup]
     same_name = next(case for case in cases if case.id == "same-01")
 
-    assert len(setup_steps) == 16
+    assert len(setup_steps) == 17
     assert all(step.expected_tools for step in setup_steps)
-    assert len(same_name.setup[0].expected_schedule) == 2
+    assert len(same_name.setup[0].expected_schedule) == 1
+    assert len(same_name.setup[1].expected_schedule) == 2
     assert same_name.turns[0].clarification is not None
     assert same_name.turns[0].clarification.option_count == 2
     assert same_name.turns[0].clarification.resume.expected_tools == {"cancel_calendar_entry": 1}
