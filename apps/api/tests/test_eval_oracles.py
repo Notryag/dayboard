@@ -86,6 +86,48 @@ async def test_calendar_oracle_compares_authoritative_local_projection() -> None
     assert result["actual"][0]["local_start"] == "2026-07-30T09:00"
 
 
+async def test_calendar_oracle_queries_cancelled_history_explicitly() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/calendar-entries"
+        assert request.url.params["status"] == "cancelled"
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "id": "entry-cancelled",
+                        "title": "已取消会议",
+                        "status": "cancelled",
+                        "timing_kind": "timed",
+                        "scheduled_date": None,
+                        "start_time": "2026-07-30T01:00:00+00:00",
+                        "end_time": "2026-07-30T02:00:00+00:00",
+                        "timezone": "Asia/Shanghai",
+                        "created_by_run_id": "run-1",
+                    }
+                ],
+                "next_cursor": None,
+            },
+        )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="http://test"
+    ) as client:
+        result = await evaluate_schedule_expectation(
+            client,
+            ExpectedScheduleItem(
+                kind="calendar",
+                title="已取消会议",
+                status="cancelled",
+                timing_kind="timed",
+                local_start="2026-07-30T09:00",
+                local_end="2026-07-30T10:00",
+            ),
+        )
+
+    assert result["passed"] is True
+
+
 async def test_task_oracle_reports_semantic_mismatch() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/task-items"

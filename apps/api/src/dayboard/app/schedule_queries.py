@@ -121,6 +121,7 @@ class ScheduleQueryService:
         self,
         context: TenantContext,
         *,
+        status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
         end_time: datetime | None,
         cursor: str | None,
@@ -137,6 +138,7 @@ class ScheduleQueryService:
                 raise InvalidScheduleCursor("Invalid pagination cursor") from exc
         entries = await self.calendar_entries.list_page(
             context,
+            status=status,
             start_time=start_time,
             end_time=end_time,
             start_date=(

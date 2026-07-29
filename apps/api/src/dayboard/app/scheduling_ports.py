@@ -25,6 +25,7 @@ class CalendarEntryStore(Protocol):
         self,
         context: TenantContext,
         *,
+        status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
         end_time: datetime | None,
         start_date: date | None,

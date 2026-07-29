@@ -51,7 +51,7 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
                 start_time=scheduled_day.replace(hour=9),
                 timezone="Asia/Shanghai",
                 participants=[],
-            )
+            ),
         ]
     )
     await db_session.commit()
@@ -345,6 +345,10 @@ async def test_run_schedule_items_and_direct_actions(
             "/api/calendar-entries",
             params={"date": "2026-07-15"},
         )
+        cancelled_page = await client.get(
+            "/api/calendar-entries",
+            params={"date": "2026-07-15", "status": "cancelled"},
+        )
         missing = await client.post(
             f"/api/calendar-entries/{uuid4()}/cancel",
             json={"expected_row_version": cancelled_entry.row_version},
@@ -370,6 +374,9 @@ async def test_run_schedule_items_and_direct_actions(
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert [item["status"] for item in selected_date.json()["items"]] == ["scheduled"]
+    assert [(item["title"], item["status"]) for item in cancelled_page.json()["items"]] == [
+        ("开会", "cancelled")
+    ]
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "CALENDAR_ENTRY_NOT_FOUND"
 

@@ -131,6 +131,8 @@ def _query_params(expectation: ExpectedScheduleItem) -> dict[str, str | int]:
         if selected_date is None and expectation.local_start is not None:
             selected_date = expectation.local_start[:10]
         params: dict[str, str | int] = {"limit": 100}
+        if expectation.status == "cancelled":
+            params["status"] = "cancelled"
         if selected_date is not None:
             params["date"] = selected_date
         return params

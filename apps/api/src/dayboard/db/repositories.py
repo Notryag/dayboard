@@ -45,6 +45,7 @@ class CalendarEntryRepository:
         self,
         context: TenantContext,
         *,
+        status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
         end_time: datetime | None,
         start_date: date | None,
@@ -56,8 +57,25 @@ class CalendarEntryRepository:
         conditions = [
             CalendarEntryRow.tenant_id == context.tenant_id,
             CalendarEntryRow.owner_user_id == context.user_id,
-            CalendarEntryRow.deleted_at.is_(None),
         ]
+        if status == "current":
+            conditions.append(CalendarEntryRow.deleted_at.is_(None))
+        elif status == "scheduled":
+            conditions.extend(
+                [
+                    CalendarEntryRow.deleted_at.is_(None),
+                    CalendarEntryRow.completed_at.is_(None),
+                ]
+            )
+        elif status == "completed":
+            conditions.extend(
+                [
+                    CalendarEntryRow.deleted_at.is_(None),
+                    CalendarEntryRow.completed_at.is_not(None),
+                ]
+            )
+        elif status == "cancelled":
+            conditions.append(CalendarEntryRow.deleted_at.is_not(None))
         timed_conditions = [CalendarEntryRow.timing_kind == "timed"]
         anytime_conditions = [CalendarEntryRow.timing_kind == "anytime"]
         if start_time is not None:

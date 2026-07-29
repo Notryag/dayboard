@@ -271,6 +271,9 @@ async def retry_failed_reminder(
 
 @router.get("/api/calendar-entries", response_model=SchedulePage[CalendarEntryView])
 async def list_calendar_entries(
+    calendar_status: Literal["current", "scheduled", "completed", "cancelled", "all"] = Query(
+        default="current", alias="status"
+    ),
     period: Literal["today", "tomorrow"] | None = Query(default=None),
     selected_date: date | None = Query(default=None, alias="date"),
     from_time: datetime | None = Query(default=None, alias="from"),
@@ -303,6 +306,7 @@ async def list_calendar_entries(
     try:
         return await build_schedule_query_service(session).list_calendar_entries(
             tenant_context,
+            status=calendar_status,
             start_time=from_time,
             end_time=to_time,
             cursor=cursor,
