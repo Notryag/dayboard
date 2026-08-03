@@ -624,8 +624,6 @@ export interface components {
         AccountResponse: {
             /** User Id */
             user_id: string;
-            /** Tenant Id */
-            tenant_id: string;
             /** Username */
             username: string;
             /** Email */
@@ -645,15 +643,10 @@ export interface components {
              */
             id: string;
             /**
-             * Tenant Id
+             * User Id
              * Format: uuid
              */
-            tenant_id: string;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
+            user_id: string;
             /**
              * Thread Id
              * Format: uuid
@@ -682,11 +675,6 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /**
-             * Tenant Id
-             * Format: uuid
-             */
-            tenant_id: string;
             /**
              * Run Id
              * Format: uuid
@@ -913,15 +901,10 @@ export interface components {
              */
             id: string;
             /**
-             * Tenant Id
+             * User Id
              * Format: uuid
              */
-            tenant_id: string;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
+            user_id: string;
             /** Is Primary */
             is_primary: boolean;
             /** Title */
@@ -1082,15 +1065,10 @@ export interface components {
              */
             id: string;
             /**
-             * Tenant Id
+             * User Id
              * Format: uuid
              */
-            tenant_id: string;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
+            user_id: string;
             source_type: components["schemas"]["ReminderSourceType"];
             /**
              * Source Id
@@ -1145,15 +1123,10 @@ export interface components {
              */
             id: string;
             /**
-             * Tenant Id
+             * User Id
              * Format: uuid
              */
-            tenant_id: string;
-            /**
-             * Owner User Id
-             * Format: uuid
-             */
-            owner_user_id: string;
+            user_id: string;
             source_type: components["schemas"]["ReminderSourceType"];
             /**
              * Source Id

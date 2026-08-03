@@ -112,7 +112,6 @@ export function taskItem(overrides: Partial<TaskItem> = {}): TaskItem {
 function account() {
   return {
     user_id: "user-1",
-    tenant_id: "tenant-1",
     username: "e2e-user",
     email: "e2e@example.test",
     display_name: "E2E User",
@@ -222,8 +221,7 @@ export async function installApiFixture(
       state.threadId ??= `thread-${++sequence}`;
       return json(route, {
         id: state.threadId,
-        tenant_id: "tenant-1",
-        owner_user_id: "user-1",
+        user_id: "user-1",
         is_primary: true,
         title: null,
         status: "active",
@@ -236,8 +234,7 @@ export async function installApiFixture(
       state.threadId = `thread-${++sequence}`;
       return json(route, {
         id: state.threadId,
-        tenant_id: "tenant-1",
-        owner_user_id: "user-1",
+        user_id: "user-1",
         is_primary: false,
         title: null,
         status: "active",

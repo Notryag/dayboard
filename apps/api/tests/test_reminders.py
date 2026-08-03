@@ -45,7 +45,6 @@ def test_delivery_disposition_distinguishes_expiry_cancellation_and_overdue_task
     common = {
         "id": uuid4(),
         "user_id": uuid4(),
-        "user_id": uuid4(),
         "channel": "in_app",
         "scheduled_for": now - timedelta(minutes=1),
         "status": ReminderDeliveryStatus.processing,

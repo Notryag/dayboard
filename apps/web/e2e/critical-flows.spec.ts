@@ -444,8 +444,7 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
     calendars: [entry],
     reminders: [{
       id: "reminder-1",
-      tenant_id: "tenant-1",
-      owner_user_id: "user-1",
+      user_id: "user-1",
       source_type: "calendar_entry",
       source_id: entry.id,
       channel: "in_app",
@@ -470,8 +469,7 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
       updated_at: "2026-07-21T09:50:00+08:00",
     }, {
       id: "reminder-deleted",
-      tenant_id: "tenant-1",
-      owner_user_id: "user-1",
+      user_id: "user-1",
       source_type: "calendar_entry",
       source_id: "calendar-deleted",
       channel: "in_app",
@@ -492,8 +490,7 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
       updated_at: "2026-07-20T10:05:00+08:00",
     }, {
       id: "reminder-pending",
-      tenant_id: "tenant-1",
-      owner_user_id: "user-1",
+      user_id: "user-1",
       source_type: "calendar_entry",
       source_id: "calendar-future",
       channel: "in_app",
