@@ -14,8 +14,6 @@ from dayboard.composition.account_recovery import build_account_recovery_service
 from dayboard.db.account_recovery_uow import SqlAlchemyAccountRecoveryUnitOfWork
 from dayboard.db.models import (
     PasswordResetTokenRow,
-    TenantMembershipRow,
-    TenantRow,
     UserCredentialRow,
     UserProfileRow,
     UserRow,
@@ -34,14 +32,12 @@ async def _create_password_account(db_session: AsyncSession) -> UserRow:
         username=f"recovery-{uuid4().hex}",
         email=f"recovery-{uuid4().hex}@example.com",
     )
-    tenant = TenantRow(name="Recovery test")
-    db_session.add_all([user, tenant])
+    db_session.add(user)
     await db_session.flush()
     db_session.add_all(
         [
             UserCredentialRow(user_id=user.id, password_hash="test-hash:old-password"),
             UserProfileRow(user_id=user.id, timezone="Asia/Shanghai", locale="zh-CN"),
-            TenantMembershipRow(tenant_id=tenant.id, user_id=user.id, role="owner"),
         ]
     )
     await db_session.commit()

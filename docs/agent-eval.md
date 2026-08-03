@@ -3,7 +3,7 @@
 Agent Eval is the quantitative live-model benchmark. It is separate from deterministic CI and
 the small deployment Acceptance catalog:
 
-- CI proves domain, persistence, tool schema, tenant isolation, Run lifecycle, Reminder Outbox,
+- CI proves domain, persistence, tool schema, user isolation, Run lifecycle, Reminder Outbox,
   API, and browser behavior without spending model tokens.
 - Acceptance runs a few end-to-end deployed-stack scenarios after a release.
 - Agent Eval measures model behavior over a broad, versioned Chinese scheduling corpus.
@@ -16,7 +16,7 @@ same-name ambiguity, typos, contextual references, conflicts, missing targets, f
 and privilege/prompt-injection attempts. Cases may contain setup turns and multiple evaluated
 turns. Every evaluated turn declares exact expected tool counts, expected terminal status, and
 forbidden tools. Measured critical turns may also assert the schedule state returned by the normal
-tenant-scoped REST API, so calling the right tool with the wrong title, date, time, or status fails.
+user-scoped REST API, so calling the right tool with the wrong title, date, time, or status fails.
 
 Schedule assertions use a small product-level contract:
 
@@ -80,7 +80,7 @@ When authenticated by the dedicated Eval Token, the Runner first cancels that id
 calendar entries and tasks through the normal CAS-protected product APIs. This keeps earlier Eval
 runs from introducing unrelated conflict results while retaining their history. Password-login
 fallback never performs this reset. Use `--preserve-active-schedule` only when a scenario deliberately
-needs existing Eval-tenant data.
+needs existing Eval-user data.
 Repeated attempts use separate Threads and idempotency namespaces. `--repeat` is capped at 10 and
 requires an explicit `--case`, preventing accidental multiplication of the complete paid benchmark.
 
@@ -92,7 +92,7 @@ tests the product's durable CAS-resume path rather than accepting an assistant q
 
 ## One-time production authentication setup
 
-Create a dedicated Eval account and obtain its tenant and user IDs once. Do not point Eval at a
+Create a dedicated Eval account and obtain its user ID once. Do not point Eval at a
 normal user or admin identity. Generate a token locally and store only its digest on the Dayboard
 server:
 
@@ -107,7 +107,6 @@ Configure the API container with all three values and recreate it:
 
 ```text
 DAYBOARD_EVAL_AUTH_TOKEN_SHA256=<sha256 hex digest>
-DAYBOARD_EVAL_TENANT_ID=<dedicated Eval tenant UUID>
 DAYBOARD_EVAL_USER_ID=<dedicated Eval user UUID>
 ```
 

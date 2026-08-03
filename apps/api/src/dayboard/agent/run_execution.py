@@ -26,7 +26,7 @@ from agent_platform.core import (
     AgentRunStatus,
     RunExecutionFailure,
     RunExecutionOutcomeKind,
-    TenantContext,
+    UserContext,
 )
 from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
@@ -60,7 +60,7 @@ USER_VISIBLE_RUNTIME_EVENTS = frozenset(
 class DayboardAgentFactory(Protocol):
     def __call__(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         compaction_hooks: Sequence[CompactionHook],
     ) -> object: ...
@@ -102,7 +102,7 @@ class DayboardRunExecutionDriver:
 
     async def execute(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         on_completed: RunCompletionCallback,
@@ -223,7 +223,6 @@ class DayboardRunExecutionDriver:
                     else "dayboard.command.completed"
                 ),
                 run_id=str(run.id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 result_length=len(outcome.result_message),
             )
@@ -249,7 +248,6 @@ class DayboardRunExecutionDriver:
                 "dayboard.command.run_started",
                 run_id=str(run.id),
                 thread_id=str(run.thread_id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
                 message_length=len(run.input_message),
@@ -259,7 +257,6 @@ class DayboardRunExecutionDriver:
                 "dayboard.command.north_invoke_started",
                 run_id=str(run.id),
                 thread_id=str(run.thread_id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
             )
@@ -284,7 +281,6 @@ class DayboardRunExecutionDriver:
                     }
                 },
                 context={
-                    "tenant_id": str(context.tenant_id),
                     "user_id": str(context.user_id),
                     "run_id": str(run.id),
                 },
@@ -315,7 +311,6 @@ class DayboardRunExecutionDriver:
             logger.exception(
                 "dayboard.command.failed",
                 run_id=str(run.id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
                 error_type=type(exc).__name__,
@@ -334,7 +329,7 @@ class DayboardRunExecutionDriver:
 
     def _check_budget(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
     ) -> ProviderBudgetEstimate:
         estimate = self.budget_guard.estimate(input_text=run.input_message)
@@ -342,7 +337,6 @@ class DayboardRunExecutionDriver:
             "dayboard.command.budget_check_started",
             run_id=str(run.id),
             thread_id=str(run.thread_id),
-            tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
             model=self.model_name,
             estimated_tokens=estimate.token_units,
@@ -357,7 +351,7 @@ class DayboardRunExecutionDriver:
 
     async def _settle_provider_usage(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         usage_accumulator: RuntimeUsageAccumulator,
         budget_estimate: ProviderBudgetEstimate | None,
@@ -401,14 +395,12 @@ class DayboardRunExecutionDriver:
                     logger.exception(
                         "dayboard.command.provider_budget_reconciliation_failed",
                         run_id=str(run_id),
-                        tenant_id=str(context.tenant_id),
                         user_id=str(context.user_id),
                         model=self.model_name,
                     )
             logger.info(
                 "dayboard.command.provider_usage_settled",
                 run_id=str(run_id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
                 input_tokens=usage.input_tokens,
@@ -421,7 +413,6 @@ class DayboardRunExecutionDriver:
             logger.exception(
                 "dayboard.command.provider_usage_settlement_failed",
                 run_id=str(run_id),
-                tenant_id=str(context.tenant_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
             )

@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Protocol
 
 from agent_platform.core.execution import RunExecutionFailure, RunExecutionOutcome
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.runs import AgentRun
 
 
@@ -17,7 +17,7 @@ RunFailureCallback = Callable[[RunExecutionFailure], Awaitable[bool]]
 class RunExecutionDriver(Protocol):
     async def execute(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         on_completed: RunCompletionCallback,

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.domain.voice import VoiceTranscript
 
@@ -50,7 +50,7 @@ class SpeechToTextProvider(Protocol):
 class VoiceTranscriptStore(Protocol):
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         filename: str | None,
         content_type: str,
@@ -59,21 +59,21 @@ class VoiceTranscriptStore(Protocol):
 
     async def complete_processing(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
         result: SpeechTranscriptionResult,
     ) -> VoiceTranscript | None: ...
 
     async def fail_processing(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
         message: str,
     ) -> VoiceTranscript | None: ...
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
     ) -> VoiceTranscript | None: ...
 

@@ -23,7 +23,7 @@ from agent_platform.core import (
     RunExecutionFailure,
     RunExecutionOutcome,
     RunExecutionOutcomeKind,
-    TenantContext,
+    UserContext,
 )
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
 
@@ -32,25 +32,24 @@ class MemoryRunStore:
     def __init__(self, run: AgentRun) -> None:
         self.record = run
 
-    async def get(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
+    async def get(self, context: UserContext, run_id: UUID) -> AgentRun | None:
         if (
             run_id != self.record.id
-            or context.tenant_id != self.record.tenant_id
-            or context.user_id != self.record.owner_user_id
+            or context.user_id != self.record.user_id
         ):
             return None
         return self.record
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> AgentRun | None:
         return await self.get(context, run_id)
 
     async def transition_status(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         from_statuses: set[AgentRunStatus],
@@ -76,7 +75,7 @@ class MemoryRunEventStore:
 
     async def append(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         run_id: UUID,
         event_type: str,
@@ -86,7 +85,6 @@ class MemoryRunEventStore:
     ) -> AgentRunEvent:
         event = AgentRunEvent(
             id=uuid4(),
-            tenant_id=context.tenant_id,
             run_id=run_id,
             seq=len(self.records) + 1,
             event_type=event_type,
@@ -105,13 +103,12 @@ class MemoryThreadStore:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread | None:
         if (
             thread_id != self.record.id
-            or context.tenant_id != self.record.tenant_id
-            or context.user_id != self.record.owner_user_id
+            or context.user_id != self.record.user_id
         ):
             return None
         return self.record
@@ -123,7 +120,7 @@ class MemoryMessageStore:
 
     async def upsert_assistant(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -149,7 +146,7 @@ class MemoryStateStore:
 
     async def set_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         interaction: PendingInteraction,
@@ -167,7 +164,7 @@ class MemoryStateStore:
 
     async def clear_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None:
         del context
@@ -186,12 +183,11 @@ class MemoryStateStore:
 
 
 class MemoryPlatformUnitOfWork:
-    def __init__(self, context: TenantContext, *, status: AgentRunStatus) -> None:
+    def __init__(self, context: UserContext, *, status: AgentRunStatus) -> None:
         now = datetime.now(UTC)
         thread = ConversationThread(
             id=uuid4(),
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             is_primary=True,
             title=None,
             status=ConversationThreadStatus.active,
@@ -201,8 +197,7 @@ class MemoryPlatformUnitOfWork:
         )
         run = AgentRun(
             id=uuid4(),
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             thread_id=thread.id,
             status=status,
             input_message="安排会议",
@@ -238,7 +233,7 @@ class CallbackDriver:
 
     async def execute(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         on_completed: RunCompletionCallback,
@@ -255,9 +250,8 @@ class CallbackDriver:
         )
 
 
-def build_context() -> TenantContext:
-    return TenantContext(
-        tenant_id=uuid4(),
+def build_context() -> UserContext:
+    return UserContext(
         user_id=uuid4(),
         timezone="Asia/Shanghai",
         locale="zh-CN",

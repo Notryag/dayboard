@@ -20,25 +20,23 @@ from agent_platform.core import (
     IdempotencyConflictError,
     IdempotencyRecord,
     InteractionConflictError,
-    TenantContext,
+    UserContext,
 )
 
 
-def _context() -> TenantContext:
-    return TenantContext(
-        tenant_id=uuid4(),
+def _context() -> UserContext:
+    return UserContext(
         user_id=uuid4(),
         timezone="Asia/Shanghai",
         locale="zh-CN",
     )
 
 
-def _thread(context: TenantContext) -> ConversationThread:
+def _thread(context: UserContext) -> ConversationThread:
     now = datetime.now(UTC)
     return ConversationThread(
         id=uuid4(),
-        tenant_id=context.tenant_id,
-        owner_user_id=context.user_id,
+        user_id=context.user_id,
         is_primary=False,
         title="记录",
         status=ConversationThreadStatus.active,
@@ -48,12 +46,11 @@ def _thread(context: TenantContext) -> ConversationThread:
     )
 
 
-def _run(context: TenantContext, thread_id, run_id=None) -> AgentRun:
+def _run(context: UserContext, thread_id, run_id=None) -> AgentRun:
     now = datetime.now(UTC)
     return AgentRun(
         id=run_id or uuid4(),
-        tenant_id=context.tenant_id,
-        owner_user_id=context.user_id,
+        user_id=context.user_id,
         thread_id=thread_id,
         status=AgentRunStatus.queued,
         input_message="记录今天的数据",
@@ -63,12 +60,11 @@ def _run(context: TenantContext, thread_id, run_id=None) -> AgentRun:
     )
 
 
-def _claim(context: TenantContext, *, request_hash: str, created: bool) -> IdempotencyClaim:
+def _claim(context: UserContext, *, request_hash: str, created: bool) -> IdempotencyClaim:
     return IdempotencyClaim(
         record=IdempotencyRecord(
             id=uuid4(),
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             key="request-1",
             request_hash=request_hash,
             run_id=uuid4(),

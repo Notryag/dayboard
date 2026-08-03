@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from agent_platform.core import EventExtensionEnvelope, TenantContext
+from agent_platform.core import EventExtensionEnvelope, UserContext
 from agent_platform.application import AgentRunService
 from agent_platform.core import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 
@@ -15,7 +15,7 @@ class MemoryRunStore:
 
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         input_message: str,
         thread_id: UUID | None,
@@ -25,8 +25,7 @@ class MemoryRunStore:
         now = datetime.now(UTC)
         run = AgentRun(
             id=run_id or uuid4(),
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             thread_id=thread_id or uuid4(),
             status=status,
             input_message=input_message,
@@ -39,7 +38,7 @@ class MemoryRunStore:
 
     async def transition_status(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         from_statuses: set[AgentRunStatus],
@@ -49,8 +48,7 @@ class MemoryRunStore:
         run = self.records.get(run_id)
         if (
             run is None
-            or run.tenant_id != context.tenant_id
-            or run.owner_user_id != context.user_id
+            or run.user_id != context.user_id
             or run.status not in from_statuses
         ):
             return None
@@ -64,18 +62,15 @@ class MemoryRunStore:
         self.records[run_id] = updated
         return updated
 
-    async def get(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
+    async def get(self, context: UserContext, run_id: UUID) -> AgentRun | None:
         run = self.records.get(run_id)
-        if run is None or (run.tenant_id, run.owner_user_id) != (
-            context.tenant_id,
-            context.user_id,
-        ):
+        if run is None or run.user_id != context.user_id:
             return None
         return run
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> AgentRun | None:
         return await self.get(context, run_id)
@@ -85,15 +80,14 @@ class MemoryRunStore:
 
     async def get_active_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> AgentRun | None:
         return next(
             (
                 run
                 for run in self.records.values()
-                if run.tenant_id == context.tenant_id
-                and run.owner_user_id == context.user_id
+                if run.user_id == context.user_id
                 and run.thread_id == thread_id
                 and run.status in {AgentRunStatus.queued, AgentRunStatus.running}
             ),
@@ -121,7 +115,7 @@ class MemoryRunEventStore:
 
     async def append(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         run_id: UUID,
         event_type: str,
@@ -131,7 +125,6 @@ class MemoryRunEventStore:
     ) -> AgentRunEvent:
         event = AgentRunEvent(
             id=uuid4(),
-            tenant_id=context.tenant_id,
             run_id=run_id,
             seq=len(self.events) + 1,
             event_type=event_type,
@@ -145,7 +138,7 @@ class MemoryRunEventStore:
 
     async def list_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         after_seq: int = 0,
@@ -153,8 +146,7 @@ class MemoryRunEventStore:
         return [
             event
             for event in self.events
-            if event.tenant_id == context.tenant_id
-            and event.run_id == run_id
+            if event.run_id == run_id
             and event.seq > after_seq
         ]
 
@@ -175,8 +167,7 @@ class MemoryRunUnitOfWork:
 
 def test_run_lifecycle_is_storage_independent() -> None:
     async def scenario() -> None:
-        context = TenantContext(
-            tenant_id=uuid4(),
+        context = UserContext(
             user_id=uuid4(),
             timezone="Asia/Shanghai",
             locale="zh-CN",
@@ -203,8 +194,7 @@ def test_run_lifecycle_is_storage_independent() -> None:
 
 def test_failed_run_records_platform_owned_extension() -> None:
     async def scenario() -> None:
-        context = TenantContext(
-            tenant_id=uuid4(),
+        context = UserContext(
             user_id=uuid4(),
             timezone="Asia/Shanghai",
             locale="zh-CN",

@@ -9,9 +9,9 @@ Dayboard owns scheduling semantics, persistence, authorization, and model-visibl
 North owns the generic Agent loop and middleware execution. The model proposes business fields;
 the runtime injects trusted context and the server validates every operation.
 
-The model never receives or supplies `tenant_id`, `user_id`, `run_id`, `operation_key`,
+The model never receives or supplies `user_id`, `run_id`, `operation_key`,
 `*_by_run_id`, permissions, or the trusted default timezone. Local datetime fields have no offset
-and are resolved with `TenantContext.timezone`. A future explicit foreign timezone may be an
+and are resolved with `UserContext.timezone`. A future explicit foreign timezone may be an
 optional model field, but it must never replace the trusted default implicitly.
 
 Schedule receipts expose integer `row_version`; mutations require `expected_row_version` for atomic
@@ -92,7 +92,7 @@ Agent projection exposes only fields required for rendering and subsequent optim
 
 Sequence-dependent creation uses `anchor_entry_id` plus `expected_anchor_row_version` on
 `create_calendar_entry`. These fields are mutually exclusive with direct date/start/end inputs.
-After a search selects one timed entry, the service locks that tenant-owned row, verifies its
+After a search selects one timed entry, the service locks that user scope-owned row, verifies its
 version and active state, derives the new start from its authoritative `end_time`, checks conflicts,
 and creates the new entry in the same transaction. The model must not copy `end_time` into a direct
 `local_start`; doing so would reintroduce a search/write race.

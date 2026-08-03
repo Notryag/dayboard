@@ -8,7 +8,7 @@ from pydantic import AwareDatetime, BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.composition.scheduling import build_scheduling_service
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.domain.calendar import (
     CalendarEntry,
     CalendarEntryCreate,
@@ -169,7 +169,7 @@ class TaskItemChangedError(RuntimeError):
 
 async def create_calendar_entry(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: CreateCalendarEntryInput,
     *,
     created_by_run_id: UUID | None = None,
@@ -252,7 +252,7 @@ async def create_calendar_entry(
 
 async def search_calendar_entries(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: SearchCalendarEntriesInput,
 ) -> list[CalendarEntry]:
     return list(
@@ -267,7 +267,7 @@ async def search_calendar_entries(
 
 async def reschedule_calendar_entry(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: RescheduleCalendarEntryInput,
     *,
     updated_by_run_id: UUID,
@@ -386,7 +386,7 @@ async def reschedule_calendar_entry(
 
 async def cancel_calendar_entry(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: CancelCalendarEntryInput,
     *,
     cancelled_by_run_id: UUID,
@@ -436,7 +436,7 @@ async def cancel_calendar_entry(
 
 async def create_task_item(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: CreateTaskItemInput,
     *,
     created_by_run_id: UUID | None = None,
@@ -474,7 +474,7 @@ async def create_task_item(
 
 async def search_task_items(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: SearchTaskItemsInput,
 ) -> list[TaskItem]:
     return list(
@@ -486,7 +486,7 @@ async def search_task_items(
 
 async def update_task_item(
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     data: UpdateTaskItemInput,
     *,
     updated_by_run_id: UUID,

@@ -8,7 +8,7 @@ from north.runtime import MemoryStreamBridge
 from dayboard.composition.platform import build_platform_unit_of_work_factory
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 class FakeSessionContext:
@@ -69,8 +69,7 @@ def test_run_execution_scope_creates_one_driver_per_run(monkeypatch) -> None:
     assert first is not second
     assert first.driver is not second.driver
     first.driver.agent_factory(
-        TenantContext(
-            tenant_id=uuid4(),
+        UserContext(
             user_id=uuid4(),
             timezone="Asia/Shanghai",
             locale="zh-CN",

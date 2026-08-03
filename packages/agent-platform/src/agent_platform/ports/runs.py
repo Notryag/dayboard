@@ -7,7 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from agent_platform.core.events import EventExtensionEnvelope
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.runs import (
     AgentRun,
     AgentRunEvent,
@@ -19,7 +19,7 @@ from agent_platform.core.runs import (
 class RunStore(Protocol):
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         input_message: str,
         thread_id: UUID | None,
@@ -29,7 +29,7 @@ class RunStore(Protocol):
 
     async def transition_status(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         from_statuses: set[AgentRunStatus],
@@ -37,11 +37,11 @@ class RunStore(Protocol):
         result_message: str | None = None,
     ) -> AgentRun | None: ...
 
-    async def get(self, context: TenantContext, run_id: UUID) -> AgentRun | None: ...
+    async def get(self, context: UserContext, run_id: UUID) -> AgentRun | None: ...
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> AgentRun | None: ...
 
@@ -49,7 +49,7 @@ class RunStore(Protocol):
 
     async def get_active_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> AgentRun | None: ...
 
@@ -61,7 +61,7 @@ class RunStore(Protocol):
 class RunEventStore(Protocol):
     async def append(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         run_id: UUID,
         event_type: str,
@@ -72,7 +72,7 @@ class RunEventStore(Protocol):
 
     async def list_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         after_seq: int = 0,

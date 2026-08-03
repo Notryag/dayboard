@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.reminders import ReminderService
 from dayboard.composition.reminders import build_reminder_services
@@ -52,16 +52,16 @@ class SignalingReminderSourceRepository(ReminderSourceRepository):
 
 async def _create_due_reminder(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> CalendarEntry:
     scheduling = build_scheduling_services(db_session)
     start = datetime.now(UTC) + timedelta(minutes=5)
     entry = await scheduling.scheduling.create_calendar_entry(
-        tenant_context,
+        user_context,
         CalendarEntryCreate(
             title="事务边界提醒",
             start_time=start,
-            timezone=tenant_context.timezone,
+            timezone=user_context.timezone,
             reminder=Reminder(offset="PT10M"),
         ),
     )
@@ -71,9 +71,9 @@ async def _create_due_reminder(
 
 async def test_reminder_service_leaves_commit_to_outer_transaction(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
-    await _create_due_reminder(db_session, tenant_context)
+    await _create_due_reminder(db_session, user_context)
     scope = build_reminder_services(db_session)
     commit_calls = 0
 
@@ -91,9 +91,9 @@ async def test_reminder_service_leaves_commit_to_outer_transaction(
 
 async def test_source_lock_failure_leaves_due_delivery_pending(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
-    await _create_due_reminder(db_session, tenant_context)
+    await _create_due_reminder(db_session, user_context)
     scope = build_reminder_services(db_session)
     scope.unit_of_work.sources = FailingReminderSourceStore()  # type: ignore[assignment]
     service = ReminderService(scope.unit_of_work)
@@ -110,14 +110,14 @@ async def test_source_lock_failure_leaves_due_delivery_pending(
 
 async def test_concurrent_reschedule_finishes_before_worker_claims_old_reminder(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
-    entry = await _create_due_reminder(db_session, tenant_context)
+    entry = await _create_due_reminder(db_session, user_context)
     moved_start = entry.start_time + timedelta(days=1)
 
     async with SessionLocal() as schedule_session, SessionLocal() as worker_session:
         moved = await CalendarEntryRepository(schedule_session).reschedule(
-            tenant_context,
+            user_context,
             entry_id=entry.id,
             timing_kind=CalendarTimingKind.timed,
             scheduled_date=None,
@@ -148,7 +148,7 @@ async def test_concurrent_reschedule_finishes_before_worker_claims_old_reminder(
             await asyncio.wait_for(asyncio.shield(worker_task), timeout=0.05)
 
         await ReminderDeliveryRepository(schedule_session).replace_pending(
-            tenant_context,
+            user_context,
             source_type=ReminderSourceType.calendar_entry,
             source_id=entry.id,
             scheduled_for=moved_start - timedelta(minutes=10),

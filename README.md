@@ -127,7 +127,7 @@ OPENAI_BASE_URL=
 
 通过 Northgate 做小流量验证时，可以保留原供应商连接，并额外设置
 `DAYBOARD_NORTHGATE_BASE_URL`、`DAYBOARD_NORTHGATE_APPLICATION_KEY` 和
-`DAYBOARD_NORTHGATE_CANARY_TENANT_IDS`。具体步骤见[部署指南](./docs/deploy.md)。
+`DAYBOARD_NORTHGATE_CANARY_USER_IDS`。具体步骤见[部署指南](./docs/deploy.md)。
 
 ### 2. 启动后端
 

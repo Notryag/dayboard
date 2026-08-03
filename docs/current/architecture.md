@@ -83,11 +83,11 @@ an active Thread; archived history remains readable but cannot accept new comman
 | Boundary | Owns | Must not own |
 | --- | --- | --- |
 | Web | authenticated presentation, recording gestures, REST/SSE clients | intent policy, trusted identity, persistence |
-| FastAPI | auth, validation, tenant context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
+| FastAPI | auth, validation, user context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
 | Worker | queued job execution, dependency composition, stale-Run recovery, reminder delivery | browser sessions |
 | North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
 | Agent Platform | identity, Conversation/Run contracts, lifecycle coordination, persistence ports | North or scheduling concepts |
-| Dayboard Agent | prompt, seven scheduling tools, North adapter, safe result projection | tenant identity or direct model-authorized writes |
+| Dayboard Agent | prompt, seven scheduling tools, North adapter, safe result projection | user identity or direct model-authorized writes |
 | Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
 | PostgreSQL | durable product and execution state | queue delivery or live fanout |
 | Redis | arq queue, rate limits, locks, Redis Streams | durable product truth |
@@ -169,12 +169,11 @@ dayboard.workers       arq Run and reminder jobs
 dayboard.integrations  ASR and external provider adapters
 ```
 
-Trusted `TenantContext` is resolved from the authenticated server session or the dedicated Eval
-Bearer identity configured by token digest, tenant ID, and user ID. Eval authentication revalidates
-the active database user and tenant membership on every request; it does not accept caller-supplied
-identity fields. Tenant, owner, timezone,
-thread, Run, operation keys, and permissions are injected by the runtime and never exposed as
-model-supplied tool arguments. Repository queries scope business data by tenant and owner.
+Trusted `UserContext` is resolved from the authenticated server session or the dedicated Eval
+Bearer identity configured by token digest and user ID. Eval authentication revalidates the active
+database user on every request; it does not accept caller-supplied identity fields. User ID,
+timezone, thread, Run, operation keys, and permissions are injected by the runtime and never
+exposed as model-supplied tool arguments. Repository queries scope business data by user ID.
 
 Dayboard's composition roots connect Platform Conversation and Run services to PostgreSQL adapters.
 `dayboard.composition.platform` builds an explicit per-session Platform scope and a fresh
@@ -183,7 +182,7 @@ builds the storage-free command application service, while `dayboard.composition
 North driver per persisted Run with its stream bridge, trusted Agent factory, Provider Usage
 settlement port, and budget guard. The platform owns persistence use cases, paging, state
 transitions and lifecycle event policy; adapters own SQLAlchemy rows, constraint translation,
-tenant-scoped queries, and individual database operations. Dayboard's clarification service owns
+user-scoped queries, and individual database operations. Dayboard's clarification service owns
 scheduling candidate validation, local-time projection, public state filtering, and user-facing
 choice text.
 
@@ -200,7 +199,7 @@ Reminder inbox and delivery processing use a separate product-owned Unit of Work
 service depends on delivery and source-projection ports and receives domain snapshots rather than
 SQLAlchemy rows; `dayboard.composition` wires those ports to the SQLAlchemy Unit of Work for API and
 Worker processes. API mutations and the Worker own the commit boundary. Due processing first reads
-candidate deliveries, locks their tenant/owner-scoped source rows in stable order, and only then
+candidate deliveries, locks their user-scoped source rows in stable order, and only then
 claims still-due Reminder rows. This matches Scheduling's source-then-delivery lock order and makes
 concurrent rescheduling linearizable rather than mixing an old reminder with an uncommitted new
 source. Source checking plus transitions to `delivered`, `expired`, or `cancelled` happen in one
@@ -209,7 +208,7 @@ future Web Push adapter must commit the claim before network delivery and finali
 second transaction. Queue-only states are not exposed as inbox entries.
 
 Voice transcription uses its own product-owned Unit of Work and an application-owned ASR provider
-port. The application service first commits a tenant/owner-scoped `processing` transcript, calls the
+port. The application service first commits a user-scoped `processing` transcript, calls the
 external provider without an open database transaction, and then commits exactly one terminal
 `completed` or `failed` transition. Terminal updates lock and match only rows that are still
 `processing`; repository adapters return domain transcripts and keep ORM rows plus provider request
@@ -217,7 +216,7 @@ metadata inside `dayboard.db`. `dayboard.composition.voice` is the only module t
 application service to the SQLAlchemy Unit of Work.
 
 Account Recovery uses a separate Dayboard-owned Unit of Work because credentials and reset tokens
-are global user identity data rather than tenant-scoped scheduling records. The application service
+are global user identity data rather than user-scoped scheduling records. The application service
 owns CSPRNG token generation, SHA-256 token digests, password-hasher orchestration, and expiry
 policy, but it never imports SQLAlchemy or commits. The API commits token issue or successful
 consumption before scheduling email delivery or deleting the browser cookie. Repository operations
@@ -233,9 +232,9 @@ Provider Usage crosses a narrow settlement port after the Run has reached its au
 terminal state. The SQLAlchemy settlement adapter opens its own short Session, delegates SQL to the
 repository, and commits or rolls back without a feature-specific Unit-of-Work or application
 service. Typed aggregates and storage-neutral settlement results cross the port; SQLAlchemy rows
-remain inside `dayboard.db`. PostgreSQL inserts through an owner-scoped `INSERT ... SELECT` from the
-trusted Run, so an incorrect tenant or owner cannot create a record or occupy the unique
-`(tenant_id, run_id)` key. Concurrent settlement is idempotent and immutable: exactly one
+remain inside `dayboard.db`. PostgreSQL inserts through a user-scoped `INSERT ... SELECT` from the
+trusted Run, so an incorrect user cannot create a record or occupy the unique
+`(user_id, run_id)` key. Concurrent settlement is idempotent and immutable: exactly one
 transaction creates the aggregate, and only that winner may reconcile the prior Redis budget
 reservation. Usage persistence or budget-reconciliation failures are logged without changing the
 completed or failed Run outcome.
@@ -256,7 +255,7 @@ Unit of Work for every durable event instead of sharing the Run's main session. 
 callbacks deliver a typed `RuntimeExecutionResult`; Dayboard projects it into a Platform outcome
 before North emits its end sentinel, so PostgreSQL is already terminal when the browser observes
 stream completion. Redis carries only
-`run_id`; the worker reloads tenant, owner, thread, and input from PostgreSQL and composes a new
+`run_id`; the worker reloads user ID, thread, and input from PostgreSQL and composes a new
 driver for that Run. The superseded queue/execution protocol has no compatibility path.
 
 The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
@@ -389,11 +388,11 @@ owns gateway accounting rather than Dayboard product state; model providers own 
 
 PostgreSQL stores:
 
-- users, credentials, sessions, memberships, and profiles;
+- users, credentials, sessions, external identities, and profiles;
 - calendar entries, tasks, reminders, and delivery records;
 - conversation threads, messages, compaction summaries, and clarification state;
 - Agent Runs, durable RuntimeJournal events, and provider usage settlement;
-- tenant/owner scope, audit timestamps, soft-deletion state, and Run correlation.
+- user ID, audit timestamps, soft-deletion state, and Run correlation.
 
 Dayboard Alembic owns and compares only Dayboard tables. North's checkpoint saver owns
 `checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, and `checkpoint_migrations`; those tables
@@ -437,5 +436,5 @@ Operational procedures live in [../deploy.md](../deploy.md) and
 - Worker execution has one production path: North `RunExecutor` plus `StreamBridge`.
 - RuntimeJournal events are diagnostics, not the browser's canonical message protocol.
 - Tool success follows committed persistence; model text never creates product state.
-- Tenant, owner, timezone, Run, and idempotency context are server-controlled.
+- user ID, timezone, Run, and idempotency context are server-controlled.
 - Unreleased superseded paths are removed rather than retained as compatibility layers.

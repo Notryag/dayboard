@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from typing import Literal, Protocol
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind
 from dayboard.domain.reminders import ReminderSourceType
@@ -17,13 +17,13 @@ from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, Task
 class CalendarEntryStore(Protocol):
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         data: CalendarEntryCreate,
     ) -> CalendarEntry: ...
 
     async def list_page(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
@@ -37,7 +37,7 @@ class CalendarEntryStore(Protocol):
 
     async def search_active(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -48,32 +48,32 @@ class CalendarEntryStore(Protocol):
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None: ...
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None: ...
 
     async def get_including_cancelled(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None: ...
 
     async def get_by_updated_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None: ...
 
     async def reschedule(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         timing_kind: CalendarTimingKind,
@@ -87,14 +87,14 @@ class CalendarEntryStore(Protocol):
 
     async def get_by_cancelled_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None: ...
 
     async def cancel(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -105,14 +105,14 @@ class CalendarEntryStore(Protocol):
 
     async def get_by_created_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> CalendarEntry | None: ...
 
     async def cancel_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -120,7 +120,7 @@ class CalendarEntryStore(Protocol):
 
     async def complete_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -128,7 +128,7 @@ class CalendarEntryStore(Protocol):
 
     async def reopen_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -136,7 +136,7 @@ class CalendarEntryStore(Protocol):
 
     async def update_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         title: str,
@@ -149,7 +149,7 @@ class CalendarEntryStore(Protocol):
 
     async def list_overlapping(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -159,11 +159,11 @@ class CalendarEntryStore(Protocol):
 
 
 class TaskItemStore(Protocol):
-    async def create(self, context: TenantContext, data: TaskItemCreate) -> TaskItem: ...
+    async def create(self, context: UserContext, data: TaskItemCreate) -> TaskItem: ...
 
     async def list_page(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: TaskStatus | None,
         due_kind: Literal["all", "dated", "undated"],
@@ -178,7 +178,7 @@ class TaskItemStore(Protocol):
 
     async def search(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         title_query: str | None = None,
         status: TaskStatus | None = TaskStatus.open,
@@ -186,20 +186,20 @@ class TaskItemStore(Protocol):
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         task_id: UUID,
     ) -> TaskItem | None: ...
 
     async def get_by_updated_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> TaskItem | None: ...
 
     async def update(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         data: TaskItemUpdate,
@@ -208,7 +208,7 @@ class TaskItemStore(Protocol):
 
     async def update_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         title: str,
@@ -218,14 +218,14 @@ class TaskItemStore(Protocol):
 
     async def get_by_created_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> TaskItem | None: ...
 
     async def set_status_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         status: TaskStatus,
@@ -236,7 +236,7 @@ class TaskItemStore(Protocol):
 class ReminderScheduleStore(Protocol):
     async def replace_pending(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         source_type: ReminderSourceType,
         source_id: UUID,

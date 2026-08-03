@@ -9,7 +9,7 @@ from agent_platform.core.events import (
     EventExtensionEnvelope,
     build_run_failure_event_extension,
 )
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.runs import AgentRun, AgentRunEvent, AgentRunEventCategory, AgentRunStatus
 from agent_platform.ports.unit_of_work import RunUnitOfWork
 
@@ -22,7 +22,7 @@ class AgentRunService:
 
     async def create_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         input_message: str,
         thread_id: UUID | None = None,
@@ -44,7 +44,7 @@ class AgentRunService:
         )
         return run
 
-    async def mark_running(self, context: TenantContext, run: AgentRun) -> bool:
+    async def mark_running(self, context: UserContext, run: AgentRun) -> bool:
         transitioned = await self.runs.transition_status(
             context,
             run.id,
@@ -63,7 +63,7 @@ class AgentRunService:
 
     async def append_progress(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         event_type: str,
@@ -82,7 +82,7 @@ class AgentRunService:
 
     async def mark_completed(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         result_message: str,
@@ -109,7 +109,7 @@ class AgentRunService:
 
     async def mark_needs_clarification(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         question: str,
@@ -136,7 +136,7 @@ class AgentRunService:
 
     async def mark_failed(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         error_type: str,
@@ -164,7 +164,7 @@ class AgentRunService:
 
     async def mark_cancelled(
         self,
-        context: TenantContext,
+        context: UserContext,
         run: AgentRun,
         *,
         event_content: str | None = None,
@@ -186,12 +186,12 @@ class AgentRunService:
         )
         return True
 
-    async def get_run(self, context: TenantContext, run_id: UUID) -> AgentRun | None:
+    async def get_run(self, context: UserContext, run_id: UUID) -> AgentRun | None:
         return await self.runs.get(context, run_id)
 
     async def get_run_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> AgentRun | None:
         return await self.runs.get_for_update(context, run_id)
@@ -201,14 +201,14 @@ class AgentRunService:
 
     async def get_active_thread_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> AgentRun | None:
         return await self.runs.get_active_for_thread(context, thread_id)
 
     async def list_events(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         *,
         after_seq: int = 0,

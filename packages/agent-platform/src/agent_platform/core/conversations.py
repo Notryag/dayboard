@@ -24,8 +24,7 @@ class ConversationThreadStatus(StrEnum):
 
 class ConversationThread(BaseModel):
     id: UUID
-    tenant_id: UUID
-    owner_user_id: UUID
+    user_id: UUID
     is_primary: bool
     title: str | None
     status: ConversationThreadStatus

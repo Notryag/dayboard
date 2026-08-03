@@ -13,13 +13,12 @@ from agent_platform.core import (
     EventExtensionEnvelope,
     PresentationEnvelope,
 )
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from agent_platform.core import AgentRunEvent, AgentRunEventCategory
 
 
-def test_tenant_context_is_trusted_immutable_data() -> None:
-    context = TenantContext(
-        tenant_id=uuid4(),
+def test_user_context_is_trusted_immutable_data() -> None:
+    context = UserContext(
         user_id=uuid4(),
         timezone="Asia/Shanghai",
         locale="zh-CN",
@@ -53,7 +52,6 @@ def test_run_event_rejects_empty_event_type() -> None:
     with pytest.raises(ValidationError):
         AgentRunEvent(
             id=uuid4(),
-            tenant_id=uuid4(),
             run_id=uuid4(),
             seq=1,
             event_type="",

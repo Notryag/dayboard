@@ -15,7 +15,7 @@ from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.run_execution import DayboardRunExecutionDriver
 from dayboard.agent.run_result_projection import extract_clarification_payload
 from dayboard.config import Settings
-from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
+from agent_platform.core import AgentRun, AgentRunStatus, UserContext
 
 
 def test_clarification_state_uses_real_search_tool_candidates() -> None:
@@ -36,7 +36,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
                     "end_time": "2026-07-11T01:00:00+00:00",
                     "timezone": "Asia/Shanghai",
                     "status": "scheduled",
-                    "tenant_id": "must-not-persist",
+                    "user_id": "must-not-persist",
                 },
             },
         }
@@ -55,7 +55,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
     assert payload.presentation is not None
     assert payload.presentation.type == "calendar_entry_choice"
     assert payload.presentation.options[0].title == "产品会议"
-    assert not hasattr(candidate, "tenant_id")
+    assert not hasattr(candidate, "user_id")
 
 
 def test_clarification_state_uses_agent_suggested_choices_without_search_results() -> None:
@@ -144,7 +144,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
 
 def test_build_dayboard_agent_attaches_trusted_northgate_metadata(
     monkeypatch,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     captured = {}
     run_id = UUID("00000000-0000-0000-0000-000000000401")
@@ -169,20 +169,19 @@ def test_build_dayboard_agent_attaches_trusted_northgate_metadata(
             DAYBOARD_NORTHGATE_METADATA_ENABLED=True,
         ),
         tools=[],
-        context=tenant_context,
+        context=user_context,
         run_id=run_id,
     )
 
     assert captured["model_headers"] == {
         "Northgate-Metadata": (
-            f'{{"tenant_id":"{tenant_context.tenant_id}",'
-            f'"user_id":"{tenant_context.user_id}","run_id":"{run_id}"}}'
+            f'{{"user_id":"{user_context.user_id}","run_id":"{run_id}"}}'
         )
     }
 
 
 def test_build_dayboard_agent_requires_trusted_context_for_northgate_metadata() -> None:
-    with pytest.raises(ValueError, match="trusted tenant context and run ID"):
+    with pytest.raises(ValueError, match="trusted user context and run ID"):
         build_dayboard_agent(
             Settings(
                 APP_MODEL_NAME="openai:gpt-test",
@@ -192,9 +191,9 @@ def test_build_dayboard_agent_requires_trusted_context_for_northgate_metadata() 
         )
 
 
-def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
+def test_build_dayboard_agent_selects_northgate_for_canary_user(
     monkeypatch,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     captured = {}
     run_id = UUID("00000000-0000-0000-0000-000000000402")
@@ -217,13 +216,13 @@ def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
         APP_MODEL_NAME="openai:gpt-test",
         DAYBOARD_NORTHGATE_BASE_URL="http://northgate:8080/v1/gateways/dayboard/openai",
         DAYBOARD_NORTHGATE_APPLICATION_KEY="northgate-key",
-        DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=str(tenant_context.tenant_id),
+        DAYBOARD_NORTHGATE_CANARY_USER_IDS=str(user_context.user_id),
     )
 
     build_dayboard_agent(
         settings,
         tools=[],
-        context=tenant_context,
+        context=user_context,
         run_id=run_id,
     )
 
@@ -237,9 +236,9 @@ def test_build_dayboard_agent_selects_northgate_for_canary_tenant(
     assert "Northgate-Metadata" in captured["model_headers"]
 
 
-def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
+def test_build_dayboard_agent_keeps_non_canary_user_on_default_connection(
     monkeypatch,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     captured = {}
 
@@ -261,7 +260,7 @@ def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
         APP_MODEL_NAME="openai:gpt-test",
         DAYBOARD_NORTHGATE_BASE_URL="http://northgate:8080/v1/gateways/dayboard/openai",
         DAYBOARD_NORTHGATE_APPLICATION_KEY="northgate-key",
-        DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=(
+        DAYBOARD_NORTHGATE_CANARY_USER_IDS=(
             "00000000-0000-0000-0000-000000000099"
         ),
     )
@@ -269,7 +268,7 @@ def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
     build_dayboard_agent(
         settings,
         tools=[],
-        context=tenant_context,
+        context=user_context,
         run_id=UUID("00000000-0000-0000-0000-000000000403"),
     )
 
@@ -283,7 +282,7 @@ def test_build_dayboard_agent_keeps_non_canary_tenant_on_default_connection(
 
 def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
     monkeypatch,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     captured = []
 
@@ -302,8 +301,8 @@ def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
     monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
     settings = Settings(APP_MODEL_NAME="openai:gpt-test")
 
-    build_dayboard_agent(settings, tools=[], context=tenant_context)
-    build_dayboard_agent(settings, tools=[], context=tenant_context)
+    build_dayboard_agent(settings, tools=[], context=user_context)
+    build_dayboard_agent(settings, tools=[], context=user_context)
 
     assert captured[0] == captured[1]
     assert captured[0].startswith("dayboard-scheduling-v1-")
@@ -312,7 +311,7 @@ def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
 
 def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
     monkeypatch,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     captured = {}
 
@@ -333,7 +332,7 @@ def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
     build_dayboard_agent(
         Settings(APP_MODEL_NAME="anthropic:claude-test"),
         tools=[],
-        context=tenant_context,
+        context=user_context,
     )
 
     assert captured == {}
@@ -369,11 +368,11 @@ def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch)
 def test_build_dayboard_agent_rejects_trusted_context_in_tool_schema() -> None:
     class UnsafeTool:
         name = "search_knowledge"
-        args = {"query": {"type": "string"}, "tenant_id": {"type": "string"}}
+        args = {"query": {"type": "string"}, "user_id": {"type": "string"}}
 
     with pytest.raises(
         ValueError,
-        match="search_knowledge.*trusted server context.*tenant_id",
+        match="search_knowledge.*trusted server context.*user_id",
     ):
         build_dayboard_agent(
             Settings(APP_MODEL_NAME="openai:gpt-test"),
@@ -382,7 +381,7 @@ def test_build_dayboard_agent_rejects_trusted_context_in_tool_schema() -> None:
 
 
 async def test_dayboard_driver_maps_north_clarification_result_to_platform_outcome(
-    tenant_context: TenantContext,
+    user_context: UserContext,
     monkeypatch,
 ) -> None:
     built = {}
@@ -391,8 +390,7 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
     now = datetime.now(UTC)
     run = AgentRun(
         id=run_id,
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         thread_id=uuid4(),
         status=AgentRunStatus.running,
         input_message="安排会议",
@@ -453,9 +451,9 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         executor_factory=fake_executor_factory(fake_invoker),
     )
 
-    await driver.execute(tenant_context, run, on_completed=complete, on_failed=fail)
+    await driver.execute(user_context, run, on_completed=complete, on_failed=fail)
 
-    assert built["context"] == tenant_context
+    assert built["context"] == user_context
     assert built["run_id"] == run_id
     assert outcomes[0].result_message == "几点开始？"
     assert outcomes[0].interaction is not None
@@ -463,7 +461,7 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
 
 
 async def test_dayboard_driver_logs_and_projects_failure(
-    tenant_context: TenantContext,
+    user_context: UserContext,
     caplog,
 ) -> None:
     recorded_failures = []
@@ -482,8 +480,7 @@ async def test_dayboard_driver_logs_and_projects_failure(
     now = datetime.now(UTC)
     run = AgentRun(
         id=uuid4(),
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         thread_id=uuid4(),
         status=AgentRunStatus.running,
         input_message="安排会议",
@@ -511,7 +508,7 @@ async def test_dayboard_driver_logs_and_projects_failure(
     with caplog.at_level(logging.ERROR, logger="dayboard.agent.run_execution"):
         with pytest.raises(RuntimeError, match="provider unavailable"):
             await driver.execute(
-                tenant_context,
+                user_context,
                 run,
                 on_completed=complete,
                 on_failed=fail,

@@ -41,7 +41,7 @@ anytime
   start_time and end_time are null
 ```
 
-Common fields include title, trusted IANA timezone, participants, reminder, status, tenant/owner
+Common fields include title, trusted IANA timezone, participants, reminder, status, user
 scope, audit timestamps, and Run correlation. Status is `scheduled`, `completed`, or `cancelled`.
 
 Timed entries default to one hour when duration is omitted. Dayboard automatically checks clock
@@ -104,13 +104,13 @@ as a live schedule item.
 
 ## Conversation And Clarification
 
-Conversation threads and messages are durable and owner-scoped. Bounded context and persisted
+Conversation threads and messages are durable and user-scoped. Bounded context and persisted
 compaction summaries prevent full history from being sent to every model call.
 The mobile client resolves the owner's primary Thread from PostgreSQL before loading history.
 Device-local storage never determines conversation ownership, so another device restores
 the same durable history instead of silently creating a separate conversation.
 The product exposes one primary conversation per owner. The first screen loads the newest 30
-messages, and scrolling upward follows an owner-scoped `(created_at, id)` cursor to fetch older
+messages, and scrolling upward follows an user-scoped `(created_at, id)` cursor to fetch older
 pages without shifting the visible scroll position. Isolated evaluation Threads are active,
 non-primary records (`is_primary = false`); they are not product conversations and do not appear in
 this history. `active | archived` describes lifecycle only, and archived Threads cannot accept new
@@ -130,10 +130,10 @@ The Agent does not ask for confirmation when the target and requested action are
 ## Identity And Ownership
 
 Users can register with password authentication. Server-side sessions use secure `HttpOnly`
-cookies. Membership and profile records resolve trusted tenant, owner, timezone, and locale context.
+cookies. Profile records resolve trusted user, timezone, and locale context.
 
 Every conversation, Run, schedule object, transcript, reminder, and provider usage record is scoped
-by tenant and owner. Browser headers, user text, queued job payloads, and model arguments cannot
+by user. Browser headers, user text, queued job payloads, and model arguments cannot
 override that scope.
 
 Scheduling currently resolves local time with the trusted account context, which defaults to

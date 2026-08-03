@@ -7,20 +7,20 @@ from typing import Protocol
 from uuid import UUID
 
 from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 
 
 class IdempotencyStore(Protocol):
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         key: str,
     ) -> IdempotencyRecord | None: ...
 
     async def claim(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         key: str,
         request_hash: str,

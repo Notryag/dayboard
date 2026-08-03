@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.scheduling_ports import SchedulingUnitOfWork
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind
@@ -21,7 +21,7 @@ class SchedulingService:
 
     async def _sync_calendar_reminder(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry: CalendarEntry,
     ) -> None:
         active = (
@@ -53,7 +53,7 @@ class SchedulingService:
 
     async def _sync_task_reminder(
         self,
-        context: TenantContext,
+        context: UserContext,
         task: TaskItem,
     ) -> None:
         active = (
@@ -85,7 +85,7 @@ class SchedulingService:
 
     async def create_calendar_entry(
         self,
-        context: TenantContext,
+        context: UserContext,
         data: CalendarEntryCreate,
     ) -> CalendarEntry:
         entry = await self.calendar_entries.create(context, data)
@@ -94,7 +94,7 @@ class SchedulingService:
 
     async def search_calendar_entries(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -117,28 +117,28 @@ class SchedulingService:
 
     async def get_calendar_entry(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None:
         return await self.calendar_entries.get(context, entry_id)
 
     async def get_calendar_entry_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None:
         return await self.calendar_entries.get_for_update(context, entry_id)
 
     async def get_calendar_entry_including_cancelled(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None:
         return await self.calendar_entries.get_including_cancelled(context, entry_id)
 
     async def get_calendar_entry_updated_by_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
@@ -146,7 +146,7 @@ class SchedulingService:
 
     async def reschedule_calendar_entry(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         timing_kind: CalendarTimingKind,
@@ -174,7 +174,7 @@ class SchedulingService:
 
     async def get_calendar_entry_cancelled_by_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
@@ -186,7 +186,7 @@ class SchedulingService:
 
     async def cancel_calendar_entry(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -208,7 +208,7 @@ class SchedulingService:
 
     async def get_calendar_entry_created_by_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> CalendarEntry | None:
@@ -216,7 +216,7 @@ class SchedulingService:
 
     async def cancel_calendar_entry_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -232,7 +232,7 @@ class SchedulingService:
 
     async def complete_calendar_entry_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -248,7 +248,7 @@ class SchedulingService:
 
     async def reopen_calendar_entry_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -264,7 +264,7 @@ class SchedulingService:
 
     async def update_calendar_entry_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         title: str,
@@ -290,7 +290,7 @@ class SchedulingService:
 
     async def list_calendar_conflicts(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -307,7 +307,7 @@ class SchedulingService:
 
     async def create_task_item(
         self,
-        context: TenantContext,
+        context: UserContext,
         data: TaskItemCreate,
     ) -> TaskItem:
         task = await self.task_items.create(context, data)
@@ -316,7 +316,7 @@ class SchedulingService:
 
     async def search_task_items(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         title_query: str | None = None,
         status: TaskStatus | None = TaskStatus.open,
@@ -327,12 +327,12 @@ class SchedulingService:
             status=status,
         )
 
-    async def get_task_item(self, context: TenantContext, task_id: UUID) -> TaskItem | None:
+    async def get_task_item(self, context: UserContext, task_id: UUID) -> TaskItem | None:
         return await self.task_items.get(context, task_id)
 
     async def get_task_item_updated_by_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> TaskItem | None:
@@ -340,7 +340,7 @@ class SchedulingService:
 
     async def update_task_item(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         data: TaskItemUpdate,
@@ -358,7 +358,7 @@ class SchedulingService:
 
     async def get_task_item_created_by_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> TaskItem | None:
@@ -366,7 +366,7 @@ class SchedulingService:
 
     async def set_task_status_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         status: TaskStatus,
@@ -384,7 +384,7 @@ class SchedulingService:
 
     async def update_task_item_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         title: str,

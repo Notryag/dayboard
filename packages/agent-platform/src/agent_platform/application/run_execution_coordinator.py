@@ -13,7 +13,7 @@ from agent_platform.core.execution import (
     RunExecutionOutcome,
     RunExecutionOutcomeKind,
 )
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.runs import AgentRunStatus
 from agent_platform.ports.execution import RunExecutionDriver
 from agent_platform.ports.unit_of_work import PlatformUnitOfWork
@@ -37,7 +37,7 @@ class RunExecutionCoordinator:
 
     async def execute(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         driver: RunExecutionDriver,
     ) -> None:
@@ -96,7 +96,7 @@ class RunExecutionCoordinator:
 
     async def fail(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         failure: RunExecutionFailure,
     ) -> bool:
@@ -132,7 +132,7 @@ class RunExecutionCoordinator:
 
     async def _complete(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         outcome: RunExecutionOutcome,
     ) -> None:

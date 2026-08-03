@@ -42,7 +42,7 @@ async def test_redis_dispatcher_rejects_duplicate_job(
         raise AssertionError("duplicate job should be rejected")
 
 
-async def test_redis_dispatcher_aborts_run_job(tenant_context, monkeypatch) -> None:
+async def test_redis_dispatcher_aborts_run_job(user_context, monkeypatch) -> None:
     captured = {}
 
     class FakeJob:

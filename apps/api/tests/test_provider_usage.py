@@ -11,7 +11,7 @@ import pytest
 from fake_runtime import fake_executor_factory
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import AgentRunStatus, TenantContext
+from agent_platform.core import AgentRunStatus, UserContext
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
 from dayboard.app.command_schemas import CommandRequest
 from dayboard.composition.platform import build_run_service
@@ -78,7 +78,7 @@ def _run_scope(
 
 async def test_command_service_records_provider_usage(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async def fake_invoker(**kwargs):
         sink = kwargs["event_sink"]
@@ -120,10 +120,10 @@ async def test_command_service_records_provider_usage(
     service = build_command_service(db_session)
 
     request = CommandRequest(message="安排会议")
-    run_id = await service.create_command_run(tenant_context, request)
-    await scope.execute(tenant_context, run_id)
+    run_id = await service.create_command_run(user_context, request)
+    await scope.execute(user_context, run_id)
     records = await ProviderUsageRepository(db_session).list_for_run(
-        tenant_context,
+        user_context,
         run_id,
     )
 
@@ -139,7 +139,7 @@ async def test_command_service_records_provider_usage(
 
 async def test_runtime_events_are_serialized_with_independent_sessions(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async def fake_invoker(**kwargs):
         sink = kwargs["event_sink"]
@@ -166,12 +166,12 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
     scope = _run_scope(db_session, fake_invoker)
     service = build_command_service(db_session)
     request = CommandRequest(message="创建两个任务")
-    run_id = await service.create_command_run(tenant_context, request)
-    await scope.execute(tenant_context, run_id)
+    run_id = await service.create_command_run(user_context, request)
+    await scope.execute(user_context, run_id)
 
     from dayboard.composition.platform import build_run_service
 
-    events = await build_run_service(db_session).list_events(tenant_context, run_id)
+    events = await build_run_service(db_session).list_events(user_context, run_id)
     starts = [event for event in events if event.event_type == "tool_call_started"]
     assert [event.seq for event in starts] == sorted(event.seq for event in starts)
     assert all(event.extension is not None for event in starts)
@@ -187,7 +187,7 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
 
 async def test_model_lifecycle_is_audited_without_user_stream_publication(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     class RecordingBridge:
         def __init__(self) -> None:
@@ -223,12 +223,12 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
     scope = _run_scope(db_session, fake_invoker, stream_bridge=bridge)
     service = build_command_service(db_session)
     request = CommandRequest(message="安排会议")
-    run_id = await service.create_command_run(tenant_context, request)
-    await scope.execute(tenant_context, run_id)
+    run_id = await service.create_command_run(user_context, request)
+    await scope.execute(user_context, run_id)
 
     from dayboard.composition.platform import build_run_service
 
-    events = await build_run_service(db_session).list_events(tenant_context, run_id)
+    events = await build_run_service(db_session).list_events(user_context, run_id)
     assert "agent_model_completed" in {event.event_type for event in events}
     assert "tool_call_started" in {event.event_type for event in events}
     assert "agent_model_completed" not in bridge.events
@@ -237,7 +237,7 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
 
 async def test_command_service_does_not_invent_missing_provider_usage(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async def fake_invoker(**kwargs):
         del kwargs
@@ -247,16 +247,16 @@ async def test_command_service_does_not_invent_missing_provider_usage(
     service = build_command_service(db_session)
 
     request = CommandRequest(message="安排会议")
-    run_id = await service.create_command_run(tenant_context, request)
-    await scope.execute(tenant_context, run_id)
+    run_id = await service.create_command_run(user_context, request)
+    await scope.execute(user_context, run_id)
 
-    assert await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id) == []
+    assert await ProviderUsageRepository(db_session).list_for_run(user_context, run_id) == []
 
 
 @pytest.mark.parametrize("error", [RuntimeError("provider failed"), asyncio.CancelledError()])
 async def test_command_service_settles_usage_when_invocation_does_not_return(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
     error: BaseException,
 ) -> None:
     async def fake_invoker(**kwargs):
@@ -275,52 +275,51 @@ async def test_command_service_settles_usage_when_invocation_does_not_return(
     scope = _run_scope(db_session, fake_invoker)
     service = build_command_service(db_session)
     request = CommandRequest(message="安排会议")
-    run_id = await service.create_command_run(tenant_context, request)
+    run_id = await service.create_command_run(user_context, request)
 
     with pytest.raises(type(error)):
-        await scope.execute(tenant_context, run_id)
+        await scope.execute(user_context, run_id)
 
-    records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
+    records = await ProviderUsageRepository(db_session).list_for_run(user_context, run_id)
     assert len(records) == 1
     assert records[0].total_tokens == 15
 
 
 async def test_provider_usage_settlement_is_idempotent(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     repository = ProviderUsageRepository(db_session)
     run_id = await build_command_service(db_session).create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
-    first = await repository.settle(tenant_context, _aggregate(run_id))
+    first = await repository.settle(user_context, _aggregate(run_id))
     repeated = await repository.settle(
-        tenant_context,
+        user_context,
         _aggregate(run_id, total_tokens=13, call_id="retry-call"),
     )
     await db_session.commit()
 
-    records = await repository.list_for_run(tenant_context, run_id)
+    records = await repository.list_for_run(user_context, run_id)
     assert len(records) == 1
     assert first.created is True
     assert repeated.created is False
     assert records[0].total_tokens == 12
 
 
-async def test_provider_usage_is_owner_scoped_within_a_tenant(
+async def test_provider_usage_is_owner_scoped_within_a_user(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_id = await build_command_service(db_session).create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
-    other_context = TenantContext(
-        tenant_id=tenant_context.tenant_id,
+    other_context = UserContext(
         user_id=uuid4(),
-        timezone=tenant_context.timezone,
-        locale=tenant_context.locale,
+        timezone=user_context.timezone,
+        locale=user_context.locale,
     )
     repository = ProviderUsageRepository(db_session)
 
@@ -328,22 +327,22 @@ async def test_provider_usage_is_owner_scoped_within_a_tenant(
         await repository.settle(other_context, _aggregate(run_id))
     await db_session.rollback()
 
-    assert await repository.list_for_run(tenant_context, run_id) == []
+    assert await repository.list_for_run(user_context, run_id) == []
     assert await repository.list_for_run(other_context, run_id) == []
 
-    settlement = await repository.settle(tenant_context, _aggregate(run_id))
+    settlement = await repository.settle(user_context, _aggregate(run_id))
     await db_session.commit()
 
     assert settlement.created is True
-    assert len(await repository.list_for_run(tenant_context, run_id)) == 1
+    assert len(await repository.list_for_run(user_context, run_id)) == 1
 
 
 async def test_provider_usage_settlement_is_concurrent_and_immutable(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_id = await build_command_service(db_session).create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
     start = asyncio.Event()
@@ -356,7 +355,7 @@ async def test_provider_usage_settlement_is_concurrent_and_immutable(
             if ready_count == 2:
                 start.set()
             await start.wait()
-            result = await ProviderUsageRepository(session).settle(tenant_context, aggregate)
+            result = await ProviderUsageRepository(session).settle(user_context, aggregate)
             await session.commit()
             return result
 
@@ -366,7 +365,7 @@ async def test_provider_usage_settlement_is_concurrent_and_immutable(
     )
 
     assert sorted([first.created, second.created]) == [False, True]
-    records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
+    records = await ProviderUsageRepository(db_session).list_for_run(user_context, run_id)
     assert len(records) == 1
     assert records[0].total_tokens in {12, 99}
     assert records[0].calls[0].call_id in {"first", "second"}
@@ -374,7 +373,7 @@ async def test_provider_usage_settlement_is_concurrent_and_immutable(
 
 async def test_usage_failure_does_not_replace_completed_run(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     observed_statuses: list[AgentRunStatus] = []
 
@@ -409,20 +408,20 @@ async def test_usage_failure_does_not_replace_completed_run(
     )
     service = build_command_service(db_session)
     run_id = await service.create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
 
-    await scope.execute(tenant_context, run_id)
+    await scope.execute(user_context, run_id)
 
-    run = await build_run_service(db_session).get_run(tenant_context, run_id)
+    run = await build_run_service(db_session).get_run(user_context, run_id)
     assert run is not None and run.status == AgentRunStatus.completed
     assert observed_statuses == [AgentRunStatus.completed]
 
 
 async def test_usage_failure_does_not_replace_provider_exception(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     class FailingProviderUsage:
         async def settle(self, context, aggregate):
@@ -449,20 +448,20 @@ async def test_usage_failure_does_not_replace_provider_exception(
     )
     service = build_command_service(db_session)
     run_id = await service.create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
 
     with pytest.raises(ValueError, match="provider failed"):
-        await scope.execute(tenant_context, run_id)
+        await scope.execute(user_context, run_id)
 
-    run = await build_run_service(db_session).get_run(tenant_context, run_id)
+    run = await build_run_service(db_session).get_run(user_context, run_id)
     assert run is not None and run.status == AgentRunStatus.failed
 
 
 async def test_budget_reconciliation_failure_does_not_replace_completed_run(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     settings = Settings(
         APP_MODEL_NAME="openai:gpt-test",
@@ -499,20 +498,20 @@ async def test_budget_reconciliation_failure_does_not_replace_completed_run(
     )
     service = build_command_service(db_session)
     run_id = await service.create_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="安排会议"),
     )
 
-    await scope.execute(tenant_context, run_id)
+    await scope.execute(user_context, run_id)
 
-    run = await build_run_service(db_session).get_run(tenant_context, run_id)
-    records = await ProviderUsageRepository(db_session).list_for_run(tenant_context, run_id)
+    run = await build_run_service(db_session).get_run(user_context, run_id)
+    records = await ProviderUsageRepository(db_session).list_for_run(user_context, run_id)
     assert run is not None and run.status == AgentRunStatus.completed
     assert len(records) == 1
 
 
 async def test_duplicate_settlement_reconciles_budget_only_once(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     class IdempotentProviderUsage:
         def __init__(self) -> None:
@@ -559,13 +558,13 @@ async def test_duplicate_settlement_reconciles_budget_only_once(
     run_id = uuid4()
 
     await driver._settle_provider_usage(
-        tenant_context,
+        user_context,
         run_id,
         usage_accumulator,
         estimate,
     )
     await driver._settle_provider_usage(
-        tenant_context,
+        user_context,
         run_id,
         usage_accumulator,
         estimate,

@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import or_, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.db.models import CalendarEntryRow, ReminderDeliveryRow, TaskItemRow
 from dayboard.domain.reminders import (
@@ -29,7 +29,7 @@ class ReminderDeliveryRepository:
 
     async def replace_pending(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         source_type: ReminderSourceType,
         source_id: UUID,
@@ -46,8 +46,7 @@ class ReminderDeliveryRepository:
         if scheduled_for is None or payload is None:
             return
         row = ReminderDeliveryRow(
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             source_type=source_type.value,
             source_id=source_id,
             channel=channel,
@@ -60,7 +59,7 @@ class ReminderDeliveryRepository:
 
     async def cancel_active(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         source_type: ReminderSourceType,
         source_id: UUID,
@@ -69,8 +68,7 @@ class ReminderDeliveryRepository:
         await self.session.execute(
             update(ReminderDeliveryRow)
             .where(
-                ReminderDeliveryRow.tenant_id == context.tenant_id,
-                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.user_id == context.user_id,
                 ReminderDeliveryRow.source_type == source_type.value,
                 ReminderDeliveryRow.source_id == source_id,
                 ReminderDeliveryRow.channel == channel,
@@ -89,12 +87,11 @@ class ReminderDeliveryRepository:
             )
         )
 
-    async def list_for_user(self, context: TenantContext) -> list[ReminderDelivery]:
+    async def list_for_user(self, context: UserContext) -> list[ReminderDelivery]:
         rows = await self.session.scalars(
             select(ReminderDeliveryRow)
             .where(
-                ReminderDeliveryRow.tenant_id == context.tenant_id,
-                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.user_id == context.user_id,
                 ReminderDeliveryRow.deleted_at.is_(None),
             )
             .order_by(ReminderDeliveryRow.scheduled_for.desc())
@@ -103,15 +100,14 @@ class ReminderDeliveryRepository:
 
     async def list_inbox_for_user(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         limit: int = 100,
     ) -> list[ReminderDelivery]:
         rows = await self.session.scalars(
             select(ReminderDeliveryRow)
             .where(
-                ReminderDeliveryRow.tenant_id == context.tenant_id,
-                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.user_id == context.user_id,
                 ReminderDeliveryRow.status.in_(
                     [
                         ReminderDeliveryStatus.delivered.value,
@@ -127,7 +123,7 @@ class ReminderDeliveryRepository:
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> ReminderDelivery | None:
         return await self._get(
@@ -138,22 +134,21 @@ class ReminderDeliveryRepository:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> ReminderDelivery | None:
         return await self._get(context, delivery_id, for_update=False)
 
     async def _get(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
         *,
         for_update: bool,
     ) -> ReminderDelivery | None:
         statement = select(ReminderDeliveryRow).where(
             ReminderDeliveryRow.id == delivery_id,
-            ReminderDeliveryRow.tenant_id == context.tenant_id,
-            ReminderDeliveryRow.owner_user_id == context.user_id,
+            ReminderDeliveryRow.user_id == context.user_id,
             ReminderDeliveryRow.deleted_at.is_(None),
         )
         if for_update:
@@ -163,7 +158,7 @@ class ReminderDeliveryRepository:
 
     async def mark_read(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
         *,
         read_at: datetime,
@@ -172,8 +167,7 @@ class ReminderDeliveryRepository:
             update(ReminderDeliveryRow)
             .where(
                 ReminderDeliveryRow.id == delivery_id,
-                ReminderDeliveryRow.tenant_id == context.tenant_id,
-                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.user_id == context.user_id,
                 ReminderDeliveryRow.status == ReminderDeliveryStatus.delivered.value,
                 ReminderDeliveryRow.deleted_at.is_(None),
             )
@@ -184,7 +178,7 @@ class ReminderDeliveryRepository:
 
     async def retry_failed(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
         *,
         retry_at: datetime,
@@ -193,8 +187,7 @@ class ReminderDeliveryRepository:
             update(ReminderDeliveryRow)
             .where(
                 ReminderDeliveryRow.id == delivery_id,
-                ReminderDeliveryRow.tenant_id == context.tenant_id,
-                ReminderDeliveryRow.owner_user_id == context.user_id,
+                ReminderDeliveryRow.user_id == context.user_id,
                 ReminderDeliveryRow.status == ReminderDeliveryStatus.failed.value,
                 ReminderDeliveryRow.deleted_at.is_(None),
             )
@@ -348,7 +341,10 @@ class ReminderSourceRepository:
     ) -> list[ReminderSourceSnapshot]:
         calendar_keys = sorted(
             {
-                (delivery.tenant_id, delivery.owner_user_id, delivery.source_id)
+                (
+                    delivery.user_id,
+                    delivery.source_id,
+                )
                 for delivery in deliveries
                 if delivery.source_type is ReminderSourceType.calendar_entry
             },
@@ -356,7 +352,10 @@ class ReminderSourceRepository:
         )
         task_keys = sorted(
             {
-                (delivery.tenant_id, delivery.owner_user_id, delivery.source_id)
+                (
+                    delivery.user_id,
+                    delivery.source_id,
+                )
                 for delivery in deliveries
                 if delivery.source_type is ReminderSourceType.task_item
             },
@@ -366,14 +365,12 @@ class ReminderSourceRepository:
             select(CalendarEntryRow)
             .where(
                 tuple_(
-                    CalendarEntryRow.tenant_id,
-                    CalendarEntryRow.owner_user_id,
+                    CalendarEntryRow.user_id,
                     CalendarEntryRow.id,
                 ).in_(calendar_keys)
             )
             .order_by(
-                CalendarEntryRow.tenant_id,
-                CalendarEntryRow.owner_user_id,
+                CalendarEntryRow.user_id,
                 CalendarEntryRow.id,
             )
         )
@@ -381,14 +378,12 @@ class ReminderSourceRepository:
             select(TaskItemRow)
             .where(
                 tuple_(
-                    TaskItemRow.tenant_id,
-                    TaskItemRow.owner_user_id,
+                    TaskItemRow.user_id,
                     TaskItemRow.id,
                 ).in_(task_keys)
             )
             .order_by(
-                TaskItemRow.tenant_id,
-                TaskItemRow.owner_user_id,
+                TaskItemRow.user_id,
                 TaskItemRow.id,
             )
         )
@@ -401,8 +396,7 @@ class ReminderSourceRepository:
         task_rows = list(await self.session.scalars(task_statement)) if task_keys else []
         snapshots = [
             ReminderSourceSnapshot(
-                tenant_id=row.tenant_id,
-                owner_user_id=row.owner_user_id,
+                user_id=row.user_id,
                 source_type=ReminderSourceType.calendar_entry,
                 source_id=row.id,
                 title=row.title,
@@ -419,8 +413,7 @@ class ReminderSourceRepository:
         ]
         snapshots.extend(
             ReminderSourceSnapshot(
-                tenant_id=row.tenant_id,
-                owner_user_id=row.owner_user_id,
+                user_id=row.user_id,
                 source_type=ReminderSourceType.task_item,
                 source_id=row.id,
                 title=row.title,

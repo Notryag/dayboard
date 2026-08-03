@@ -6,7 +6,7 @@ from uuid import UUID
 import structlog
 
 from agent_platform.application import CommandSubmissionService, RunExecutionCoordinator
-from agent_platform.core import CommandSubmission, RunExecutionFailure, TenantContext
+from agent_platform.core import CommandSubmission, RunExecutionFailure, UserContext
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.command_schemas import CommandRequest
 
@@ -31,7 +31,7 @@ class CommandService:
 
     async def create_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         request: CommandRequest,
         idempotency_key: str | None = None,
     ) -> UUID:
@@ -44,7 +44,7 @@ class CommandService:
 
     async def create_or_get_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         request: CommandRequest,
         *,
         idempotency_key: str | None = None,
@@ -68,7 +68,6 @@ class CommandService:
             "dayboard.command.run_queued",
             run_id=str(creation.run_id),
             thread_id=str(creation.thread_id),
-            tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
             created=creation.created,
         )
@@ -76,7 +75,7 @@ class CommandService:
 
     async def create_or_get_clarification_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         state_version: int,
@@ -113,7 +112,6 @@ class CommandService:
             run_id=str(creation.run_id),
             thread_id=str(creation.thread_id),
             source_state_version=state_version,
-            tenant_id=str(context.tenant_id),
             user_id=str(context.user_id),
             created=creation.created,
         )
@@ -121,7 +119,7 @@ class CommandService:
 
     async def fail_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         exc: Exception,
     ) -> None:

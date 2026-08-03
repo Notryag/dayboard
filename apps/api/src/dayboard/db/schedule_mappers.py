@@ -11,8 +11,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
     return CalendarEntry(
         id=row.id,
         row_version=row.row_version,
-        tenant_id=row.tenant_id,
-        owner_user_id=row.owner_user_id,
+        user_id=row.user_id,
         title=row.title,
         timing_kind=row.timing_kind,
         scheduled_date=row.scheduled_date,
@@ -39,8 +38,7 @@ def task_item_from_row(row: TaskItemRow) -> TaskItem:
     return TaskItem(
         id=row.id,
         row_version=row.row_version,
-        tenant_id=row.tenant_id,
-        owner_user_id=row.owner_user_id,
+        user_id=row.user_id,
         title=row.title,
         due_at=row.due_at,
         timezone=row.timezone,

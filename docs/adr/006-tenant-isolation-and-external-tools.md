@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Superseded by [ADR-010](./010-user-scoped-identity.md) for the current pre-release schema.
 
 ## Context
 

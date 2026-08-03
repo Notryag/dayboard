@@ -6,7 +6,7 @@ from uuid import uuid4
 
 import pytest
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.voice import (
     VoiceProviderFailure,
@@ -141,13 +141,13 @@ class SuccessfulProvider:
 
 
 async def test_voice_service_commits_processing_before_provider_and_terminal_state(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     events: list[str] = []
     unit_of_work = FakeVoiceUnitOfWork(events)
 
     transcript = await VoiceTranscriptionService(unit_of_work).transcribe(
-        tenant_context,
+        user_context,
         SuccessfulProvider(events),
         AudioInput(
             content=b"audio",
@@ -166,7 +166,7 @@ async def test_voice_service_commits_processing_before_provider_and_terminal_sta
 
 
 async def test_voice_service_persists_safe_provider_failure(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     events: list[str] = []
     unit_of_work = FakeVoiceUnitOfWork(events)
@@ -181,7 +181,7 @@ async def test_voice_service_persists_safe_provider_failure(
 
     with pytest.raises(VoiceProviderFailure) as exc_info:
         await VoiceTranscriptionService(unit_of_work).transcribe(
-            tenant_context,
+            user_context,
             FailingProvider(),
             AudioInput(content=b"audio", content_type="audio/webm"),
         )
@@ -194,7 +194,7 @@ async def test_voice_service_persists_safe_provider_failure(
 
 
 async def test_voice_service_persists_cancellation_without_converting_it_to_provider_failure(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     events: list[str] = []
     unit_of_work = FakeVoiceUnitOfWork(events)
@@ -209,7 +209,7 @@ async def test_voice_service_persists_cancellation_without_converting_it_to_prov
 
     with pytest.raises(asyncio.CancelledError):
         await VoiceTranscriptionService(unit_of_work).transcribe(
-            tenant_context,
+            user_context,
             CancelledProvider(),
             AudioInput(content=b"audio", content_type="audio/webm"),
         )
@@ -223,7 +223,7 @@ async def test_voice_service_persists_cancellation_without_converting_it_to_prov
 
 
 async def test_voice_transition_failure_is_not_mapped_to_provider_failure(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     events: list[str] = []
     unit_of_work = FakeVoiceUnitOfWork(events)
@@ -236,7 +236,7 @@ async def test_voice_transition_failure_is_not_mapped_to_provider_failure(
     unit_of_work.transcripts.complete_processing = reject_completion  # type: ignore[method-assign]
     with pytest.raises(VoiceTranscriptTransitionError):
         await VoiceTranscriptionService(unit_of_work).transcribe(
-            tenant_context,
+            user_context,
             SuccessfulProvider(events),
             AudioInput(content=b"audio", content_type="audio/webm"),
         )
@@ -245,7 +245,7 @@ async def test_voice_transition_failure_is_not_mapped_to_provider_failure(
 
 
 async def test_voice_terminal_commit_failure_is_not_mapped_to_provider_failure(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     events: list[str] = []
     unit_of_work = FakeVoiceUnitOfWork(events)
@@ -260,7 +260,7 @@ async def test_voice_terminal_commit_failure_is_not_mapped_to_provider_failure(
     unit_of_work.commit = fail_terminal_commit  # type: ignore[method-assign]
     with pytest.raises(PersistenceFailure, match="database unavailable"):
         await VoiceTranscriptionService(unit_of_work).transcribe(
-            tenant_context,
+            user_context,
             SuccessfulProvider(events),
             AudioInput(content=b"audio", content_type="audio/webm"),
         )

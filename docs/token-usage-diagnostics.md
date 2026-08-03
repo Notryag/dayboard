@@ -9,7 +9,7 @@ there instead of replacing earlier baselines.
 
 ## Production Request Path
 
-Production Dayboard model traffic for the configured tenant follows this path:
+Production Dayboard model traffic for the configured user scope follows this path:
 
 ```text
 Dayboard worker
@@ -19,13 +19,13 @@ Dayboard worker
   -> model provider
 ```
 
-Dayboard supplies trusted `tenant_id`, `user_id`, and `run_id` metadata to
+Dayboard supplies trusted `user_id`, `user_id`, and `run_id` metadata to
 Northgate. North owns model-call and tool-call runtime behavior. Dayboard owns
 the durable per-Run business usage record. Northgate owns gateway admission,
 routing, reservations, attempts, and cross-application traffic diagnostics.
 
 The production environment retains a direct provider URL as rollback
-configuration, but both current production tenants are selected into the
+configuration, but both current production user scopes are selected into the
 Northgate connection. A diagnosis must still verify the selected connection;
 the presence of a fallback URL does not prove that a request bypassed Northgate.
 
@@ -121,7 +121,7 @@ includes the complete system message and the first user message. Dayboard's
 runtime datetime and each new command therefore changed that routing key, even
 when requests shared the same long static prefix. Dayboard now supplies an
 explicit versioned key for `openai:` models, deterministically partitioned into
-32 shards by a hash of trusted tenant/user identity. No raw identity is sent in
+32 shards by a hash of trusted user identity. No raw identity is sent in
 the key. This keeps both model calls and later Runs for one user on a stable
 cache route while avoiding one global hot key. Northgate continues to record
 provider-reported cache reads so the effect can be measured rather than assumed.

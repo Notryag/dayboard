@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.reminder_ports import ReminderUnitOfWork
 from dayboard.domain.reminders import (
@@ -20,7 +20,7 @@ from dayboard.domain.reminders import (
 )
 
 
-SourceKey = tuple[UUID, UUID, ReminderSourceType, UUID]
+SourceKey = tuple[UUID, ReminderSourceType, UUID]
 
 
 class DeliveryDisposition(StrEnum):
@@ -35,15 +35,14 @@ def utc_now() -> datetime:
 
 def _delivery_key(delivery: ReminderDelivery) -> SourceKey:
     return (
-        delivery.tenant_id,
-        delivery.owner_user_id,
+        delivery.user_id,
         delivery.source_type,
         delivery.source_id,
     )
 
 
 def _source_key(source: ReminderSourceSnapshot) -> SourceKey:
-    return (source.tenant_id, source.owner_user_id, source.source_type, source.source_id)
+    return (source.user_id, source.source_type, source.source_id)
 
 
 def _payload_string(delivery: ReminderDelivery, key: str) -> str | None:
@@ -116,10 +115,10 @@ class ReminderService:
             for source in await self.sources.lock_for_deliveries(deliveries)
         }
 
-    async def list_for_user(self, context: TenantContext) -> list[ReminderDelivery]:
+    async def list_for_user(self, context: UserContext) -> list[ReminderDelivery]:
         return list(await self.deliveries.list_for_user(context))
 
-    async def list_inbox(self, context: TenantContext) -> list[ReminderInboxItem]:
+    async def list_inbox(self, context: UserContext) -> list[ReminderInboxItem]:
         deliveries = list(await self.deliveries.list_inbox_for_user(context))
         sources = await self._source_map(deliveries)
         now = self.clock()
@@ -156,7 +155,7 @@ class ReminderService:
 
     async def mark_read(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> tuple[ReminderDelivery | None, bool]:
         delivery = await self.deliveries.get_for_update(context, delivery_id)
@@ -175,7 +174,7 @@ class ReminderService:
 
     async def retry_failed(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> tuple[ReminderDelivery | None, bool]:
         candidate = await self.deliveries.get(context, delivery_id)

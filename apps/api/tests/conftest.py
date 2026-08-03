@@ -12,6 +12,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
 os.environ["DAYBOARD_RATE_LIMIT_ENABLED"] = "false"
+os.environ["DAYBOARD_ENV"] = "local"
+os.environ["DAYBOARD_AUTH_COOKIE_SECURE"] = "false"
 test_database_url = os.environ.get(
     "TEST_DATABASE_URL",
     "postgresql+asyncpg://dayboard:dayboard@localhost:5432/dayboard_test",
@@ -26,8 +28,8 @@ from dayboard.api.dependencies import get_command_service
 from dayboard.composition.commands import build_command_service
 from dayboard.composition.platform import build_run_service
 from north.runtime import END_SENTINEL, StreamEvent
-from agent_platform.core import TenantContext
-from dayboard.api.auth import get_tenant_context
+from agent_platform.core import UserContext
+from dayboard.api.auth import get_user_context
 from dayboard.db.models import (
     AgentRunEventRow,
     AgentRunRow,
@@ -41,8 +43,6 @@ from dayboard.db.models import (
     TaskItemRow,
     VoiceTranscriptRow,
     ExternalIdentityRow,
-    TenantMembershipRow,
-    TenantRow,
     UserCredentialRow,
     UserProfileRow,
     UserRow,
@@ -59,7 +59,7 @@ class TestCommandService:
 
     async def create_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         request: CommandRequest,
     ) -> UUID:
         run = await build_run_service(self.session).create_run(
@@ -71,7 +71,7 @@ class TestCommandService:
 
     async def create_or_get_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         request: CommandRequest,
         *,
         idempotency_key: str | None = None,
@@ -90,7 +90,7 @@ class TestCommandService:
 
     async def fail_command_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         exc: Exception,
     ) -> None:
@@ -162,9 +162,8 @@ class TestStreamBridge:
 
 
 @pytest.fixture
-def tenant_context() -> TenantContext:
-    return TenantContext(
-        tenant_id=UUID("00000000-0000-0000-0000-000000000001"),
+def user_context() -> UserContext:
+    return UserContext(
         user_id=UUID("00000000-0000-0000-0000-000000000002"),
         timezone="Asia/Shanghai",
         locale="zh-CN",
@@ -179,9 +178,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(ExternalIdentityRow))
         await session.execute(delete(UserCredentialRow))
         await session.execute(delete(UserProfileRow))
-        await session.execute(delete(TenantMembershipRow))
         await session.execute(delete(UserRow))
-        await session.execute(delete(TenantRow))
         await session.execute(delete(ReminderDeliveryRow))
         await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
@@ -200,9 +197,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(ExternalIdentityRow))
         await session.execute(delete(UserCredentialRow))
         await session.execute(delete(UserProfileRow))
-        await session.execute(delete(TenantMembershipRow))
         await session.execute(delete(UserRow))
-        await session.execute(delete(TenantRow))
         await session.execute(delete(ReminderDeliveryRow))
         await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
@@ -218,17 +213,17 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
 
 @pytest.fixture
-async def api_app(db_session: AsyncSession, tenant_context: TenantContext):
+async def api_app(db_session: AsyncSession, user_context: UserContext):
     async def override_session() -> AsyncIterator[AsyncSession]:
         yield db_session
 
-    def override_tenant_context() -> TenantContext:
-        return tenant_context
+    def override_user_context() -> UserContext:
+        return user_context
 
     dispatcher = TestCommandDispatcher()
     stream_bridge = TestStreamBridge()
     app.dependency_overrides[get_session] = override_session
-    app.dependency_overrides[get_tenant_context] = override_tenant_context
+    app.dependency_overrides[get_user_context] = override_user_context
     app.dependency_overrides[get_command_service] = lambda: build_command_service(db_session)
     app.dependency_overrides[get_command_dispatcher] = lambda: dispatcher
     app.dependency_overrides[get_stream_bridge] = lambda: stream_bridge

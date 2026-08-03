@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.voice_ports import (
     AudioInput,
@@ -29,7 +29,7 @@ class VoiceTranscriptionService:
 
     async def _persist_failure(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
         message: str,
     ) -> None:
@@ -46,7 +46,7 @@ class VoiceTranscriptionService:
 
     async def transcribe(
         self,
-        context: TenantContext,
+        context: UserContext,
         provider: SpeechToTextProvider,
         audio: AudioInput,
         *,
@@ -120,7 +120,7 @@ class VoiceTranscriptionService:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
     ) -> VoiceTranscript | None:
         return await self.transcripts.get(context, transcript_id)

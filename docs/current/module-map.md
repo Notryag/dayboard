@@ -102,7 +102,7 @@ visually linear stack.
   versioned-envelope lifecycle.
 - **Owns:** framework-free core records, lifecycle services, storage/runtime ports, state-machine
   invariants.
-- **Public contracts:** `TenantContext`, Conversation and Run records, `PendingInteraction`,
+- **Public contracts:** `UserContext`, Conversation and Run records, `PendingInteraction`,
   `PresentationEnvelope`, `EventExtensionEnvelope`, `PlatformUnitOfWork`, `RunExecutionDriver`.
 - **Allowed dependencies:** its own layers and framework-free validation types.
 - **Forbidden dependencies:** Dayboard, North, SQLAlchemy, FastAPI, product tools and payload meaning.
@@ -161,7 +161,7 @@ visually linear stack.
 - **Forbidden dependencies:** natural-language policy, prompt decisions, HTTP presentation.
 - **Transaction owner:** concrete Unit of Work exposes commit/rollback; it does not decide use-case
   atomicity.
-- **Invariant:** every product query is tenant/owner scoped where the contract requires it.
+- **Invariant:** every product query is user scoped where the contract requires it.
 
 ### Composition
 
@@ -200,7 +200,7 @@ visually linear stack.
   server-state caching.
 - **Owns:** generated OpenAPI consumption, validated Run reducer, TanStack Query caches, and UI-only
   state.
-- **Forbidden dependencies:** intent classification, tenant identity authority, direct persistence,
+- **Forbidden dependencies:** intent classification, user identity authority, direct persistence,
   or parsing assistant prose into schedule objects.
 - **Invariant:** live and refreshed schedule results use the same versioned presentation contract.
 
@@ -215,7 +215,7 @@ visually linear stack.
 | Schedule mutation | Calendar/Task and Reminder delivery rows | row-version write + Reminder cancellation/replacement | product write and reminder state cannot diverge |
 | Reminder delivery | Reminder delivery plus source projection | source lock + due claim + delivered/expired/cancelled transition | lock source before delivery; queue states are not inbox states |
 | Voice transcription | Voice transcript row | commit `processing`; external ASR; separate terminal commit | never hold a transaction across ASR |
-| Provider usage | immutable aggregate keyed by tenant and Run | independent owner-scoped settlement transaction | accounting failure cannot replace terminal Run outcome |
+| Provider usage | immutable aggregate keyed by user ID and Run | independent user-scoped settlement transaction | accounting failure cannot replace terminal Run outcome |
 | Password reset | credential, reset tokens, sessions | password update + token consumption + session revocation | raw reset token is never stored |
 
 ## Event And Payload Ownership

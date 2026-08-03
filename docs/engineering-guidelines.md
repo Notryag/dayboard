@@ -8,7 +8,7 @@
 - Keep `north` runtime concepts out of Dayboard business models unless they are references, such as `run_id`.
 - Treat PostgreSQL as the source of truth.
 - Treat Redis or Valkey as infrastructure for queues, fanout, locks, rate limits, and cache.
-- Make tenant and user context explicit from the first implementation.
+- Make user isolation and user context explicit from the first implementation.
 - Prefer mature existing libraries over custom implementations for infrastructure, protocol, parsing, UI primitives, and generated clients.
 
 ## Design Durable Invariants First
@@ -24,7 +24,7 @@ Review these questions before the first schema or public contract is written:
 
 1. What is the authoritative source of truth and who owns each transformation?
 2. Is each field carrying exactly one semantic responsibility?
-3. What are the transaction, concurrency, idempotency, and tenant-isolation guarantees?
+3. What are the transaction, concurrency, idempotency, and user-isolation guarantees?
 4. Which representation belongs at the database, service, API, model, and UI boundaries?
 5. Which constraints and indexes make invalid states impossible and expected access paths efficient?
 6. How will the design migrate, roll back, recover, and remain observable under real concurrency?
@@ -221,27 +221,26 @@ tool input
 
 The LLM response is not a source of truth. A database row created through a tool is the source of truth.
 
-## Tenant Context
+## User Context
 
-Service and tool boundaries must accept a `TenantContext` even while the product uses a shared
+Service and tool boundaries accept an immutable `UserContext` while the product uses a shared
 database deployment.
 
 ```text
-TenantContext:
-  tenant_id
+UserContext:
   user_id
   timezone
   locale
-  isolation_mode
 ```
 
 Rules:
 
-- `tenant_id` and `user_id` must come from trusted server context.
-- The model must not generate tenant, user, permission, or run identity fields.
-- Repository queries must include `tenant_id`.
+- `user_id`, timezone, and locale must come from trusted server context.
+- The model must not generate user, permission, or Run identity fields.
+- Repository queries must include `user_id`.
 - Tool input schemas must not expose trusted context fields.
-- Future dedicated schema or dedicated database support should be added through a database/session resolver, not by rewriting services.
+- A future shared Workspace must be introduced as a real authorization model, not as an unused
+  storage-routing flag.
 
 ## Database Rules
 
@@ -267,11 +266,9 @@ Rules:
 Common business table fields:
 
 ```text
-tenant_id
 created_at
 updated_at
 deleted_at
-owner_user_id
 created_by_run_id
 updated_by_run_id
 ```
@@ -279,11 +276,11 @@ updated_by_run_id
 Time rules:
 
 - Agent-facing scheduling tools accept local date/time values without `Z` or a numeric offset.
-- Resolve local values at the Dayboard boundary using the trusted `TenantContext.timezone`; never
+- Resolve local values at the Dayboard boundary using the trusted `UserContext.timezone`; never
   accept timezone ownership from model or per-command browser input.
 - Use timezone-aware datetimes after that boundary.
 - Store canonical timestamps in PostgreSQL as timezone-aware values.
-- Store the trusted product/tenant IANA timezone separately, such as `Asia/Shanghai`.
+- Store the trusted user's IANA timezone separately, such as `Asia/Shanghai`.
 - Natural-language time parsing must use an explicit reference time and timezone.
 
 ## API Rules
@@ -298,9 +295,9 @@ Time rules:
 - Apply rate limiting at the API boundary for user-facing write and command endpoints.
 - Use Redis or Valkey for shared rate limit state in server environments.
 - Do not rely only on frontend throttling for cost or abuse control.
-- Never use a caller-supplied tenant or user header as a rate-limit or authorization identity.
+- Never use a caller-supplied user header as a rate-limit or authorization identity.
 - Give every HTTP request a validated or generated request ID and return it in `X-Request-ID`.
-- Bind authenticated user and tenant IDs to structured request logs after session resolution.
+- Bind authenticated user ID to structured request logs after session resolution.
 - Correlate queued Agent work with thread and Run IDs; durable Run events remain the user-visible
   execution record while logs are the operator diagnostic record.
 - Never log passwords, password hashes, raw session tokens, cookies, authorization headers, raw
@@ -329,7 +326,7 @@ Suggested error shape:
 - Model/provider-specific code should stay behind `north` or an integration boundary.
 - Log run metadata, tool names, tool arguments, results, object ids, errors, and latency.
 - Do not log secrets, raw provider tokens, or unnecessary sensitive audio payloads.
-- Protect trusted context from prompt injection. User text cannot override tenant, user, permission, or system context.
+- Protect trusted context from prompt injection. User text cannot override user, permission, or system context.
 - Load model credentials and gateway URLs only from environment variables or secret stores.
 - Do not commit real `OPENAI_API_KEY`, `OPENAI_BASE_URL`, provider keys, or copied local Codex credentials.
 - Support OpenAI-compatible forwarding through `.env` variables such as `OPENAI_BASE_URL` and `OPENAI_API_KEY`.

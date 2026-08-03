@@ -15,7 +15,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     monkeypatch.setenv("DAYBOARD_NORTHGATE_BASE_URL", "http://northgate:8080/v1")
     monkeypatch.setenv("DAYBOARD_NORTHGATE_APPLICATION_KEY", "northgate-application-key")
     monkeypatch.setenv(
-        "DAYBOARD_NORTHGATE_CANARY_TENANT_IDS",
+        "DAYBOARD_NORTHGATE_CANARY_USER_IDS",
         "00000000-0000-0000-0000-000000000001",
     )
     monkeypatch.setenv("DAYBOARD_RATE_LIMIT_DEFAULT", "10/minute")
@@ -44,7 +44,7 @@ def test_model_gateway_and_rate_limit_settings_from_env(monkeypatch) -> None:
     assert settings.northgate_base_url == "http://northgate:8080/v1"
     assert settings.northgate_application_key is not None
     assert settings.northgate_application_key.get_secret_value() == "northgate-application-key"
-    assert settings.northgate_canary_tenants == {UUID("00000000-0000-0000-0000-000000000001")}
+    assert settings.northgate_canary_users == {UUID("00000000-0000-0000-0000-000000000001")}
     assert "northgate-application-key" not in repr(settings)
     assert "secret-value" not in repr(settings)
     assert settings.rate_limit_default == "10/minute"
@@ -97,21 +97,24 @@ def test_default_timezone_must_be_valid_iana_name() -> None:
 
 def test_northgate_canary_requires_complete_connection() -> None:
     with pytest.raises(ValidationError, match="NORTHGATE_BASE_URL"):
-        Settings(DAYBOARD_NORTHGATE_CANARY_TENANT_IDS=("00000000-0000-0000-0000-000000000001"))
+        Settings(
+            DAYBOARD_NORTHGATE_CANARY_USER_IDS="00000000-0000-0000-0000-000000000001",
+            DAYBOARD_NORTHGATE_BASE_URL=None,
+            DAYBOARD_NORTHGATE_APPLICATION_KEY=None,
+        )
 
 
-def test_northgate_canary_rejects_invalid_tenant_id() -> None:
+def test_northgate_canary_rejects_invalid_user_id() -> None:
     with pytest.raises(ValidationError, match="must contain UUIDs"):
-        Settings(DAYBOARD_NORTHGATE_CANARY_TENANT_IDS="not-a-uuid")
+        Settings(DAYBOARD_NORTHGATE_CANARY_USER_IDS="not-a-uuid")
 
 
 def test_eval_auth_requires_complete_identity_and_sha256_digest() -> None:
     with pytest.raises(ValidationError, match="requires DAYBOARD_EVAL_AUTH_TOKEN_SHA256"):
-        Settings(DAYBOARD_EVAL_AUTH_TOKEN_SHA256="0" * 64)
+        Settings(DAYBOARD_EVAL_AUTH_TOKEN_SHA256="0" * 64, DAYBOARD_EVAL_USER_ID=None)
 
     with pytest.raises(ValidationError, match="must be a SHA-256 hex digest"):
         Settings(
             DAYBOARD_EVAL_AUTH_TOKEN_SHA256="not-a-digest",
-            DAYBOARD_EVAL_TENANT_ID="00000000-0000-0000-0000-000000000001",
             DAYBOARD_EVAL_USER_ID="00000000-0000-0000-0000-000000000002",
         )

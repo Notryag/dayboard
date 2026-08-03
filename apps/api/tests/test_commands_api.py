@@ -12,8 +12,8 @@ from dayboard.app.clarifications import ClarificationService
 from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.composition.platform import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
-from agent_platform.core import TenantContext
-from dayboard.api.auth import get_tenant_context
+from agent_platform.core import UserContext
+from dayboard.api.auth import get_user_context
 from dayboard.db.run_repositories import AgentRunEventRepository
 from dayboard.db.models import ConversationThreadRow
 from agent_platform.core import ConversationRole
@@ -31,7 +31,7 @@ from dayboard.domain.interactions import (
 async def test_create_background_command_run_returns_before_execution(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
@@ -44,11 +44,11 @@ async def test_create_background_command_run_returns_before_execution(
 
     body = response.json()
     events = await AgentRunEventRepository(db_session).list_for_run(
-        tenant_context,
+        user_context,
         UUID(body["run_id"]),
     )
     run = await build_run_service(db_session).get_run(
-        tenant_context,
+        user_context,
         UUID(body["run_id"]),
     )
     dispatcher = api_app.state.test_command_dispatcher
@@ -114,10 +114,10 @@ async def test_primary_conversation_is_stable_for_the_owner(api_app: FastAPI) ->
 async def test_archived_thread_rejects_new_commands(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     conversations = build_conversation_service(db_session)
-    thread = await conversations.create_thread(tenant_context)
+    thread = await conversations.create_thread(user_context)
     await db_session.execute(
         update(ConversationThreadRow)
         .where(ConversationThreadRow.id == thread.id)
@@ -142,13 +142,13 @@ async def test_archived_thread_rejects_new_commands(
 async def test_conversation_messages_use_stable_cursor_pagination(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     conversations = build_conversation_service(db_session)
-    thread = await conversations.get_or_create_primary_thread(tenant_context)
+    thread = await conversations.get_or_create_primary_thread(user_context)
     for index in range(35):
         await conversations.append_message(
-            tenant_context,
+            user_context,
             thread_id=thread.id,
             run_id=uuid4(),
             role=ConversationRole.user,
@@ -181,7 +181,7 @@ async def test_conversation_messages_use_stable_cursor_pagination(
 async def test_thread_rejects_a_second_active_run_and_allows_next_after_completion(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
@@ -199,10 +199,10 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
         )
 
         runs = build_run_service(db_session)
-        first_row = await runs.get_run(tenant_context, UUID(first.json()["run_id"]))
+        first_row = await runs.get_run(user_context, UUID(first.json()["run_id"]))
         assert first_row is not None
-        await runs.mark_running(tenant_context, first_row)
-        await runs.mark_completed(tenant_context, first_row, result_message="会议已创建")
+        await runs.mark_running(user_context, first_row)
+        await runs.mark_completed(user_context, first_row, result_message="会议已创建")
         await db_session.commit()
 
         third = await client.post(
@@ -225,7 +225,7 @@ async def test_thread_rejects_a_second_active_run_and_allows_next_after_completi
 async def test_active_thread_run_can_be_resumed_until_it_finishes(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
@@ -240,10 +240,10 @@ async def test_active_thread_run_can_be_resumed_until_it_finishes(
         active = await client.get(f"/api/threads/{thread_id}/active-run")
 
         runs = build_run_service(db_session)
-        run = await runs.get_run(tenant_context, UUID(created.json()["run_id"]))
+        run = await runs.get_run(user_context, UUID(created.json()["run_id"]))
         assert run is not None
-        await runs.mark_running(tenant_context, run)
-        await runs.mark_completed(tenant_context, run, result_message="会议已创建")
+        await runs.mark_running(user_context, run)
+        await runs.mark_completed(user_context, run, result_message="会议已创建")
         await db_session.commit()
 
         finished = await client.get(f"/api/threads/{thread_id}/active-run")
@@ -257,7 +257,7 @@ async def test_active_thread_run_can_be_resumed_until_it_finishes(
 
 async def test_active_thread_run_is_owner_scoped(
     api_app: FastAPI,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
@@ -265,20 +265,19 @@ async def test_active_thread_run_is_owner_scoped(
     ) as client:
         thread = await client.post("/api/threads", json={})
         thread_id = thread.json()["id"]
-        api_app.dependency_overrides[get_tenant_context] = lambda: TenantContext(
-            tenant_id=tenant_context.tenant_id,
+        api_app.dependency_overrides[get_user_context] = lambda: UserContext(
             user_id=uuid4(),
-            timezone=tenant_context.timezone,
-            locale=tenant_context.locale,
+            timezone=user_context.timezone,
+            locale=user_context.locale,
         )
         response = await client.get(f"/api/threads/{thread_id}/active-run")
 
     assert response.status_code == 404
 
 
-async def test_thread_routes_are_tenant_and_owner_scoped(
+async def test_thread_routes_are_user_scoped(
     api_app: FastAPI,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     async with AsyncClient(
         transport=ASGITransport(app=api_app),
@@ -286,11 +285,10 @@ async def test_thread_routes_are_tenant_and_owner_scoped(
     ) as client:
         created = await client.post("/api/threads", json={})
         thread_id = created.json()["id"]
-        api_app.dependency_overrides[get_tenant_context] = lambda: TenantContext(
-            tenant_id=tenant_context.tenant_id,
+        api_app.dependency_overrides[get_user_context] = lambda: UserContext(
             user_id=uuid4(),
-            timezone=tenant_context.timezone,
-            locale=tenant_context.locale,
+            timezone=user_context.timezone,
+            locale=user_context.locale,
         )
         messages = await client.get(f"/api/threads/{thread_id}/messages")
         command = await client.post(
@@ -305,14 +303,14 @@ async def test_thread_routes_are_tenant_and_owner_scoped(
 async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     conversations = build_conversation_service(db_session)
-    thread = await conversations.create_thread(tenant_context, title="工作安排")
+    thread = await conversations.create_thread(user_context, title="工作安排")
     source_run_id = uuid4()
     entry_id = uuid4()
     pending = await ClarificationService(conversations).set_pending(
-        tenant_context,
+        user_context,
         thread_id=thread.id,
         run_id=source_run_id,
         question="你想修改哪一个日程？",
@@ -373,7 +371,7 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
 
     dispatcher = api_app.state.test_command_dispatcher
     queued_run = await build_run_service(db_session).get_run(
-        tenant_context,
+        user_context,
         UUID(response.json()["run_id"]),
     )
     public_body = public_state.json()
@@ -399,12 +397,12 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
 async def test_structured_clarification_rejects_stale_state_version(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     conversations = build_conversation_service(db_session)
-    thread = await conversations.create_thread(tenant_context)
+    thread = await conversations.create_thread(user_context)
     pending = await ClarificationService(conversations).set_pending(
-        tenant_context,
+        user_context,
         thread_id=thread.id,
         run_id=uuid4(),
         question="选择一个日程",
@@ -569,12 +567,12 @@ async def test_cancel_queued_run_is_persisted_and_dispatched(api_app: FastAPI) -
 async def test_cancel_terminal_run_does_not_overwrite_status(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(tenant_context, input_message="安排会议")
-    await service.mark_running(tenant_context, run)
-    await service.mark_completed(tenant_context, run, result_message="已安排")
+    run = await service.create_run(user_context, input_message="安排会议")
+    await service.mark_running(user_context, run)
+    await service.mark_completed(user_context, run, result_message="已安排")
     await db_session.commit()
 
     async with AsyncClient(
@@ -595,14 +593,14 @@ async def test_cancel_terminal_run_does_not_overwrite_status(
 async def test_stream_run_events_returns_terminal_run_state(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(tenant_context, input_message="安排会议")
-    await runs.mark_running(tenant_context, run)
-    await runs.mark_needs_clarification(tenant_context, run, question="几点开始？")
+    run = await runs.create_run(user_context, input_message="安排会议")
+    await runs.mark_running(user_context, run)
+    await runs.mark_needs_clarification(user_context, run, question="几点开始？")
     await build_conversation_service(db_session).upsert_assistant_message(
-        tenant_context,
+        user_context,
         thread_id=run.thread_id,
         run_id=run.id,
         content="几点开始？",
@@ -658,11 +656,11 @@ async def test_stream_run_events_returns_not_found(api_app: FastAPI) -> None:
 async def test_stream_run_events_forwards_live_structured_messages(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(tenant_context, input_message="创建任务")
-    await runs.mark_running(tenant_context, run)
+    run = await runs.create_run(user_context, input_message="创建任务")
+    await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
     await stream_bridge.publish(
@@ -724,11 +722,11 @@ async def test_stream_run_events_forwards_live_structured_messages(
 async def test_stream_run_events_drops_unprojected_canonical_and_raw_errors(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(tenant_context, input_message="执行内部工具")
-    await runs.mark_running(tenant_context, run)
+    run = await runs.create_run(user_context, input_message="执行内部工具")
+    await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
     await stream_bridge.publish(
@@ -768,11 +766,11 @@ async def test_stream_run_events_drops_unprojected_canonical_and_raw_errors(
 async def test_stream_run_events_resumes_from_last_event_id_header(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(tenant_context, input_message="继续事件流")
-    await runs.mark_running(tenant_context, run)
+    run = await runs.create_run(user_context, input_message="继续事件流")
+    await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
     await stream_bridge.publish(str(run.id), "run_started", {"content": "开始"})
@@ -797,10 +795,10 @@ async def test_stream_run_events_resumes_from_last_event_id_header(
 async def test_stream_run_events_rejects_invalid_last_event_id(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run = await build_run_service(db_session).create_run(
-        tenant_context, input_message="无效游标"
+        user_context, input_message="无效游标"
     )
     await db_session.commit()
 
@@ -819,12 +817,12 @@ async def test_stream_run_events_rejects_invalid_last_event_id(
 async def test_stream_run_events_ignores_live_cursor_for_terminal_run(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(tenant_context, input_message="安排会议")
-    await runs.mark_running(tenant_context, run)
-    await runs.mark_completed(tenant_context, run, result_message="已安排")
+    run = await runs.create_run(user_context, input_message="安排会议")
+    await runs.mark_running(user_context, run)
+    await runs.mark_completed(user_context, run, result_message="已安排")
     await db_session.commit()
 
     async with AsyncClient(

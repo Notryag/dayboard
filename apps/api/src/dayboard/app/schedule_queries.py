@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.app.scheduling_ports import ScheduleStores
 from dayboard.domain.calendar import CalendarEntry, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskStatus
@@ -119,7 +119,7 @@ class ScheduleQueryService:
 
     async def list_calendar_entries(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
@@ -167,7 +167,7 @@ class ScheduleQueryService:
 
     async def list_task_items(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: TaskStatus | None,
         due_kind: Literal["all", "dated", "undated"],

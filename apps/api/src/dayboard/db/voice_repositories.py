@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.app.voice_ports import SpeechTranscriptionResult
 from dayboard.db.models import VoiceTranscriptRow
@@ -37,15 +37,14 @@ class VoiceTranscriptRepository:
 
     async def _get_processing_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
     ) -> VoiceTranscriptRow | None:
         return await self.session.scalar(
             select(VoiceTranscriptRow)
             .where(
                 VoiceTranscriptRow.id == transcript_id,
-                VoiceTranscriptRow.tenant_id == context.tenant_id,
-                VoiceTranscriptRow.owner_user_id == context.user_id,
+                VoiceTranscriptRow.user_id == context.user_id,
                 VoiceTranscriptRow.status == VoiceTranscriptStatus.processing.value,
             )
             .with_for_update()
@@ -53,15 +52,14 @@ class VoiceTranscriptRepository:
 
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         filename: str | None,
         content_type: str,
         audio_size_bytes: int,
     ) -> VoiceTranscript:
         row = VoiceTranscriptRow(
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             status=VoiceTranscriptStatus.processing.value,
             filename=filename,
             content_type=content_type,
@@ -74,7 +72,7 @@ class VoiceTranscriptRepository:
 
     async def complete_processing(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
         result: SpeechTranscriptionResult,
     ) -> VoiceTranscript | None:
@@ -96,7 +94,7 @@ class VoiceTranscriptRepository:
 
     async def fail_processing(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
         message: str,
     ) -> VoiceTranscript | None:
@@ -111,14 +109,13 @@ class VoiceTranscriptRepository:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         transcript_id: UUID,
     ) -> VoiceTranscript | None:
         row = await self.session.scalar(
             select(VoiceTranscriptRow).where(
                 VoiceTranscriptRow.id == transcript_id,
-                VoiceTranscriptRow.tenant_id == context.tenant_id,
-                VoiceTranscriptRow.owner_user_id == context.user_id,
+                VoiceTranscriptRow.user_id == context.user_id,
             )
         )
         return _voice_transcript_from_row(row) if row is not None else None

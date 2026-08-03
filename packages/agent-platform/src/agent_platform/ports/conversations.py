@@ -12,7 +12,7 @@ from agent_platform.core.conversations import (
     ConversationState,
     ConversationThread,
 )
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.interactions import PendingInteraction
 from agent_platform.core.presentations import PresentationEnvelope
 
@@ -20,7 +20,7 @@ from agent_platform.core.presentations import PresentationEnvelope
 class ConversationThreadStore(Protocol):
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID | None = None,
         title: str | None = None,
@@ -28,15 +28,15 @@ class ConversationThreadStore(Protocol):
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread | None: ...
 
-    async def get_or_create_primary(self, context: TenantContext) -> ConversationThread: ...
+    async def get_or_create_primary(self, context: UserContext) -> ConversationThread: ...
 
     async def update_summary(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         summary: str,
     ) -> ConversationThread | None: ...
@@ -45,7 +45,7 @@ class ConversationThreadStore(Protocol):
 class ConversationMessageStore(Protocol):
     async def append_once(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -56,7 +56,7 @@ class ConversationMessageStore(Protocol):
 
     async def upsert_assistant(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -66,19 +66,19 @@ class ConversationMessageStore(Protocol):
 
     async def get_assistant_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> ConversationMessage | None: ...
 
     async def list_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> list[ConversationMessage]: ...
 
     async def list_page_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         *,
         before: UUID | None,
@@ -89,13 +89,13 @@ class ConversationMessageStore(Protocol):
 class ConversationStateStore(Protocol):
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None: ...
 
     async def set_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         interaction: PendingInteraction,
@@ -104,7 +104,7 @@ class ConversationStateStore(Protocol):
 
     async def consume_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         expected_version: int,
@@ -113,6 +113,6 @@ class ConversationStateStore(Protocol):
 
     async def clear_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None: ...

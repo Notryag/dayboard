@@ -53,12 +53,12 @@ from dayboard.composition.platform import (
     build_platform_services,
     build_run_service,
 )
-from dayboard.api.auth import get_tenant_context
+from dayboard.api.auth import get_user_context
 from dayboard.api.dependencies import get_command_service
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
 from dayboard.config import Settings, get_settings
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.db.session import get_session
 from agent_platform.core import AgentRun, AgentRunEvent
 from dayboard.domain.voice import VoiceCapabilities, VoiceTranscript
@@ -224,19 +224,19 @@ async def health(
 @router.get("/api/reminders", response_model=list[ReminderInboxItem])
 async def list_reminders(
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> list[ReminderInboxItem]:
-    return await build_reminder_services(session).reminders.list_inbox(tenant_context)
+    return await build_reminder_services(session).reminders.list_inbox(user_context)
 
 
 @router.post("/api/reminders/{delivery_id}/read", response_model=ReminderDelivery)
 async def mark_reminder_read(
     delivery_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ReminderDelivery:
     scope = build_reminder_services(session)
-    reminder, changed = await scope.reminders.mark_read(tenant_context, delivery_id)
+    reminder, changed = await scope.reminders.mark_read(user_context, delivery_id)
     if reminder is None:
         raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
     if not changed:
@@ -253,10 +253,10 @@ async def mark_reminder_read(
 async def retry_failed_reminder(
     delivery_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ReminderDelivery:
     scope = build_reminder_services(session)
-    reminder, changed = await scope.reminders.retry_failed(tenant_context, delivery_id)
+    reminder, changed = await scope.reminders.retry_failed(user_context, delivery_id)
     if reminder is None:
         raise ApiProblem(status_code=404, code="REMINDER_NOT_FOUND", message="Reminder not found")
     if not changed:
@@ -281,7 +281,7 @@ async def list_calendar_entries(
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
     limit: int = Query(default=50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> SchedulePage[CalendarEntryView]:
     if period is not None and selected_date is not None:
         raise HTTPException(status_code=422, detail="period cannot be combined with date")
@@ -294,18 +294,18 @@ async def list_calendar_entries(
             detail=f"{parameter} cannot be combined with from or to",
         )
     if period is not None:
-        local_today = datetime.now(ZoneInfo(tenant_context.timezone)).date()
+        local_today = datetime.now(ZoneInfo(user_context.timezone)).date()
         selected_date = local_today + timedelta(days=0 if period == "today" else 1)
     if selected_date is not None:
         from_time, to_time = resolve_local_date_window(
             selected_date,
             selected_date,
-            tenant_context.timezone,
+            user_context.timezone,
         )
     _validate_aware_range(from_time, to_time, "from", "to")
     try:
         return await build_schedule_query_service(session).list_calendar_entries(
-            tenant_context,
+            user_context,
             status=calendar_status,
             start_time=from_time,
             end_time=to_time,
@@ -330,7 +330,7 @@ async def list_task_items(
     cursor: str | None = Query(default=None, min_length=1, max_length=1000),
     limit: int = Query(default=50, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> SchedulePage[TaskItemView]:
     if selected_date is not None and (due_from is not None or due_to is not None):
         raise HTTPException(
@@ -351,14 +351,14 @@ async def list_task_items(
         due_from, due_to = resolve_local_date_window(
             selected_date,
             selected_date,
-            tenant_context.timezone,
+            user_context.timezone,
         )
         due_kind = "dated"
     _validate_aware_range(due_from, due_to, "due_from", "due_to")
     resolved_status = None if task_status == "all" else TaskStatus(task_status)
     try:
         return await build_schedule_query_service(session).list_task_items(
-            tenant_context,
+            user_context,
             status=resolved_status,
             due_kind=due_kind,
             due_from=due_from,
@@ -375,11 +375,11 @@ async def cancel_calendar_entry_from_ui(
     entry_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> CalendarEntryView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_calendar_entry(tenant_context, entry_id)
+    current = await service.get_calendar_entry(user_context, entry_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -387,7 +387,7 @@ async def cancel_calendar_entry_from_ui(
             message="Calendar entry not found",
         )
     entry = await service.cancel_calendar_entry_from_ui(
-        tenant_context,
+        user_context,
         entry_id=entry_id,
         expected_row_version=body.expected_row_version,
     )
@@ -406,11 +406,11 @@ async def complete_calendar_entry_from_ui(
     entry_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> CalendarEntryView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_calendar_entry(tenant_context, entry_id)
+    current = await service.get_calendar_entry(user_context, entry_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -420,7 +420,7 @@ async def complete_calendar_entry_from_ui(
     if current.completed_at is not None:
         return CalendarEntryView.from_domain(current)
     entry = await service.complete_calendar_entry_from_ui(
-        tenant_context,
+        user_context,
         entry_id=entry_id,
         expected_row_version=body.expected_row_version,
     )
@@ -439,11 +439,11 @@ async def reopen_calendar_entry_from_ui(
     entry_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> CalendarEntryView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_calendar_entry(tenant_context, entry_id)
+    current = await service.get_calendar_entry(user_context, entry_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -453,7 +453,7 @@ async def reopen_calendar_entry_from_ui(
     if current.completed_at is None:
         return CalendarEntryView.from_domain(current)
     entry = await service.reopen_calendar_entry_from_ui(
-        tenant_context,
+        user_context,
         entry_id=entry_id,
         expected_row_version=body.expected_row_version,
     )
@@ -472,11 +472,11 @@ async def update_calendar_entry_from_ui(
     entry_id: UUID,
     body: CalendarEntryUpdateRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> CalendarEntryView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_calendar_entry(tenant_context, entry_id)
+    current = await service.get_calendar_entry(user_context, entry_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -484,7 +484,7 @@ async def update_calendar_entry_from_ui(
             message="Calendar entry not found",
         )
     entry = await service.update_calendar_entry_from_ui(
-        tenant_context,
+        user_context,
         entry_id=entry_id,
         title=body.title,
         timing_kind=CalendarTimingKind(body.timing_kind),
@@ -512,11 +512,11 @@ async def _set_task_status_from_ui(
     body: ScheduleMutationRequest,
     target_status: TaskStatus,
     session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> TaskItemView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_task_item(tenant_context, task_id)
+    current = await service.get_task_item(user_context, task_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -526,7 +526,7 @@ async def _set_task_status_from_ui(
     if current.status == target_status:
         return TaskItemView.from_domain(current)
     task = await service.set_task_status_from_ui(
-        tenant_context,
+        user_context,
         task_id=task_id,
         status=target_status,
         expected_row_version=body.expected_row_version,
@@ -546,14 +546,14 @@ async def complete_task_item_from_ui(
     task_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> TaskItemView:
     return await _set_task_status_from_ui(
         task_id,
         body,
         TaskStatus.completed,
         session,
-        tenant_context,
+        user_context,
     )
 
 
@@ -562,11 +562,11 @@ async def reopen_task_item_from_ui(
     task_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> TaskItemView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_task_item(tenant_context, task_id)
+    current = await service.get_task_item(user_context, task_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -582,7 +582,7 @@ async def reopen_task_item_from_ui(
             message="Only completed task items can be reopened",
         )
     task = await service.set_task_status_from_ui(
-        tenant_context,
+        user_context,
         task_id=task_id,
         status=TaskStatus.open,
         expected_row_version=body.expected_row_version,
@@ -602,11 +602,11 @@ async def update_task_item_from_ui(
     task_id: UUID,
     body: TaskItemUpdateRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> TaskItemView:
     scope = build_scheduling_services(session)
     service = scope.scheduling
-    current = await service.get_task_item(tenant_context, task_id)
+    current = await service.get_task_item(user_context, task_id)
     if current is None:
         raise ApiProblem(
             status_code=404,
@@ -614,7 +614,7 @@ async def update_task_item_from_ui(
             message="Task item not found",
         )
     task = await service.update_task_item_from_ui(
-        tenant_context,
+        user_context,
         task_id=task_id,
         title=body.title,
         due_at=body.due_at,
@@ -635,14 +635,14 @@ async def cancel_task_item_from_ui(
     task_id: UUID,
     body: ScheduleMutationRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> TaskItemView:
     return await _set_task_status_from_ui(
         task_id,
         body,
         TaskStatus.cancelled,
         session,
-        tenant_context,
+        user_context,
     )
 
 
@@ -655,7 +655,7 @@ async def cancel_task_item_from_ui(
 async def create_command_run(
     request: Request,
     body: CommandRequest,
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(
@@ -668,7 +668,7 @@ async def create_command_run(
     del request
     try:
         creation = await service.create_or_get_command_run(
-            tenant_context,
+            user_context,
             body,
             idempotency_key=idempotency_key,
         )
@@ -691,7 +691,7 @@ async def create_command_run(
     try:
         await dispatcher.enqueue(creation.run_id)
     except Exception as exc:
-        await service.fail_command_run(tenant_context, creation.run_id, exc)
+        await service.fail_command_run(user_context, creation.run_id, exc)
         raise ApiProblem(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             code="COMMAND_QUEUE_UNAVAILABLE",
@@ -707,11 +707,11 @@ async def create_command_run(
 async def create_thread(
     body: ThreadCreateRequest,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ConversationThread:
     platform = build_platform_services(session)
     thread = await platform.conversations.create_thread(
-        tenant_context,
+        user_context,
         title=body.title,
     )
     await platform.unit_of_work.commit()
@@ -721,10 +721,10 @@ async def create_thread(
 @router.put("/api/conversation", response_model=ConversationThread)
 async def get_or_create_primary_conversation(
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ConversationThread:
     platform = build_platform_services(session)
-    thread = await platform.conversations.get_or_create_primary_thread(tenant_context)
+    thread = await platform.conversations.get_or_create_primary_thread(user_context)
     await platform.unit_of_work.commit()
     return thread
 
@@ -738,12 +738,12 @@ async def get_thread_messages(
     before: UUID | None = None,
     limit: int = Query(default=30, ge=1, le=100),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> DayboardConversationMessagePage:
     try:
         return project_conversation_message_page(
             await build_conversation_service(session).list_message_page(
-                tenant_context,
+                user_context,
                 thread_id,
                 before=before,
                 limit=limit,
@@ -764,10 +764,10 @@ async def get_thread_messages(
 async def get_thread_state(
     thread_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> ClarificationConversationState | None:
     try:
-        state = await build_conversation_service(session).get_state(tenant_context, thread_id)
+        state = await build_conversation_service(session).get_state(user_context, thread_id)
         return public_conversation_state(state)
     except LookupError as exc:
         raise ApiProblem(
@@ -788,7 +788,7 @@ async def create_voice_transcription(
     audio: UploadFile = File(...),
     language: str | None = Form(default="zh"),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
     provider: SpeechToTextProvider = Depends(get_speech_provider),
     audio_probe: AudioMetadataProbe = Depends(get_audio_metadata_probe),
     settings: Settings = Depends(get_settings),
@@ -846,7 +846,7 @@ async def create_voice_transcription(
         )
     try:
         return await build_voice_services(session).transcriptions.transcribe(
-            tenant_context,
+            user_context,
             provider,
             AudioInput(
                 content=content,
@@ -867,10 +867,10 @@ async def create_voice_transcription(
 @router.get("/api/voice/capabilities", response_model=VoiceCapabilities)
 async def get_voice_capabilities(
     request: Request,
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
     settings: Settings = Depends(get_settings),
 ) -> VoiceCapabilities:
-    del tenant_context
+    del user_context
     return VoiceCapabilities(
         available=getattr(request.app.state, "speech_provider", None) is not None,
         max_duration_seconds=settings.asr_max_audio_seconds,
@@ -886,10 +886,10 @@ async def get_voice_capabilities(
 async def get_voice_transcription(
     transcript_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> VoiceTranscript:
     transcript = await build_voice_services(session).transcriptions.get(
-        tenant_context,
+        user_context,
         transcript_id,
     )
     if transcript is None:
@@ -907,7 +907,7 @@ async def create_thread_command_run(
     request: Request,
     thread_id: UUID,
     body: CommandRequest,
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -915,7 +915,7 @@ async def create_thread_command_run(
     del request
     try:
         creation = await service.create_or_get_command_run(
-            tenant_context,
+            user_context,
             body,
             idempotency_key=idempotency_key,
             thread_id=thread_id,
@@ -948,7 +948,7 @@ async def create_thread_command_run(
         try:
             await dispatcher.enqueue(creation.run_id)
         except Exception as exc:
-            await service.fail_command_run(tenant_context, creation.run_id, exc)
+            await service.fail_command_run(user_context, creation.run_id, exc)
             raise ApiProblem(
                 status_code=503,
                 code="COMMAND_QUEUE_UNAVAILABLE",
@@ -972,7 +972,7 @@ async def respond_to_clarification(
     request: Request,
     thread_id: UUID,
     body: ClarificationChoiceRequest,
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
     service: CommandService = Depends(get_command_service),
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -980,7 +980,7 @@ async def respond_to_clarification(
     del request
     try:
         creation = await service.create_or_get_clarification_run(
-            tenant_context,
+            user_context,
             thread_id=thread_id,
             state_version=body.state_version,
             option_key=body.option_key,
@@ -1014,7 +1014,7 @@ async def respond_to_clarification(
         try:
             await dispatcher.enqueue(creation.run_id)
         except Exception as exc:
-            await service.fail_command_run(tenant_context, creation.run_id, exc)
+            await service.fail_command_run(user_context, creation.run_id, exc)
             raise ApiProblem(
                 status_code=503,
                 code="COMMAND_QUEUE_UNAVAILABLE",
@@ -1032,9 +1032,9 @@ async def respond_to_clarification(
 async def get_run(
     run_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> AgentRun:
-    run = await build_run_service(session).get_run(tenant_context, run_id)
+    run = await build_run_service(session).get_run(user_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return run
@@ -1044,17 +1044,17 @@ async def get_run(
 async def get_active_thread_run(
     thread_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> AgentRun | None:
     try:
-        await build_conversation_service(session).require_thread(tenant_context, thread_id)
+        await build_conversation_service(session).require_thread(user_context, thread_id)
     except LookupError as exc:
         raise ApiProblem(
             status_code=404,
             code="THREAD_NOT_FOUND",
             message="Conversation thread not found",
         ) from exc
-    return await build_run_service(session).get_active_thread_run(tenant_context, thread_id)
+    return await build_run_service(session).get_active_thread_run(user_context, thread_id)
 
 
 @router.post("/api/runs/{run_id}/cancel", response_model=AgentRun)
@@ -1063,26 +1063,26 @@ async def cancel_run(
     dispatcher: RedisCommandDispatcher = Depends(get_command_dispatcher),
     stream_bridge: StreamBridge = Depends(get_stream_bridge),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> AgentRun:
     platform = build_platform_services(session)
     service = platform.runs
-    run = await service.get_run_for_update(tenant_context, run_id)
+    run = await service.get_run_for_update(user_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     transitioned = await service.mark_cancelled(
-        tenant_context,
+        user_context,
         run,
         event_content="请求已取消",
     )
     if transitioned:
         conversations = platform.conversations
-        existing_message = await conversations.get_assistant_message_for_run(tenant_context, run.id)
+        existing_message = await conversations.get_assistant_message_for_run(user_context, run.id)
         parts = dayboard_presentation_parts(
             existing_message.presentation if existing_message is not None else None
         )
         await conversations.upsert_assistant_message(
-            tenant_context,
+            user_context,
             thread_id=run.thread_id,
             run_id=run.id,
             content=run.result_message or "请求已取消",
@@ -1109,7 +1109,7 @@ async def cancel_run(
         await dispatcher.cancel(run_id)
     except Exception:
         pass
-    cancelled = await service.get_run(tenant_context, run_id)
+    cancelled = await service.get_run(user_context, run_id)
     if cancelled is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
     return cancelled
@@ -1119,12 +1119,12 @@ async def cancel_run(
 async def get_run_events(
     run_id: UUID,
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> list[AgentRunEvent]:
     service = build_run_service(session)
-    if await service.get_run(tenant_context, run_id) is None:
+    if await service.get_run(user_context, run_id) is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
-    return await service.list_events(tenant_context, run_id)
+    return await service.list_events(user_context, run_id)
 
 
 @router.get("/api/runs/{run_id}/events/stream")
@@ -1139,10 +1139,10 @@ async def stream_run_events(
     ),
     stream_bridge: StreamBridge = Depends(get_stream_bridge),
     session: AsyncSession = Depends(get_session),
-    tenant_context: TenantContext = Depends(get_tenant_context),
+    user_context: UserContext = Depends(get_user_context),
 ) -> StreamingResponse:
     service = build_run_service(session)
-    run = await service.get_run(tenant_context, run_id)
+    run = await service.get_run(user_context, run_id)
     if run is None:
         raise ApiProblem(status_code=404, code="RUN_NOT_FOUND", message="Run not found")
 
@@ -1156,7 +1156,7 @@ async def stream_run_events(
             }:
                 return None
             assistant = await build_conversation_service(session).get_assistant_message_for_run(
-                tenant_context, run_id
+                user_context, run_id
             )
             parts = dayboard_presentation_parts(
                 assistant.presentation if assistant is not None else None
@@ -1177,7 +1177,7 @@ async def stream_run_events(
                 return
             if entry == HEARTBEAT_SENTINEL:
                 session.expire_all()
-                latest = await service.get_run(tenant_context, run_id)
+                latest = await service.get_run(user_context, run_id)
                 terminal = await terminal_event(latest) if latest is not None else None
                 if terminal is not None:
                     event_type, data = terminal

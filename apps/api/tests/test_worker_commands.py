@@ -13,7 +13,6 @@ def test_command_run_job_does_not_retry_a_terminal_failed_run() -> None:
 
 
 async def test_worker_restores_execution_context_from_persisted_run(monkeypatch) -> None:
-    tenant_id = uuid4()
     user_id = uuid4()
     run_id = uuid4()
     captured = {}
@@ -29,8 +28,7 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
         async def get_run_for_worker(self, requested_run_id):
             assert requested_run_id == run_id
             return SimpleNamespace(
-                tenant_id=tenant_id,
-                owner_user_id=user_id,
+                user_id=user_id,
                 input_message="数据库中的消息",
             )
 
@@ -60,7 +58,6 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
         str(run_id),
     )
 
-    assert captured["context"].tenant_id == tenant_id
     assert captured["context"].user_id == user_id
     assert captured["run_id"] == run_id
     assert captured["session"] is not None

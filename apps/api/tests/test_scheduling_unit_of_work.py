@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.app.scheduling import SchedulingService
 from dayboard.db.models import CalendarEntryRow
 from dayboard.db.scheduling_uow import SqlAlchemySchedulingUnitOfWork
@@ -25,7 +25,7 @@ class FailingReminderScheduleStore:
 
 async def test_scheduling_service_leaves_commit_to_outer_transaction(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     unit_of_work = SqlAlchemySchedulingUnitOfWork(db_session)
     service = SchedulingService(unit_of_work)
@@ -39,11 +39,11 @@ async def test_scheduling_service_leaves_commit_to_outer_transaction(
     start = datetime.now(UTC) + timedelta(days=1)
 
     entry = await service.create_calendar_entry(
-        tenant_context,
+        user_context,
         CalendarEntryCreate(
             title="外层事务提交",
             start_time=start,
-            timezone=tenant_context.timezone,
+            timezone=user_context.timezone,
             reminder=Reminder(offset="PT10M"),
         ),
     )
@@ -54,7 +54,7 @@ async def test_scheduling_service_leaves_commit_to_outer_transaction(
 
 async def test_reminder_failure_rolls_back_schedule_and_outbox_together(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     unit_of_work = SqlAlchemySchedulingUnitOfWork(db_session)
     unit_of_work.reminders = FailingReminderScheduleStore()  # type: ignore[assignment]
@@ -62,11 +62,11 @@ async def test_reminder_failure_rolls_back_schedule_and_outbox_together(
 
     with pytest.raises(ReminderWriteFailed):
         await service.create_calendar_entry(
-            tenant_context,
+            user_context,
             CalendarEntryCreate(
                 title="原子回滚",
                 start_time=datetime.now(UTC) + timedelta(days=1),
-                timezone=tenant_context.timezone,
+                timezone=user_context.timezone,
                 reminder=Reminder(offset="PT10M"),
             ),
         )

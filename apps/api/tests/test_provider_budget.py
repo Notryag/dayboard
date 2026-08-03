@@ -12,7 +12,7 @@ from dayboard.agent.budget import ProviderBudgetExceeded, ProviderBudgetGuard, e
 from dayboard.agent.run_execution import DayboardRunExecutionDriver
 from dayboard.agent.run_result_projection import safe_error_message
 from dayboard.config import Settings
-from agent_platform.core import AgentRun, AgentRunStatus, TenantContext
+from agent_platform.core import AgentRun, AgentRunStatus, UserContext
 
 
 def test_estimate_prompt_tokens_is_nonzero() -> None:
@@ -41,7 +41,7 @@ def test_upstream_rate_limit_is_user_friendly() -> None:
     )
 
 
-def test_provider_budget_guard_rejects_request_over_limit(tenant_context: TenantContext) -> None:
+def test_provider_budget_guard_rejects_request_over_limit(user_context: UserContext) -> None:
     guard = ProviderBudgetGuard(
         Settings(
             DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
@@ -51,16 +51,16 @@ def test_provider_budget_guard_rejects_request_over_limit(tenant_context: Tenant
     )
 
     estimate = guard.estimate(input_text="安排明天上午十点开会")
-    guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+    guard.check(context=user_context, model_name="openai:gpt-test", estimate=estimate)
 
     with pytest.raises(ProviderBudgetExceeded) as exc_info:
-        guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+        guard.check(context=user_context, model_name="openai:gpt-test", estimate=estimate)
 
     assert exc_info.value.budget_type == "request"
 
 
 def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     guard = ProviderBudgetGuard(
         Settings(
@@ -70,10 +70,10 @@ def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
         )
     )
     estimate = guard.estimate(input_text="安排会议")
-    guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+    guard.check(context=user_context, model_name="openai:gpt-test", estimate=estimate)
 
     charged = guard.reconcile_actual(
-        context=tenant_context,
+        context=user_context,
         model_name="openai:gpt-test",
         estimate=estimate,
         actual_tokens=20,
@@ -81,12 +81,12 @@ def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
 
     assert charged == 20 - estimate.token_units
     with pytest.raises(ProviderBudgetExceeded) as exc_info:
-        guard.check(context=tenant_context, model_name="openai:gpt-test", estimate=estimate)
+        guard.check(context=user_context, model_name="openai:gpt-test", estimate=estimate)
     assert exc_info.value.budget_type == "token"
 
 
 async def test_command_service_checks_budget_before_model_execution(
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     guard = ProviderBudgetGuard(
         Settings(
@@ -125,8 +125,7 @@ async def test_command_service_checks_budget_before_model_execution(
         now = datetime.now(UTC)
         return AgentRun(
             id=uuid4(),
-            tenant_id=tenant_context.tenant_id,
-            owner_user_id=tenant_context.user_id,
+            user_id=user_context.user_id,
             thread_id=uuid4(),
             status=AgentRunStatus.running,
             input_message=message,
@@ -136,7 +135,7 @@ async def test_command_service_checks_budget_before_model_execution(
         )
 
     await build_driver().execute(
-        tenant_context,
+        user_context,
         build_run("安排明天开会"),
         on_completed=complete,
         on_failed=fail,
@@ -144,7 +143,7 @@ async def test_command_service_checks_budget_before_model_execution(
 
     with pytest.raises(ProviderBudgetExceeded):
         await build_driver().execute(
-            tenant_context,
+            user_context,
             build_run("安排后天开会"),
             on_completed=complete,
             on_failed=fail,

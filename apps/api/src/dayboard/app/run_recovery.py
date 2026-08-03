@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from agent_platform.application import AgentRunService
 from agent_platform.core import AgentRunStatus
 
@@ -19,9 +19,8 @@ async def recover_stale_running_runs(
 ) -> list[UUID]:
     recovered: list[UUID] = []
     for run in await service.list_stale_running(updated_before=updated_before):
-        context = TenantContext(
-            tenant_id=run.tenant_id,
-            user_id=run.owner_user_id,
+        context = UserContext(
+            user_id=run.user_id,
             timezone=timezone,
             locale=locale,
         )
@@ -45,9 +44,8 @@ async def recover_stale_queued_runs(
 ) -> list[UUID]:
     recovered: list[UUID] = []
     for run in await service.list_stale_queued(created_before=created_before):
-        context = TenantContext(
-            tenant_id=run.tenant_id,
-            user_id=run.owner_user_id,
+        context = UserContext(
+            user_id=run.user_id,
             timezone=timezone,
             locale=locale,
         )

@@ -7,6 +7,8 @@ These documents are the canonical description of the implemented product:
 - [module-map.md](./module-map.md): code placement, dependency permissions, public module contracts,
   transaction ownership, and cross-module invariants.
 - [product-model.md](./product-model.md): user-facing concepts and scheduling semantics.
+- [identity-model.md](./identity-model.md): authenticated user isolation, HTTP/Worker boundaries, and
+  the pre-release tenant-removal decision.
 - [run-lifecycle.md](./run-lifecycle.md): queued execution, Redis Stream/SSE delivery, persistence,
   recovery, clarification, cancellation, and usage.
 - [time-protocol.md](./time-protocol.md): Beijing local model protocol, UTC persistence, artifact

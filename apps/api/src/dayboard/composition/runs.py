@@ -11,7 +11,7 @@ from north import CompactionHook, RunExecutor
 from north.runtime import StreamBridge
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from agent_platform.ports import PlatformUnitOfWorkFactory
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
@@ -35,7 +35,7 @@ class RunExecutionScope:
     platform: PlatformServiceScope
     driver: DayboardRunExecutionDriver
 
-    async def execute(self, context: TenantContext, run_id: UUID) -> None:
+    async def execute(self, context: UserContext, run_id: UUID) -> None:
         await self.platform.execution.execute(context, run_id, self.driver)
 
 
@@ -47,7 +47,7 @@ def build_dayboard_agent_factory(
     session_lock: asyncio.Lock | None = None,
 ) -> DayboardAgentFactory:
     def create_agent(
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         compaction_hooks: Sequence[CompactionHook],
     ) -> object:

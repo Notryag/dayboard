@@ -18,14 +18,12 @@ from dayboard.agent.prompts import (
 )
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(
     {
-        "tenant_id",
         "user_id",
-        "owner_user_id",
         "timezone",
         "locale",
         "run_id",
@@ -40,16 +38,15 @@ PROMPT_CACHE_KEY_SHARDS = 32
 
 def _model_headers(
     settings: Settings,
-    context: TenantContext | None,
+    context: UserContext | None,
     run_id: UUID | None,
 ) -> dict[str, str]:
-    canary_selected = context is not None and context.tenant_id in settings.northgate_canary_tenants
+    canary_selected = context is not None and context.user_id in settings.northgate_canary_users
     if not settings.northgate_metadata_enabled and not canary_selected:
         return {}
     if context is None or run_id is None:
-        raise ValueError("Northgate metadata requires trusted tenant context and run ID")
+        raise ValueError("Northgate metadata requires trusted user context and run ID")
     metadata = {
-        "tenant_id": str(context.tenant_id),
         "user_id": str(context.user_id),
         "run_id": str(run_id),
     }
@@ -58,15 +55,15 @@ def _model_headers(
 
 def _model_options(
     settings: Settings,
-    context: TenantContext | None,
+    context: UserContext | None,
 ) -> dict[str, object]:
     options: dict[str, object] = {}
     if context is not None and settings.agent_model_name.startswith("openai:"):
-        identity = f"{context.tenant_id}:{context.user_id}".encode()
+        identity = str(context.user_id).encode()
         shard = int.from_bytes(sha256(identity).digest()[:2], "big") % PROMPT_CACHE_KEY_SHARDS
         options["model_kwargs"] = {"prompt_cache_key": f"{PROMPT_CACHE_KEY_VERSION}-{shard:02d}"}
 
-    if context is not None and context.tenant_id in settings.northgate_canary_tenants:
+    if context is not None and context.user_id in settings.northgate_canary_users:
         if settings.northgate_base_url is None or settings.northgate_application_key is None:
             raise ValueError("Northgate canary connection is incomplete")
         options.update(
@@ -94,7 +91,7 @@ def build_dayboard_agent(
     *,
     tools: list | None = None,
     session: AsyncSession | None = None,
-    context: TenantContext | None = None,
+    context: UserContext | None = None,
     run_id: UUID | None = None,
     session_lock: asyncio.Lock | None = None,
     checkpointer=None,
@@ -114,8 +111,7 @@ def build_dayboard_agent(
         resolved_tools.append(ask_clarification)
     _validate_model_visible_tool_fields(resolved_tools)
 
-    resolved_context = context or TenantContext(
-        tenant_id=resolved_settings.default_tenant_id,
+    resolved_context = context or UserContext(
         user_id=resolved_settings.default_user_id,
         timezone=resolved_settings.default_timezone,
         locale=resolved_settings.default_locale,

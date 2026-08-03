@@ -27,7 +27,7 @@ from agent_platform.core.execution import (
     RunExecutionOutcome,
     RunExecutionOutcomeKind,
 )
-from agent_platform.core.identity import TenantContext, TenantIsolationMode
+from agent_platform.core.identity import UserContext
 from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
 from agent_platform.core.interactions import PendingInteraction
 from agent_platform.core.presentations import PresentationEnvelope
@@ -66,6 +66,5 @@ __all__ = [
     "RunExecutionFailure",
     "RunExecutionOutcome",
     "RunExecutionOutcomeKind",
-    "TenantContext",
-    "TenantIsolationMode",
+    "UserContext",
 ]

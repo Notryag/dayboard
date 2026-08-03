@@ -57,7 +57,7 @@ class RecordingPasswordResetMailer:
         )
 
 
-async def test_register_login_logout_and_resolve_tenant_context(
+async def test_register_login_logout_and_resolve_user_context(
     db_session: AsyncSession,
 ) -> None:
     settings = Settings(
@@ -157,7 +157,6 @@ async def test_eval_bearer_token_resolves_only_configured_active_identity(
                 DAYBOARD_AUTH_COOKIE_SECURE=False,
                 DAYBOARD_RATE_LIMIT_ENABLED=False,
                 DAYBOARD_EVAL_AUTH_TOKEN_SHA256=sha256(raw_token.encode()).hexdigest(),
-                DAYBOARD_EVAL_TENANT_ID=identity["tenant_id"],
                 DAYBOARD_EVAL_USER_ID=identity["user_id"],
             )
             client.cookies.clear()

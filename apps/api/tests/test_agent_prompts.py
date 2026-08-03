@@ -6,12 +6,11 @@ from dayboard.agent.prompts import (
     build_dayboard_system_prompt,
     build_runtime_scheduling_context,
 )
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 def test_system_prompt_exposes_relative_dates_and_anytime_contract() -> None:
-    context = TenantContext(
-        tenant_id=UUID("00000000-0000-0000-0000-000000000001"),
+    context = UserContext(
         user_id=UUID("00000000-0000-0000-0000-000000000002"),
         timezone="Asia/Shanghai",
         locale="zh-CN",
@@ -60,8 +59,7 @@ def test_system_prompt_is_stable_across_runtime_values() -> None:
 
 
 def test_runtime_context_converts_to_beijing_time() -> None:
-    context = TenantContext(
-        tenant_id=UUID("00000000-0000-0000-0000-000000000001"),
+    context = UserContext(
         user_id=UUID("00000000-0000-0000-0000-000000000002"),
         timezone="Asia/Shanghai",
         locale="zh-CN",

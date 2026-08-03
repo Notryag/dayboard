@@ -28,7 +28,7 @@ Current product error codes:
 | `INVALID_CREDENTIALS` | 401 | Login credentials were rejected. |
 | `IDENTIFIER_ALREADY_REGISTERED` | 409 | Username or email is already registered. |
 | `THREAD_NOT_FOUND` | 404 | The conversation does not exist for the current owner. |
-| `RUN_NOT_FOUND` | 404 | The Run does not exist for the current tenant. |
+| `RUN_NOT_FOUND` | 404 | The Run does not exist for the current user scope. |
 | `COMMAND_ALREADY_IN_PROGRESS` | 409 | The thread already has an active Run. |
 | `IDEMPOTENCY_CONFLICT` | 409 | An idempotency key was reused for different input. |
 | `CLARIFICATION_CONFLICT` | 409 | Clarification state is stale or no longer valid. |

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 DAYBOARD_SUMMARY_PROMPT = """Summarize the scheduling conversation for future turns.
@@ -14,7 +14,7 @@ Keep only, using Beijing local wall-clock values without UTC offsets:
 - completed create, reschedule, or cancellation actions;
 - unresolved choices or clarification questions.
 
-Omit reasoning, tool logs, credentials, tenant metadata, UTC timestamps, timezone conversions,
+Omit reasoning, tool logs, credentials, identity metadata, UTC timestamps, timezone conversions,
 pleasantries, and obsolete details.
 Database tool results remain authoritative if the summary later conflicts with them.
 Use concise plain text with no more than 250 words.
@@ -50,7 +50,7 @@ Rules:
 
 
 def build_runtime_scheduling_context(
-    context: TenantContext,
+    context: UserContext,
     *,
     now: datetime | None = None,
 ) -> str:

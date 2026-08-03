@@ -820,7 +820,7 @@ def main() -> None:
     parser.add_argument(
         "--preserve-active-schedule",
         action="store_true",
-        help="Do not cancel active data in the dedicated Eval tenant before execution.",
+        help="Do not cancel active data in the dedicated Eval user scope before execution.",
     )
     parser.add_argument("--execute", action="store_true")
     raise SystemExit(asyncio.run(_main(parser.parse_args())))

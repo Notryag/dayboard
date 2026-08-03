@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 def _validate_tokens(*values: int) -> None:
@@ -51,12 +51,12 @@ class ProviderUsageSettlement:
 
 
 class ProviderUsageRunNotFound(LookupError):
-    """The requested Run is not visible to the trusted tenant/owner context."""
+    """The requested Run is not visible to the trusted user context."""
 
 
 class ProviderUsageSettlementPort(Protocol):
     async def settle(
         self,
-        context: TenantContext,
+        context: UserContext,
         aggregate: ProviderUsageAggregate,
     ) -> ProviderUsageSettlement: ...

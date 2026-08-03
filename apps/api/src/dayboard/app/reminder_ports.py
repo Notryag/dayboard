@@ -7,36 +7,36 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 from dayboard.domain.reminders import ReminderDelivery, ReminderSourceSnapshot
 
 
 class ReminderDeliveryStore(Protocol):
-    async def list_for_user(self, context: TenantContext) -> Sequence[ReminderDelivery]: ...
+    async def list_for_user(self, context: UserContext) -> Sequence[ReminderDelivery]: ...
 
     async def list_inbox_for_user(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         limit: int = 100,
     ) -> Sequence[ReminderDelivery]: ...
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> ReminderDelivery | None: ...
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
     ) -> ReminderDelivery | None: ...
 
     async def mark_read(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
         *,
         read_at: datetime,
@@ -44,7 +44,7 @@ class ReminderDeliveryStore(Protocol):
 
     async def retry_failed(
         self,
-        context: TenantContext,
+        context: UserContext,
         delivery_id: UUID,
         *,
         retry_at: datetime,

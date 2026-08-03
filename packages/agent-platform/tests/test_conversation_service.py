@@ -17,7 +17,7 @@ from agent_platform.core import (
     PendingInteraction,
     PresentationEnvelope,
 )
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 class MemoryThreadStore:
@@ -26,7 +26,7 @@ class MemoryThreadStore:
 
     async def create(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID | None = None,
         title: str | None = None,
@@ -34,8 +34,7 @@ class MemoryThreadStore:
         now = datetime.now(UTC)
         thread = ConversationThread(
             id=thread_id or uuid4(),
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             is_primary=False,
             title=title,
             status=ConversationThreadStatus.active,
@@ -48,24 +47,20 @@ class MemoryThreadStore:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread | None:
         thread = self.records.get(thread_id)
-        if thread is None or (thread.tenant_id, thread.owner_user_id) != (
-            context.tenant_id,
-            context.user_id,
-        ):
+        if thread is None or thread.user_id != context.user_id:
             return None
         return thread
 
-    async def get_or_create_primary(self, context: TenantContext) -> ConversationThread:
+    async def get_or_create_primary(self, context: UserContext) -> ConversationThread:
         existing = next(
             (
                 thread
                 for thread in self.records.values()
-                if thread.tenant_id == context.tenant_id
-                and thread.owner_user_id == context.user_id
+                if thread.user_id == context.user_id
                 and thread.is_primary
             ),
             None,
@@ -79,7 +74,7 @@ class MemoryThreadStore:
 
     async def update_summary(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         summary: str,
     ) -> ConversationThread | None:
@@ -97,7 +92,7 @@ class MemoryMessageStore:
 
     async def append_once(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -126,7 +121,7 @@ class MemoryMessageStore:
 
     async def upsert_assistant(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -149,7 +144,7 @@ class MemoryMessageStore:
 
     async def get_assistant_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> ConversationMessage | None:
         del context
@@ -164,7 +159,7 @@ class MemoryMessageStore:
 
     async def list_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> list[ConversationMessage]:
         del context
@@ -172,7 +167,7 @@ class MemoryMessageStore:
 
     async def list_page_for_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         *,
         before: UUID | None,
@@ -193,7 +188,7 @@ class MemoryStateStore:
 
     async def get(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None:
         del context
@@ -201,7 +196,7 @@ class MemoryStateStore:
 
     async def set_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         interaction: PendingInteraction,
@@ -221,7 +216,7 @@ class MemoryStateStore:
 
     async def consume_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         expected_version: int,
@@ -249,7 +244,7 @@ class MemoryStateStore:
 
     async def clear_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None:
         del context
@@ -285,8 +280,7 @@ class MemoryConversationUnitOfWork:
 
 def test_conversation_history_and_state_are_storage_independent() -> None:
     async def scenario() -> None:
-        context = TenantContext(
-            tenant_id=uuid4(),
+        context = UserContext(
             user_id=uuid4(),
             timezone="Asia/Shanghai",
             locale="zh-CN",

@@ -34,7 +34,6 @@ class Settings(BaseSettings):
         default=None,
         alias="DAYBOARD_EVAL_AUTH_TOKEN_SHA256",
     )
-    eval_tenant_id: UUID | None = Field(default=None, alias="DAYBOARD_EVAL_TENANT_ID")
     eval_user_id: UUID | None = Field(default=None, alias="DAYBOARD_EVAL_USER_ID")
     public_web_url: str = Field(
         default="http://localhost:3000",
@@ -76,12 +75,8 @@ class Settings(BaseSettings):
         alias="DAYBOARD_IDEMPOTENCY_RETENTION_SECONDS",
         ge=3600,
     )
-    default_tenant_id: UUID = Field(
-        default=UUID("00000000-0000-0000-0000-000000000001"),
-        alias="DAYBOARD_DEFAULT_TENANT_ID",
-    )
     default_user_id: UUID = Field(
-        default=UUID("00000000-0000-0000-0000-000000000002"),
+        default=UUID("00000000-0000-0000-0000-000000000001"),
         alias="DAYBOARD_DEFAULT_USER_ID",
     )
     default_timezone: str = Field(default="Asia/Shanghai", alias="DAYBOARD_DEFAULT_TIMEZONE")
@@ -187,9 +182,9 @@ class Settings(BaseSettings):
         default=None,
         alias="DAYBOARD_NORTHGATE_APPLICATION_KEY",
     )
-    northgate_canary_tenant_ids: str = Field(
+    northgate_canary_user_ids: str = Field(
         default="",
-        alias="DAYBOARD_NORTHGATE_CANARY_TENANT_IDS",
+        alias="DAYBOARD_NORTHGATE_CANARY_USER_IDS",
     )
     rate_limit_enabled: bool = Field(default=True, alias="DAYBOARD_RATE_LIMIT_ENABLED")
     rate_limit_default: str = Field(default="120/minute", alias="DAYBOARD_RATE_LIMIT_DEFAULT")
@@ -245,7 +240,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_secure_production_auth(self) -> "Settings":
-        canary_ids = self.northgate_canary_tenants
+        canary_ids = self.northgate_canary_users
         application_key = (
             self.northgate_application_key.get_secret_value()
             if self.northgate_application_key is not None
@@ -253,7 +248,7 @@ class Settings(BaseSettings):
         )
         if canary_ids and (not self.northgate_base_url or not application_key):
             raise ValueError(
-                "Northgate canary tenants require DAYBOARD_NORTHGATE_BASE_URL and "
+                "Northgate canary users require DAYBOARD_NORTHGATE_BASE_URL and "
                 "DAYBOARD_NORTHGATE_APPLICATION_KEY"
             )
         eval_token_sha256 = (
@@ -261,13 +256,13 @@ class Settings(BaseSettings):
             if self.eval_auth_token_sha256 is not None
             else ""
         )
-        eval_identity = (eval_token_sha256, self.eval_tenant_id, self.eval_user_id)
+        eval_identity = (eval_token_sha256, self.eval_user_id)
         if any(value is not None and value != "" for value in eval_identity) and not all(
             value is not None and value != "" for value in eval_identity
         ):
             raise ValueError(
                 "Eval authentication requires DAYBOARD_EVAL_AUTH_TOKEN_SHA256, "
-                "DAYBOARD_EVAL_TENANT_ID, and DAYBOARD_EVAL_USER_ID together"
+                "DAYBOARD_EVAL_USER_ID together"
             )
         if eval_token_sha256 and (
             len(eval_token_sha256) != 64
@@ -285,17 +280,17 @@ class Settings(BaseSettings):
         return self
 
     @property
-    def northgate_canary_tenants(self) -> frozenset[UUID]:
-        tenants: set[UUID] = set()
-        for raw in self.northgate_canary_tenant_ids.split(","):
+    def northgate_canary_users(self) -> frozenset[UUID]:
+        users: set[UUID] = set()
+        for raw in self.northgate_canary_user_ids.split(","):
             value = raw.strip()
             if not value:
                 continue
             try:
-                tenants.add(UUID(value))
+                users.add(UUID(value))
             except ValueError as exc:
-                raise ValueError("DAYBOARD_NORTHGATE_CANARY_TENANT_IDS must contain UUIDs") from exc
-        return frozenset(tenants)
+                raise ValueError("DAYBOARD_NORTHGATE_CANARY_USER_IDS must contain UUIDs") from exc
+        return frozenset(users)
 
     @property
     def effective_rate_limit_storage_url(self) -> str:

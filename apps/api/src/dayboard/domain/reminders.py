@@ -35,8 +35,7 @@ class ReminderSourceStatus(StrEnum):
 
 class ReminderDelivery(BaseModel):
     id: UUID
-    tenant_id: UUID
-    owner_user_id: UUID
+    user_id: UUID
     source_type: ReminderSourceType
     source_id: UUID
     channel: str
@@ -61,8 +60,7 @@ class ReminderInboxItem(ReminderDelivery):
 
 
 class ReminderSourceSnapshot(BaseModel):
-    tenant_id: UUID
-    owner_user_id: UUID
+    user_id: UUID
     source_type: ReminderSourceType
     source_id: UUID
     title: str

@@ -24,7 +24,7 @@ from dayboard.composition.platform import build_run_service
 from dayboard.composition.provider_usage import build_provider_usage_settlement
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.config import Settings
-from agent_platform.core import AgentRunStatus, InteractionConflictError, TenantContext
+from agent_platform.core import AgentRunStatus, InteractionConflictError, UserContext
 from dayboard.db.session import SessionLocal
 from dayboard.domain.interactions import ClarificationPayload
 from fake_runtime import fake_executor_factory
@@ -81,7 +81,7 @@ def _task_artifact(*, task_id: str, title: str) -> dict:
 
 async def test_two_runs_persist_complete_thread_history(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     invoked_threads: list[str] = []
     responses = iter(["已经安排。", "已经改好。"])
@@ -93,18 +93,18 @@ async def test_two_runs_persist_complete_thread_history(
     scope = _run_scope(db_session, fake_invoker)
     service = build_command_service(db_session)
     first_request = CommandRequest(message="明天八点开会")
-    first = await service.create_or_get_command_run(tenant_context, first_request)
-    await scope.execute(tenant_context, first.run_id)
+    first = await service.create_or_get_command_run(user_context, first_request)
+    await scope.execute(user_context, first.run_id)
     second_request = CommandRequest(message="改到后天")
     second = await service.create_or_get_command_run(
-        tenant_context,
+        user_context,
         second_request,
         thread_id=first.thread_id,
     )
-    await scope.execute(tenant_context, second.run_id)
+    await scope.execute(user_context, second.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
-        tenant_context, first.thread_id
+        user_context, first.thread_id
     )
 
     assert second.thread_id == first.thread_id
@@ -120,7 +120,7 @@ async def test_two_runs_persist_complete_thread_history(
 async def test_tool_message_part_is_persisted_with_final_assistant_message(
     api_app: FastAPI,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_stream = RecordingRunStream()
 
@@ -153,11 +153,11 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
     service = build_command_service(db_session)
     request = CommandRequest(message="提醒我提交周报")
-    created = await service.create_or_get_command_run(tenant_context, request)
-    await scope.execute(tenant_context, created.run_id)
+    created = await service.create_or_get_command_run(user_context, request)
+    await scope.execute(user_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
-        tenant_context, created.thread_id
+        user_context, created.thread_id
     )
     assistant = messages[-1]
     async with AsyncClient(
@@ -181,7 +181,7 @@ async def test_tool_message_part_is_persisted_with_final_assistant_message(
 
 async def test_artifact_projection_waits_for_shared_session_transaction(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     scope = None
 
@@ -215,14 +215,14 @@ async def test_artifact_projection_waits_for_shared_session_transaction(
 
     scope = _run_scope(db_session, fake_invoker)
     created = await build_command_service(db_session).create_or_get_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="创建并行事务保护任务"),
     )
 
-    await scope.execute(tenant_context, created.run_id)
+    await scope.execute(user_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
-        tenant_context, created.thread_id
+        user_context, created.thread_id
     )
     assert (
         dayboard_presentation_parts(messages[-1].presentation)[0]["item"]["value"]["title"]
@@ -232,7 +232,7 @@ async def test_artifact_projection_waits_for_shared_session_transaction(
 
 async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_stream = RecordingRunStream()
     created = None
@@ -241,11 +241,11 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
         assert created is not None
         async with SessionLocal() as cancel_session:
             cancel_runs = build_run_service(cancel_session)
-            run = await cancel_runs.get_run_for_update(tenant_context, created.run_id)
+            run = await cancel_runs.get_run_for_update(user_context, created.run_id)
             assert run is not None
-            assert await cancel_runs.mark_cancelled(tenant_context, run)
+            assert await cancel_runs.mark_cancelled(user_context, run)
             await build_conversation_service(cancel_session).upsert_assistant_message(
-                tenant_context,
+                user_context,
                 thread_id=created.thread_id,
                 run_id=created.run_id,
                 content="请求已取消",
@@ -280,13 +280,13 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
     service = build_command_service(db_session)
     request = CommandRequest(message="创建任务")
-    created = await service.create_or_get_command_run(tenant_context, request)
+    created = await service.create_or_get_command_run(user_context, request)
 
     with pytest.raises(asyncio.CancelledError):
-        await scope.execute(tenant_context, created.run_id)
+        await scope.execute(user_context, created.run_id)
 
     messages = await build_conversation_service(db_session).list_messages(
-        tenant_context, created.thread_id
+        user_context, created.thread_id
     )
     assistant = messages[-1]
 
@@ -297,7 +297,7 @@ async def test_cancelled_run_rejects_late_tool_message_and_failed_event(
 
 async def test_clarification_outcome_is_persisted_before_terminal_stream(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_stream = RecordingRunStream()
 
@@ -315,18 +315,18 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
     scope = _run_scope(db_session, fake_invoker, stream_bridge=run_stream)
     service = build_command_service(db_session)
     created = await service.create_or_get_command_run(
-        tenant_context,
+        user_context,
         CommandRequest(message="明天开会"),
     )
 
-    await scope.execute(tenant_context, created.run_id)
+    await scope.execute(user_context, created.run_id)
 
     runs = build_run_service(db_session)
     conversations = build_conversation_service(db_session)
-    run = await runs.get_run(tenant_context, created.run_id)
-    state = await conversations.get_state(tenant_context, created.thread_id)
-    messages = await conversations.list_messages(tenant_context, created.thread_id)
-    events = await runs.list_events(tenant_context, created.run_id)
+    run = await runs.get_run(user_context, created.run_id)
+    state = await conversations.get_state(user_context, created.thread_id)
+    messages = await conversations.list_messages(user_context, created.thread_id)
+    events = await runs.list_events(user_context, created.run_id)
 
     assert run is not None
     assert run.status == AgentRunStatus.needs_clarification
@@ -342,22 +342,22 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
 
 async def test_pending_clarification_state_is_versioned_and_clearable(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     service = build_conversation_service(db_session)
-    thread = await service.create_thread(tenant_context)
+    thread = await service.create_thread(user_context)
     run_id = uuid4()
 
     pending = await ClarificationService(service).set_pending(
-        tenant_context,
+        user_context,
         thread_id=thread.id,
         run_id=run_id,
         question="你指的是 8 点还是 10 点的会议？",
         payload=ClarificationPayload(response_kind="free_text"),
     )
     await db_session.commit()
-    loaded = await service.get_state(tenant_context, thread.id)
-    cleared = await service.clear_interaction(tenant_context, thread.id)
+    loaded = await service.get_state(user_context, thread.id)
+    cleared = await service.clear_interaction(user_context, thread.id)
     await db_session.commit()
 
     assert loaded == pending
@@ -373,23 +373,22 @@ async def test_pending_clarification_state_is_versioned_and_clearable(
 
 async def test_conversation_state_is_owner_scoped(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     service = build_conversation_service(db_session)
-    thread = await service.create_thread(tenant_context)
+    thread = await service.create_thread(user_context)
     await ClarificationService(service).set_pending(
-        tenant_context,
+        user_context,
         thread_id=thread.id,
         run_id=uuid4(),
         question="哪一个？",
         payload=ClarificationPayload(response_kind="free_text"),
     )
     await db_session.commit()
-    other_context = TenantContext(
-        tenant_id=tenant_context.tenant_id,
+    other_context = UserContext(
         user_id=uuid4(),
-        timezone=tenant_context.timezone,
-        locale=tenant_context.locale,
+        timezone=user_context.timezone,
+        locale=user_context.locale,
     )
 
     try:
@@ -402,12 +401,12 @@ async def test_conversation_state_is_owner_scoped(
 
 async def test_pending_interaction_can_only_be_consumed_once_concurrently(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     service = build_conversation_service(db_session)
-    thread = await service.create_thread(tenant_context)
+    thread = await service.create_thread(user_context)
     pending = await ClarificationService(service).set_pending(
-        tenant_context,
+        user_context,
         thread_id=thread.id,
         run_id=uuid4(),
         question="选择哪一个？",
@@ -420,7 +419,7 @@ async def test_pending_interaction_can_only_be_consumed_once_concurrently(
             contender = build_conversation_service(session)
             try:
                 await contender.consume_interaction(
-                    tenant_context,
+                    user_context,
                     thread_id=thread.id,
                     expected_version=pending.version,
                 )
@@ -435,7 +434,7 @@ async def test_pending_interaction_can_only_be_consumed_once_concurrently(
     assert sorted(results) == [False, True]
     async with SessionLocal() as verification_session:
         consumed = await build_conversation_service(verification_session).get_state(
-            tenant_context,
+            user_context,
             thread.id,
         )
     assert consumed is not None

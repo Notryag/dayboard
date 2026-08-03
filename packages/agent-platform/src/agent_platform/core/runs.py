@@ -30,8 +30,7 @@ class AgentRunEventCategory(StrEnum):
 
 class AgentRun(BaseModel):
     id: UUID
-    tenant_id: UUID
-    owner_user_id: UUID
+    user_id: UUID
     thread_id: UUID
     status: AgentRunStatus
     input_message: str
@@ -42,7 +41,6 @@ class AgentRun(BaseModel):
 
 class AgentRunEvent(BaseModel):
     id: UUID
-    tenant_id: UUID
     run_id: UUID
     seq: int
     event_type: str = Field(min_length=1, max_length=80)

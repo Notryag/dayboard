@@ -12,7 +12,7 @@ def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
                 "title": "提交周报",
                 "due_local": "2026-07-10T18:00:00",
                 "password": "must-not-leak",
-                "tenant_id": "must-not-leak",
+                "user_id": "must-not-leak",
             },
             metadata={"call_id": "call-1", "tool_name": "create_task_item"},
         )

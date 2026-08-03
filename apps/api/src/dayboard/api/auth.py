@@ -17,10 +17,8 @@ import structlog
 from dayboard.config import Settings, get_settings
 from dayboard.api.errors import ApiProblem
 from dayboard.api.rate_limit import limiter
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.db.models import (
-    TenantMembershipRow,
-    TenantRow,
     UserCredentialRow,
     UserProfileRow,
     UserRow,
@@ -49,7 +47,6 @@ class LoginRequest(BaseModel):
 
 class AccountResponse(BaseModel):
     user_id: str
-    tenant_id: str
     username: str
     email: str | None
     display_name: str | None
@@ -67,17 +64,11 @@ def _token_digest(token: str) -> str:
 
 async def _account_for_session(
     session: AsyncSession, token: str
-) -> tuple[UserSessionRow, UserRow, TenantMembershipRow, UserProfileRow] | None:
+) -> tuple[UserSessionRow, UserRow, UserProfileRow] | None:
     now = datetime.now(timezone.utc)
     statement = (
-        select(UserSessionRow, UserRow, TenantMembershipRow, UserProfileRow)
+        select(UserSessionRow, UserRow, UserProfileRow)
         .join(UserRow, UserRow.id == UserSessionRow.user_id)
-        .join(
-            TenantMembershipRow,
-            (TenantMembershipRow.user_id == UserRow.id)
-            & (TenantMembershipRow.status == "active")
-            & (TenantMembershipRow.deleted_at.is_(None)),
-        )
         .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
         .where(
             UserSessionRow.token_hash == _token_digest(token),
@@ -86,7 +77,6 @@ async def _account_for_session(
             UserRow.is_active.is_(True),
             UserRow.deleted_at.is_(None),
         )
-        .order_by(TenantMembershipRow.created_at)
         .limit(1)
     )
     result = (await session.execute(statement)).one_or_none()
@@ -96,23 +86,15 @@ async def _account_for_session(
 async def _account_for_eval_identity(
     session: AsyncSession,
     *,
-    tenant_id: UUID,
     user_id: UUID,
-) -> tuple[UserRow, TenantMembershipRow, UserProfileRow] | None:
+) -> tuple[UserRow, UserProfileRow] | None:
     statement = (
-        select(UserRow, TenantMembershipRow, UserProfileRow)
-        .join(
-            TenantMembershipRow,
-            (TenantMembershipRow.user_id == UserRow.id)
-            & (TenantMembershipRow.tenant_id == tenant_id),
-        )
+        select(UserRow, UserProfileRow)
         .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
         .where(
             UserRow.id == user_id,
             UserRow.is_active.is_(True),
             UserRow.deleted_at.is_(None),
-            TenantMembershipRow.status == "active",
-            TenantMembershipRow.deleted_at.is_(None),
         )
         .limit(1)
     )
@@ -138,7 +120,7 @@ async def _eval_account_for_request(
     request: Request,
     session: AsyncSession,
     settings: Settings,
-) -> tuple[UserRow, TenantMembershipRow, UserProfileRow] | None:
+) -> tuple[UserRow, UserProfileRow] | None:
     token = _bearer_token(request)
     if token is None:
         return None
@@ -149,7 +131,6 @@ async def _eval_account_for_request(
     )
     if (
         not configured_digest
-        or settings.eval_tenant_id is None
         or settings.eval_user_id is None
         or not secrets.compare_digest(_token_digest(token), configured_digest)
     ):
@@ -160,7 +141,6 @@ async def _eval_account_for_request(
         )
     account = await _account_for_eval_identity(
         session,
-        tenant_id=settings.eval_tenant_id,
         user_id=settings.eval_user_id,
     )
     if account is None:
@@ -198,7 +178,7 @@ async def _account_for_login(
     session: AsyncSession,
     user_id: UUID,
     expected_password_hash: str,
-) -> tuple[UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow] | None:
+) -> tuple[UserRow, UserCredentialRow, UserProfileRow] | None:
     locked_user_id = await session.scalar(
         select(UserRow.id)
         .where(
@@ -212,18 +192,14 @@ async def _account_for_login(
         return None
 
     statement = (
-        select(UserRow, UserCredentialRow, TenantMembershipRow, UserProfileRow)
+        select(UserRow, UserCredentialRow, UserProfileRow)
         .join(UserCredentialRow, UserCredentialRow.user_id == UserRow.id)
-        .join(TenantMembershipRow, TenantMembershipRow.user_id == UserRow.id)
         .join(UserProfileRow, UserProfileRow.user_id == UserRow.id)
         .where(
             UserRow.id == locked_user_id,
             UserCredentialRow.deleted_at.is_(None),
             UserCredentialRow.password_hash == expected_password_hash,
-            TenantMembershipRow.status == "active",
-            TenantMembershipRow.deleted_at.is_(None),
         )
-        .order_by(TenantMembershipRow.created_at)
         .limit(1)
         .with_for_update(of=UserCredentialRow)
     )
@@ -233,14 +209,12 @@ async def _account_for_login(
 
 def _response(
     user: UserRow,
-    membership: TenantMembershipRow,
     profile: UserProfileRow,
     *,
     timezone: str,
 ) -> AccountResponse:
     return AccountResponse(
         user_id=str(user.id),
-        tenant_id=str(membership.tenant_id),
         username=user.username,
         email=user.email,
         display_name=user.display_name,
@@ -261,14 +235,13 @@ def _set_session_cookie(response: Response, token: str, settings: Settings) -> N
     )
 
 
-async def get_tenant_context(
+async def get_user_context(
     request: Request,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
-) -> TenantContext:
+) -> UserContext:
     if settings.auth_mode == "development":
-        context = TenantContext(
-            tenant_id=settings.default_tenant_id,
+        context = UserContext(
             user_id=settings.default_user_id,
             timezone=settings.default_timezone,
             locale=settings.default_locale,
@@ -276,7 +249,7 @@ async def get_tenant_context(
     else:
         eval_account = await _eval_account_for_request(request, session, settings)
         if eval_account is not None:
-            user, membership, profile = eval_account
+            user, profile = eval_account
             authentication_kind = "eval_token"
         else:
             token = request.cookies.get(settings.auth_session_cookie_name)
@@ -287,19 +260,18 @@ async def get_tenant_context(
                     code="AUTHENTICATION_REQUIRED",
                     message="Authentication required",
                 )
-            user_session, user, membership, profile = account
+            user_session, user, profile = account
             user_session.last_seen_at = datetime.now(timezone.utc)
             await session.commit()
             authentication_kind = "session_cookie"
-        context = TenantContext(
-            tenant_id=membership.tenant_id,
+        context = UserContext(
             user_id=user.id,
-            timezone=settings.default_timezone,
+            timezone=profile.timezone,
             locale=profile.locale,
         )
         request.state.authentication_kind = authentication_kind
     structlog.contextvars.bind_contextvars(
-        tenant_id=str(context.tenant_id), user_id=str(context.user_id)
+        user_id=str(context.user_id)
     )
     return context
 
@@ -317,15 +289,13 @@ async def register(
     username = _normalized(body.username)
     email = _normalized(str(body.email)) if body.email else None
     user = UserRow(username=username, email=email, display_name=body.display_name)
-    tenant = TenantRow(name=body.display_name or username)
-    session.add_all([user, tenant])
+    session.add(user)
     await session.flush()
     profile = UserProfileRow(
         user_id=user.id,
         timezone=settings.default_timezone,
         locale=body.locale,
     )
-    membership = TenantMembershipRow(tenant_id=tenant.id, user_id=user.id, role="owner")
     credential = UserCredentialRow(user_id=user.id, password_hash=password_hash.hash(body.password))
     raw_token = secrets.token_urlsafe(32)
     user_session = UserSessionRow(
@@ -334,7 +304,7 @@ async def register(
         expires_at=datetime.now(timezone.utc)
         + timedelta(seconds=settings.auth_session_ttl_seconds),
     )
-    session.add_all([profile, membership, credential, user_session])
+    session.add_all([profile, credential, user_session])
     try:
         await session.commit()
     except IntegrityError as exc:
@@ -346,8 +316,8 @@ async def register(
             message="Username or email is already registered",
         ) from exc
     _set_session_cookie(response, raw_token, settings)
-    logger.info("dayboard.auth.registered", user_id=str(user.id), tenant_id=str(tenant.id))
-    return _response(user, membership, profile, timezone=settings.default_timezone)
+    logger.info("dayboard.auth.registered", user_id=str(user.id))
+    return _response(user, profile, timezone=profile.timezone)
 
 
 @router.post("/login", response_model=AccountResponse)
@@ -381,7 +351,7 @@ async def login(
             code="INVALID_CREDENTIALS",
             message="Invalid credentials",
         )
-    user, _, membership, profile = account
+    user, _, profile = account
     raw_token = secrets.token_urlsafe(32)
     session.add(
         UserSessionRow(
@@ -394,9 +364,9 @@ async def login(
     await session.commit()
     _set_session_cookie(response, raw_token, settings)
     logger.info(
-        "dayboard.auth.login_succeeded", user_id=str(user.id), tenant_id=str(membership.tenant_id)
+        "dayboard.auth.login_succeeded", user_id=str(user.id)
     )
-    return _response(user, membership, profile, timezone=settings.default_timezone)
+    return _response(user, profile, timezone=profile.timezone)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -426,8 +396,8 @@ async def me(
 ) -> AccountResponse:
     eval_account = await _eval_account_for_request(request, session, settings)
     if eval_account is not None:
-        user, membership, profile = eval_account
-        return _response(user, membership, profile, timezone=settings.default_timezone)
+        user, profile = eval_account
+        return _response(user, profile, timezone=profile.timezone)
     token = request.cookies.get(settings.auth_session_cookie_name)
     account = await _account_for_session(session, token) if token else None
     if account is None:
@@ -436,5 +406,5 @@ async def me(
             code="AUTHENTICATION_REQUIRED",
             message="Authentication required",
         )
-    _, user, membership, profile = account
-    return _response(user, membership, profile, timezone=settings.default_timezone)
+    _, user, profile = account
+    return _response(user, profile, timezone=profile.timezone)

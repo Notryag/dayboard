@@ -7,7 +7,7 @@ from contextlib import AbstractAsyncContextManager
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.app.provider_usage_ports import (
     ProviderUsageAggregate,
     ProviderUsageSettlement,
@@ -24,7 +24,7 @@ class SqlAlchemyProviderUsageSettlement:
 
     async def settle(
         self,
-        context: TenantContext,
+        context: UserContext,
         aggregate: ProviderUsageAggregate,
     ) -> ProviderUsageSettlement:
         async with self._session_factory() as session:

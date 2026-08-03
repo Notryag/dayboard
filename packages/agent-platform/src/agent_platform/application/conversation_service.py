@@ -18,7 +18,7 @@ from agent_platform.core.errors import (
     ConversationNotFoundError,
     InteractionConflictError,
 )
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.core.interactions import PendingInteraction
 from agent_platform.core.presentations import PresentationEnvelope
 from agent_platform.ports.unit_of_work import ConversationUnitOfWork
@@ -33,7 +33,7 @@ class ConversationService:
 
     async def create_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID | None = None,
         title: str | None = None,
@@ -42,7 +42,7 @@ class ConversationService:
 
     async def require_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread:
         thread = await self.threads.get(context, thread_id)
@@ -52,14 +52,14 @@ class ConversationService:
 
     async def get_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread | None:
         return await self.threads.get(context, thread_id)
 
     async def require_active_thread(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationThread:
         thread = await self.require_thread(context, thread_id)
@@ -67,12 +67,12 @@ class ConversationService:
             raise ConversationArchivedError("Conversation thread is archived")
         return thread
 
-    async def get_or_create_primary_thread(self, context: TenantContext) -> ConversationThread:
+    async def get_or_create_primary_thread(self, context: UserContext) -> ConversationThread:
         return await self.threads.get_or_create_primary(context)
 
     async def append_message(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -91,7 +91,7 @@ class ConversationService:
 
     async def list_messages(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> list[ConversationMessage]:
         await self.require_thread(context, thread_id)
@@ -99,7 +99,7 @@ class ConversationService:
 
     async def list_message_page(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         *,
         before: UUID | None,
@@ -116,7 +116,7 @@ class ConversationService:
 
     async def upsert_assistant_message(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -133,14 +133,14 @@ class ConversationService:
 
     async def get_assistant_message_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> ConversationMessage | None:
         return await self.messages.get_assistant_for_run(context, run_id)
 
     async def update_summary(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
         summary: str,
     ) -> ConversationThread:
@@ -151,7 +151,7 @@ class ConversationService:
 
     async def get_state(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None:
         await self.require_thread(context, thread_id)
@@ -159,7 +159,7 @@ class ConversationService:
 
     async def set_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         interaction: PendingInteraction,
@@ -175,7 +175,7 @@ class ConversationService:
 
     async def consume_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         expected_version: int,
@@ -194,7 +194,7 @@ class ConversationService:
 
     async def clear_interaction(
         self,
-        context: TenantContext,
+        context: UserContext,
         thread_id: UUID,
     ) -> ConversationState | None:
         return await self.states.clear_interaction(context, thread_id)

@@ -20,7 +20,7 @@ def _task_value(*, title: str = "提交周报") -> dict:
         "created_by_run_id": None,
         "created_at": "2026-07-20T10:00:00Z",
         "updated_at": "2026-07-20T10:00:00Z",
-        "tenant_id": "must-not-leak",
+        "user_id": "must-not-leak",
     }
 
 
@@ -81,7 +81,7 @@ def test_projects_structured_tool_message_artifact_to_schedule_part() -> None:
     assert projected.data["tool_call_id"] == "call-1"
     assert projected.data["item"]["kind"] == "task"
     assert projected.data["item"]["value"]["title"] == "提交周报"
-    assert "tenant_id" not in projected.data["item"]["value"]
+    assert "user_id" not in projected.data["item"]["value"]
 
 
 def test_projects_ai_message_chunk_to_text_delta() -> None:

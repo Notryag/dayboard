@@ -19,7 +19,7 @@ from dayboard.composition.platform import (
 from dayboard.composition.runs import build_run_execution_scope
 from dayboard.app.run_recovery import recover_stale_queued_runs, recover_stale_running_runs
 from dayboard.config import get_settings
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.db.session import SessionLocal
 
 logger = structlog.get_logger(__name__)
@@ -42,9 +42,8 @@ async def execute_command_run(
         run = await scope.platform.runs.get_run_for_worker(resolved_run_id)
         if run is None:
             raise LookupError(f"Run {resolved_run_id} not found")
-        context = TenantContext(
-            tenant_id=run.tenant_id,
-            user_id=run.owner_user_id,
+        context = UserContext(
+            user_id=run.user_id,
             timezone=settings.default_timezone,
             locale=settings.default_locale,
         )

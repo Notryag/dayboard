@@ -7,7 +7,7 @@ from limits.storage import MemoryStorage, storage_from_string
 from limits.strategies import FixedWindowRateLimiter
 
 from dayboard.config import Settings, get_settings
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 
 
 class ProviderBudgetExceeded(RuntimeError):
@@ -49,14 +49,14 @@ class ProviderBudgetGuard:
     def check(
         self,
         *,
-        context: TenantContext,
+        context: UserContext,
         model_name: str,
         estimate: ProviderBudgetEstimate,
     ) -> None:
         if not self.settings.provider_budget_enabled:
             return
 
-        key = f"tenant:{context.tenant_id}:user:{context.user_id}:model:{model_name}"
+        key = f"user:{context.user_id}:model:{model_name}"
         if not self.limiter.hit(self.request_limit, f"provider-requests:{key}", cost=estimate.request_units):
             raise ProviderBudgetExceeded("request", str(self.request_limit))
         if not self.limiter.hit(self.token_limit, f"provider-tokens:{key}", cost=estimate.token_units):
@@ -65,7 +65,7 @@ class ProviderBudgetGuard:
     def reconcile_actual(
         self,
         *,
-        context: TenantContext,
+        context: UserContext,
         model_name: str,
         estimate: ProviderBudgetEstimate,
         actual_tokens: int,
@@ -81,7 +81,7 @@ class ProviderBudgetGuard:
         additional_tokens = max(0, actual_tokens - estimate.token_units)
         if additional_tokens == 0:
             return 0
-        key = f"tenant:{context.tenant_id}:user:{context.user_id}:model:{model_name}"
+        key = f"user:{context.user_id}:model:{model_name}"
         self.limiter.hit(
             self.token_limit,
             f"provider-tokens:{key}",

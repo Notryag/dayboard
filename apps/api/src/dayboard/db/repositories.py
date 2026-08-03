@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import DateTime, and_, cast, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 from dayboard.db.schedule_mappers import calendar_entry_from_row, task_item_from_row
 from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, CalendarTimingKind
@@ -21,10 +21,9 @@ class CalendarEntryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, context: TenantContext, data: CalendarEntryCreate) -> CalendarEntry:
+    async def create(self, context: UserContext, data: CalendarEntryCreate) -> CalendarEntry:
         row = CalendarEntryRow(
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             title=data.title,
             timing_kind=data.timing_kind.value,
             scheduled_date=data.scheduled_date,
@@ -43,7 +42,7 @@ class CalendarEntryRepository:
 
     async def list_page(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: Literal["current", "scheduled", "completed", "cancelled", "all"],
         start_time: datetime | None,
@@ -55,8 +54,7 @@ class CalendarEntryRepository:
         limit: int,
     ) -> list[CalendarEntry]:
         conditions = [
-            CalendarEntryRow.tenant_id == context.tenant_id,
-            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.user_id == context.user_id,
         ]
         if status == "current":
             conditions.append(CalendarEntryRow.deleted_at.is_(None))
@@ -111,7 +109,7 @@ class CalendarEntryRepository:
 
     async def search_active(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -120,8 +118,7 @@ class CalendarEntryRepository:
         title_query: str | None = None,
     ) -> list[CalendarEntry]:
         conditions = [
-            CalendarEntryRow.tenant_id == context.tenant_id,
-            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
             CalendarEntryRow.completed_at.is_(None),
             or_(
@@ -156,12 +153,11 @@ class CalendarEntryRepository:
         )
         return [calendar_entry_from_row(row) for row in result]
 
-    async def get(self, context: TenantContext, entry_id: UUID) -> CalendarEntry | None:
+    async def get(self, context: UserContext, entry_id: UUID) -> CalendarEntry | None:
         row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
             )
         )
@@ -169,15 +165,14 @@ class CalendarEntryRepository:
 
     async def get_for_update(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None:
         row = await self.session.scalar(
             select(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.deleted_at.is_(None),
             )
             .with_for_update()
@@ -186,28 +181,26 @@ class CalendarEntryRepository:
 
     async def get_including_cancelled(
         self,
-        context: TenantContext,
+        context: UserContext,
         entry_id: UUID,
     ) -> CalendarEntry | None:
         row = await self.session.scalar(
             select(CalendarEntryRow).where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
             )
         )
         return calendar_entry_from_row(row) if row else None
 
     async def get_by_updated_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
         row = await self.session.scalar(
             select(CalendarEntryRow).where(
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.updated_by_run_id == run_id,
                 CalendarEntryRow.updated_operation_key == operation_key,
                 CalendarEntryRow.deleted_at.is_(None),
@@ -217,7 +210,7 @@ class CalendarEntryRepository:
 
     async def reschedule(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         timing_kind: CalendarTimingKind,
@@ -232,8 +225,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
@@ -257,7 +249,7 @@ class CalendarEntryRepository:
 
     async def update_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         title: str,
@@ -271,8 +263,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
@@ -297,14 +288,13 @@ class CalendarEntryRepository:
 
     async def get_by_cancelled_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> CalendarEntry | None:
         row = await self.session.scalar(
             select(CalendarEntryRow).where(
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.cancelled_by_run_id == run_id,
                 CalendarEntryRow.cancelled_operation_key == operation_key,
                 CalendarEntryRow.deleted_at.is_not(None),
@@ -314,7 +304,7 @@ class CalendarEntryRepository:
 
     async def cancel(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -327,8 +317,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
@@ -347,13 +336,12 @@ class CalendarEntryRepository:
 
     async def get_by_created_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> CalendarEntry | None:
         conditions = [
-            CalendarEntryRow.tenant_id == context.tenant_id,
-            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.user_id == context.user_id,
             CalendarEntryRow.created_by_run_id == run_id,
             CalendarEntryRow.deleted_at.is_(None),
         ]
@@ -364,7 +352,7 @@ class CalendarEntryRepository:
 
     async def cancel_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -374,8 +362,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
@@ -394,7 +381,7 @@ class CalendarEntryRepository:
 
     async def complete_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -404,8 +391,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_(None),
@@ -421,7 +407,7 @@ class CalendarEntryRepository:
 
     async def reopen_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         entry_id: UUID,
         expected_row_version: int,
@@ -430,8 +416,7 @@ class CalendarEntryRepository:
             update(CalendarEntryRow)
             .where(
                 CalendarEntryRow.id == entry_id,
-                CalendarEntryRow.tenant_id == context.tenant_id,
-                CalendarEntryRow.owner_user_id == context.user_id,
+                CalendarEntryRow.user_id == context.user_id,
                 CalendarEntryRow.row_version == expected_row_version,
                 CalendarEntryRow.deleted_at.is_(None),
                 CalendarEntryRow.completed_at.is_not(None),
@@ -447,7 +432,7 @@ class CalendarEntryRepository:
 
     async def list_overlapping(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         start_time: datetime,
         end_time: datetime,
@@ -459,8 +444,7 @@ class CalendarEntryRepository:
             CalendarEntryRow.start_time + default_duration,
         )
         conditions = [
-            CalendarEntryRow.tenant_id == context.tenant_id,
-            CalendarEntryRow.owner_user_id == context.user_id,
+            CalendarEntryRow.user_id == context.user_id,
             CalendarEntryRow.deleted_at.is_(None),
             CalendarEntryRow.completed_at.is_(None),
             CalendarEntryRow.timing_kind == "timed",
@@ -479,10 +463,9 @@ class TaskItemRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, context: TenantContext, data: TaskItemCreate) -> TaskItem:
+    async def create(self, context: UserContext, data: TaskItemCreate) -> TaskItem:
         row = TaskItemRow(
-            tenant_id=context.tenant_id,
-            owner_user_id=context.user_id,
+            user_id=context.user_id,
             title=data.title,
             due_at=data.due_at,
             timezone=data.timezone,
@@ -498,7 +481,7 @@ class TaskItemRepository:
 
     async def list_page(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         status: TaskStatus | None,
         due_kind: Literal["all", "dated", "undated"],
@@ -511,8 +494,7 @@ class TaskItemRepository:
         limit: int,
     ) -> list[TaskItem]:
         conditions = [
-            TaskItemRow.tenant_id == context.tenant_id,
-            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.user_id == context.user_id,
             TaskItemRow.deleted_at.is_(None),
         ]
         if status is not None:
@@ -554,14 +536,13 @@ class TaskItemRepository:
 
     async def search(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         title_query: str | None = None,
         status: TaskStatus | None = TaskStatus.open,
     ) -> list[TaskItem]:
         conditions = [
-            TaskItemRow.tenant_id == context.tenant_id,
-            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.user_id == context.user_id,
             TaskItemRow.deleted_at.is_(None),
         ]
         if title_query:
@@ -576,12 +557,11 @@ class TaskItemRepository:
         )
         return [task_item_from_row(row) for row in result]
 
-    async def get(self, context: TenantContext, task_id: UUID) -> TaskItem | None:
+    async def get(self, context: UserContext, task_id: UUID) -> TaskItem | None:
         row = await self.session.scalar(
             select(TaskItemRow).where(
                 TaskItemRow.id == task_id,
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.user_id == context.user_id,
                 TaskItemRow.deleted_at.is_(None),
             )
         )
@@ -589,14 +569,13 @@ class TaskItemRepository:
 
     async def get_by_updated_operation(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str,
     ) -> TaskItem | None:
         row = await self.session.scalar(
             select(TaskItemRow).where(
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.user_id == context.user_id,
                 TaskItemRow.updated_by_run_id == run_id,
                 TaskItemRow.updated_operation_key == operation_key,
                 TaskItemRow.deleted_at.is_(None),
@@ -606,7 +585,7 @@ class TaskItemRepository:
 
     async def update(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         data: TaskItemUpdate,
@@ -628,8 +607,7 @@ class TaskItemRepository:
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.user_id == context.user_id,
                 TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )
@@ -640,7 +618,7 @@ class TaskItemRepository:
 
     async def update_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         title: str,
@@ -651,8 +629,7 @@ class TaskItemRepository:
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.user_id == context.user_id,
                 TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )
@@ -670,13 +647,12 @@ class TaskItemRepository:
 
     async def get_by_created_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
         operation_key: str | None = None,
     ) -> TaskItem | None:
         conditions = [
-            TaskItemRow.tenant_id == context.tenant_id,
-            TaskItemRow.owner_user_id == context.user_id,
+            TaskItemRow.user_id == context.user_id,
             TaskItemRow.created_by_run_id == run_id,
             TaskItemRow.deleted_at.is_(None),
         ]
@@ -687,7 +663,7 @@ class TaskItemRepository:
 
     async def set_status_from_ui(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         task_id: UUID,
         status: TaskStatus,
@@ -697,8 +673,7 @@ class TaskItemRepository:
             update(TaskItemRow)
             .where(
                 TaskItemRow.id == task_id,
-                TaskItemRow.tenant_id == context.tenant_id,
-                TaskItemRow.owner_user_id == context.user_id,
+                TaskItemRow.user_id == context.user_id,
                 TaskItemRow.row_version == expected_row_version,
                 TaskItemRow.deleted_at.is_(None),
             )

@@ -8,7 +8,7 @@ from uuid import UUID
 
 from agent_platform.core.errors import IdempotencyConflictError
 from agent_platform.core.idempotency import IdempotencyClaim, IdempotencyRecord
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.ports.unit_of_work import IdempotencyUnitOfWork
 
 
@@ -23,7 +23,7 @@ class IdempotencyService:
 
     async def find_matching(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         key: str,
         request_identity: str,
@@ -39,7 +39,7 @@ class IdempotencyService:
 
     async def claim(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         key: str,
         request_identity: str,

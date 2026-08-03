@@ -8,7 +8,7 @@ from sqlalchemy import Integer, String, bindparam, select
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PostgresUUID, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.app.provider_usage_ports import (
     ProviderUsageAggregate,
     ProviderUsageCall,
@@ -57,13 +57,12 @@ class ProviderUsageRepository:
 
     async def settle(
         self,
-        context: TenantContext,
+        context: UserContext,
         aggregate: ProviderUsageAggregate,
     ) -> ProviderUsageSettlement:
         source = select(
             bindparam("usage_record_id", uuid4(), type_=PostgresUUID(as_uuid=True)),
-            AgentRunRow.tenant_id,
-            AgentRunRow.owner_user_id,
+            AgentRunRow.user_id,
             AgentRunRow.id,
             bindparam("provider", aggregate.provider, type_=String(80)),
             bindparam("model", aggregate.model, type_=String(240)),
@@ -73,15 +72,13 @@ class ProviderUsageRepository:
             bindparam("usage_metadata", _serialize_calls(aggregate.calls), type_=JSONB()),
         ).where(
             AgentRunRow.id == aggregate.run_id,
-            AgentRunRow.tenant_id == context.tenant_id,
-            AgentRunRow.owner_user_id == context.user_id,
+            AgentRunRow.user_id == context.user_id,
             AgentRunRow.deleted_at.is_(None),
         )
         statement = insert(ProviderUsageRecordRow).from_select(
             [
                 ProviderUsageRecordRow.id,
-                ProviderUsageRecordRow.tenant_id,
-                ProviderUsageRecordRow.owner_user_id,
+                ProviderUsageRecordRow.user_id,
                 ProviderUsageRecordRow.run_id,
                 ProviderUsageRecordRow.provider,
                 ProviderUsageRecordRow.model,
@@ -94,7 +91,7 @@ class ProviderUsageRepository:
         )
         statement = statement.on_conflict_do_nothing(
             index_elements=[
-                ProviderUsageRecordRow.tenant_id,
+                ProviderUsageRecordRow.user_id,
                 ProviderUsageRecordRow.run_id,
             ],
         ).returning(ProviderUsageRecordRow.id)
@@ -104,8 +101,7 @@ class ProviderUsageRepository:
 
         existing_id = await self._session.scalar(
             select(ProviderUsageRecordRow.id).where(
-                ProviderUsageRecordRow.tenant_id == context.tenant_id,
-                ProviderUsageRecordRow.owner_user_id == context.user_id,
+                ProviderUsageRecordRow.user_id == context.user_id,
                 ProviderUsageRecordRow.run_id == aggregate.run_id,
             )
         )
@@ -117,7 +113,7 @@ class ProviderUsageRepository:
 
     async def list_for_run(
         self,
-        context: TenantContext,
+        context: UserContext,
         run_id: UUID,
     ) -> list[ProviderUsageAggregate]:
         rows = (
@@ -132,8 +128,7 @@ class ProviderUsageRepository:
                     ProviderUsageRecordRow.usage_metadata,
                 )
                 .where(
-                    ProviderUsageRecordRow.tenant_id == context.tenant_id,
-                    ProviderUsageRecordRow.owner_user_id == context.user_id,
+                    ProviderUsageRecordRow.user_id == context.user_id,
                     ProviderUsageRecordRow.run_id == run_id,
                 )
                 .order_by(ProviderUsageRecordRow.created_at.asc())

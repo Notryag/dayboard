@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.composition.scheduling import build_scheduling_services
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
@@ -279,13 +279,13 @@ def _create_operation_key(kind: str, data: BaseModel) -> str:
 def build_scheduling_tools(
     *,
     session: AsyncSession,
-    context: TenantContext,
+    context: UserContext,
     run_id: UUID | None,
     session_lock: asyncio.Lock | None = None,
 ) -> list[StructuredTool]:
     """Build agent-safe scheduling tools with trusted context injected.
 
-    The model only sees product fields. Database session, tenant/user context,
+    The model only sees product fields. Database session and trusted user context,
     and run identity stay server-owned and are captured by these closures.
     """
     tool_lock = session_lock or asyncio.Lock()

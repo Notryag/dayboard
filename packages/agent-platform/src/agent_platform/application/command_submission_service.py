@@ -10,7 +10,7 @@ from agent_platform.application.run_service import AgentRunService
 from agent_platform.core.commands import CommandSubmission
 from agent_platform.core.conversations import ConversationRole
 from agent_platform.core.errors import IdempotencyTargetNotFoundError
-from agent_platform.core.identity import TenantContext
+from agent_platform.core.identity import UserContext
 from agent_platform.ports.unit_of_work import PlatformUnitOfWork
 
 
@@ -25,7 +25,7 @@ class CommandSubmissionService:
 
     async def find_existing(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         idempotency_key: str,
         request_identity: str,
@@ -57,7 +57,7 @@ class CommandSubmissionService:
 
     async def submit(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         input_message: str,
         thread_id: UUID | None = None,

@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.composition.scheduling import build_scheduling_service
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.tools import (
     CancelCalendarEntryInput,
     CalendarEntryChangedError,
@@ -32,11 +32,11 @@ from dayboard.tools import (
 
 async def test_create_and_list_calendar_entry(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     result = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="产品复盘",
             start_time=datetime(2026, 7, 10, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -47,7 +47,7 @@ async def test_create_and_list_calendar_entry(
 
     entries = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time="2026-07-10T00:00:00+08:00",
             end_time="2026-07-11T00:00:00+08:00",
@@ -56,8 +56,7 @@ async def test_create_and_list_calendar_entry(
 
     assert result.type == "calendar_entry_created"
     assert result.calendar_entry.title == "产品复盘"
-    assert result.calendar_entry.tenant_id == tenant_context.tenant_id
-    assert result.calendar_entry.owner_user_id == tenant_context.user_id
+    assert result.calendar_entry.user_id == user_context.user_id
     assert result.calendar_entry.end_time == datetime(
         2026, 7, 10, 11, 0, tzinfo=ZoneInfo("Asia/Shanghai")
     )
@@ -66,11 +65,11 @@ async def test_create_and_list_calendar_entry(
 
 async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     first = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="晨会",
             start_time=datetime(2026, 7, 11, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -80,7 +79,7 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
 
     overlaps = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
             end_time=datetime(2026, 7, 11, 9, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -88,7 +87,7 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
     )
     created_with_warning = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="产品会",
             start_time=datetime(2026, 7, 11, 8, 30, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -97,7 +96,7 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
     )
     entries = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time="2026-07-11T00:00:00+08:00",
             end_time="2026-07-12T00:00:00+08:00",
@@ -113,11 +112,11 @@ async def test_calendar_conflict_detection_warns_but_creates_overlapping_entry(
 
 async def test_calendar_conflict_detection_allows_adjacent_entries(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="晨会",
             start_time=datetime(2026, 7, 11, 8, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -127,7 +126,7 @@ async def test_calendar_conflict_detection_allows_adjacent_entries(
 
     adjacent = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="产品会",
             start_time=datetime(2026, 7, 11, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -140,11 +139,11 @@ async def test_calendar_conflict_detection_allows_adjacent_entries(
 
 async def test_calendar_creation_derives_time_from_locked_anchor(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     dance = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="跳舞",
             start_time="2026-07-23T09:00:00+08:00",
@@ -154,7 +153,7 @@ async def test_calendar_creation_derives_time_from_locked_anchor(
 
     singing = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="唱歌",
             timezone="Asia/Shanghai",
@@ -171,11 +170,11 @@ async def test_calendar_creation_derives_time_from_locked_anchor(
 
 async def test_calendar_anchor_rejects_stale_or_anytime_entry(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     dance = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="跳舞",
             start_time="2026-07-23T09:00:00+08:00",
@@ -185,7 +184,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
     stale_row_version = dance.calendar_entry.row_version
     await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=dance.calendar_entry.id,
             new_start_time="2026-07-23T10:00:00+08:00",
@@ -198,7 +197,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
     with pytest.raises(CalendarEntryChangedError, match="Anchor calendar entry changed"):
         await create_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             CreateCalendarEntryInput(
                 title="唱歌",
                 timezone="Asia/Shanghai",
@@ -209,7 +208,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
 
     anytime = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="提交报告",
             scheduled_date="2026-07-24",
@@ -219,7 +218,7 @@ async def test_calendar_anchor_rejects_stale_or_anytime_entry(
     with pytest.raises(ValueError, match="has no end time"):
         await create_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             CreateCalendarEntryInput(
                 title="庆祝",
                 timezone="Asia/Shanghai",
@@ -248,12 +247,12 @@ def test_calendar_search_rejects_reversed_interval() -> None:
 
 async def test_calendar_creation_rejects_end_before_start(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     with pytest.raises(ValidationError, match="end_time must be after start_time"):
         await create_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             CreateCalendarEntryInput(
                 title="反向会议",
                 start_time=datetime(2026, 7, 11, 9, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -265,11 +264,11 @@ async def test_calendar_creation_rejects_end_before_start(
 
 async def test_conflicts_compare_absolute_instants_across_offsets(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="上海会议",
             start_time="2026-07-11T08:00:00+08:00",
@@ -279,7 +278,7 @@ async def test_conflicts_compare_absolute_instants_across_offsets(
 
     result = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time=datetime.fromisoformat("2026-07-11T00:30:00+00:00"),
             end_time=datetime.fromisoformat("2026-07-11T01:00:00+00:00"),
@@ -291,11 +290,11 @@ async def test_conflicts_compare_absolute_instants_across_offsets(
 
 async def test_create_and_list_task_item(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     result = await create_task_item(
         db_session,
-        tenant_context,
+        user_context,
         CreateTaskItemInput(
             title="整理周报",
             due_at=datetime(2026, 7, 10, 18, 0, tzinfo=ZoneInfo("Asia/Shanghai")),
@@ -305,31 +304,30 @@ async def test_create_and_list_task_item(
 
     tasks = await search_task_items(
         db_session,
-        tenant_context,
+        user_context,
         SearchTaskItemsInput(status=None),
     )
 
     assert result.type == "task_item_created"
     assert result.task_item.title == "整理周报"
-    assert result.task_item.tenant_id == tenant_context.tenant_id
-    assert result.task_item.owner_user_id == tenant_context.user_id
+    assert result.task_item.user_id == user_context.user_id
     assert tasks == [result.task_item]
 
 
 async def test_empty_task_search_is_bounded(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     for index in range(52):
         await create_task_item(
             db_session,
-            tenant_context,
+            user_context,
             CreateTaskItemInput(title=f"任务 {index}", timezone="Asia/Shanghai"),
         )
 
     tasks = await search_task_items(
         db_session,
-        tenant_context,
+        user_context,
         SearchTaskItemsInput(status=None),
     )
 
@@ -338,27 +336,27 @@ async def test_empty_task_search_is_bounded(
 
 async def test_search_and_update_multiple_tasks_in_one_run(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     first = await create_task_item(
         db_session,
-        tenant_context,
+        user_context,
         CreateTaskItemInput(title="整理周报", timezone="Asia/Shanghai"),
     )
     second = await create_task_item(
         db_session,
-        tenant_context,
+        user_context,
         CreateTaskItemInput(title="提交报销", timezone="Asia/Shanghai"),
     )
     matches = await search_task_items(
         db_session,
-        tenant_context,
+        user_context,
         SearchTaskItemsInput(title_query="报"),
     )
     run_id = uuid4()
     completed = await update_task_item(
         db_session,
-        tenant_context,
+        user_context,
         UpdateTaskItemInput(
             task_item_id=first.task_item.id,
             expected_row_version=first.task_item.row_version,
@@ -369,7 +367,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
     )
     moved = await update_task_item(
         db_session,
-        tenant_context,
+        user_context,
         UpdateTaskItemInput(
             task_item_id=second.task_item.id,
             expected_row_version=second.task_item.row_version,
@@ -380,7 +378,7 @@ async def test_search_and_update_multiple_tasks_in_one_run(
     )
     repeated = await update_task_item(
         db_session,
-        tenant_context,
+        user_context,
         UpdateTaskItemInput(
             task_item_id=second.task_item.id,
             expected_row_version=second.task_item.row_version,
@@ -399,16 +397,16 @@ async def test_search_and_update_multiple_tasks_in_one_run(
 
 async def test_update_task_rejects_stale_selected_version(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_task_item(
         db_session,
-        tenant_context,
+        user_context,
         CreateTaskItemInput(title="整理纪要", timezone="Asia/Shanghai"),
     )
     await update_task_item(
         db_session,
-        tenant_context,
+        user_context,
         UpdateTaskItemInput(
             task_item_id=created.task_item.id,
             expected_row_version=created.task_item.row_version,
@@ -421,7 +419,7 @@ async def test_update_task_rejects_stale_selected_version(
     with pytest.raises(TaskItemChangedError, match="changed after it was selected"):
         await update_task_item(
             db_session,
-            tenant_context,
+            user_context,
             UpdateTaskItemInput(
                 task_item_id=created.task_item.id,
                 expected_row_version=created.task_item.row_version,
@@ -434,11 +432,11 @@ async def test_update_task_rejects_stale_selected_version(
 
 async def test_search_and_reschedule_calendar_entry_preserves_event_details(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="产品会议",
             start_time="2026-07-11T08:00:00+08:00",
@@ -449,7 +447,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
     )
     matches = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time="2026-07-11T00:00:00+08:00",
             end_time="2026-07-12T00:00:00+08:00",
@@ -459,7 +457,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
     update_run_id = uuid4()
     moved = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=matches[0].id,
             new_date="2026-07-12",
@@ -470,7 +468,7 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
     )
     repeated = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=matches[0].id,
             new_start_time="2026-07-13T08:00:00+08:00",
@@ -496,11 +494,11 @@ async def test_search_and_reschedule_calendar_entry_preserves_event_details(
 
 async def test_reschedule_rejects_stale_selected_version(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="评审会",
             start_time="2026-07-11T10:00:00+08:00",
@@ -510,7 +508,7 @@ async def test_reschedule_rejects_stale_selected_version(
     selected = created.calendar_entry
     await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=selected.id,
             new_start_time="2026-07-12T10:00:00+08:00",
@@ -523,7 +521,7 @@ async def test_reschedule_rejects_stale_selected_version(
     with pytest.raises(CalendarEntryChangedError, match="changed after it was selected"):
         await reschedule_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             RescheduleCalendarEntryInput(
                 calendar_entry_id=selected.id,
                 new_start_time="2026-07-13T10:00:00+08:00",
@@ -536,11 +534,11 @@ async def test_reschedule_rejects_stale_selected_version(
 
 async def test_reschedule_can_change_only_end_time_and_rejects_noop(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="吃饭",
             start_time="2026-07-14T12:00:00+08:00",
@@ -551,7 +549,7 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
 
     extended = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=created.calendar_entry.id,
             new_end_time="2026-07-14T17:00:00+08:00",
@@ -571,7 +569,7 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
     with pytest.raises(ValueError, match="already has the requested time range"):
         await reschedule_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             RescheduleCalendarEntryInput(
                 calendar_entry_id=extended.calendar_entry.id,
                 new_end_time="2026-07-14T17:00:00+08:00",
@@ -584,11 +582,11 @@ async def test_reschedule_can_change_only_end_time_and_rejects_noop(
 
 async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     fishing = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="钓鱼",
             start_time="2026-07-24T16:00:00+08:00",
@@ -598,7 +596,7 @@ async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
     )
     shopping = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="超市",
             start_time="2026-07-24T17:00:00+08:00",
@@ -609,7 +607,7 @@ async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
 
     shortened = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=fishing.calendar_entry.id,
             new_duration_minutes=30,
@@ -626,7 +624,7 @@ async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
     )
     assert shortened.conflicts == []
     persisted_shopping = await build_scheduling_service(db_session).get_calendar_entry(
-        tenant_context, shopping.calendar_entry.id
+        user_context, shopping.calendar_entry.id
     )
     assert persisted_shopping is not None
     assert persisted_shopping.row_version == shopping.calendar_entry.row_version
@@ -636,7 +634,7 @@ async def test_reschedule_duration_shortens_entry_without_moving_adjacent_entry(
 
 async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     entries = []
     for index, title in enumerate(("晨会", "评审", "访谈", "复盘"), start=8):
@@ -644,7 +642,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
             (
                 await create_calendar_entry(
                     db_session,
-                    tenant_context,
+                    user_context,
                     CreateCalendarEntryInput(
                         title=title,
                         start_time=f"2026-07-11T{index:02d}:00:00+08:00",
@@ -657,7 +655,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
 
     first_move = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[0].id,
             new_date="2026-07-12",
@@ -668,7 +666,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     )
     second_move = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[1].id,
             new_date="2026-07-13",
@@ -679,7 +677,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     )
     first_cancel = await cancel_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CancelCalendarEntryInput(
             calendar_entry_id=entries[2].id,
             expected_row_version=entries[2].row_version,
@@ -689,7 +687,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     )
     second_cancel = await cancel_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CancelCalendarEntryInput(
             calendar_entry_id=entries[3].id,
             expected_row_version=entries[3].row_version,
@@ -699,7 +697,7 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
     )
     repeated_move = await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=entries[0].id,
             new_date="2026-07-12",
@@ -720,11 +718,11 @@ async def test_multiple_calendar_updates_and_cancellations_in_one_run(
 
 async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="客户会议",
             start_time="2026-07-11T08:00:00+08:00",
@@ -740,21 +738,21 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
 
     cancelled = await cancel_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         input_data,
         cancelled_by_run_id=run_id,
         operation_key="cancel-client-meeting",
     )
     repeated = await cancel_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         input_data,
         cancelled_by_run_id=run_id,
         operation_key="cancel-client-meeting",
     )
     repeated_in_another_run = await cancel_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         input_data,
         cancelled_by_run_id=uuid4(),
         operation_key="cancel-client-meeting-again",
@@ -769,7 +767,7 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
     assert (
         await search_calendar_entries(
             db_session,
-            tenant_context,
+            user_context,
             SearchCalendarEntriesInput(
                 start_time="2026-07-11T00:00:00+08:00",
                 end_time="2026-07-12T00:00:00+08:00",
@@ -781,11 +779,11 @@ async def test_cancel_calendar_entry_is_soft_deleted_and_idempotent(
 
 async def test_cancel_rejects_stale_selected_version(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     created = await create_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         CreateCalendarEntryInput(
             title="评审会",
             start_time="2026-07-11T10:00:00+08:00",
@@ -795,7 +793,7 @@ async def test_cancel_rejects_stale_selected_version(
     selected = created.calendar_entry
     await reschedule_calendar_entry(
         db_session,
-        tenant_context,
+        user_context,
         RescheduleCalendarEntryInput(
             calendar_entry_id=selected.id,
             new_date="2026-07-12",
@@ -808,7 +806,7 @@ async def test_cancel_rejects_stale_selected_version(
     with pytest.raises(CalendarEntryChangedError, match="search again before cancelling"):
         await cancel_calendar_entry(
             db_session,
-            tenant_context,
+            user_context,
             CancelCalendarEntryInput(
                 calendar_entry_id=selected.id,
                 expected_row_version=selected.row_version,

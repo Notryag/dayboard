@@ -11,8 +11,7 @@ from pydantic import BaseModel
 
 class IdempotencyRecord(BaseModel):
     id: UUID
-    tenant_id: UUID
-    owner_user_id: UUID
+    user_id: UUID
     key: str
     request_hash: str
     run_id: UUID

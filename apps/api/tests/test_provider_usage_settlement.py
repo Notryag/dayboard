@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.app.provider_usage_ports import (
     ProviderUsageAggregate,
     ProviderUsageCall,
@@ -78,7 +78,7 @@ def _adapter(session: FakeSession) -> SqlAlchemyProviderUsageSettlement:
 
 
 async def test_provider_usage_adapter_commits_successful_settlement(
-    tenant_context: TenantContext,
+    user_context: UserContext,
     monkeypatch,
 ) -> None:
     session = FakeSession()
@@ -89,7 +89,7 @@ async def test_provider_usage_adapter_commits_successful_settlement(
         lambda candidate_session: repository,
     )
 
-    settlement = await _adapter(session).settle(tenant_context, aggregate)
+    settlement = await _adapter(session).settle(user_context, aggregate)
 
     assert settlement.created is True
     assert repository.aggregates == [aggregate]
@@ -106,7 +106,7 @@ async def test_provider_usage_adapter_commits_successful_settlement(
     ],
 )
 async def test_provider_usage_adapter_rolls_back_and_preserves_failures(
-    tenant_context: TenantContext,
+    user_context: UserContext,
     monkeypatch,
     repository_error: BaseException | None,
     commit_error: BaseException | None,
@@ -121,7 +121,7 @@ async def test_provider_usage_adapter_rolls_back_and_preserves_failures(
     assert expected_error is not None
 
     with pytest.raises(type(expected_error), match=str(expected_error) or None):
-        await _adapter(session).settle(tenant_context, _aggregate())
+        await _adapter(session).settle(user_context, _aggregate())
 
     assert session.rollbacks == 1
     assert session.commits == (0 if repository_error is not None else 1)

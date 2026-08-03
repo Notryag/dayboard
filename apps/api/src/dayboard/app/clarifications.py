@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 
 from agent_platform.application import ConversationService
 from agent_platform.core import ConversationState, PendingInteraction
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.domain.interactions import (
     CLARIFICATION_INTERACTION_TYPE,
     CLARIFICATION_SCHEMA_VERSION,
@@ -74,7 +74,7 @@ class ClarificationService:
 
     async def set_pending(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         run_id: UUID,
@@ -114,7 +114,7 @@ class ClarificationService:
 
     async def resolve_choice(
         self,
-        context: TenantContext,
+        context: UserContext,
         *,
         thread_id: UUID,
         state_version: int,

@@ -13,7 +13,7 @@ from dayboard.api.errors import ApiErrorBody, ApiErrorResponse
 
 def rate_limit_key(request: Request) -> str:
     # Authentication runs inside endpoint dependencies, after this middleware.
-    # Never trust a caller-supplied tenant header for abuse controls.
+    # Never trust a caller-supplied identity header for abuse controls.
     return get_remote_address(request)
 
 

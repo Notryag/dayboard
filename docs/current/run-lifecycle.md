@@ -24,7 +24,7 @@ clarification response creates a follow-up Run on the same thread rather than re
 
 ```text
 POST /api/threads/{thread_id}/command-runs
-  -> authenticate and resolve TenantContext
+  -> authenticate and resolve UserContext
   -> validate command, Idempotency-Key, and active Thread lifecycle
   -> persist user message and queued agent_run in PostgreSQL
   -> commit
@@ -44,7 +44,7 @@ existing Run before this lifecycle check.
 ```text
 arq worker receives run_id
   -> open independent database session
-  -> load Run, tenant, owner, thread, and input from PostgreSQL
+  -> load Run, user ID, thread, and input from PostgreSQL
   -> Platform coordinator transitions queued to running and commits
   -> close the lifecycle transaction before external execution
   -> assemble bounded history, prompt, tools, and trusted context
@@ -280,7 +280,7 @@ already made the Run terminal.
 
 North normalizes usage per model call. Dayboard attempts settlement after the Platform has committed
 the terminal Run outcome, using a fresh Unit of Work and an immutable unique aggregate per
-`(tenant_id, run_id)`. The PostgreSQL adapter derives tenant and owner from the trusted Run during
+`(user_id, run_id)`. The PostgreSQL adapter derives user ID from the trusted Run during
 insert, so a mismatched caller cannot occupy the idempotency key. Only the transaction that creates
 the row reconciles the prior Redis budget reservation; retries observe the existing aggregate and do
 not charge twice. Usage persistence and Redis reconciliation are ordered after, but are not atomic
@@ -291,13 +291,13 @@ PostgreSQL usage commit but before Redis reconciliation can leave the reservatio
 recovery requires a durable usage outbox or reconciliation job; it is not hidden behind an in-memory
 retry. Admission currently occurs in Dayboard, while migration of scoped provider-token policy to
 Northgate remains future work. Northgate's current policy is gateway-scoped, so it cannot replace
-Dayboard's tenant/user/model admission until it accepts trusted dynamic identity and atomically
+Dayboard's user/model admission until it accepts trusted dynamic identity and atomically
 enforces explicit policy scopes.
 
 Operator diagnosis follows:
 
 ```text
-request_id -> tenant/user -> thread_id -> run_id -> runtime/tool event -> product object
+request_id -> user_id -> thread_id -> run_id -> runtime/tool event -> product object
 ```
 
 Token and cache diagnostics live in [../token-usage-diagnostics.md](../token-usage-diagnostics.md).

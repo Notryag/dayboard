@@ -7,14 +7,14 @@ from zoneinfo import ZoneInfo
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
 
 
-async def test_calendar_query_filters_paginates_and_isolates_tenant(
+async def test_calendar_query_filters_paginates_and_isolates_user(
     api_app,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     today_at_noon = datetime.now(timezone).replace(hour=12, minute=0, second=0, microsecond=0)
@@ -23,8 +23,7 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
     range_end = range_start + timedelta(days=1)
     entries = [
         CalendarEntryRow(
-            tenant_id=tenant_context.tenant_id,
-            owner_user_id=tenant_context.user_id,
+            user_id=user_context.user_id,
             title=title,
             start_time=scheduled_day.replace(hour=hour),
             end_time=scheduled_day.replace(hour=hour + 1),
@@ -37,16 +36,14 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
         entries
         + [
             CalendarEntryRow(
-                tenant_id=tenant_context.tenant_id,
-                owner_user_id=tenant_context.user_id,
+                user_id=user_context.user_id,
                 title="Today in account timezone",
                 start_time=today_at_noon,
                 timezone="Asia/Shanghai",
                 participants=[],
             ),
             CalendarEntryRow(
-                tenant_id=uuid4(),
-                owner_user_id=uuid4(),
+                user_id=uuid4(),
                 title="Another user",
                 start_time=scheduled_day.replace(hour=9),
                 timezone="Asia/Shanghai",
@@ -90,22 +87,21 @@ async def test_calendar_query_filters_paginates_and_isolates_tenant(
         "Morning",
         "Afternoon",
     ]
-    assert "tenant_id" not in first.json()["items"][0]
-    assert "owner_user_id" not in first.json()["items"][0]
+    assert "user_id" not in first.json()["items"][0]
+    assert "user_id" not in first.json()["items"][0]
 
 
 async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
     api_app,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     db_session.add_all(
         [
             TaskItemRow(
                 id=UUID("00000000-0000-0000-0000-000000000101"),
-                tenant_id=tenant_context.tenant_id,
-                owner_user_id=tenant_context.user_id,
+                user_id=user_context.user_id,
                 title="Due task",
                 due_at=datetime(2026, 7, 13, 18, 0, tzinfo=timezone),
                 timezone="Asia/Shanghai",
@@ -113,16 +109,14 @@ async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
             ),
             TaskItemRow(
                 id=UUID("00000000-0000-0000-0000-000000000102"),
-                tenant_id=tenant_context.tenant_id,
-                owner_user_id=tenant_context.user_id,
+                user_id=user_context.user_id,
                 title="No due task",
                 due_at=None,
                 timezone="Asia/Shanghai",
                 status="open",
             ),
             TaskItemRow(
-                tenant_id=tenant_context.tenant_id,
-                owner_user_id=tenant_context.user_id,
+                user_id=user_context.user_id,
                 title="Completed task",
                 due_at=datetime(2026, 7, 13, 12, 0, tzinfo=timezone),
                 timezone="Asia/Shanghai",
@@ -158,22 +152,20 @@ async def test_task_query_filters_status_due_range_and_paginates_null_due_last(
 async def test_completed_schedule_items_remain_queryable_for_the_day(
     api_app,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     selected_date = datetime.now(timezone).date() + timedelta(days=7)
     start = datetime.combine(selected_date, datetime.min.time(), timezone) + timedelta(hours=9)
     entry = CalendarEntryRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="完成后保留的日程",
         start_time=start,
         timezone="Asia/Shanghai",
         participants=[],
     )
     task = TaskItemRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="完成后保留的待办",
         due_at=start + timedelta(hours=1),
         timezone="Asia/Shanghai",
@@ -252,13 +244,12 @@ async def test_schedule_queries_reject_invalid_ranges_and_cursors(api_app) -> No
 async def test_run_schedule_items_and_direct_actions(
     api_app,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     run_id = UUID("00000000-0000-0000-0000-000000000201")
     entry = CalendarEntryRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="游泳",
         start_time=datetime(2026, 7, 15, 19, 0, tzinfo=timezone),
         end_time=datetime(2026, 7, 15, 20, 0, tzinfo=timezone),
@@ -267,8 +258,7 @@ async def test_run_schedule_items_and_direct_actions(
         created_by_run_id=run_id,
     )
     cancelled_entry = CalendarEntryRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="开会",
         start_time=datetime(2026, 7, 15, 21, 0, tzinfo=timezone),
         end_time=datetime(2026, 7, 15, 22, 0, tzinfo=timezone),
@@ -277,8 +267,7 @@ async def test_run_schedule_items_and_direct_actions(
         created_by_run_id=run_id,
     )
     task = TaskItemRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="拿快递",
         due_at=None,
         timezone="Asia/Shanghai",
@@ -291,8 +280,7 @@ async def test_run_schedule_items_and_direct_actions(
             cancelled_entry,
             task,
             TaskItemRow(
-                tenant_id=uuid4(),
-                owner_user_id=uuid4(),
+                user_id=uuid4(),
                 title="Other account task",
                 due_at=None,
                 timezone="Asia/Shanghai",
@@ -384,12 +372,11 @@ async def test_run_schedule_items_and_direct_actions(
 async def test_direct_schedule_item_updates(
     api_app,
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     timezone = ZoneInfo("Asia/Shanghai")
     entry = CalendarEntryRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="旧日程",
         start_time=datetime(2026, 7, 20, 9, 0, tzinfo=timezone),
         end_time=datetime(2026, 7, 20, 10, 0, tzinfo=timezone),
@@ -397,8 +384,7 @@ async def test_direct_schedule_item_updates(
         participants=[],
     )
     task = TaskItemRow(
-        tenant_id=tenant_context.tenant_id,
-        owner_user_id=tenant_context.user_id,
+        user_id=user_context.user_id,
         title="旧待办",
         due_at=datetime(2026, 7, 20, 18, 0, tzinfo=timezone),
         timezone="Asia/Shanghai",

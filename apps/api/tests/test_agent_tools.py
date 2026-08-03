@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.agent import build_scheduling_tools
 from dayboard.agent.tools import AgentCreateCalendarEntryInput
-from agent_platform.core import TenantContext
+from agent_platform.core import UserContext
 from dayboard.tools import (
     SearchCalendarEntriesInput,
     SearchTaskItemsInput,
@@ -25,9 +25,9 @@ from dayboard.tools import (
 
 async def test_agent_scheduling_tool_schema_hides_trusted_context(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
-    tools = build_scheduling_tools(session=db_session, context=tenant_context, run_id=uuid4())
+    tools = build_scheduling_tools(session=db_session, context=user_context, run_id=uuid4())
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
     search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
     reschedule_entry = next(tool for tool in tools if tool.name == "reschedule_calendar_entry")
@@ -57,9 +57,9 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     assert "expected_anchor_row_version" in fields
     assert "start_time" not in fields
     assert "timezone" not in fields
-    assert "tenant_id" not in fields
     assert "user_id" not in fields
-    assert "owner_user_id" not in fields
+    assert "user_id" not in fields
+    assert "user_id" not in fields
     assert "created_by_run_id" not in fields
     assert "Defaults to PT0M" in schema["properties"]["reminder"]["description"]
     assert set(search_entries.args_schema.model_json_schema()["properties"]) == {
@@ -93,14 +93,14 @@ async def test_agent_scheduling_tool_schema_hides_trusted_context(
     }
 
 
-async def test_agent_scheduling_tools_inject_run_and_tenant_context(
+async def test_agent_scheduling_tools_inject_run_and_user_context(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     run_id = uuid4()
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=run_id,
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -143,7 +143,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
         "status",
         "row_version",
     }
-    assert "tenant_id" not in str(entry_result)
+    assert "user_id" not in str(entry_result)
     assert "created_by_run_id" not in str(entry_result)
     assert "requires_follow_up" not in str(entry_result)
     assert set(task_result["task_item"]) == {
@@ -155,7 +155,7 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
 
     entries = await search_calendar_entries(
         db_session,
-        tenant_context,
+        user_context,
         SearchCalendarEntriesInput(
             start_time="2026-07-10T00:00:00+08:00",
             end_time="2026-07-12T00:00:00+08:00",
@@ -163,16 +163,15 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     )
     tasks = await search_task_items(
         db_session,
-        tenant_context,
+        user_context,
         SearchTaskItemsInput(status=None),
     )
 
     assert len(entries) == 2
     assert len(tasks) == 2
-    assert entries[0].tenant_id == tenant_context.tenant_id
-    assert entries[0].owner_user_id == tenant_context.user_id
+    assert entries[0].user_id == user_context.user_id
     assert entries[0].created_by_run_id == run_id
-    assert entries[0].timezone == tenant_context.timezone
+    assert entries[0].timezone == user_context.timezone
     assert entries[0].start_time.astimezone(ZoneInfo("Asia/Shanghai")) == datetime(
         2026, 7, 10, 10, 0, tzinfo=ZoneInfo("Asia/Shanghai")
     )
@@ -180,20 +179,19 @@ async def test_agent_scheduling_tools_inject_run_and_tenant_context(
     assert entries[0].reminder.offset == "PT0M"
     assert entries[0].reminder.anchor == "start_time"
     assert entries[1].reminder is None
-    assert tasks[0].tenant_id == tenant_context.tenant_id
-    assert tasks[0].owner_user_id == tenant_context.user_id
+    assert tasks[0].user_id == user_context.user_id
     assert tasks[0].created_by_run_id == run_id
-    assert tasks[0].timezone == tenant_context.timezone
+    assert tasks[0].timezone == user_context.timezone
     assert "due_at" not in task_result["task_item"]
 
 
 async def test_agent_tool_message_splits_compact_content_from_full_artifact(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -216,7 +214,7 @@ async def test_agent_tool_message_splits_compact_content_from_full_artifact(
     assert result.artifact["operation"] == "calendar_entry_created"
     assert result.artifact["item"]["kind"] == "calendar"
     presentation = result.artifact["item"]["value"]
-    assert presentation["timezone"] == tenant_context.timezone
+    assert presentation["timezone"] == user_context.timezone
     assert presentation["participants"] == []
     assert presentation["created_at"] is not None
     assert presentation["created_by_run_id"] is not None
@@ -235,18 +233,18 @@ async def test_agent_tool_message_splits_compact_content_from_full_artifact(
 
 async def test_empty_agent_searches_replace_list_tools(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
     search_entries = next(tool for tool in tools if tool.name == "search_calendar_entries")
     create_task = next(tool for tool in tools if tool.name == "create_task_item")
     search_tasks = next(tool for tool in tools if tool.name == "search_task_items")
-    tomorrow = datetime.now(ZoneInfo(tenant_context.timezone)) + timedelta(days=1)
+    tomorrow = datetime.now(ZoneInfo(user_context.timezone)) + timedelta(days=1)
 
     created_entry = await create_entry.ainvoke(
         {
@@ -267,11 +265,11 @@ async def test_empty_agent_searches_replace_list_tools(
 
 async def test_agent_creates_and_searches_anytime_calendar_entry(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -304,11 +302,11 @@ async def test_agent_creates_and_searches_anytime_calendar_entry(
 
 async def test_agent_creates_calendar_entry_after_searched_anchor(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -371,11 +369,11 @@ def test_agent_local_datetime_inputs_reject_timezone_offsets() -> None:
 
 async def test_agent_search_and_reschedule_resolve_local_beijing_time(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -411,17 +409,17 @@ async def test_agent_search_and_reschedule_resolve_local_beijing_time(
 
 async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tomorrow = (
-        datetime.now(ZoneInfo(tenant_context.timezone)) + timedelta(days=1)
+        datetime.now(ZoneInfo(user_context.timezone)) + timedelta(days=1)
     ).date().isoformat()
     local_start = f"{tomorrow}T16:00"
     local_end = f"{tomorrow}T17:00"
 
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_entry = next(tool for tool in tools if tool.name == "create_calendar_entry")
@@ -454,11 +452,11 @@ async def test_agent_reschedule_duration_uses_local_receipt_without_utc(
 
 async def test_agent_task_updates_status_without_time_fields(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_task = next(tool for tool in tools if tool.name == "create_task_item")
@@ -484,11 +482,11 @@ async def test_agent_task_updates_status_without_time_fields(
 
 async def test_parallel_agent_tool_calls_are_serialized_on_shared_session(
     db_session: AsyncSession,
-    tenant_context: TenantContext,
+    user_context: UserContext,
 ) -> None:
     tools = build_scheduling_tools(
         session=db_session,
-        context=tenant_context,
+        context=user_context,
         run_id=uuid4(),
     )
     create_task = next(tool for tool in tools if tool.name == "create_task_item")
@@ -501,7 +499,7 @@ async def test_parallel_agent_tool_calls_are_serialized_on_shared_session(
     assert first["task_item"]["id"] != second["task_item"]["id"]
     tasks = await search_task_items(
         db_session,
-        tenant_context,
+        user_context,
         SearchTaskItemsInput(status=None),
     )
     assert {task.title for task in tasks} == {"并行任务一", "并行任务二"}
