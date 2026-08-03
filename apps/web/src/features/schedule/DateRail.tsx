@@ -1,6 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useMemo, useRef } from "react";
+import { useI18n } from "@/i18n";
 import {
   dateRangeFrom,
   formatAccessibleDate,
@@ -27,6 +28,7 @@ export function DateRail({
   selectedDate,
   today,
 }: DateRailProps) {
+  const { locale, t } = useI18n();
   const railRef = useRef<HTMLElement>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
   const dates = useMemo(() => dateRangeFrom(centerDate), [centerDate]);
@@ -40,7 +42,7 @@ export function DateRail({
   return (
     <nav
       className={styles.dateRail}
-      aria-label="浏览日期"
+      aria-label={t("schedule.browseDates")}
       data-swipe-navigation-ignore
       ref={railRef}
     >
@@ -50,7 +52,7 @@ export function DateRail({
         const isOutsideMonth = date.slice(0, 7) !== selectedMonth;
         return (
           <button
-            aria-label={formatAccessibleDate(date)}
+            aria-label={formatAccessibleDate(date, locale)}
             aria-current={isSelected ? "date" : undefined}
             className={`${styles.dateCell} ${isSelected ? styles.dateCellSelected : ""} ${
               isToday && !isSelected ? styles.dateCellToday : ""
@@ -74,7 +76,7 @@ export function DateRail({
             data-selected-date={isSelected ? "true" : undefined}
             type="button"
           >
-            <span>{formatRailWeekday(date)}</span>
+            <span>{formatRailWeekday(date, locale)}</span>
             <strong>{formatDayNumber(date)}</strong>
           </button>
         );

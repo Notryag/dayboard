@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getMessage, useI18n } from "@/i18n";
 import type {
   ClarificationInteraction as Interaction,
   ConversationState,
@@ -19,25 +20,26 @@ import {
 import { createMessage, initialMessages, persistedMessage } from "./conversationMessages";
 import { useRunStream } from "./useRunStream";
 
-function clarificationChoiceLabel(interaction: Interaction, optionKey: string) {
+function clarificationChoiceLabel(interaction: Interaction, optionKey: string, locale: "zh-CN" | "en-US") {
   if (interaction.type === "suggested_choice") {
     const option = interaction.options.find((candidate) => candidate.key === optionKey);
-    return option ? `选择“${option.label}”` : null;
+    return option ? getMessage(locale, "chat.selectOption", { label: option.label }) : null;
   }
   const option = interaction.options.find((candidate) => candidate.key === optionKey);
   if (!option) return null;
-  const time = option.start_time ? new Intl.DateTimeFormat("zh-CN", {
+  const time = option.start_time ? new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
     timeZone: option.timezone,
-  }).format(new Date(option.start_time)) : `${option.scheduled_date} · 随时`;
-  return `选择“${option.title} · ${time}”`;
+  }).format(new Date(option.start_time)) : `${option.scheduled_date} · ${getMessage(locale, "schedule.anytime")}`;
+  return getMessage(locale, "chat.selectOptionWithTime", { title: option.title, time });
 }
 
 export function useConversationSession() {
+  const { locale, t } = useI18n();
   const apiUrl = useMemo(() => apiBaseUrl(), []);
   const {
     state: { messages, progress, scheduleRevision },
@@ -85,7 +87,9 @@ export function useConversationSession() {
       setNextMessageCursor(history.next_cursor);
       dispatch({
         type: "messages_replaced",
-        messages: history.items.length ? history.items.map(persistedMessage) : initialMessages,
+        messages: history.items.length
+          ? history.items.map((message) => persistedMessage(message, locale))
+          : initialMessages(locale),
       });
 
       const activeRun = await getActiveRun(resolvedThreadId);
@@ -104,10 +108,10 @@ export function useConversationSession() {
     void initializeThread()
       .catch((error: unknown) => {
         initializingThreadRef.current = false;
-        setBootstrapError(userFacingApiError(error, "无法加载对话，请稍后重试。"));
+        setBootstrapError(userFacingApiError(error, t("chat.bootstrapFailed"), locale));
       })
       .finally(() => setIsThreadBootstrapping(false));
-  }, [bootstrapAttempt, consumeRun, dispatch]);
+  }, [bootstrapAttempt, consumeRun, dispatch, locale, t]);
 
   const submitCommand = useCallback(async (submittedText: string) => {
     const text = submittedText.trim();
@@ -115,7 +119,7 @@ export function useConversationSession() {
 
     setIsSubmitting(true);
     dispatch({ type: "progress_reset" });
-    dispatch({ type: "message_appended", message: createMessage("user", text) });
+    dispatch({ type: "message_appended", message: createMessage("user", text, undefined, undefined, locale) });
     try {
       const command = await createCommandRun(threadId, { message: text });
       await consumeRun(command.run_id, threadId);
@@ -124,7 +128,10 @@ export function useConversationSession() {
         type: "message_appended",
         message: createMessage(
           "assistant",
-          userFacingApiError(error, "请求没有成功。请稍后再试。"),
+          userFacingApiError(error, t("chat.requestFailed"), locale),
+          undefined,
+          undefined,
+          locale,
         ),
       });
     } finally {
@@ -132,17 +139,17 @@ export function useConversationSession() {
       dispatch({ type: "progress_reset" });
       setActiveRunId(null);
     }
-  }, [consumeRun, dispatch, isSubmitting, threadId]);
+  }, [consumeRun, dispatch, isSubmitting, locale, t, threadId]);
 
   const chooseClarification = useCallback(async (optionKey: string) => {
     const interaction = clarificationPresentation(conversationState);
     if (!threadId || !conversationState || !interaction || isSubmitting) return;
-    const choiceLabel = clarificationChoiceLabel(interaction, optionKey);
+    const choiceLabel = clarificationChoiceLabel(interaction, optionKey, locale);
     if (!choiceLabel) return;
 
     setIsSubmitting(true);
     dispatch({ type: "progress_reset" });
-    dispatch({ type: "message_appended", message: createMessage("user", choiceLabel) });
+    dispatch({ type: "message_appended", message: createMessage("user", choiceLabel, undefined, undefined, locale) });
     try {
       const command = await submitClarificationChoice(threadId, {
         state_version: conversationState.version,
@@ -153,14 +160,14 @@ export function useConversationSession() {
       await refreshConversationState(threadId).catch(() => undefined);
       dispatch({
         type: "message_appended",
-        message: createMessage("assistant", "这个选项已经失效，请重新选择。"),
+        message: createMessage("assistant", t("chat.staleChoice"), undefined, undefined, locale),
       });
     } finally {
       setIsSubmitting(false);
       dispatch({ type: "progress_reset" });
       setActiveRunId(null);
     }
-  }, [consumeRun, conversationState, dispatch, isSubmitting, refreshConversationState, threadId]);
+  }, [consumeRun, conversationState, dispatch, isSubmitting, locale, refreshConversationState, t, threadId]);
 
   const cancelActiveRun = useCallback(async () => {
     if (!activeRunId) return;
@@ -171,11 +178,14 @@ export function useConversationSession() {
         type: "message_appended",
         message: createMessage(
           "assistant",
-          userFacingApiError(error, "暂时无法停止，请稍后重试。"),
+          userFacingApiError(error, t("chat.stopFailed"), locale),
+          undefined,
+          undefined,
+          locale,
         ),
       });
     }
-  }, [activeRunId, dispatch]);
+  }, [activeRunId, dispatch, locale, t]);
 
   const markScheduleChanged = useCallback(() => {
     dispatch({ type: "schedule_changed" });
@@ -190,13 +200,13 @@ export function useConversationSession() {
       setNextMessageCursor(history.next_cursor);
       dispatch({
         type: "messages_prepended",
-        messages: history.items.map(persistedMessage),
+          messages: history.items.map((message) => persistedMessage(message, locale)),
       });
     } finally {
       loadingOlderMessagesRef.current = false;
       setIsLoadingOlderMessages(false);
     }
-  }, [dispatch, nextMessageCursor, threadId]);
+  }, [dispatch, locale, nextMessageCursor, threadId]);
 
   const retryBootstrap = useCallback(() => {
     setBootstrapAttempt((current) => current + 1);

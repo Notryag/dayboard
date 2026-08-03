@@ -1,6 +1,7 @@
 "use client";
 
 import { RotateCw } from "lucide-react";
+import { useI18n } from "@/i18n";
 import styles from "./ConversationBootstrapNotice.module.css";
 
 type ConversationBootstrapNoticeProps = {
@@ -14,12 +15,13 @@ export function ConversationBootstrapNotice({
   error,
   onRetry,
 }: ConversationBootstrapNoticeProps) {
+  const { t } = useI18n();
   return (
     <div className={styles.notice} role="alert">
       <span>{error}</span>
       <button disabled={busy} onClick={onRetry} type="button">
         <RotateCw aria-hidden="true" size={15} />
-        重新连接
+        {t("chat.reconnect")}
       </button>
     </div>
   );

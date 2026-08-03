@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { userFacingApiError } from "@/lib/api/client";
 import { confirmPasswordReset, requestPasswordReset } from "./api";
 import styles from "./auth.module.css";
@@ -17,6 +18,7 @@ export function PasswordRecoveryForm({
   onBack,
   onResetCompleted,
 }: PasswordRecoveryFormProps) {
+  const { t, locale } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRequested, setIsRequested] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,7 @@ export function PasswordRecoveryForm({
       await requestPasswordReset(String(form.get("email")));
       setIsRequested(true);
     } catch (caught) {
-      setError(userFacingApiError(caught, "暂时无法发送重置邮件"));
+      setError(userFacingApiError(caught, t("auth.resetEmailUnavailable"), locale));
     } finally {
       setIsSubmitting(false);
     }
@@ -43,11 +45,11 @@ export function PasswordRecoveryForm({
     const confirmation = String(form.get("passwordConfirmation"));
     setError(null);
     if (password !== confirmation) {
-      setError("两次输入的密码不一致");
+      setError(t("auth.passwordMismatchShort"));
       return;
     }
     if (!resetToken) {
-      setError("重置链接无效，请重新申请");
+      setError(t("auth.invalidResetLink"));
       return;
     }
     setIsSubmitting(true);
@@ -55,7 +57,7 @@ export function PasswordRecoveryForm({
       await confirmPasswordReset(resetToken, password);
       await onResetCompleted();
     } catch (caught) {
-      setError(userFacingApiError(caught, "重置链接无效或已过期"));
+      setError(userFacingApiError(caught, t("auth.invalidOrExpiredResetLink"), locale));
     } finally {
       setIsSubmitting(false);
     }
@@ -65,16 +67,16 @@ export function PasswordRecoveryForm({
     <>
       <button className={styles.backButton} onClick={onBack} type="button">
         <ArrowLeft aria-hidden="true" size={18} />
-        返回登录
+        {t("auth.backToLogin")}
       </button>
       {resetToken ? (
         <form className={styles.form} onSubmit={submitPassword}>
           <label>
-            <span>新密码</span>
+            <span>{t("auth.newPassword")}</span>
             <input autoComplete="new-password" minLength={10} name="password" required type="password" />
           </label>
           <label>
-            <span>确认新密码</span>
+            <span>{t("auth.confirmNewPassword")}</span>
             <input
               autoComplete="new-password"
               minLength={10}
@@ -85,20 +87,20 @@ export function PasswordRecoveryForm({
           </label>
           {error ? <p className={styles.error}>{error}</p> : null}
           <button className={styles.submit} disabled={isSubmitting} type="submit">
-            {isSubmitting ? "正在重置" : "设置新密码"}
+            {isSubmitting ? t("auth.resetting") : t("auth.setNewPassword")}
           </button>
         </form>
       ) : isRequested ? (
-        <p className={styles.notice}>如果该邮箱已绑定账号，重置邮件将很快送达。</p>
+        <p className={styles.notice}>{t("auth.resetNotice")}</p>
       ) : (
         <form className={styles.form} onSubmit={submitRequest}>
           <label>
-            <span>绑定邮箱</span>
+            <span>{t("auth.boundEmail")}</span>
             <input autoComplete="email" name="email" required type="email" />
           </label>
           {error ? <p className={styles.error}>{error}</p> : null}
           <button className={styles.submit} disabled={isSubmitting} type="submit">
-            {isSubmitting ? "正在发送" : "发送重置邮件"}
+            {isSubmitting ? t("auth.sending") : t("auth.sendResetEmail")}
           </button>
         </form>
       )}

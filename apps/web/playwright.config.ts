@@ -8,6 +8,7 @@ export default defineConfig({
   reporter: process.env.CI ? [["line"], ["html", { open: "never" }]] : "line",
   use: {
     baseURL: "http://127.0.0.1:3100/dayboard",
+    locale: "zh-CN",
     screenshot: "off",
     trace: "retain-on-failure",
   },

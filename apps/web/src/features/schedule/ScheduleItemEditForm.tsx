@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { userFacingApiError } from "@/lib/api/client";
 import { updateCalendarEntry, updateTaskItem } from "./api";
 import { scheduleItemTitle } from "./scheduleItemPresentation";
@@ -95,6 +96,7 @@ export function ScheduleItemEditForm({
   onSaved,
   timezone,
 }: ScheduleItemEditFormProps) {
+  const { locale, t } = useI18n();
   const [title, setTitle] = useState(item.value.title);
   const [timingKind, setTimingKind] = useState<"timed" | "anytime">(
     item.kind === "calendar" ? item.value.timing_kind : "timed",
@@ -134,7 +136,7 @@ export function ScheduleItemEditForm({
         );
         onSaved({
           undo: {
-            label: `已修改“${scheduleItemTitle(item)}”`,
+            label: t("schedule.modified", { title: scheduleItemTitle(item) }),
             run: async () => {
               await updateCalendarEntry(updated, calendarInputFromItem(item));
             },
@@ -147,7 +149,7 @@ export function ScheduleItemEditForm({
         });
         onSaved({
           undo: {
-            label: `已修改“${scheduleItemTitle(item)}”`,
+            label: t("schedule.modified", { title: scheduleItemTitle(item) }),
             run: async () => {
               await updateTaskItem(updated, {
                 title: item.value.title,
@@ -158,7 +160,7 @@ export function ScheduleItemEditForm({
         });
       }
     } catch (caught) {
-      setError(userFacingApiError(caught, "保存失败，请刷新后重试。"));
+      setError(userFacingApiError(caught, t("schedule.saveFailed"), locale));
     } finally {
       setBusy(false);
     }
@@ -167,7 +169,7 @@ export function ScheduleItemEditForm({
   return (
     <form className={styles.editForm} onSubmit={(event) => void submit(event)}>
       <label>
-        <span>标题</span>
+        <span>{t("schedule.title")}</span>
         <input
           autoFocus
           disabled={busy}
@@ -179,13 +181,13 @@ export function ScheduleItemEditForm({
         />
       </label>
       {item.kind === "calendar" ? (
-        <div className={styles.timingMode} role="group" aria-label="日程时间类型">
-          <button aria-pressed={timingKind === "anytime"} disabled={busy} onClick={() => setTimingKind("anytime")} type="button">随时</button>
-          <button aria-pressed={timingKind === "timed"} disabled={busy} onClick={() => setTimingKind("timed")} type="button">定时</button>
+        <div className={styles.timingMode} role="group" aria-label={t("schedule.timeType")}>
+          <button aria-pressed={timingKind === "anytime"} disabled={busy} onClick={() => setTimingKind("anytime")} type="button">{t("schedule.anytime")}</button>
+          <button aria-pressed={timingKind === "timed"} disabled={busy} onClick={() => setTimingKind("timed")} type="button">{t("schedule.timed")}</button>
         </div>
       ) : null}
       <label>
-        <span>{item.kind === "calendar" ? (timingKind === "anytime" ? "日期" : "开始时间") : "截止时间"}</span>
+        <span>{item.kind === "calendar" ? (timingKind === "anytime" ? t("schedule.date") : t("schedule.startTime")) : t("schedule.dueTime")}</span>
         <input
           disabled={busy}
           onChange={(event) => timingKind === "anytime" ? setScheduledDate(event.target.value) : setDateTime(event.target.value)}
@@ -196,7 +198,7 @@ export function ScheduleItemEditForm({
       </label>
       {item.kind === "calendar" && timingKind === "timed" ? (
         <label>
-          <span>持续分钟</span>
+          <span>{t("schedule.durationMinutesLabel")}</span>
           <input
             disabled={busy}
             max={10080}
@@ -211,10 +213,10 @@ export function ScheduleItemEditForm({
       ) : null}
       {error ? <p className={styles.formError}>{error}</p> : null}
       <div className={styles.formActions}>
-        <button disabled={busy} onClick={onCancel} type="button">取消</button>
+        <button disabled={busy} onClick={onCancel} type="button">{t("common.cancel")}</button>
         <button className={styles.saveButton} disabled={busy} type="submit">
           {busy ? <LoaderCircle className={styles.spinner} size={16} /> : null}
-          保存
+          {t("common.save")}
         </button>
       </div>
     </form>

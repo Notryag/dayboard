@@ -2,6 +2,7 @@
 
 import type { RefObject } from "react";
 import { Mic, SendHorizontal, Square } from "lucide-react";
+import { useI18n } from "@/i18n";
 import styles from "./Composer.module.css";
 
 type TextComposerProps = {
@@ -27,6 +28,7 @@ export function TextComposer({
   onSwitchToVoice,
   value,
 }: TextComposerProps) {
+  const { t } = useI18n();
   return (
     <form
       className={`${styles.composer} ${styles.textComposer}`}
@@ -36,22 +38,22 @@ export function TextComposer({
       }}
     >
       <button
-        aria-label="切换到语音输入"
+        aria-label={t("chat.switchToVoice")}
         className={styles.iconButton}
         disabled={disabled || isSubmitting}
         onClick={onSwitchToVoice}
-        title="语音输入"
+        title={t("chat.voiceInput")}
         type="button"
       >
         <Mic size={20} strokeWidth={2.2} />
       </button>
 
       <label className={styles.inputWrap}>
-        <span className={styles.srOnly}>输入日程或任务</span>
+        <span className={styles.srOnly}>{t("chat.inputPlaceholder")}</span>
         <input
           disabled={disabled || isSubmitting}
           onChange={(event) => onChange(event.target.value)}
-          placeholder="输入日程或任务"
+          placeholder={t("chat.inputPlaceholder")}
           ref={inputRef}
           type="text"
           value={value}
@@ -60,7 +62,7 @@ export function TextComposer({
 
       {isSubmitting ? (
         <button
-          aria-label="停止"
+          aria-label={t("chat.stop")}
           className={styles.stopButton}
           disabled={!activeRunId}
           onClick={onCancelRun}
@@ -70,7 +72,7 @@ export function TextComposer({
         </button>
       ) : (
         <button
-          aria-label="发送"
+          aria-label={t("chat.send")}
           className={styles.sendButton}
           disabled={!value.trim() || disabled}
           type="submit"

@@ -22,33 +22,33 @@ type ApiErrorEnvelope = {
   };
 };
 
-const errorMessages: Record<string, string> = {
-  AUTHENTICATION_REQUIRED: "登录状态已失效，请重新登录。",
-  INVALID_CREDENTIALS: "账号或密码不正确。",
-  IDENTIFIER_ALREADY_REGISTERED: "用户名或邮箱已被注册。",
-  INTERNAL_SERVER_ERROR: "服务出现异常，请稍后重试。",
-  THREAD_NOT_FOUND: "当前对话已不存在，请重新开始。",
-  RUN_NOT_FOUND: "该请求已不存在，请重新提交。",
-  COMMAND_ALREADY_IN_PROGRESS: "上一条请求仍在处理中，请稍候。",
-  IDEMPOTENCY_CONFLICT: "请求标识已被其他操作使用，请重新提交。",
-  CLARIFICATION_CONFLICT: "这个选项已经失效，请重新选择。",
-  CALENDAR_ENTRY_NOT_FOUND: "这个日程已不存在。",
-  TASK_ITEM_NOT_FOUND: "这个待办已不存在。",
-  SCHEDULE_ITEM_CONFLICT: "安排已被更新，请刷新后重试。",
-  REMINDER_NOT_FOUND: "这条提醒已不存在。",
-  REMINDER_STATE_CONFLICT: "提醒状态已经变化，请刷新后重试。",
-  COMMAND_QUEUE_UNAVAILABLE: "服务暂时繁忙，请稍后重试。",
-  RATE_LIMIT_EXCEEDED: "操作过于频繁，请稍后再试。",
-  VALIDATION_ERROR: "提交的信息不完整或格式不正确。",
-  VOICE_EMPTY: "没有录到声音，请重新录制。",
-  VOICE_FORMAT_UNSUPPORTED: "当前录音格式不受支持。",
-  VOICE_INVALID_AUDIO: "录音文件无法读取，请重新录制。",
-  VOICE_TOO_LARGE: "录音文件过大，请缩短录音时间。",
-  VOICE_TOO_LONG: "录音时间过长，请分段录制。",
-  VOICE_TOO_SHORT: "录音时间太短，请重新录制。",
-  VOICE_TRANSCRIPTION_FAILED: "语音识别失败，请重新录制。",
-  VOICE_UNAVAILABLE: "语音识别暂不可用。",
-  VOICE_VALIDATION_UNAVAILABLE: "语音服务暂不可用，请稍后再试。",
+const errorMessageKeys: Record<string, string> = {
+  AUTHENTICATION_REQUIRED: "errors.authRequired",
+  INVALID_CREDENTIALS: "errors.invalidCredentials",
+  IDENTIFIER_ALREADY_REGISTERED: "errors.alreadyRegistered",
+  INTERNAL_SERVER_ERROR: "errors.internal",
+  THREAD_NOT_FOUND: "errors.threadNotFound",
+  RUN_NOT_FOUND: "errors.runNotFound",
+  COMMAND_ALREADY_IN_PROGRESS: "errors.commandInProgress",
+  IDEMPOTENCY_CONFLICT: "errors.idempotencyConflict",
+  CLARIFICATION_CONFLICT: "errors.clarificationConflict",
+  CALENDAR_ENTRY_NOT_FOUND: "errors.calendarNotFound",
+  TASK_ITEM_NOT_FOUND: "errors.taskNotFound",
+  SCHEDULE_ITEM_CONFLICT: "errors.scheduleConflict",
+  REMINDER_NOT_FOUND: "errors.reminderNotFound",
+  REMINDER_STATE_CONFLICT: "errors.reminderConflict",
+  COMMAND_QUEUE_UNAVAILABLE: "errors.queueUnavailable",
+  RATE_LIMIT_EXCEEDED: "errors.rateLimit",
+  VALIDATION_ERROR: "errors.validation",
+  VOICE_EMPTY: "errors.voiceEmpty",
+  VOICE_FORMAT_UNSUPPORTED: "errors.voiceFormat",
+  VOICE_INVALID_AUDIO: "errors.voiceInvalid",
+  VOICE_TOO_LARGE: "errors.voiceLarge",
+  VOICE_TOO_LONG: "errors.voiceLong",
+  VOICE_TOO_SHORT: "errors.voiceShort",
+  VOICE_TRANSCRIPTION_FAILED: "errors.voiceTranscription",
+  VOICE_UNAVAILABLE: "errors.voiceUnavailable",
+  VOICE_VALIDATION_UNAVAILABLE: "errors.voiceValidation",
 };
 
 export function apiBaseUrl() {
@@ -75,10 +75,14 @@ export async function apiErrorFromResponse(response: Response): Promise<ApiError
   );
 }
 
-export function userFacingApiError(error: unknown, fallback: string) {
+export function userFacingApiError(error: unknown, fallback: string, locale: Locale = "zh-CN") {
   if (error instanceof ApiError) {
-    const message = errorMessages[error.code] ?? fallback;
-    return error.requestId ? `${message}（参考号 ${error.requestId}）` : message;
+    const key = errorMessageKeys[error.code];
+    const message = key ? getMessage(locale, key) : fallback;
+    return error.requestId
+      ? getMessage(locale, "errors.reference", { message, id: error.requestId })
+      : message;
   }
   return fallback;
 }
+import { getMessage, type Locale } from "@/i18n";

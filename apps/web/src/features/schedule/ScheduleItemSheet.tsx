@@ -13,6 +13,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import {
   SheetClose,
@@ -50,12 +51,13 @@ export function ScheduleItemSheet({
   onChanged,
   onClose,
 }: ScheduleItemSheetProps) {
+  const { locale, t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
   const Icon = iconForScheduleItem(item.kind);
-  const reminder = formatScheduleReminder(item.value.reminder);
+  const reminder = formatScheduleReminder(item.value.reminder, locale);
   const status = scheduleItemStatus(item);
 
   async function toggleCompletion() {
@@ -63,10 +65,10 @@ export function ScheduleItemSheet({
     onBusyChange(true);
     setError(null);
     try {
-      onChanged(await (status === "completed" ? reopenScheduleItem(item) : completeScheduleItem(item)));
+      onChanged(await (status === "completed" ? reopenScheduleItem(item, locale) : completeScheduleItem(item, locale)));
       onClose();
     } catch (caught) {
-      setError(userFacingApiError(caught, "状态更新失败，请刷新后重试。"));
+      setError(userFacingApiError(caught, t("schedule.statusUpdateFailed"), locale));
     } finally {
       setBusy(false);
       onBusyChange(false);
@@ -83,7 +85,7 @@ export function ScheduleItemSheet({
       onChanged();
       onClose();
     } catch (caught) {
-      setError(userFacingApiError(caught, "取消失败，请刷新后重试。"));
+      setError(userFacingApiError(caught, t("schedule.cancelFailed"), locale));
     } finally {
       setBusy(false);
       onBusyChange(false);
@@ -92,7 +94,7 @@ export function ScheduleItemSheet({
 
   return (
     <SheetContent
-      aria-label="安排详情"
+      aria-label={t("schedule.details")}
       aria-describedby={undefined}
       className={styles.sheet}
       overlayClassName={styles.sheetLayer}
@@ -107,17 +109,17 @@ export function ScheduleItemSheet({
             {createElement(Icon, { size: 21 })}
           </span>
           <div className={styles.sheetHeading}>
-            <span>{editing ? "编辑" : item.kind === "calendar" ? "日程" : "待办"}</span>
+            <span>{editing ? t("schedule.edit") : item.kind === "calendar" ? t("schedule.calendar") : t("schedule.task")}</span>
             <SheetTitle>{scheduleItemTitle(item)}</SheetTitle>
           </div>
           <SheetClose
             disabled={busy}
             render={
               <Button
-                aria-label="关闭详情"
+                aria-label={t("schedule.closeDetails")}
                 className={styles.closeButton}
                 size="icon"
-                title="关闭"
+                title={t("common.close")}
                 type="button"
                 variant="ghost"
               />
@@ -138,7 +140,7 @@ export function ScheduleItemSheet({
           <div className={styles.details}>
             <p className={styles.detailLine}>
               {item.kind === "calendar" ? <CalendarClock aria-hidden="true" size={17} /> : <ListTodo aria-hidden="true" size={17} />}
-              <span>{scheduleItemMeta(item, timezone, "detail")}</span>
+              <span>{scheduleItemMeta(item, timezone, "detail", locale)}</span>
             </p>
             {item.kind === "calendar" && item.value.participants.length ? (
               <p className={styles.detailLine}>
@@ -152,7 +154,7 @@ export function ScheduleItemSheet({
                 <span>{reminder}</span>
               </p>
             ) : null}
-            {status !== "open" ? <p className={styles.status}>{status === "completed" ? "已完成" : "已取消"}</p> : null}
+            {status !== "open" ? <p className={styles.status}>{status === "completed" ? t("schedule.completed") : t("schedule.cancelled")}</p> : null}
             {error ? (
               <p className={styles.error} role="alert">
                 <AlertCircle aria-hidden="true" size={16} />
@@ -164,12 +166,12 @@ export function ScheduleItemSheet({
 
         {!editing && confirmCancel ? (
           <div className={styles.confirmation}>
-            <p>确定取消“{scheduleItemTitle(item)}”？</p>
+            <p>{t("schedule.cancelQuestion", { title: scheduleItemTitle(item) })}</p>
             <div>
-              <button disabled={busy} onClick={() => setConfirmCancel(false)} type="button">返回</button>
+              <button disabled={busy} onClick={() => setConfirmCancel(false)} type="button">{t("schedule.return")}</button>
               <button className={styles.dangerButton} disabled={busy} onClick={() => void cancel()} type="button">
                 {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Trash2 size={16} />}
-                确认取消
+                {t("schedule.confirmCancel")}
               </button>
             </div>
           </div>
@@ -179,16 +181,16 @@ export function ScheduleItemSheet({
           <footer className={styles.actions}>
             {status === "open" ? (
               <button className={styles.editButton} disabled={busy} onClick={() => setEditing(true)} type="button">
-                <Pencil aria-hidden="true" size={16} />修改
+                <Pencil aria-hidden="true" size={16} />{t("schedule.modify")}
               </button>
             ) : null}
             <button className={styles.completeButton} disabled={busy} onClick={() => void toggleCompletion()} type="button">
               {busy ? <LoaderCircle className={styles.spinner} size={16} /> : <Check size={16} />}
-              {status === "completed" ? "标记未完成" : "标记完成"}
+              {status === "completed" ? t("schedule.markIncomplete") : t("schedule.markComplete")}
             </button>
             {status === "open" ? (
               <button className={styles.cancelButton} disabled={busy} onClick={() => setConfirmCancel(true)} type="button">
-                <Trash2 aria-hidden="true" size={16} />取消
+                <Trash2 aria-hidden="true" size={16} />{t("common.cancel")}
               </button>
             ) : null}
           </footer>

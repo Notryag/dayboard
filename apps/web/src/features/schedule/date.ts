@@ -1,30 +1,16 @@
+import { getMessage, type Locale } from "@/i18n";
+
 const dateKeyFormatters = new Map<string, Intl.DateTimeFormat>();
 const timeFormatters = new Map<string, Intl.DateTimeFormat>();
 
-export function timezoneDisplayName(timezone: string) {
-  return timezone === "Asia/Shanghai" ? "北京时间" : timezone;
+export function timezoneDisplayName(timezone: string, locale: Locale = "zh-CN") {
+  return timezone === "Asia/Shanghai" ? getMessage(locale, "common.chinaStandardTime") : timezone;
 }
 
-const weekdayLongFormatter = new Intl.DateTimeFormat("zh-CN", {
-  weekday: "long",
-  timeZone: "UTC",
-});
-const weekdayNarrowFormatter = new Intl.DateTimeFormat("zh-CN", {
-  weekday: "narrow",
-  timeZone: "UTC",
-});
-const monthYearFormatter = new Intl.DateTimeFormat("zh-CN", {
-  year: "numeric",
-  month: "long",
-  timeZone: "UTC",
-});
-const accessibleDateFormatter = new Intl.DateTimeFormat("zh-CN", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-  timeZone: "UTC",
-});
+const weekdayLongFormatters = new Map<Locale, Intl.DateTimeFormat>();
+const weekdayNarrowFormatters = new Map<Locale, Intl.DateTimeFormat>();
+const monthYearFormatters = new Map<Locale, Intl.DateTimeFormat>();
+const accessibleDateFormatters = new Map<Locale, Intl.DateTimeFormat>();
 
 function formatterForDateKey(timezone: string) {
   let formatter = dateKeyFormatters.get(timezone);
@@ -40,16 +26,17 @@ function formatterForDateKey(timezone: string) {
   return formatter;
 }
 
-function formatterForTime(timezone: string) {
-  let formatter = timeFormatters.get(timezone);
+function formatterForTime(timezone: string, locale: Locale) {
+  const key = `${locale}:${timezone}`;
+  let formatter = timeFormatters.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat("zh-CN", {
+    formatter = new Intl.DateTimeFormat(locale, {
       hour: "2-digit",
       minute: "2-digit",
       hourCycle: "h23",
       timeZone: timezone,
     });
-    timeFormatters.set(timezone, formatter);
+    timeFormatters.set(key, formatter);
   }
   return formatter;
 }
@@ -75,26 +62,44 @@ export function dateRangeFrom(value: string, length = 31) {
   return Array.from({ length }, (_, index) => shiftDateKey(value, index));
 }
 
-export function formatSelectedWeekday(value: string) {
-  return weekdayLongFormatter.format(dateFromKey(value));
+function formatterFor<T extends Locale>(
+  formatters: Map<T, Intl.DateTimeFormat>,
+  locale: T,
+  options: Intl.DateTimeFormatOptions,
+) {
+  let formatter = formatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
+    formatters.set(locale, formatter);
+  }
+  return formatter;
 }
 
-export function formatRailWeekday(value: string) {
-  return weekdayNarrowFormatter.format(dateFromKey(value));
+export function formatSelectedWeekday(value: string, locale: Locale = "zh-CN") {
+  return formatterFor(weekdayLongFormatters, locale, { weekday: "long" }).format(dateFromKey(value));
+}
+
+export function formatRailWeekday(value: string, locale: Locale = "zh-CN") {
+  return formatterFor(weekdayNarrowFormatters, locale, { weekday: "narrow" }).format(dateFromKey(value));
 }
 
 export function formatDayNumber(value: string) {
   return String(dateFromKey(value).getUTCDate());
 }
 
-export function formatMonthYear(value: string) {
-  return monthYearFormatter.format(dateFromKey(value));
+export function formatMonthYear(value: string, locale: Locale = "zh-CN") {
+  return formatterFor(monthYearFormatters, locale, { year: "numeric", month: "long" }).format(dateFromKey(value));
 }
 
-export function formatAccessibleDate(value: string) {
-  return accessibleDateFormatter.format(dateFromKey(value));
+export function formatAccessibleDate(value: string, locale: Locale = "zh-CN") {
+  return formatterFor(accessibleDateFormatters, locale, {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(dateFromKey(value));
 }
 
-export function formatScheduleTime(value: string, timezone: string) {
-  return formatterForTime(timezone).format(new Date(value));
+export function formatScheduleTime(value: string, timezone: string, locale: Locale = "zh-CN") {
+  return formatterForTime(timezone, locale).format(new Date(value));
 }

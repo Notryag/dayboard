@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useI18n } from "@/i18n";
 import { DateRail } from "./DateRail";
 import { DayAgendaSection } from "./DayAgendaSection";
 import { ScheduleHeader } from "./ScheduleHeader";
@@ -30,6 +31,7 @@ export function SchedulePanel({
   refreshKey,
   timezone,
 }: SchedulePanelProps) {
+  const { t } = useI18n();
   const today = dateKeyInTimezone(new Date(), timezone);
   const queryClient = useQueryClient();
   const previousRefreshKey = useRef(refreshKey);
@@ -53,20 +55,20 @@ export function SchedulePanel({
   );
 
   const calendar = useSchedulePage<CalendarEntry>({
-    loadErrorMessage: "暂时无法加载日程",
-    loadMoreErrorMessage: "暂时无法加载更多日程",
+    loadErrorMessage: t("schedule.loadFailed"),
+    loadMoreErrorMessage: t("schedule.loadMoreFailed"),
     loadPage: loadCalendarPage,
     queryKey: ["schedule", "calendar", selectedDate],
   });
   const datedTasks = useSchedulePage<TaskItem>({
-    loadErrorMessage: "暂时无法加载当天待办",
-    loadMoreErrorMessage: "暂时无法加载更多当天待办",
+    loadErrorMessage: t("schedule.loadTasksFailed"),
+    loadMoreErrorMessage: t("schedule.loadMoreTasksFailed"),
     loadPage: loadDatedTaskPage,
     queryKey: ["schedule", "tasks", "dated", selectedDate],
   });
   const undatedTasks = useSchedulePage<TaskItem>({
-    loadErrorMessage: "暂时无法加载待办",
-    loadMoreErrorMessage: "暂时无法加载更多待办",
+    loadErrorMessage: t("schedule.loadUndatedTasksFailed"),
+    loadMoreErrorMessage: t("schedule.loadMoreUndatedTasksFailed"),
     loadPage: loadUndatedTaskPage,
     queryKey: ["schedule", "tasks", "undated"],
   });
@@ -107,11 +109,11 @@ export function SchedulePanel({
           timezone={timezone}
         />
         <TaskListSection
-          emptyText="没有待办"
+          emptyText={t("schedule.noTasks")}
           id="undated-task-section"
           onChanged={onChanged}
           resource={undatedTasks}
-          title="待办清单"
+          title={t("schedule.taskList")}
         />
       </div>
     </section>

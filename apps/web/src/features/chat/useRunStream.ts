@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
+import { getMessage, useI18n } from "@/i18n";
 import type { ScheduleResultPart } from "@/features/schedule/types";
 import type { AgentRunStatus } from "@/lib/api/types";
 import type { ChatMessage } from "./ChatMessageList";
@@ -151,15 +152,16 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
   }
 }
 
-function terminalFallback(event: RunEvent) {
-  if (event.type === "failed") return "请求没有成功。请稍后再试。";
-  if (event.type === "cancelled") return "请求已取消。";
-  return "已处理完成。";
+function terminalFallback(event: RunEvent, locale: "zh-CN" | "en-US") {
+  if (event.type === "failed") return getMessage(locale, "chat.requestFailed");
+  if (event.type === "cancelled") return getMessage(locale, "chat.cancelled");
+  return getMessage(locale, "chat.completed");
 }
 
 export function useRunStream(apiUrl: string) {
+  const { locale } = useI18n();
   const [state, dispatch] = useReducer(runStreamReducer, {
-    messages: initialMessages,
+    messages: initialMessages(locale),
     progress: [],
     scheduleRevision: 0,
   });
@@ -212,7 +214,7 @@ export function useRunStream(apiUrl: string) {
         const handleEvent = (rawEvent: Event) => {
           let event: RunEvent;
           try {
-            event = parseRunEvent(rawEvent.type, (rawEvent as MessageEvent<string>).data);
+            event = parseRunEvent(rawEvent.type, (rawEvent as MessageEvent<string>).data, locale);
           } catch (error) {
             fail(stream, error);
             return;
@@ -224,7 +226,7 @@ export function useRunStream(apiUrl: string) {
           if (event.type !== "assistant_delta" || !replayIncomplete) {
             dispatch({ type: "run_event", event, runId });
           }
-          if (isTerminalRunEvent(event)) finish(stream, event.content ?? terminalFallback(event));
+          if (isTerminalRunEvent(event)) finish(stream, event.content ?? terminalFallback(event, locale));
         };
 
         for (const eventName of runEventNames) stream.addEventListener(eventName, handleEvent);
@@ -240,7 +242,7 @@ export function useRunStream(apiUrl: string) {
                   connect();
                   return;
                 }
-                finish(stream, run.result_message ?? "请求已结束。");
+                finish(stream, run.result_message ?? getMessage(locale, "chat.ended"));
                 return;
               }
               retries += 1;
@@ -252,7 +254,7 @@ export function useRunStream(apiUrl: string) {
 
       connect();
     });
-  }, [apiUrl]);
+  }, [apiUrl, dispatch, locale]);
 
   return useMemo(() => ({ state, dispatch, followRun }), [followRun, state]);
 }

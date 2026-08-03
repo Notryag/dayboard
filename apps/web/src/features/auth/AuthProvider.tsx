@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useI18n } from "@/i18n";
 import {
   ApiError,
   authenticationRequiredEvent,
@@ -30,6 +31,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { t, locale } = useI18n();
   const queryClient = useQueryClient();
   const [account, setAccount] = useState<Account | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,11 +53,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch((error: unknown) => {
         setAccount(null);
         if (!(error instanceof ApiError && error.status === 401)) {
-          setRecoveryError(userFacingApiError(error, "暂时无法连接服务"));
+          setRecoveryError(userFacingApiError(error, t("auth.serviceUnavailable"), locale));
         }
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [locale, t]);
 
   useEffect(() => {
     void getAuthCapabilities()

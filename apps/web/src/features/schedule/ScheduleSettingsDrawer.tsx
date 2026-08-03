@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Globe2, LogOut, Monitor, Moon, Settings2, Sun, UserRound, X } from "lucide-react";
+import { useI18n, type Locale } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { timezoneDisplayName } from "./date";
 import {
@@ -23,12 +24,11 @@ type ThemePreference = "system" | "light" | "dark";
 
 const themeOptions: Array<{
   icon: typeof Monitor;
-  label: string;
   value: ThemePreference;
 }> = [
-  { icon: Monitor, label: "跟随系统", value: "system" },
-  { icon: Sun, label: "浅色", value: "light" },
-  { icon: Moon, label: "深色", value: "dark" },
+  { icon: Monitor, value: "system" },
+  { icon: Sun, value: "light" },
+  { icon: Moon, value: "dark" },
 ];
 
 const themeChangeEvent = "dayboard-theme-change";
@@ -63,6 +63,7 @@ export function ScheduleSettingsDrawer({
   onLogout,
   timezone,
 }: ScheduleSettingsDrawerProps) {
+  const { locale, setLocale, t } = useI18n();
   const theme = useSyncExternalStore(
     subscribeToThemePreference,
     getThemePreference,
@@ -74,10 +75,10 @@ export function ScheduleSettingsDrawer({
       <SheetTrigger
         render={
           <Button
-            aria-label="打开设置"
+            aria-label={t("common.settings")}
             className={styles.trigger}
             size="icon"
-            title="设置"
+            title={t("common.settings")}
             type="button"
             variant="ghost"
           />
@@ -92,14 +93,14 @@ export function ScheduleSettingsDrawer({
         showCloseButton={false}
       >
           <header className={styles.drawerHeader}>
-            <SheetTitle>设置</SheetTitle>
+            <SheetTitle>{t("common.settings")}</SheetTitle>
             <SheetClose
               render={
                 <Button
-                  aria-label="关闭设置"
+                  aria-label={`${t("common.close")}${t("common.settings")}`}
                   className={styles.closeButton}
                   size="icon"
-                  title="关闭"
+                  title={t("common.close")}
                   type="button"
                   variant="ghost"
                 />
@@ -117,38 +118,56 @@ export function ScheduleSettingsDrawer({
               <strong>{accountName}</strong>
               <span>
                 <Globe2 aria-hidden="true" size={14} />
-                {timezoneDisplayName(timezone)}
+                {timezoneDisplayName(timezone, locale)}
               </span>
             </div>
           </div>
 
           <section className={styles.preferenceSection}>
-            <span className={styles.preferenceLabel}>外观</span>
-            <div aria-label="外观主题" className={styles.themeControl} role="group">
+            <span className={styles.preferenceLabel}>{t("common.appearance")}</span>
+            <div aria-label={t("common.appearance")} className={styles.themeControl} role="group">
               {themeOptions.map((option) => {
                 const Icon = option.icon;
+                const label = option.value === "system"
+                  ? t("common.system")
+                  : option.value === "light" ? t("common.light") : t("common.dark");
                 return (
                   <Button
                     aria-pressed={theme === option.value}
                     className={theme === option.value ? styles.themeOptionActive : styles.themeOption}
                     key={option.value}
                     onClick={() => applyThemePreference(option.value)}
-                    title={option.label}
+                    title={label}
                     type="button"
                     variant="ghost"
                   >
                     <Icon aria-hidden="true" size={17} />
-                    <span>{option.label}</span>
+                    <span>{label}</span>
                   </Button>
                 );
               })}
             </div>
           </section>
 
+          <section className={styles.preferenceSection}>
+            <label className={styles.preferenceLabel} htmlFor="dayboard-language">
+              {t("common.language")}
+            </label>
+            <select
+              className={styles.languageSelect}
+              id="dayboard-language"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value as Locale)}
+            >
+              <option value="zh-CN">{t("common.chinese")}</option>
+              <option value="en-US">{t("common.english")}</option>
+            </select>
+          </section>
+
           <div className={styles.drawerActions}>
             <Button className={styles.logoutButton} onClick={onLogout} type="button" variant="destructive">
               <LogOut aria-hidden="true" size={18} />
-              退出登录
+              {t("common.logout")}
             </Button>
           </div>
       </SheetContent>

@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { useI18n } from "@/i18n";
 import styles from "./PasswordInput.module.css";
 
 type PasswordInputProps = {
@@ -12,6 +13,7 @@ type PasswordInputProps = {
 };
 
 export function PasswordInput({ autoComplete, label, minLength, name }: PasswordInputProps) {
+  const { t } = useI18n();
   const [visible, setVisible] = useState(false);
   const inputId = useId();
 
@@ -28,10 +30,10 @@ export function PasswordInput({ autoComplete, label, minLength, name }: Password
           type={visible ? "text" : "password"}
         />
         <button
-          aria-label={visible ? `隐藏${label}` : `显示${label}`}
+          aria-label={visible ? `${t("common.hide")}${label}` : `${t("common.show")}${label}`}
           aria-pressed={visible}
           onClick={() => setVisible((current) => !current)}
-          title={visible ? "隐藏密码" : "显示密码"}
+          title={visible ? `${t("common.hide")}${label}` : `${t("common.show")}${label}`}
           type="button"
         >
           {visible ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}

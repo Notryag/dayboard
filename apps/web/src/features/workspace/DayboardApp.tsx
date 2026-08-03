@@ -5,6 +5,7 @@ import {
   CalendarDays,
   MessageCircle,
 } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -32,6 +33,7 @@ type UndoNotice = NonNullable<ScheduleChange["undo"]> & {
 };
 
 function ChatHome() {
+  const { t, locale } = useI18n();
   const { account, logout } = useAuth();
   const {
     activeRunId,
@@ -106,7 +108,7 @@ function ChatHome() {
         ? {
             ...current,
             busy: false,
-            error: userFacingApiError(error, "撤销失败，请刷新后重试。"),
+            error: userFacingApiError(error, t("workspace.undoFailed"), locale),
           }
         : current);
     }
@@ -123,11 +125,11 @@ function ChatHome() {
         <header className={styles.appHeader}>
           <div className={styles.headerLeading}>
             <Button
-              aria-label={activeView === "chat" ? "打开日程" : "返回对话"}
+              aria-label={activeView === "chat" ? t("workspace.openSchedule") : t("workspace.backToConversation")}
               className={styles.floatingHeaderButton}
               onClick={() => selectView(activeView === "chat" ? "schedule" : "chat")}
               size="icon"
-              title={activeView === "chat" ? "日程" : "对话"}
+              title={activeView === "chat" ? t("workspace.schedule") : t("workspace.conversation")}
               type="button"
               variant="ghost"
             >
@@ -142,7 +144,7 @@ function ChatHome() {
           <div className={styles.headerTrailing}>
             <ReminderCenter onOpenSource={openReminderSource} timezone={timezone} />
             <ScheduleSettingsDrawer
-              accountName={account?.display_name || account?.username || "Dayboard 用户"}
+              accountName={account?.display_name || account?.username || t("workspace.user")}
               onLogout={() => void logout()}
               timezone={timezone}
             />
@@ -157,7 +159,7 @@ function ChatHome() {
         >
           <>
             <section
-              aria-label="对话"
+              aria-label={t("workspace.conversationRegion")}
               aria-hidden={activeView !== "chat"}
               className={styles.chatPane}
               id="chat-panel"
@@ -190,7 +192,7 @@ function ChatHome() {
                     steps={
                       activeProgress.length
                         ? activeProgress
-                        : [{ eventType: "submitting", text: "正在提交请求" }]
+                        : [{ eventType: "submitting", text: t("workspace.submitting") }]
                     }
                   />
                 ) : null}
@@ -213,7 +215,7 @@ function ChatHome() {
             </section>
 
             <div
-              aria-label="日程"
+              aria-label={t("workspace.scheduleRegion")}
               aria-hidden={activeView !== "schedule"}
               className={styles.schedulePane}
               id="schedule-panel"

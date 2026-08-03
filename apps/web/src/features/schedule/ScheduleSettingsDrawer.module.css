@@ -37,6 +37,7 @@
 .closeButton:focus-visible,
 .themeOption:focus-visible,
 .themeOptionActive:focus-visible,
+.languageSelect:focus-visible,
 .logoutButton:focus-visible {
   outline: var(--focus-ring-width) solid var(--dayboard-color-primary);
   outline-offset: var(--focus-ring-offset);
@@ -53,6 +54,18 @@
   color: var(--dayboard-color-text-muted);
   font-size: var(--font-size-caption);
   font-weight: var(--font-weight-label);
+}
+
+.languageSelect {
+  width: 100%;
+  min-height: var(--control-size);
+  padding: 0 var(--space-3);
+  border: var(--border-width) solid var(--dayboard-color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--dayboard-color-text);
+  background: var(--dayboard-color-surface-raised);
+  cursor: pointer;
+  font: inherit;
 }
 
 .themeControl {

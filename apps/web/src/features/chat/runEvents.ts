@@ -1,12 +1,13 @@
 import type { ScheduleDisplayItem, ScheduleResultPart } from "@/features/schedule/types";
 import type { RunActivityStep } from "./RunActivityTicker";
+import { getMessage, type Locale } from "@/i18n";
 
 const progressLabels = {
-  run_created: "请求已进入队列",
-  run_started: "正在处理",
-  tool_call_started: "正在执行操作",
-  tool_call_completed: "操作完成",
-  tool_call_error: "操作失败",
+  run_created: "chat.progressQueued",
+  run_started: "chat.progressProcessing",
+  tool_call_started: "chat.progressAction",
+  tool_call_completed: "chat.progressDone",
+  tool_call_error: "chat.progressFailed",
 } as const;
 
 const scheduleOperations = new Set<ScheduleResultPart["operation"]>([
@@ -97,7 +98,7 @@ function terminalParts(payload: Record<string, unknown>): ScheduleResultPart[] |
   return parts as ScheduleResultPart[];
 }
 
-export function parseRunEvent(eventName: string, rawData: string): RunEvent {
+export function parseRunEvent(eventName: string, rawData: string, locale: Locale = "zh-CN"): RunEvent {
   let value: unknown;
   try {
     value = JSON.parse(rawData);
@@ -107,7 +108,7 @@ export function parseRunEvent(eventName: string, rawData: string): RunEvent {
   if (!isRecord(value)) throw new Error(`Invalid payload for Run event: ${eventName}`);
 
   if (eventName in progressLabels) {
-    const fallback = progressLabels[eventName as keyof typeof progressLabels];
+    const fallback = getMessage(locale, progressLabels[eventName as keyof typeof progressLabels]);
     const useContent = eventName !== "run_created" && eventName !== "run_started";
     return {
       type: "progress",

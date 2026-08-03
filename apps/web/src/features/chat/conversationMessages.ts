@@ -2,20 +2,21 @@ import type { ChatMessage } from "./ChatMessageList";
 import type { ScheduleResultPart } from "@/features/schedule/types";
 import type { ConversationMessage as ApiConversationMessage } from "@/lib/api/types";
 import { parseScheduleResultParts } from "./runEvents";
+import { getMessage, type Locale } from "@/i18n";
 
 export type ConversationMessage = ApiConversationMessage;
 
-export const initialMessages: ChatMessage[] = [
-  {
+export function initialMessages(locale: Locale = "zh-CN"): ChatMessage[] {
+  return [{
     id: "welcome",
     role: "assistant",
-    text: "今天想安排什么？你可以直接说“明天下午三点提醒我开产品会”。",
+    text: getMessage(locale, "chat.greeting"),
     time: "",
-  },
-];
+  }];
+}
 
-function currentTimeLabel() {
-  return new Intl.DateTimeFormat("zh-CN", {
+function currentTimeLabel(locale: Locale = "zh-CN") {
+  return new Intl.DateTimeFormat(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -27,23 +28,24 @@ export function createMessage(
   text: string,
   runId?: string,
   parts?: ScheduleResultPart[],
+  locale: Locale = "zh-CN",
 ): ChatMessage {
   return {
     id: crypto.randomUUID(),
     role,
     text,
-    time: currentTimeLabel(),
+    time: currentTimeLabel(locale),
     runId,
     parts,
   };
 }
 
-export function persistedMessage(message: ConversationMessage): ChatMessage {
+export function persistedMessage(message: ConversationMessage, locale: Locale = "zh-CN"): ChatMessage {
   return {
     id: message.id,
     role: message.role,
     text: message.content,
-    time: new Intl.DateTimeFormat("zh-CN", {
+    time: new Intl.DateTimeFormat(locale, {
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,

@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { userFacingApiError } from "@/lib/api/client";
 import { AuthProvider, useAuth } from "./AuthProvider";
 import { PasswordInput } from "./PasswordInput";
@@ -9,6 +10,7 @@ import { PasswordRecoveryForm } from "./PasswordRecoveryForm";
 import styles from "./auth.module.css";
 
 function AuthContent({ children }: { children: React.ReactNode }) {
+  const { t, locale } = useI18n();
   const {
     account,
     isLoading,
@@ -42,7 +44,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password"));
     if (mode === "register" && password !== String(form.get("confirmPassword"))) {
-      setError("两次输入的密码不一致。");
+      setError(t("auth.passwordMismatch"));
       return;
     }
     setError(null);
@@ -57,18 +59,22 @@ function AuthContent({ children }: { children: React.ReactNode }) {
           password,
           email: String(form.get("email") ?? "") || undefined,
           display_name: String(form.get("displayName") ?? "") || undefined,
-          locale: navigator.language || "zh-CN",
+          locale,
         });
       }
     } catch (caught) {
-      setError(userFacingApiError(caught, mode === "login" ? "登录失败" : "注册失败"));
+      setError(userFacingApiError(
+        caught,
+        mode === "login" ? t("auth.loginFailed") : t("auth.registerFailed"),
+        locale,
+      ));
     } finally {
       setIsSubmitting(false);
     }
   }
 
   if (isLoading) {
-    return <main className={styles.loading}>正在恢复会话</main>;
+    return <main className={styles.loading}>{t("auth.loadingSession")}</main>;
   }
   if (account && mode !== "reset") return children;
 
@@ -78,7 +84,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
     await logout();
     setResetToken(null);
     setMode("login");
-    setNotice("密码已更新，请使用新密码登录。");
+    setNotice(t("auth.passwordUpdated"));
   }
 
   function returnToLogin() {
@@ -96,15 +102,15 @@ function AuthContent({ children }: { children: React.ReactNode }) {
         </div>
         <h1 id="auth-title">
           {mode === "login"
-            ? "登录"
+            ? t("auth.login")
             : mode === "register"
-              ? "创建账号"
+              ? t("auth.createAccount")
               : mode === "forgot"
-                ? "找回密码"
-                : "设置新密码"}
+                ? t("auth.recoverPassword")
+                : t("auth.setNewPassword")}
         </h1>
         {!isRecovery ? (
-          <div className={styles.tabs} aria-label="账号操作">
+          <div className={styles.tabs} aria-label={t("auth.login")}>
             <button
               aria-pressed={mode === "login"}
               onClick={() => {
@@ -113,7 +119,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
               }}
               type="button"
             >
-              登录
+              {t("auth.login")}
             </button>
             <button
               aria-pressed={mode === "register"}
@@ -123,7 +129,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
               }}
               type="button"
             >
-              注册
+              {t("auth.register")}
             </button>
           </div>
         ) : null}
@@ -139,13 +145,13 @@ function AuthContent({ children }: { children: React.ReactNode }) {
             {notice ? <p className={styles.notice}>{notice}</p> : null}
             {mode === "login" ? (
               <label>
-                <span>用户名或邮箱</span>
+                <span>{t("auth.usernameOrEmail")}</span>
                 <input autoComplete="username" name="identifier" required />
               </label>
             ) : (
               <>
                 <label>
-                  <span>用户名</span>
+                  <span>{t("auth.username")}</span>
                   <input
                     autoComplete="username"
                     minLength={3}
@@ -155,25 +161,25 @@ function AuthContent({ children }: { children: React.ReactNode }) {
                   />
                 </label>
                 <label>
-                  <span>邮箱（可选）</span>
+                  <span>{t("auth.emailOptional")}</span>
                   <input autoComplete="email" name="email" type="email" />
                 </label>
                 <label>
-                  <span>显示名称（可选）</span>
+                  <span>{t("auth.displayNameOptional")}</span>
                   <input autoComplete="name" name="displayName" />
                 </label>
               </>
             )}
             <PasswordInput
               autoComplete={mode === "login" ? "current-password" : "new-password"}
-              label="密码"
+              label={t("auth.password")}
               minLength={mode === "register" ? 10 : 1}
               name="password"
             />
             {mode === "register" ? (
               <PasswordInput
                 autoComplete="new-password"
-                label="确认密码"
+                label={t("auth.confirmPassword")}
                 minLength={10}
                 name="confirmPassword"
               />
@@ -184,12 +190,12 @@ function AuthContent({ children }: { children: React.ReactNode }) {
                 onClick={() => setMode("forgot")}
                 type="button"
               >
-                忘记密码
+                {t("auth.forgotPassword")}
               </button>
             ) : null}
             {error ? <p className={styles.error}>{error}</p> : null}
             <button className={styles.submit} disabled={isSubmitting} type="submit">
-              {isSubmitting ? "正在提交" : mode === "login" ? "登录" : "创建账号"}
+              {isSubmitting ? t("auth.submit") : mode === "login" ? t("auth.login") : t("auth.createAccount")}
             </button>
           </form>
         )}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, BellRing, CalendarClock, LoaderCircle, RefreshCw, RotateCw, X } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { userFacingApiError } from "@/lib/api/client";
@@ -33,12 +34,12 @@ function payloadString(reminder: ReminderInboxItem, key: string) {
   return typeof value === "string" ? value : null;
 }
 
-function reminderTitle(reminder: ReminderInboxItem) {
-  return reminder.source_title ?? payloadString(reminder, "title") ?? "日程提醒";
+function reminderTitle(reminder: ReminderInboxItem, fallback: string) {
+  return reminder.source_title ?? payloadString(reminder, "title") ?? fallback;
 }
 
-function reminderDate(reminder: ReminderInboxItem, timezone: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
+function reminderDate(reminder: ReminderInboxItem, timezone: string, locale: "zh-CN" | "en-US") {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -63,16 +64,17 @@ function sourceUnavailable(reminder: ReminderInboxItem) {
   return reminder.source_status === "deleted" || reminder.source_status === "cancelled";
 }
 
-function statusLabel(reminder: ReminderInboxItem) {
-  const sourceName = reminder.source_type === "task_item" ? "待办" : "日程";
-  if (reminder.source_status === "deleted") return `${sourceName}已删除`;
-  if (reminder.source_status === "cancelled") return `${sourceName}已取消`;
-  if (reminder.source_status === "completed") return `${sourceName}已完成`;
-  if (reminder.status === "failed") return "投递失败";
-  return reminder.read_at ? "已读" : "新提醒";
+function statusLabel(reminder: ReminderInboxItem, t: (key: string) => string) {
+  const sourceName = reminder.source_type === "task_item" ? t("reminders.task") : t("reminders.schedule");
+  if (reminder.source_status === "deleted") return `${sourceName} ${t("reminders.deleted")}`;
+  if (reminder.source_status === "cancelled") return `${sourceName} ${t("reminders.cancelled")}`;
+  if (reminder.source_status === "completed") return `${sourceName} ${t("reminders.completed")}`;
+  if (reminder.status === "failed") return t("reminders.deliveryFailed");
+  return reminder.read_at ? t("reminders.read") : t("reminders.new");
 }
 
 export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) {
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const permission = useSyncExternalStore(
@@ -128,8 +130,8 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
       const storageKey = `dayboard:notification:${reminder.id}`;
       if (sessionStorage.getItem(storageKey)) continue;
       sessionStorage.setItem(storageKey, "shown");
-      const notification = new Notification(reminderTitle(reminder), {
-        body: reminderDate(reminder, timezone),
+      const notification = new Notification(reminderTitle(reminder, t("reminders.scheduleReminder")), {
+        body: reminderDate(reminder, timezone, locale),
         tag: `dayboard-reminder-${reminder.id}`,
       });
       notification.onclick = () => {
@@ -138,7 +140,7 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
         void openSource(reminder);
       };
     }
-  }, [openSource, permission, timezone, visible]);
+  }, [locale, openSource, permission, t, timezone, visible]);
 
   async function requestNotificationPermission() {
     if (typeof Notification === "undefined") return;
@@ -151,10 +153,10 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
       <SheetTrigger
         render={
           <Button
-            aria-label={unreadCount ? `提醒，${unreadCount} 条未读` : "提醒"}
+            aria-label={unreadCount ? `${t("reminders.title")}, ${t("reminders.unread", { count: unreadCount })}` : t("reminders.title")}
             className={styles.trigger}
             size="icon"
-            title="提醒"
+            title={t("reminders.title")}
             type="button"
             variant="ghost"
           />
@@ -171,16 +173,16 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
       >
         <header className={styles.header}>
           <div>
-            <SheetTitle>提醒</SheetTitle>
-            <span>{unreadCount ? `${unreadCount} 条未读` : "没有未读提醒"}</span>
+            <SheetTitle>{t("reminders.title")}</SheetTitle>
+            <span>{unreadCount ? t("reminders.unread", { count: unreadCount }) : t("reminders.noUnread")}</span>
           </div>
           <div className={styles.headerActions}>
             <Button
-              aria-label="刷新提醒"
+              aria-label={t("reminders.refresh")}
               disabled={reminders.isFetching}
               onClick={() => void reminders.refetch()}
               size="icon"
-              title="刷新"
+              title={t("common.retry")}
               type="button"
               variant="ghost"
             >
@@ -188,7 +190,7 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
             </Button>
             <SheetClose
               render={
-                <Button aria-label="关闭提醒" size="icon" title="关闭" type="button" variant="ghost" />
+                <Button aria-label={`${t("common.close")}${t("reminders.title")}`} size="icon" title={t("common.close")} type="button" variant="ghost" />
               }
             >
               <X aria-hidden="true" size={20} />
@@ -198,7 +200,7 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
 
         {mutationError ? (
           <p className={styles.error} role="alert">
-            {userFacingApiError(mutationError, "提醒操作失败，请稍后重试。")}
+            {userFacingApiError(mutationError, t("reminders.operationFailed"), locale)}
           </p>
         ) : null}
 
@@ -206,14 +208,14 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
           {permission !== "unsupported" ? (
             <div className={styles.notificationControl}>
               <BellRing aria-hidden="true" size={17} />
-              <span>浏览器通知</span>
+              <span>{t("reminders.notification")}</span>
               {permission === "granted" ? (
-                <small>已开启</small>
+                <small>{t("reminders.enabled")}</small>
               ) : permission === "denied" ? (
-                <small>已被浏览器阻止</small>
+                <small>{t("reminders.blocked")}</small>
               ) : (
                 <Button onClick={() => void requestNotificationPermission()} size="sm" type="button" variant="outline">
-                  开启
+                  {t("reminders.enable")}
                 </Button>
               )}
             </div>
@@ -221,19 +223,19 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
           {reminders.isPending ? (
             <div className={styles.notice} role="status">
               <LoaderCircle className={styles.spinner} size={20} />
-              正在加载提醒
+              {t("reminders.loading")}
             </div>
           ) : reminders.error ? (
             <div className={styles.notice} role="alert">
-              <span>{userFacingApiError(reminders.error, "暂时无法加载提醒。")}</span>
+              <span>{userFacingApiError(reminders.error, t("reminders.loadFailed"), locale)}</span>
               <Button onClick={() => void reminders.refetch()} size="sm" type="button" variant="outline">
-                重试
+                {t("common.retry")}
               </Button>
             </div>
           ) : !visible.length ? (
             <div className={styles.empty}>
               <Bell aria-hidden="true" size={22} />
-              <p>还没有提醒</p>
+              <p>{t("reminders.empty")}</p>
             </div>
           ) : (
             <ol className={styles.list}>
@@ -250,20 +252,20 @@ export function ReminderCenter({ onOpenSource, timezone }: ReminderCenterProps) 
                     >
                       <span className={styles.itemIcon}><CalendarClock size={17} /></span>
                       <span className={styles.itemCopy}>
-                        <strong>{reminderTitle(reminder)}</strong>
-                        <span>{reminderDate(reminder, timezone)}</span>
+                        <strong>{reminderTitle(reminder, t("reminders.scheduleReminder"))}</strong>
+                        <span>{reminderDate(reminder, timezone, locale)}</span>
                         <small data-source-status={reminder.source_status} data-status={reminder.status}>
-                          {statusLabel(reminder)}
+                          {statusLabel(reminder, t)}
                         </small>
                       </span>
                     </button>
                     {reminder.status === "failed" && reminder.can_retry ? (
                       <Button
-                        aria-label={`重新投递：${reminderTitle(reminder)}`}
+                        aria-label={`${t("reminders.redeliver")}: ${reminderTitle(reminder, t("reminders.scheduleReminder"))}`}
                         disabled={retry.isPending && retry.variables === reminder.id}
                         onClick={() => retry.mutate(reminder.id)}
                         size="icon"
-                        title="重新投递"
+                        title={t("reminders.redeliver")}
                         type="button"
                         variant="ghost"
                       >

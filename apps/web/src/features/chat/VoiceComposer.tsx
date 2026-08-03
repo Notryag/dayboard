@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Keyboard, LoaderCircle, X } from "lucide-react";
+import { useI18n } from "@/i18n";
 import styles from "./Composer.module.css";
 
 export type VoiceComposerStatus = "idle" | "requesting" | "recording" | "transcribing";
@@ -44,6 +45,7 @@ export function VoiceComposer({
   status,
   unavailableReason,
 }: VoiceComposerProps) {
+  const { t } = useI18n();
   const [cancelIntent, setCancelIntent] = useState(false);
   const activeRef = useRef(false);
   const cancelIntentRef = useRef(false);
@@ -119,27 +121,27 @@ export function VoiceComposer({
     else pendingReleaseRef.current = "cancel";
   }
 
-  const primaryLabel = unavailableReason ?? "按住说话";
+  const primaryLabel = unavailableReason ?? t("voice.holdToTalk");
   const elapsedLabel = formatDuration(elapsedSeconds);
   const visualLabel =
     status === "requesting"
-      ? "正在连接"
+      ? t("voice.connecting")
       : status === "recording"
         ? cancelIntent
-          ? "松开取消"
-          : "松开发送"
+          ? t("voice.releaseToCancel")
+          : t("voice.releaseToSend")
         : status === "transcribing"
-          ? "正在识别"
+          ? t("voice.transcribing")
           : primaryLabel;
   const controlLabel =
     status === "requesting"
-      ? "正在连接麦克风"
+      ? t("voice.connectingMicrophone")
       : status === "recording"
         ? cancelIntent
-          ? "松开取消"
-          : `松开发送，已录音 ${elapsedLabel}，最长 ${formatDuration(maxDurationSeconds)}`
+          ? t("voice.releaseToCancel")
+          : t("voice.recordingInfo", { elapsed: elapsedLabel, max: formatDuration(maxDurationSeconds) })
         : status === "transcribing"
-          ? "正在识别语音"
+          ? t("voice.transcribingVoice")
           : primaryLabel;
 
   return (
@@ -159,7 +161,7 @@ export function VoiceComposer({
           <span className={styles.voiceCancelIcon}>
             <X size={18} strokeWidth={2.4} />
           </span>
-          <span>{cancelIntent ? "松开取消" : "移到这里取消"}</span>
+          <span>{cancelIntent ? t("voice.releaseToCancel") : t("voice.moveHereToCancel")}</span>
         </div>
       ) : null}
 
@@ -238,17 +240,17 @@ export function VoiceComposer({
 
       {status === "idle" ? (
         <button
-          aria-label="切换到键盘输入"
+          aria-label={t("chat.switchToKeyboard")}
           className={styles.iconButton}
           onClick={onSwitchToText}
-          title="键盘输入"
+          title={t("chat.keyboardInput")}
           type="button"
         >
           <Keyboard size={20} strokeWidth={2.1} />
         </button>
       ) : status === "transcribing" ? (
         <button
-          aria-label="取消识别"
+          aria-label={t("common.cancel")}
           className={styles.iconButton}
           onClick={onCancelTranscription}
           type="button"

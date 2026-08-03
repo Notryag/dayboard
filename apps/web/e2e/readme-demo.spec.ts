@@ -76,6 +76,6 @@ test("record calendar creation and rescheduling for the README", async ({ page }
   await page.getByRole("button", { name: "打开日程" }).click();
   await page.getByLabel("跳转日期").fill("2026-08-07");
   await expect(page.getByRole("heading", { name: "星期五" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "查看日程：和张总开会" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /更多 日程: 和张总开会/ })).toBeVisible();
   await page.waitForTimeout(4200);
 });

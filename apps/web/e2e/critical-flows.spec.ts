@@ -41,9 +41,9 @@ test("register, login, and create a conversation thread", async ({ page }) => {
   await expect(page.getByRole("region", { name: "对话", exact: true })).toBeVisible();
   await expect.poll(() => state.threadId).not.toBeNull();
 
-  await page.getByRole("button", { name: "打开设置" }).click();
+  await page.getByRole("button", { name: "设置" }).click();
   await page.getByRole("button", { name: "退出登录" }).click();
-  await page.getByLabel("账号操作").getByRole("button", { name: "登录" }).click();
+  await page.getByRole("button", { name: "登录", exact: true }).first().click();
   await page.getByLabel("用户名或邮箱").fill("e2e-user");
   await page.getByRole("textbox", { name: "密码" }).fill("correct-horse-battery");
   await page.locator("form").getByRole("button", { name: "登录" }).click();
@@ -51,6 +51,33 @@ test("register, login, and create a conversation thread", async ({ page }) => {
   expect(state.requests.some((request) => request.path === "/api/auth/register")).toBeTruthy();
   expect(state.requests.some((request) => request.path === "/api/auth/login")).toBeTruthy();
   expect(state.requests.filter((request) => request.path === "/api/conversation")).toHaveLength(2);
+});
+
+test("language selection updates the UI and survives a reload", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (!window.localStorage.getItem("dayboard-locale")) {
+      window.localStorage.setItem("dayboard-locale", "zh-CN");
+    }
+  });
+  await installApiFixture(page);
+  await page.goto("/dayboard");
+
+  await expect(page).toHaveTitle(/Dayboard/);
+  await page.getByRole("button", { name: "设置" }).click();
+  const language = page.getByLabel("语言");
+  await expect(language).toHaveValue("zh-CN");
+  await language.selectOption("en-US");
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByLabel("Language")).toHaveValue("en-US");
+  await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
+
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByLabel("Language")).toHaveValue("en-US");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 });
 
 test("conversation history follows the account across devices", async ({ page }) => {
@@ -264,7 +291,7 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
   const state = await installApiFixture(page, { calendars: [original] });
   await page.goto("/dayboard");
   await page.getByRole("button", { name: "打开日程" }).click();
-  await page.getByRole("button", { name: /查看日程：产品评审/ }).click();
+  await page.getByRole("button", { name: /更多 日程: 产品评审/ }).click();
   const detailSheet = page.locator('[data-slot="sheet-content"]');
   await expect(detailSheet).toHaveAttribute("data-side", "bottom");
   await expect(detailSheet).toHaveCSS("bottom", "0px");
@@ -273,7 +300,7 @@ test("calendar edit uses optimistic versions and can be undone", async ({ page }
   await page.getByRole("button", { name: "保存" }).click();
   await expect(page.getByText("已修改“产品评审”")).toBeVisible();
   await page.getByRole("button", { name: "撤销" }).click();
-  await expect(page.getByRole("button", { name: /查看日程：产品评审/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /更多 日程: 产品评审/ })).toBeVisible();
 
   const updates = state.requests.filter(
     (request) => request.method === "PUT" && request.path === "/api/calendar-entries/calendar-1",
@@ -289,15 +316,15 @@ test("completed task remains visible in the schedule", async ({ page }) => {
   await page.goto("/dayboard");
   await page.getByRole("button", { name: "打开日程" }).click();
 
-  await page.getByRole("button", { name: "完成待办：整理资料" }).click();
-  const completed = page.getByRole("button", { name: "标记未完成待办：整理资料" });
+  await page.getByRole("button", { name: "标记完成 待办: 整理资料" }).click();
+  const completed = page.getByRole("button", { name: "标记未完成 待办: 整理资料" });
   await expect(completed).toBeVisible();
   await expect(completed).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("已完成", { exact: true })).toBeVisible();
   await expect.poll(() => state.tasks[0]?.status).toBe("completed");
 
-  await page.getByRole("button", { name: "标记未完成待办：整理资料" }).click();
-  const reopened = page.getByRole("button", { name: "完成待办：整理资料" });
+  await page.getByRole("button", { name: "标记未完成 待办: 整理资料" }).click();
+  const reopened = page.getByRole("button", { name: "标记完成 待办: 整理资料" });
   await expect(reopened).toBeVisible();
   await expect(reopened).toHaveAttribute("aria-pressed", "false");
   await expect.poll(() => state.tasks[0]?.status).toBe("open");
@@ -354,7 +381,7 @@ test("clarification choice resumes execution and writes the final item", async (
   await page.getByRole("button", { name: "发送" }).click();
   await expect(page.getByText("几点进行设计评审？")).toBeVisible();
   await page.getByRole("button", { name: "上午 9 点" }).click();
-  await expect(page.getByRole("button", { name: "查看日程：设计评审" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /更多 日程: 设计评审/ })).toBeVisible();
   expect(state.calendars).toHaveLength(1);
   expect(state.requests.some((request) => request.path.endsWith("/clarification-responses"))).toBeTruthy();
 });
@@ -405,7 +432,7 @@ test("fixed audio is transcribed and submitted without a real microphone", async
     button: 0,
     pointerId: 1,
   });
-  await expect(page.getByRole("button", { name: "查看日程：周会" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /更多 日程: 周会/ })).toBeVisible();
   const upload = state.requests.find((request) => request.path === "/api/voice/transcriptions");
   expect(upload?.method).toBe("POST");
   expect(String(upload?.body)).toContain("command-");
@@ -489,12 +516,12 @@ test("unread reminder opens and focuses its schedule item", async ({ page }) => 
   });
 
   await page.goto("/dayboard");
-  await page.getByRole("button", { name: "提醒，1 条未读" }).click();
+  await page.getByRole("button", { name: "提醒, 1 条未读" }).click();
   const drawer = page.getByRole("dialog");
   await expect(drawer.getByText("1 条未读")).toBeVisible();
   await expect(drawer.getByText("等待提醒")).toHaveCount(0);
   await expect(drawer.getByRole("button", { name: /已删除日程/ })).toBeDisabled();
-  await expect(drawer.getByText("日程已删除")).toBeVisible();
+  await expect(drawer.getByText("日程 已删除")).toBeVisible();
   await drawer.getByRole("button", { name: /产品评审/ }).click();
   await expect(page.locator("[data-reminder-highlighted='true']")).toContainText("产品评审");
   await expect(page.getByRole("button", { name: "提醒", exact: true })).toBeVisible();

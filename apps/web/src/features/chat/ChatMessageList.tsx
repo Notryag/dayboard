@@ -13,6 +13,7 @@ import {
 import { createPortal } from "react-dom";
 import { Copy, ScanText, Sparkles } from "lucide-react";
 import Markdown from "react-markdown";
+import { useI18n } from "@/i18n";
 import { ClarificationInteraction } from "@/features/clarifications/ClarificationInteraction";
 import {
   clarificationPresentation,
@@ -71,6 +72,7 @@ export function ChatMessageList({
   scrollRef,
   timezone,
 }: ChatMessageListProps) {
+  const { t } = useI18n();
   const [messageMenu, setMessageMenu] = useState<MessageActionMenu | null>(null);
   const pressOriginRef = useRef<{ x: number; y: number } | null>(null);
   const pressTimerRef = useRef<number | null>(null);
@@ -217,7 +219,7 @@ export function ChatMessageList({
   return (
     <>
       <section
-        aria-label="对话记录"
+        aria-label={t("chat.conversationHistory")}
         aria-busy={isLoadingOlderMessages}
         className={styles.messages}
         onScroll={handleScroll}
@@ -271,7 +273,7 @@ export function ChatMessageList({
               {isUser ? messageArticle : (
                 <div className={styles.assistantContent}>
                   {scheduleItems.length ? (
-                    <div aria-label="本次安排" className={styles.scheduleResults}>
+                    <div aria-label={t("chat.scheduleResult")} className={styles.scheduleResults}>
                       {scheduleItems.map((item) => (
                       <ScheduleItem
                         item={item}
@@ -301,7 +303,7 @@ export function ChatMessageList({
               role="presentation"
             >
               <div
-                aria-label="消息操作"
+                aria-label={t("chat.messageActions")}
                 className={`${styles.messageMenu} ${
                   messageMenu.placement === "above"
                     ? styles.messageMenuAbove
@@ -317,11 +319,11 @@ export function ChatMessageList({
               >
                 <button onClick={() => void copyMessageText()} role="menuitem" type="button">
                   <Copy aria-hidden="true" size={18} />
-                  <span>复制</span>
+                  <span>{t("chat.copy")}</span>
                 </button>
                 <button onClick={selectMessageText} role="menuitem" type="button">
                   <ScanText aria-hidden="true" size={18} />
-                  <span>选择文本</span>
+                  <span>{t("chat.selectText")}</span>
                 </button>
               </div>
             </div>,

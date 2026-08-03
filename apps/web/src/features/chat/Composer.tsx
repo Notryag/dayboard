@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, X } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { userFacingApiError } from "@/lib/api/client";
 import { getVoiceCapabilities, transcribeVoice } from "@/features/voice/api";
 import type { RecordedAudio, VoiceCapabilities } from "@/features/voice/types";
@@ -24,13 +25,13 @@ type ComposerProps = {
 
 export type InputMode = "voice" | "text";
 
-function recordingErrorMessage(error: unknown) {
+function recordingErrorMessage(error: unknown, t: (key: string) => string) {
   if (error instanceof DOMException) {
-    if (error.name === "NotAllowedError") return "没有麦克风权限，请在浏览器设置中允许。";
-    if (error.name === "NotFoundError") return "没有检测到可用的麦克风。";
-    if (error.name === "NotReadableError") return "麦克风暂时无法使用，请检查其他应用。";
+    if (error.name === "NotAllowedError") return t("voice.microphonePermission");
+    if (error.name === "NotFoundError") return t("voice.microphoneMissing");
+    if (error.name === "NotReadableError") return t("voice.microphoneBusy");
   }
-  return "无法开始录音，请稍后重试。";
+  return t("voice.recordingFailed");
 }
 
 export function Composer({
@@ -44,6 +45,7 @@ export function Composer({
   onSubmit,
   value,
 }: ComposerProps) {
+  const { t, locale } = useI18n();
   const [capabilities, setCapabilities] = useState<VoiceCapabilities | null>(null);
   const [capabilitiesResolved, setCapabilitiesResolved] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -100,19 +102,19 @@ export function Composer({
           mountedRef.current &&
           !(error instanceof DOMException && error.name === "AbortError")
         ) {
-          setVoiceError(userFacingApiError(error, "语音识别失败，请重新录制。"));
+          setVoiceError(userFacingApiError(error, t("voice.transcriptionFailed"), locale));
         }
       } finally {
         if (uploadControllerRef.current === controller) uploadControllerRef.current = null;
         if (mountedRef.current) setIsTranscribing(false);
       }
     },
-    [onSubmit, value],
+    [locale, onSubmit, t, value],
   );
 
   const handleRecorderError = useCallback((error: unknown) => {
-    setVoiceError(recordingErrorMessage(error));
-  }, []);
+    setVoiceError(recordingErrorMessage(error, t));
+  }, [t]);
 
   const recorder = useVoiceRecorder({
     maxDurationSeconds: capabilities?.max_duration_seconds ?? 60,
@@ -134,11 +136,11 @@ export function Composer({
     ? "transcribing"
     : recorder.status;
   const unavailableReason = !recorder.isSupported
-    ? "当前浏览器不支持语音输入"
+    ? t("voice.browserUnsupported")
     : !capabilitiesResolved
-      ? "正在准备语音输入"
+      ? t("voice.preparing")
       : !capabilities?.available
-        ? "语音输入暂不可用"
+        ? t("voice.unavailable")
         : null;
 
   function cancelTranscription() {
@@ -154,7 +156,7 @@ export function Composer({
           <AlertCircle aria-hidden="true" size={16} />
           <span>{voiceError}</span>
           <button
-            aria-label="关闭提示"
+            aria-label={t("voice.closeNotice")}
             className={styles.dismissButton}
             onClick={() => setVoiceError(null)}
             type="button"

@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronDown, ListTodo, LoaderCircle, RotateCw } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { ScheduleItem } from "./ScheduleItem";
 import type { ScheduleChange, TaskItem } from "./types";
 import type { SchedulePageResource } from "./useSchedulePage";
@@ -21,6 +22,7 @@ export function TaskListSection({
   resource,
   title,
 }: TaskListSectionProps) {
+  const { t } = useI18n();
   const headingId = `${id}-heading`;
   const { cursor, error, items, loadMore, loading, retry } = resource;
 
@@ -32,7 +34,7 @@ export function TaskListSection({
           <h3 id={headingId}>{title}</h3>
         </div>
         {!loading && !error ? (
-          <span>{`${items.length}${cursor ? "+" : ""} 项`}</span>
+          <span>{t("common.items", { count: `${items.length}${cursor ? "+" : ""}` })}</span>
         ) : null}
       </div>
 
@@ -41,14 +43,14 @@ export function TaskListSection({
           <p>{error}</p>
           <button type="button" onClick={retry}>
             <RotateCw size={16} />
-            重试
+            {t("common.retry")}
           </button>
         </div>
       ) : null}
       {loading && !items.length ? (
         <div className={styles.notice} role="status">
           <LoaderCircle className={styles.spinner} size={20} />
-          <p>正在加载待办</p>
+          <p>{t("schedule.loadingTasks")}</p>
         </div>
       ) : null}
       {!loading && !error && !items.length ? <p className={styles.empty}>{emptyText}</p> : null}
@@ -75,7 +77,7 @@ export function TaskListSection({
           type="button"
         >
           {loading ? <LoaderCircle className={styles.spinner} size={16} /> : <ChevronDown size={16} />}
-          {loading ? "正在加载" : "更多待办"}
+          {loading ? t("common.loading") : t("schedule.moreTasks")}
         </button>
       ) : null}
     </section>

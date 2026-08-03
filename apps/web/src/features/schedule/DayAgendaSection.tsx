@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { ChevronDown, Clock3, LoaderCircle, RotateCw } from "lucide-react";
+import { useI18n } from "@/i18n";
 import { formatScheduleTime } from "./date";
 import { ScheduleItem } from "./ScheduleItem";
 import type { CalendarEntry, ScheduleChange, TaskItem } from "./types";
@@ -22,10 +23,11 @@ type AgendaItem =
   | { id: string; kind: "task"; label: string; sortKey: string; task: TaskItem };
 
 function RetryNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { t } = useI18n();
   return (
     <div className={styles.sourceError} role="status">
       <span>{message}</span>
-      <button aria-label="重试" onClick={onRetry} title="重试" type="button">
+      <button aria-label={t("common.retry")} onClick={onRetry} title={t("common.retry")} type="button">
         <RotateCw size={15} />
       </button>
     </div>
@@ -39,17 +41,18 @@ export function DayAgendaSection({
   tasks,
   timezone,
 }: DayAgendaSectionProps) {
+  const { locale, t } = useI18n();
   const items = useMemo<AgendaItem[]>(() => {
     const calendarItems: AgendaItem[] = calendar.items.map((entry) => ({
       entry,
       id: `calendar-${entry.id}`,
       kind: "calendar",
-      label: entry.start_time ? formatScheduleTime(entry.start_time, timezone) : "随时",
+      label: entry.start_time ? formatScheduleTime(entry.start_time, timezone, locale) : t("schedule.anytime"),
       sortKey: entry.start_time ?? `${entry.scheduled_date}T00:00:00`,
     }));
     const taskItems: AgendaItem[] = tasks.items.flatMap((task) =>
       task.due_at
-        ? [{ id: `task-${task.id}`, kind: "task" as const, label: formatScheduleTime(task.due_at, timezone), sortKey: task.due_at, task }]
+        ? [{ id: `task-${task.id}`, kind: "task" as const, label: formatScheduleTime(task.due_at, timezone, locale), sortKey: task.due_at, task }]
         : [],
     );
     return [...calendarItems, ...taskItems].sort((left, right) => {
@@ -57,7 +60,7 @@ export function DayAgendaSection({
       if (timeDifference !== 0) return timeDifference;
       return left.kind.localeCompare(right.kind);
     });
-  }, [calendar.items, tasks.items, timezone]);
+  }, [calendar.items, locale, t, tasks.items, timezone]);
 
   const loadingWithoutItems = !items.length && (calendar.loading || tasks.loading);
   const hasErrors = Boolean(calendar.error || tasks.error);
@@ -72,22 +75,22 @@ export function DayAgendaSection({
       <div className={styles.sectionHeader}>
         <div className={`${styles.sectionTitle} ${styles.agendaSectionTitle}`}>
           <Clock3 aria-hidden="true" size={18} />
-          <h3 id="day-agenda-heading">当天安排</h3>
+          <h3 id="day-agenda-heading">{t("schedule.dayAgenda")}</h3>
         </div>
         {!loadingWithoutItems && !hasErrors ? (
-          <span>{`${items.length}${hasMore ? "+" : ""} 项`}</span>
+          <span>{t("common.items", { count: `${items.length}${hasMore ? "+" : ""}` })}</span>
         ) : null}
       </div>
 
       {loadingWithoutItems ? (
         <div className={styles.notice} role="status">
           <LoaderCircle className={styles.spinner} size={20} />
-          <p>正在加载当天安排</p>
+          <p>{t("schedule.loadingAgenda")}</p>
         </div>
       ) : null}
 
       {!loadingWithoutItems && !items.length && !hasErrors ? (
-        <p className={styles.empty}>这一天还没有安排</p>
+        <p className={styles.empty}>{t("schedule.todayEmpty")}</p>
       ) : null}
 
       {items.length ? (
@@ -128,7 +131,7 @@ export function DayAgendaSection({
           ) : (
             <ChevronDown size={16} />
           )}
-          {calendar.loading ? "正在加载" : "更多日程"}
+          {calendar.loading ? t("common.loading") : t("schedule.moreSchedule")}
         </button>
       ) : null}
       {tasks.cursor ? (
@@ -143,7 +146,7 @@ export function DayAgendaSection({
           ) : (
             <ChevronDown size={16} />
           )}
-          {tasks.loading ? "正在加载" : "更多待办"}
+          {tasks.loading ? t("common.loading") : t("schedule.moreTasks")}
         </button>
       ) : null}
     </section>
