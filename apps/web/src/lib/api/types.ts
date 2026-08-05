@@ -30,4 +30,5 @@ export type TaskItemUpdate = Schemas["TaskItemUpdateRequest"];
 export type TaskSchedulePage = Schemas["SchedulePage_TaskItemView_"];
 export type ThreadCreate = Schemas["ThreadCreateRequest"];
 export type VoiceCapabilities = Schemas["VoiceCapabilities"];
+export type VoiceStartupMetric = Schemas["VoiceStartupMetricRequest"];
 export type VoiceTranscript = Schemas["VoiceTranscript"];

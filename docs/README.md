@@ -40,6 +40,7 @@ implementation that changes them.
 - [agent-acceptance.md](./agent-acceptance.md): targeted live-model acceptance program.
 - [agent-eval.md](./agent-eval.md): 128-case quantitative Chinese scheduling benchmark.
 - [token-usage-diagnostics.md](./token-usage-diagnostics.md): provider usage and cache diagnosis.
+- [voice-latency-diagnostics.md](./voice-latency-diagnostics.md): measured hold-to-recording stages.
 - [agent-token-optimization-history.md](./agent-token-optimization-history.md): append-only token
   optimization measurements.
 - [TODO.md](./TODO.md): active token-efficiency and Northgate budget work.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import type { RecordedAudio } from "./types";
+import type { RecordedAudio, VoiceStartupMetric } from "./types";
 
 type RecorderStatus = "idle" | "requesting" | "recording";
 
@@ -9,7 +9,17 @@ type VoiceRecorderOptions = {
   maxDurationSeconds: number;
   onError: (error: unknown) => void;
   onRecorded: (recording: RecordedAudio) => void;
+  onStartupMeasured: (metric: VoiceStartupMetric) => void;
+  release: string;
   supportedContentTypes: string[];
+};
+
+type StartupAttempt = {
+  measurementId: string;
+  pressedAt: number;
+  recorderReadyAt: number | null;
+  requestStartedAt: number;
+  streamAcquiredAt: number | null;
 };
 
 const recordingFormats = [
@@ -32,6 +42,14 @@ function extensionForMimeType(mimeType: string) {
   return "webm";
 }
 
+function elapsedMs(start: number, end: number) {
+  return Math.round(Math.max(0, end - start) * 100) / 100;
+}
+
+function errorName(error: unknown) {
+  return error instanceof Error ? error.name.slice(0, 80) : "UnknownError";
+}
+
 function subscribeToBrowserCapabilities() {
   return () => undefined;
 }
@@ -47,6 +65,8 @@ export function useVoiceRecorder({
   maxDurationSeconds,
   onError,
   onRecorded,
+  onStartupMeasured,
+  release,
   supportedContentTypes,
 }: VoiceRecorderOptions) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
@@ -67,14 +87,45 @@ export function useVoiceRecorder({
   const discardRef = useRef(false);
   const requestGenerationRef = useRef(0);
   const startedAtRef = useRef(0);
+  const startupAttemptRef = useRef<StartupAttempt | null>(null);
   const mountedRef = useRef(true);
   const onErrorRef = useRef(onError);
   const onRecordedRef = useRef(onRecorded);
+  const onStartupMeasuredRef = useRef(onStartupMeasured);
 
   useEffect(() => {
     onErrorRef.current = onError;
     onRecordedRef.current = onRecorded;
-  }, [onError, onRecorded]);
+    onStartupMeasuredRef.current = onStartupMeasured;
+  }, [onError, onRecorded, onStartupMeasured]);
+
+  const finishStartupMeasurement = useCallback((
+    outcome: VoiceStartupMetric["outcome"],
+    extra: Pick<VoiceStartupMetric, "press_to_recording_ms" | "recorder_start_call_ms">
+      & Partial<Pick<VoiceStartupMetric, "press_to_cancel_ms" | "error_name">>,
+  ) => {
+    const attempt = startupAttemptRef.current;
+    if (!attempt) return;
+    startupAttemptRef.current = null;
+    onStartupMeasuredRef.current({
+      schema_version: 1,
+      measurement_id: attempt.measurementId,
+      release,
+      outcome,
+      press_to_request_ms: elapsedMs(attempt.pressedAt, attempt.requestStartedAt),
+      get_user_media_ms: attempt.streamAcquiredAt === null
+        ? null
+        : elapsedMs(attempt.requestStartedAt, attempt.streamAcquiredAt),
+      stream_to_recorder_ready_ms:
+        attempt.streamAcquiredAt === null || attempt.recorderReadyAt === null
+          ? null
+          : elapsedMs(attempt.streamAcquiredAt, attempt.recorderReadyAt),
+      recorder_start_call_ms: extra.recorder_start_call_ms,
+      press_to_recording_ms: extra.press_to_recording_ms,
+      press_to_cancel_ms: extra.press_to_cancel_ms ?? null,
+      error_name: extra.error_name ?? null,
+    });
+  }, [release]);
 
   const clearTimers = useCallback(() => {
     if (intervalRef.current !== null) window.clearInterval(intervalRef.current);
@@ -121,6 +172,14 @@ export function useVoiceRecorder({
   }, []);
 
   const cancelRecording = useCallback(() => {
+    const cancelledAt = performance.now();
+    finishStartupMeasurement("cancelled", {
+      press_to_cancel_ms: startupAttemptRef.current
+        ? elapsedMs(startupAttemptRef.current.pressedAt, cancelledAt)
+        : undefined,
+      press_to_recording_ms: null,
+      recorder_start_call_ms: null,
+    });
     discardRef.current = true;
     requestGenerationRef.current += 1;
     const recorder = recorderRef.current;
@@ -133,10 +192,18 @@ export function useVoiceRecorder({
       chunksRef.current = [];
       releaseMedia();
     }
-  }, [releaseMedia]);
+  }, [finishStartupMeasurement, releaseMedia]);
 
-  const startRecording = useCallback(async () => {
+  const startRecording = useCallback(async (pressedAt = performance.now()) => {
     if (!isSupported || status !== "idle") return;
+    const requestStartedAt = performance.now();
+    startupAttemptRef.current = {
+      measurementId: crypto.randomUUID(),
+      pressedAt,
+      recorderReadyAt: null,
+      requestStartedAt,
+      streamAcquiredAt: null,
+    };
     setStatus("requesting");
     setElapsedSeconds(0);
     setLevel(0);
@@ -155,6 +222,10 @@ export function useVoiceRecorder({
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
+      }
+      const streamAcquiredAt = performance.now();
+      if (startupAttemptRef.current) {
+        startupAttemptRef.current.streamAcquiredAt = streamAcquiredAt;
       }
       streamRef.current = stream;
       const allowedTypes = new Set(supportedContentTypes.map(baseContentType));
@@ -199,7 +270,18 @@ export function useVoiceRecorder({
         });
       };
 
+      const recorderReadyAt = performance.now();
+      if (startupAttemptRef.current) {
+        startupAttemptRef.current.recorderReadyAt = recorderReadyAt;
+      }
       recorder.start(250);
+      const recordingAt = performance.now();
+      finishStartupMeasurement("recording", {
+        press_to_recording_ms: startupAttemptRef.current
+          ? elapsedMs(startupAttemptRef.current.pressedAt, recordingAt)
+          : null,
+        recorder_start_call_ms: elapsedMs(recorderReadyAt, recordingAt),
+      });
       startedAtRef.current = performance.now();
       setStatus("recording");
       try {
@@ -213,6 +295,11 @@ export function useVoiceRecorder({
       }, 250);
       timeoutRef.current = window.setTimeout(stopRecording, maxDurationSeconds * 1000);
     } catch (error) {
+      finishStartupMeasurement("failed", {
+        error_name: errorName(error),
+        press_to_recording_ms: null,
+        recorder_start_call_ms: null,
+      });
       if (requestGeneration !== requestGenerationRef.current) return;
       releaseMedia();
       recorderRef.current = null;
@@ -222,6 +309,7 @@ export function useVoiceRecorder({
   }, [
     isSupported,
     maxDurationSeconds,
+    finishStartupMeasurement,
     monitorLevel,
     releaseMedia,
     status,

@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
@@ -36,6 +38,40 @@ class SuccessfulSpeechProvider:
             confidence=0.96,
             provider_request_id="provider-request-1",
         )
+
+
+async def test_voice_startup_metric_is_logged_without_product_persistence(
+    api_app: FastAPI,
+) -> None:
+    payload = {
+        "schema_version": 1,
+        "measurement_id": "019cc3dd-1e0f-7bca-aa99-028548ec7550",
+        "release": "v0.3.28",
+        "outcome": "recording",
+        "press_to_request_ms": 1.25,
+        "get_user_media_ms": 184.5,
+        "stream_to_recorder_ready_ms": 3.75,
+        "recorder_start_call_ms": 0.4,
+        "press_to_recording_ms": 189.9,
+        "press_to_cancel_ms": None,
+        "error_name": None,
+    }
+    with patch("dayboard.api.routes.logger") as voice_logger:
+        async with AsyncClient(
+            transport=ASGITransport(app=api_app),
+            base_url="http://test",
+            headers={"User-Agent": "Dayboard metric test"},
+        ) as client:
+            response = await client.post("/api/voice/metrics/startup", json=payload)
+
+    assert response.status_code == 204
+    voice_logger.info.assert_called_once()
+    event, = voice_logger.info.call_args.args
+    fields = voice_logger.info.call_args.kwargs
+    assert event == "dayboard.voice.startup_measured"
+    assert fields["user_agent"] == "Dayboard metric test"
+    assert fields["release"] == "v0.3.28"
+    assert fields["get_user_media_ms"] == 184.5
 
 
 async def test_voice_upload_returns_editable_transcript_and_persists_metadata(

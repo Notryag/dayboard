@@ -209,6 +209,10 @@ export async function installApiFixture(
         supported_content_types: ["audio/webm"],
       });
     }
+    if (path === "/api/voice/metrics/startup" && method === "POST") {
+      await route.fulfill({ headers: corsHeaders(), status: 204 });
+      return;
+    }
     if (path === "/api/voice/transcriptions" && method === "POST") {
       return json(route, {
         id: "transcript-1",

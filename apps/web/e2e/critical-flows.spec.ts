@@ -439,6 +439,14 @@ test("fixed audio is transcribed and submitted without a real microphone", async
   const upload = state.requests.find((request) => request.path === "/api/voice/transcriptions");
   expect(upload?.method).toBe("POST");
   expect(String(upload?.body)).toContain("command-");
+  await expect.poll(() => state.requests.some(
+    (request) => request.path === "/api/voice/metrics/startup",
+  )).toBeTruthy();
+  const startupMetric = state.requests.find(
+    (request) => request.path === "/api/voice/metrics/startup",
+  )?.body as Record<string, unknown>;
+  expect(startupMetric.outcome).toBe("recording");
+  expect(startupMetric.press_to_recording_ms).toEqual(expect.any(Number));
 });
 
 test("voice gesture cancels immediately while requesting and tracks the cancel target", async ({ page }) => {
@@ -527,6 +535,13 @@ test("voice gesture cancels immediately while requesting and tracks the cancel t
   await page.mouse.up();
   await expect(idleButton).toBeVisible();
   expect(state.requests.some((request) => request.path === "/api/voice/transcriptions")).toBeFalsy();
+  await expect.poll(() => state.requests.filter(
+    (request) => request.path === "/api/voice/metrics/startup",
+  ).length).toBe(2);
+  const outcomes = state.requests
+    .filter((request) => request.path === "/api/voice/metrics/startup")
+    .map((request) => (request.body as Record<string, unknown>).outcome);
+  expect(outcomes).toEqual(["cancelled", "recording"]);
 });
 
 test("unread reminder opens and focuses its schedule item", async ({ page }) => {

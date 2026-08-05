@@ -446,6 +446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/metrics/startup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Voice Startup Metric */
+        post: operations["record_voice_startup_metric_api_voice_metrics_startup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voice/transcriptions": {
         parameters: {
             query?: never;
@@ -1318,6 +1335,41 @@ export interface components {
             /** Supported Content Types */
             supported_content_types: string[];
         };
+        /** VoiceStartupMetricRequest */
+        VoiceStartupMetricRequest: {
+            /**
+             * Schema Version
+             * @default 1
+             * @constant
+             */
+            schema_version: 1;
+            /**
+             * Measurement Id
+             * Format: uuid
+             */
+            measurement_id: string;
+            /** Release */
+            release: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "recording" | "cancelled" | "failed";
+            /** Press To Request Ms */
+            press_to_request_ms: number;
+            /** Get User Media Ms */
+            get_user_media_ms?: number | null;
+            /** Stream To Recorder Ready Ms */
+            stream_to_recorder_ready_ms?: number | null;
+            /** Recorder Start Call Ms */
+            recorder_start_call_ms?: number | null;
+            /** Press To Recording Ms */
+            press_to_recording_ms?: number | null;
+            /** Press To Cancel Ms */
+            press_to_cancel_ms?: number | null;
+            /** Error Name */
+            error_name?: string | null;
+        };
         /** VoiceTranscript */
         VoiceTranscript: {
             /**
@@ -2158,6 +2210,37 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ClarificationConversationState"] | null;
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_voice_startup_metric_api_voice_metrics_startup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceStartupMetricRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

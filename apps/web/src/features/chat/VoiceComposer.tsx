@@ -16,7 +16,7 @@ type VoiceComposerProps = {
   maxDurationSeconds: number;
   onCancelRecording: () => void;
   onCancelTranscription: () => void;
-  onStartRecording: () => Promise<void>;
+  onStartRecording: (pressedAt: number) => Promise<void>;
   onStopRecording: () => void;
   onSwitchToText: () => void;
   status: VoiceComposerStatus;
@@ -120,13 +120,13 @@ export function VoiceComposer({
     else onStopRecording();
   }
 
-  async function beginRecording() {
+  async function beginRecording(pressedAt = performance.now()) {
     if (disabled || status !== "idle" || activeRef.current) return;
     activeRef.current = true;
     startResolvedRef.current = false;
     cancelIntentRef.current = false;
     setCancelIntent(false);
-    await onStartRecording();
+    await onStartRecording(pressedAt);
     startResolvedRef.current = true;
   }
 
@@ -237,7 +237,7 @@ export function VoiceComposer({
         onKeyDown={(event) => {
           if ((event.key === " " || event.key === "Enter") && !event.repeat) {
             event.preventDefault();
-            void beginRecording();
+            void beginRecording(performance.now());
           }
         }}
         onKeyUp={(event) => {
@@ -247,6 +247,7 @@ export function VoiceComposer({
           }
         }}
         onPointerDown={(event) => {
+          const pressedAt = performance.now();
           if (event.button !== 0 || disabled || status !== "idle") return;
           event.preventDefault();
           pointerIdRef.current = event.pointerId;
@@ -257,7 +258,7 @@ export function VoiceComposer({
           } catch {
             // Window-level tracking covers embedded browsers that reject pointer capture.
           }
-          void beginRecording();
+          void beginRecording(pressedAt);
         }}
         title={status === "idle" ? primaryLabel : undefined}
         type="button"

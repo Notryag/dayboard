@@ -1,5 +1,10 @@
 import { apiClient, requireApiData } from "@/lib/api/typedClient";
-import type { RecordedAudio, VoiceCapabilities, VoiceTranscript } from "./types";
+import type {
+  RecordedAudio,
+  VoiceCapabilities,
+  VoiceStartupMetric,
+  VoiceTranscript,
+} from "./types";
 
 export async function getVoiceCapabilities(signal?: AbortSignal): Promise<VoiceCapabilities> {
   const { data } = await apiClient.GET("/api/voice/capabilities", { signal });
@@ -20,4 +25,8 @@ export async function transcribeVoice(
     signal,
   });
   return requireApiData(data);
+}
+
+export async function reportVoiceStartupMetric(metric: VoiceStartupMetric): Promise<void> {
+  await apiClient.POST("/api/voice/metrics/startup", { body: metric });
 }

@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
 from fastapi import HTTPException
 from fastapi import Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from north import RuntimeStreamEvent
 from north.runtime import END_SENTINEL, HEARTBEAT_SENTINEL, REPLAY_GAP_EVENT, StreamBridge
 from sqlalchemy import text
@@ -102,6 +102,20 @@ class ThreadCreateRequest(BaseModel):
 
 class ScheduleMutationRequest(BaseModel):
     expected_row_version: int = Field(ge=1)
+
+
+class VoiceStartupMetricRequest(BaseModel):
+    schema_version: Literal[1] = 1
+    measurement_id: UUID
+    release: str = Field(min_length=1, max_length=64)
+    outcome: Literal["recording", "cancelled", "failed"]
+    press_to_request_ms: float = Field(ge=0, le=120_000)
+    get_user_media_ms: float | None = Field(default=None, ge=0, le=120_000)
+    stream_to_recorder_ready_ms: float | None = Field(default=None, ge=0, le=120_000)
+    recorder_start_call_ms: float | None = Field(default=None, ge=0, le=120_000)
+    press_to_recording_ms: float | None = Field(default=None, ge=0, le=120_000)
+    press_to_cancel_ms: float | None = Field(default=None, ge=0, le=120_000)
+    error_name: str | None = Field(default=None, max_length=80)
 
 
 class CalendarEntryUpdateRequest(ScheduleMutationRequest):
@@ -775,6 +789,22 @@ async def get_thread_state(
             code="THREAD_NOT_FOUND",
             message="Conversation thread not found",
         ) from exc
+
+
+@router.post("/api/voice/metrics/startup", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit(lambda: get_settings().rate_limit_voice)
+async def record_voice_startup_metric(
+    request: Request,
+    body: VoiceStartupMetricRequest,
+    user_context: UserContext = Depends(get_user_context),
+) -> Response:
+    logger.info(
+        "dayboard.voice.startup_measured",
+        user_id=str(user_context.user_id),
+        user_agent=request.headers.get("user-agent", "")[:500],
+        **body.model_dump(mode="json"),
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

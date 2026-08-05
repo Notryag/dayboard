@@ -4,8 +4,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import { userFacingApiError } from "@/lib/api/client";
-import { getVoiceCapabilities, transcribeVoice } from "@/features/voice/api";
-import type { RecordedAudio, VoiceCapabilities } from "@/features/voice/types";
+import {
+  getVoiceCapabilities,
+  reportVoiceStartupMetric,
+  transcribeVoice,
+} from "@/features/voice/api";
+import type {
+  RecordedAudio,
+  VoiceCapabilities,
+  VoiceStartupMetric,
+} from "@/features/voice/types";
 import { useVoiceRecorder } from "@/features/voice/useVoiceRecorder";
 import { TextComposer } from "./TextComposer";
 import { VoiceComposer, type VoiceComposerStatus } from "./VoiceComposer";
@@ -24,6 +32,7 @@ type ComposerProps = {
 };
 
 export type InputMode = "voice" | "text";
+const releaseVersion = process.env.NEXT_PUBLIC_DAYBOARD_RELEASE?.trim() || "dev";
 
 function recordingErrorMessage(error: unknown, t: (key: string) => string) {
   if (error instanceof DOMException) {
@@ -116,10 +125,16 @@ export function Composer({
     setVoiceError(recordingErrorMessage(error, t));
   }, [t]);
 
+  const handleStartupMeasured = useCallback((metric: VoiceStartupMetric) => {
+    void reportVoiceStartupMetric(metric).catch(() => undefined);
+  }, []);
+
   const recorder = useVoiceRecorder({
     maxDurationSeconds: capabilities?.max_duration_seconds ?? 60,
     onError: handleRecorderError,
     onRecorded: handleRecorded,
+    onStartupMeasured: handleStartupMeasured,
+    release: releaseVersion,
     supportedContentTypes: capabilities?.supported_content_types ?? [],
   });
 
@@ -174,9 +189,9 @@ export function Composer({
           maxDurationSeconds={capabilities?.max_duration_seconds ?? 60}
           onCancelRecording={recorder.cancelRecording}
           onCancelTranscription={cancelTranscription}
-          onStartRecording={async () => {
+          onStartRecording={async (pressedAt) => {
             setVoiceError(null);
-            await recorder.startRecording();
+            await recorder.startRecording(pressedAt);
           }}
           onStopRecording={recorder.stopRecording}
           onSwitchToText={showTextInput}
