@@ -32,6 +32,7 @@ const themeOptions: Array<{
 ];
 
 const themeChangeEvent = "dayboard-theme-change";
+const releaseVersion = process.env.NEXT_PUBLIC_DAYBOARD_RELEASE?.trim() || "dev";
 
 function getThemePreference(): ThemePreference {
   const storedTheme = localStorage.getItem("dayboard-theme");
@@ -165,6 +166,10 @@ export function ScheduleSettingsDrawer({
           </section>
 
           <div className={styles.drawerActions}>
+            <div className={styles.releaseInfo}>
+              <span>{t("common.version")}</span>
+              <code>{releaseVersion}</code>
+            </div>
             <Button className={styles.logoutButton} onClick={onLogout} type="button" variant="destructive">
               <LogOut aria-hidden="true" size={18} />
               {t("common.logout")}

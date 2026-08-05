@@ -191,8 +191,24 @@
 
 .drawerActions {
   margin-top: auto;
+  display: grid;
+  gap: var(--space-3);
   padding: var(--space-4) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
   border-top: var(--border-width) solid var(--dayboard-color-border);
+}
+
+.releaseInfo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--dayboard-color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.releaseInfo code {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 .logoutButton {

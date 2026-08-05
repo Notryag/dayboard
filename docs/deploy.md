@@ -137,6 +137,10 @@ FastAPI、arq 或 Next.js 进程。
 5. 备份 PostgreSQL，使用新 API 镜像执行迁移；
 6. 替换 API、Worker、Web 容器并执行健康检查。
 
+Web 镜像构建时会把发布标签注入 `NEXT_PUBLIC_DAYBOARD_RELEASE`，设置抽屉据此显示当前版本。
+本地或手动 Compose 构建默认显示 `dev`；需要标记手动构建时设置
+`DAYBOARD_RELEASE_VERSION`，不要在组件中手写版本号。
+
 自动部署会先验证版本标签确实指向 workflow 构建的 commit，再让服务器仓库以 detached HEAD
 检出该不可变 commit。部署不依赖构建期间 `main` 是否继续前进，因此主线上的后续提交不会
 使一个已经完成质量检查和镜像构建的版本失败。服务器工作树表示当前发布版本，不表示实时

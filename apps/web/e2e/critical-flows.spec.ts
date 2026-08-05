@@ -64,12 +64,15 @@ test("language selection updates the UI and survives a reload", async ({ page })
 
   await expect(page).toHaveTitle(/Dayboard/);
   await page.getByRole("button", { name: "设置" }).click();
+  await expect(page.getByText("版本")).toBeVisible();
+  await expect(page.getByText("dev", { exact: true })).toBeVisible();
   const language = page.getByLabel("语言");
   await expect(language).toHaveValue("zh-CN");
   await language.selectOption("en-US");
 
   await expect(page.locator("html")).toHaveAttribute("lang", "en-US");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText("Version")).toBeVisible();
   await expect(page.getByLabel("Language")).toHaveValue("en-US");
   await expect(page.getByRole("button", { name: "Log out" })).toBeVisible();
 

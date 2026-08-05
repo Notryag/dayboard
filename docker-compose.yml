@@ -95,6 +95,7 @@ services:
       args:
         NEXT_PUBLIC_DAYBOARD_API_BASE_URL: ""
         NEXT_PUBLIC_DAYBOARD_BASE_PATH: ""
+        NEXT_PUBLIC_DAYBOARD_RELEASE: ${DAYBOARD_RELEASE_VERSION:-dev}
     restart: unless-stopped
     environment:
       NODE_ENV: production
