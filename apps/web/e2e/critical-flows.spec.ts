@@ -438,6 +438,94 @@ test("fixed audio is transcribed and submitted without a real microphone", async
   expect(String(upload?.body)).toContain("command-");
 });
 
+test("voice gesture cancels immediately while requesting and tracks the cancel target", async ({ page }) => {
+  await page.addInitScript(() => {
+    const fixedAudio = new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]);
+    const stream = { getTracks: () => [{ stop: () => undefined }] };
+    let resolveStream: ((value: typeof stream) => void) | null = null;
+    let requestCount = 0;
+    Object.assign(window, {
+      resolveVoiceStream: () => resolveStream?.(stream),
+    });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: () => {
+          requestCount += 1;
+          if (requestCount > 1) return Promise.resolve(stream);
+          return new Promise<typeof stream>((resolve) => {
+            resolveStream = resolve;
+          });
+        },
+      },
+    });
+
+    class FixedAudioRecorder {
+      static isTypeSupported() { return true; }
+      mimeType = "audio/webm";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onstop: (() => void) | null = null;
+      state = "inactive";
+      start() { this.state = "recording"; }
+      stop() {
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob([fixedAudio], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    }
+    Object.defineProperty(window, "MediaRecorder", {
+      configurable: true,
+      value: FixedAudioRecorder,
+    });
+  });
+
+  const state = await installApiFixture(page, { voiceAvailable: true });
+  await page.goto("/dayboard");
+
+  const idleButton = page.getByRole("button", { name: "按住说话" });
+  await expect(idleButton).toBeEnabled();
+  const initialButtonBounds = await idleButton.boundingBox();
+  expect(initialButtonBounds).not.toBeNull();
+  await page.mouse.move(
+    initialButtonBounds!.x + initialButtonBounds!.width / 2,
+    initialButtonBounds!.y + initialButtonBounds!.height / 2,
+  );
+  await page.mouse.down();
+  const requestingButton = page.getByRole("button", { name: "正在连接麦克风" });
+  await expect(requestingButton).toBeVisible();
+  await expect(page.getByText("移到这里取消")).toBeVisible();
+  await page.mouse.up();
+  await expect(idleButton).toBeVisible();
+  await page.evaluate(() => (window as typeof window & { resolveVoiceStream: () => void }).resolveVoiceStream());
+
+  await page.mouse.down();
+  const recordingButton = page.getByRole("button", { name: /松开发送/ });
+  await expect(recordingButton).toBeVisible();
+  const cancelTarget = page.getByText("移到这里取消").locator("..");
+  const cancelBounds = await cancelTarget.boundingBox();
+  const buttonBounds = await recordingButton.boundingBox();
+  expect(cancelBounds).not.toBeNull();
+  expect(buttonBounds).not.toBeNull();
+  await page.mouse.move(
+    cancelBounds!.x + cancelBounds!.width / 2,
+    cancelBounds!.y + cancelBounds!.height / 2,
+  );
+  await expect(page.getByRole("button", { name: "松开取消" })).toBeVisible();
+  await page.mouse.move(
+    buttonBounds!.x + buttonBounds!.width / 2,
+    buttonBounds!.y + buttonBounds!.height / 2,
+  );
+  await expect(page.getByRole("button", { name: /松开发送/ })).toBeVisible();
+  await page.mouse.move(
+    cancelBounds!.x + cancelBounds!.width / 2,
+    cancelBounds!.y + cancelBounds!.height / 2,
+  );
+  await page.mouse.up();
+  await expect(idleButton).toBeVisible();
+  expect(state.requests.some((request) => request.path === "/api/voice/transcriptions")).toBeFalsy();
+});
+
 test("unread reminder opens and focuses its schedule item", async ({ page }) => {
   const entry = calendarEntry({ title: "产品评审" });
   const state = await installApiFixture(page, {

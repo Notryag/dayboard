@@ -7,6 +7,7 @@
   --composer-level-bar-height: 16px;
   --composer-level-gap: 2px;
   --composer-level-motion: 80ms;
+  --composer-voice-feedback-motion: 70ms;
   --composer-error-min-height: 36px;
   --composer-error-icon-column: 18px;
   --composer-error-action-size: 32px;
@@ -65,12 +66,12 @@
   pointer-events: none;
   transform: translateX(-50%);
   transform-origin: center;
-  animation: voice-cancel-target-in var(--motion-fast) ease-out both;
+  animation: voice-cancel-target-in var(--composer-voice-feedback-motion) ease-out both;
   transition:
-    color var(--motion-fast) ease,
-    border-color var(--motion-fast) ease,
-    background var(--motion-fast) ease,
-    transform var(--motion-fast) ease;
+    color var(--composer-voice-feedback-motion) ease,
+    border-color var(--composer-voice-feedback-motion) ease,
+    background var(--composer-voice-feedback-motion) ease,
+    transform var(--composer-voice-feedback-motion) ease;
 }
 
 .voiceCancelTargetActive {
@@ -90,8 +91,8 @@
   color: var(--dayboard-color-danger);
   background: var(--dayboard-color-danger-surface);
   transition:
-    color var(--motion-fast) ease,
-    background var(--motion-fast) ease;
+    color var(--composer-voice-feedback-motion) ease,
+    background var(--composer-voice-feedback-motion) ease;
 }
 
 .voiceCancelTargetActive .voiceCancelIcon {
@@ -210,9 +211,9 @@
   user-select: none;
   -webkit-user-select: none;
   transition:
-    background var(--motion-fast) ease,
-    transform var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease;
+    background var(--composer-voice-feedback-motion) ease,
+    transform var(--composer-voice-feedback-motion) ease,
+    box-shadow var(--composer-voice-feedback-motion) ease;
 }
 
 .voiceHoldButton:hover:not(:disabled) {

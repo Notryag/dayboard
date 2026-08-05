@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Keyboard, LoaderCircle, X } from "lucide-react";
 import { useI18n } from "@/i18n";
 import styles from "./Composer.module.css";
@@ -50,12 +50,13 @@ export function VoiceComposer({
   const activeRef = useRef(false);
   const cancelIntentRef = useRef(false);
   const cancelTargetRef = useRef<HTMLDivElement>(null);
+  const lastPointerPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerCleanupRef = useRef<(() => void) | null>(null);
   const pointerIdRef = useRef<number | null>(null);
   const previousStatusRef = useRef(status);
   const startResolvedRef = useRef(false);
-  const pendingReleaseRef = useRef<ReleaseAction | null>(null);
 
-  function isInsideCancelTarget(clientX: number, clientY: number) {
+  const isInsideCancelTarget = useCallback((clientX: number, clientY: number) => {
     const bounds = cancelTargetRef.current?.getBoundingClientRect();
     if (!bounds) return false;
     const padding = cancelIntentRef.current ? CANCEL_TARGET_EXIT_PADDING_PX : 0;
@@ -65,14 +66,25 @@ export function VoiceComposer({
       clientY >= bounds.top - padding &&
       clientY <= bounds.bottom + padding
     );
-  }
+  }, []);
 
-  function updateCancelIntent(clientX: number, clientY: number) {
+  const updateCancelIntent = useCallback((clientX: number, clientY: number) => {
+    lastPointerPositionRef.current = { x: clientX, y: clientY };
     const nextIntent = isInsideCancelTarget(clientX, clientY);
     if (cancelIntentRef.current === nextIntent) return;
     cancelIntentRef.current = nextIntent;
     setCancelIntent(nextIntent);
-  }
+  }, [isInsideCancelTarget]);
+
+  useEffect(() => {
+    if (status !== "requesting" && status !== "recording") return;
+    const position = lastPointerPositionRef.current;
+    if (!position) return;
+    const frame = window.requestAnimationFrame(() => {
+      updateCancelIntent(position.x, position.y);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [status, updateCancelIntent]);
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current;
@@ -83,14 +95,23 @@ export function VoiceComposer({
 
     activeRef.current = false;
     cancelIntentRef.current = false;
-    pendingReleaseRef.current = null;
+    pointerCleanupRef.current?.();
+    pointerCleanupRef.current = null;
     pointerIdRef.current = null;
+    lastPointerPositionRef.current = null;
     startResolvedRef.current = false;
     setCancelIntent(false);
   }, [status]);
 
+  useEffect(() => () => pointerCleanupRef.current?.(), []);
+
+  function stopPointerTracking() {
+    pointerCleanupRef.current?.();
+    pointerCleanupRef.current = null;
+  }
+
   function performRelease(action: ReleaseAction) {
-    pendingReleaseRef.current = null;
+    stopPointerTracking();
     activeRef.current = false;
     startResolvedRef.current = false;
     cancelIntentRef.current = false;
@@ -103,14 +124,10 @@ export function VoiceComposer({
     if (disabled || status !== "idle" || activeRef.current) return;
     activeRef.current = true;
     startResolvedRef.current = false;
-    pendingReleaseRef.current = null;
     cancelIntentRef.current = false;
     setCancelIntent(false);
     await onStartRecording();
     startResolvedRef.current = true;
-    if (!activeRef.current && pendingReleaseRef.current) {
-      performRelease(pendingReleaseRef.current);
-    }
   }
 
   function finishRecording(action: ReleaseAction) {
@@ -118,7 +135,43 @@ export function VoiceComposer({
     activeRef.current = false;
     const resolvedAction = cancelIntentRef.current ? "cancel" : action;
     if (startResolvedRef.current) performRelease(resolvedAction);
-    else pendingReleaseRef.current = "cancel";
+    else {
+      cancelIntentRef.current = false;
+      setCancelIntent(false);
+      onCancelRecording();
+    }
+  }
+
+  function beginPointerTracking() {
+    stopPointerTracking();
+    const handleMove = (event: PointerEvent) => {
+      if (pointerIdRef.current !== event.pointerId || !activeRef.current) return;
+      event.preventDefault();
+      const samples = event.getCoalescedEvents?.();
+      const latest = samples?.[samples.length - 1] ?? event;
+      updateCancelIntent(latest.clientX, latest.clientY);
+    };
+    const handleUp = (event: PointerEvent) => {
+      if (pointerIdRef.current !== event.pointerId) return;
+      updateCancelIntent(event.clientX, event.clientY);
+      pointerIdRef.current = null;
+      stopPointerTracking();
+      finishRecording("stop");
+    };
+    const handleCancel = (event: PointerEvent) => {
+      if (pointerIdRef.current !== event.pointerId) return;
+      pointerIdRef.current = null;
+      stopPointerTracking();
+      finishRecording("cancel");
+    };
+    window.addEventListener("pointermove", handleMove, { passive: false });
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
+    pointerCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
+    };
   }
 
   const primaryLabel = unavailableReason ?? t("voice.holdToTalk");
@@ -150,7 +203,7 @@ export function VoiceComposer({
         {controlLabel}
       </span>
 
-      {status === "recording" ? (
+      {status === "requesting" || status === "recording" ? (
         <div
           aria-hidden="true"
           className={`${styles.voiceCancelTarget} ${
@@ -176,7 +229,10 @@ export function VoiceComposer({
             : ""
         } ${cancelIntent ? styles.voiceHoldButtonCancel : ""}`}
         disabled={(status === "idle" && disabled) || status === "transcribing"}
-        onBlur={() => finishRecording("cancel")}
+        onBlur={() => {
+          stopPointerTracking();
+          finishRecording("cancel");
+        }}
         onContextMenu={(event) => event.preventDefault()}
         onKeyDown={(event) => {
           if ((event.key === " " || event.key === "Enter") && !event.repeat) {
@@ -194,23 +250,14 @@ export function VoiceComposer({
           if (event.button !== 0 || disabled || status !== "idle") return;
           event.preventDefault();
           pointerIdRef.current = event.pointerId;
-          event.currentTarget.setPointerCapture(event.pointerId);
+          lastPointerPositionRef.current = { x: event.clientX, y: event.clientY };
+          beginPointerTracking();
+          try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+          } catch {
+            // Window-level tracking covers embedded browsers that reject pointer capture.
+          }
           void beginRecording();
-        }}
-        onPointerMove={(event) => {
-          if (pointerIdRef.current !== event.pointerId || !activeRef.current) return;
-          updateCancelIntent(event.clientX, event.clientY);
-        }}
-        onPointerUp={(event) => {
-          if (pointerIdRef.current !== event.pointerId) return;
-          updateCancelIntent(event.clientX, event.clientY);
-          pointerIdRef.current = null;
-          finishRecording("stop");
-        }}
-        onPointerCancel={(event) => {
-          if (pointerIdRef.current !== event.pointerId) return;
-          pointerIdRef.current = null;
-          finishRecording("cancel");
         }}
         title={status === "idle" ? primaryLabel : undefined}
         type="button"

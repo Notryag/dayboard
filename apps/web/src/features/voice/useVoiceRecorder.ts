@@ -65,6 +65,7 @@ export function useVoiceRecorder({
   const timeoutRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
+  const requestGenerationRef = useRef(0);
   const startedAtRef = useRef(0);
   const mountedRef = useRef(true);
   const onErrorRef = useRef(onError);
@@ -121,8 +122,18 @@ export function useVoiceRecorder({
 
   const cancelRecording = useCallback(() => {
     discardRef.current = true;
-    stopRecording();
-  }, [stopRecording]);
+    requestGenerationRef.current += 1;
+    const recorder = recorderRef.current;
+    setStatus("idle");
+    setElapsedSeconds(0);
+    setLevel(0);
+    if (recorder?.state === "recording") recorder.stop();
+    else {
+      recorderRef.current = null;
+      chunksRef.current = [];
+      releaseMedia();
+    }
+  }, [releaseMedia]);
 
   const startRecording = useCallback(async () => {
     if (!isSupported || status !== "idle") return;
@@ -130,6 +141,7 @@ export function useVoiceRecorder({
     setElapsedSeconds(0);
     setLevel(0);
     discardRef.current = false;
+    const requestGeneration = ++requestGenerationRef.current;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -140,7 +152,7 @@ export function useVoiceRecorder({
         },
         video: false,
       });
-      if (!mountedRef.current) {
+      if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) {
         stream.getTracks().forEach((track) => track.stop());
         return;
       }
@@ -201,6 +213,7 @@ export function useVoiceRecorder({
       }, 250);
       timeoutRef.current = window.setTimeout(stopRecording, maxDurationSeconds * 1000);
     } catch (error) {
+      if (requestGeneration !== requestGenerationRef.current) return;
       releaseMedia();
       recorderRef.current = null;
       if (mountedRef.current) setStatus("idle");
@@ -220,6 +233,7 @@ export function useVoiceRecorder({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      requestGenerationRef.current += 1;
       discardRef.current = true;
       const recorder = recorderRef.current;
       if (recorder?.state === "recording") recorder.stop();
