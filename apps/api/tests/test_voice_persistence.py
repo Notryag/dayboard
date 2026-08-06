@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_platform.core import UserContext
 
 from dayboard.app.voice_ports import AudioInput, SpeechTranscriptionResult
-from dayboard.composition.voice import build_voice_services
+from dayboard.composition.voice import build_voice_service
 from dayboard.db.session import SessionLocal
 from dayboard.domain.voice import VoiceTranscriptStatus
 
@@ -25,7 +25,7 @@ async def test_voice_processing_is_visible_during_external_provider_call(
             nonlocal observed_status
             del audio, vocabulary
             async with SessionLocal() as observation_session:
-                visible = await build_voice_services(observation_session).transcriptions.get(
+                visible = await build_voice_service(observation_session).get(
                     user_context, transcript_id
                 )
                 assert visible is not None
@@ -37,9 +37,9 @@ async def test_voice_processing_is_visible_during_external_provider_call(
                 language=language,
             )
 
-    scope = build_voice_services(db_session)
+    service = build_voice_service(db_session)
     transcript_id: UUID
-    original_create = scope.unit_of_work.transcripts.create
+    original_create = service.unit_of_work.transcripts.create
 
     async def capture_create(*args, **kwargs):
         nonlocal transcript_id
@@ -47,8 +47,8 @@ async def test_voice_processing_is_visible_during_external_provider_call(
         transcript_id = created.id
         return created
 
-    scope.unit_of_work.transcripts.create = capture_create  # type: ignore[method-assign]
-    completed = await scope.transcriptions.transcribe(
+    service.unit_of_work.transcripts.create = capture_create  # type: ignore[method-assign]
+    completed = await service.transcribe(
         user_context,
         ObservingProvider(),
         AudioInput(content=b"audio", content_type="audio/webm"),
@@ -62,14 +62,14 @@ async def test_voice_repository_transitions_fail_closed_across_owners(
     db_session: AsyncSession,
     user_context: UserContext,
 ) -> None:
-    scope = build_voice_services(db_session)
-    created = await scope.unit_of_work.transcripts.create(
+    service = build_voice_service(db_session)
+    created = await service.unit_of_work.transcripts.create(
         user_context,
         filename=None,
         content_type="audio/webm",
         audio_size_bytes=5,
     )
-    await scope.unit_of_work.commit()
+    await service.unit_of_work.commit()
     other_context = UserContext(
         user_id=uuid4(),
         timezone=user_context.timezone,
@@ -81,17 +81,17 @@ async def test_voice_repository_transitions_fail_closed_across_owners(
         model="fake-model",
     )
 
-    assert await scope.unit_of_work.transcripts.get(other_context, created.id) is None
+    assert await service.unit_of_work.transcripts.get(other_context, created.id) is None
     assert (
-        await scope.unit_of_work.transcripts.complete_processing(
+        await service.unit_of_work.transcripts.complete_processing(
             other_context,
             created.id,
             result,
         )
         is None
     )
-    await scope.unit_of_work.rollback()
+    await service.unit_of_work.rollback()
 
-    persisted = await scope.transcriptions.get(user_context, created.id)
+    persisted = await service.get(user_context, created.id)
     assert persisted is not None
     assert persisted.status is VoiceTranscriptStatus.processing

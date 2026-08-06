@@ -67,9 +67,5 @@ def build_run_service(session: AsyncSession) -> AgentRunService:
     return AgentRunService(build_platform_unit_of_work(session))
 
 
-def build_command_submission_service(session: AsyncSession) -> CommandSubmissionService:
-    return CommandSubmissionService(build_platform_unit_of_work(session))
-
-
 def build_idempotency_service(session: AsyncSession) -> IdempotencyService:
     return IdempotencyService(build_platform_unit_of_work(session))

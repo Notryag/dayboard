@@ -37,7 +37,7 @@ from agent_platform.core import (
 from dayboard.app.voice import VoiceProviderFailure
 from dayboard.app.voice_ports import AudioInput, SpeechToTextProvider
 from dayboard.composition.reminders import build_reminder_services
-from dayboard.composition.voice import build_voice_services
+from dayboard.composition.voice import build_voice_service
 from dayboard.app.schedule_queries import (
     CalendarEntryView,
     InvalidScheduleCursor,
@@ -875,7 +875,7 @@ async def create_voice_transcription(
             details={"max_duration_seconds": settings.asr_max_audio_seconds},
         )
     try:
-        return await build_voice_services(session).transcriptions.transcribe(
+        return await build_voice_service(session).transcribe(
             user_context,
             provider,
             AudioInput(
@@ -918,7 +918,7 @@ async def get_voice_transcription(
     session: AsyncSession = Depends(get_session),
     user_context: UserContext = Depends(get_user_context),
 ) -> VoiceTranscript:
-    transcript = await build_voice_services(session).transcriptions.get(
+    transcript = await build_voice_service(session).get(
         user_context,
         transcript_id,
     )
