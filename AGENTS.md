@@ -38,6 +38,29 @@ These notes are for coding agents working on Dayboard.
   `agent_platform`; Dayboard keeps scheduling policy, product persistence, prompts, tools, and UI.
 - Prefer DeerFlow's run resource lifecycle for future API work: create returns immediately, stream creates and follows a run, join follows an existing run, wait blocks for final state, and cancel is explicit.
 
+## Temporary Backend Abstraction Freeze
+
+Until product validation is complete and this section is explicitly removed:
+
+1. Do not add another top-level backend layer or a new generic Platform capability.
+2. Do not add a Unit of Work unless the change introduces a distinct atomic transaction boundary.
+3. Do not add a Manager, Coordinator, Facade, Context, or Envelope unless it owns a real state
+   machine, transaction, external protocol, or versioned persistence boundary that existing modules
+   cannot own. Record that reason with the change.
+4. Put product behavior in the narrowest existing Dayboard module by default. Keep Reminder,
+   Scheduling, Task, Voice, Notification, model-budget, presentation, and tool-selection policy out
+   of `agent_platform` unless a second real product uses the same capability.
+5. Extract a reusable interface only after a second real caller exists, except for necessary
+   infrastructure boundaries such as repositories, providers, clocks, execution drivers, and
+   deterministic test seams.
+6. Prefer removing proven parameter-only forwarding over renaming or reorganizing layers. Preserve
+   transaction, idempotency, concurrency, authorization, event-ordering, and protocol boundaries.
+
+The existing backend shape is sufficient: `api`, `workers`, `composition`, `app`, `domain`, `db`,
+`agent`, `integrations`, `agent_platform`, and North. Do not introduce speculative layers such as
+`application_kernel`, `workflow_engine`, `execution_context`, `domain_runtime`, or
+`platform_common`.
+
 ## Test Execution
 
 - Do not run tests after routine small changes. Use diff review and relevant static checks by default.
