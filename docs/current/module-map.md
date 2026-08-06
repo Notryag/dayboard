@@ -167,8 +167,9 @@ visually linear stack.
 
 - **Purpose:** construct complete API and Worker scopes from settings and concrete adapters.
 - **Owns:** dependency wiring only.
-- **Public contracts:** small scope builders for Platform, Runs, Scheduling, Reminders, Voice,
-  Account Recovery, and Provider Usage.
+- **Public contracts:** small explicit builders for Platform, Runs, Scheduling, Reminders, Voice,
+  Account Recovery, and Provider Usage; scopes are used only when callers need a grouped lifecycle
+  or transaction boundary.
 - **Allowed dependencies:** all concrete outer implementations required for construction.
 - **Forbidden dependencies:** product decisions or duplicate workflows.
 - **Transaction owner:** none beyond choosing the Unit of Work supplied to an outer caller.

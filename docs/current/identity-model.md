@@ -62,19 +62,3 @@ ownership from queue metadata or model arguments.
   `(user_id, key)` for idempotency and `(user_id, run_id)` for provider usage.
 - A missing user predicate is a storage defect. Application services must not query first and
   authorize later.
-
-## Refactor Plan And Status
-
-The pre-release reset was intentionally direct; no compatibility columns, dual writes, backfill,
-feature flag, or legacy adapter is retained.
-
-1. Remove Tenant and Membership domain rows, auth joins, settings, and `TenantIsolationMode`.
-2. Replace `TenantContext` with immutable `UserContext` and rename `owner_user_id` to `user_id`.
-3. Update Platform contracts, application services, repositories, tools, API routes, and Worker
-   recovery to pass explicit user scope.
-4. Replace the old Alembic baseline with `966685d63c93_initial_user_scoped_schema.py`.
-5. Reset the development `dayboard` database and apply the new baseline.
-6. Run package tests, API tests, migration checks, and residual-term checks before restarting
-   local services.
-
-All six items are implemented and verified in this working tree.

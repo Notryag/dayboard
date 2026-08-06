@@ -1,9 +1,8 @@
 # Backend Simplification Audit
 
-> Time-bounded audit for the pre-release abstraction freeze. This file records concrete call paths
-> at the start of the cleanup and is not a canonical architecture document. Move it to
-> `docs/archive/` when the listed decisions are complete. Current contracts remain under
-> `docs/current/`.
+> Historical audit from the August 2026 pre-release abstraction-freeze cleanup. It records concrete
+> call paths at the time of that work and must not guide current implementation. Current contracts
+> remain under `docs/current/`.
 
 ## Scope And Guardrails
 
@@ -155,5 +154,24 @@ protect application code from infrastructure or an external protocol.
 - each retained scope has an explicit transaction or lifecycle reason in this audit;
 - no public API, database schema, event order, or transaction boundary changes;
 - targeted command and worker checks pass;
-- this audit moves to `docs/archive/` after the decisions are complete;
+- this audit is retained under `docs/archive/` after the decisions are complete;
 - the next three meaningful changes prioritize product behavior or experience, not architecture.
+
+## Completed Decisions
+
+- `build_command_service_from_platform` was removed; `build_command_service` now performs the
+  explicit construction directly.
+- `VoiceServiceScope` was removed; the Voice builder now returns the transaction-owning
+  `VoiceTranscriptionService` directly.
+- the unused `build_command_submission_service` helper was removed.
+- `RunExecutionScope.execute` remains because it is the cohesive public operation used by the Worker
+  and Run execution tests; exposing its coordinator/driver pairing would increase coupling.
+- Platform, Scheduling, Reminder, and Account Recovery scopes remain because callers use their
+  shared Unit of Work as an explicit transaction boundary.
+- the Protocol audit removed no ports. The low-reference protocols are structural storage, provider,
+  runtime, or deterministic-test boundaries; production adapters intentionally need not inherit
+  them nominally.
+- no shared SQLAlchemy UoW base was added. The small duplicated `commit`/`rollback` methods are less
+  costly than a new inheritance layer during the abstraction freeze.
+- no `AppContainer`, service locator, top-level backend layer, Platform capability, or public
+  protocol was introduced.

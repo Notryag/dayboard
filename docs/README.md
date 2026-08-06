@@ -25,8 +25,6 @@ implementation that changes them.
 ## Engineering Guides
 
 - [engineering-guidelines.md](./engineering-guidelines.md): coding, layering, testing, and safety.
-- [backend-simplification-audit.md](./backend-simplification-audit.md): temporary concrete call-path
-  audit for the pre-release abstraction freeze.
 - [agent-platform-extraction.md](./agent-platform-extraction.md): target three-layer ownership map
   and incremental extraction gates.
 - [ui-design.md](./ui-design.md): current visual and interaction rules.

@@ -254,9 +254,8 @@ assembly, usage settlement, and StreamBridge publication. Its runtime journal op
 Unit of Work for every durable event instead of sharing the Run's main session. North lifecycle
 callbacks deliver a typed `RuntimeExecutionResult`; Dayboard projects it into a Platform outcome
 before North emits its end sentinel, so PostgreSQL is already terminal when the browser observes
-stream completion. Redis carries only
-`run_id`; the worker reloads user ID, thread, and input from PostgreSQL and composes a new
-driver for that Run. The superseded queue/execution protocol has no compatibility path.
+stream completion. Redis carries only `run_id`; the worker reloads user ID, thread, and input from
+PostgreSQL and composes a new driver for that Run.
 
 The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
 Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
@@ -277,9 +276,7 @@ envelope as separate kind, version, and JSONB payload columns; a database constr
 presentation only on assistant messages. Run status is not duplicated into the payload because the
 Run row is authoritative. Unknown product kinds or versions remain opaque to the Platform and are
 not interpreted as Dayboard cards; malformed payloads for the known Dayboard version fail
-validation. The former unversioned message metadata was migrated once and has no runtime
-compatibility path. That data migration normalizes pre-version-counter schedule snapshots to the
-same initial `row_version = 1` assigned when row versions were introduced.
+validation.
 
 Durable Run-event extensions follow the same ownership rule through
 `EventExtensionEnvelope(kind, schema_version, payload)`. Generic event type, category, content, and
@@ -288,13 +285,10 @@ while the Platform constructs failure and interaction-state payloads before pers
 extension kind, version, and JSONB payload separately and rejects partial envelopes. User-facing
 SSE receives only projected product status and never exposes the diagnostic extension payload.
 
-The architecture check separately enforces Platform Core, Ports, and Application import rules. It
-also prevents the Dayboard Domain from importing API, application orchestration, persistence,
-workers, Agent tools, North, FastAPI, or SQLAlchemy. The scheduling, Reminder, Voice, and Account
-Recovery application services and ports, plus Provider Usage settlement and CommandService, are
-additionally prohibited from importing Dayboard persistence adapters or framework/runtime layers.
-The Run driver is separately prohibited from importing settings, persistence, or composition; only
-explicit composition modules connect those dependencies.
+The architecture check enforces Platform Core, Ports, and Application import direction, prevents
+Dayboard Domain and Application from importing outer product/framework layers, and keeps the Run
+driver independent of settings, persistence, and composition. Explicit composition modules connect
+those dependencies.
 
 Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
 `expected_row_version`; retryable Agent writes also use server-derived operation identities. A

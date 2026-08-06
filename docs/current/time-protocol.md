@@ -118,17 +118,11 @@ version, active state, and authoritative `end_time` are checked.
 All mutation paths increment the version: Agent reschedule/cancel/update, Web edit/cancel, calendar
 complete/reopen, and task complete/reopen/cancel.
 
-## Context Migration
+## Runtime Context Isolation
 
-Existing Agent checkpoints can contain legacy ToolMessages with UTC scheduling fields. The rollout
-uses the new `dayboard-time-v2` checkpoint namespace, invalidating only the old runtime context while
-preserving durable conversation messages and schedule entities. Provider-boundary sanitization also
-removes artifacts and rewrites absolute fields defensively before every main-model request. New
-summary input contains only the compact local-time receipt because the legacy namespace is never
-loaded.
-
-There is no model-schema compatibility branch for `expected_updated_at`, absolute receipt fields,
-or model-provided timezone values. This project is pre-release; the new protocol replaces them.
+Agent checkpoints use the `dayboard-time-v2` namespace. Provider-boundary sanitization removes UI
+artifacts and rewrites absolute scheduling fields before every main-model request. Summary input
+contains only compact local-time receipts, so UTC artifact values never enter model context.
 
 ## Required Tests
 
