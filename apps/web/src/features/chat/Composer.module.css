@@ -245,8 +245,10 @@
 }
 
 .voiceHoldButtonCancel {
+  color: var(--dayboard-color-danger-foreground);
+  border-color: var(--dayboard-color-danger);
+  background: var(--dayboard-color-danger);
   transform: scale(0.985);
-  opacity: 0.82;
 }
 
 .voiceButtonLabel {

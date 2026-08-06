@@ -29,6 +29,8 @@ const recordingFormats = [
   { extension: "webm", mimeType: "audio/webm" },
 ];
 
+const STREAM_WARM_TTL_MS = 15_000;
+
 function baseContentType(mimeType: string) {
   return mimeType.split(";", 1)[0].trim().toLowerCase();
 }
@@ -83,6 +85,7 @@ export function useVoiceRecorder({
   const animationFrameRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
   const timeoutRef = useRef<number | null>(null);
+  const warmStreamTimeoutRef = useRef<number | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const discardRef = useRef(false);
   const requestGenerationRef = useRef(0);
@@ -138,13 +141,33 @@ export function useVoiceRecorder({
     animationFrameRef.current = null;
   }, []);
 
-  const releaseMedia = useCallback(() => {
+  const stopMonitoring = useCallback(() => {
     clearTimers();
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
     void audioContextRef.current?.close().catch(() => undefined);
     audioContextRef.current = null;
   }, [clearTimers]);
+
+  const releaseMedia = useCallback(() => {
+    stopMonitoring();
+    if (warmStreamTimeoutRef.current !== null) {
+      window.clearTimeout(warmStreamTimeoutRef.current);
+      warmStreamTimeoutRef.current = null;
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, [stopMonitoring]);
+
+  const keepStreamWarm = useCallback(() => {
+    stopMonitoring();
+    if (warmStreamTimeoutRef.current !== null) {
+      window.clearTimeout(warmStreamTimeoutRef.current);
+    }
+    warmStreamTimeoutRef.current = window.setTimeout(() => {
+      warmStreamTimeoutRef.current = null;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }, STREAM_WARM_TTL_MS);
+  }, [stopMonitoring]);
 
   const monitorLevel = useCallback((stream: MediaStream) => {
     if (typeof AudioContext === "undefined") return;
@@ -211,16 +234,27 @@ export function useVoiceRecorder({
     const requestGeneration = ++requestGenerationRef.current;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          autoGainControl: true,
-          echoCancellation: true,
-          noiseSuppression: true,
-        },
-        video: false,
-      });
+      let stream = streamRef.current;
+      const canReuseStream = stream?.getAudioTracks().some(
+        (track) => track.readyState === "live",
+      );
+      if (!canReuseStream) {
+        releaseMedia();
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            autoGainControl: true,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+          video: false,
+        });
+      } else if (warmStreamTimeoutRef.current !== null) {
+        window.clearTimeout(warmStreamTimeoutRef.current);
+        warmStreamTimeoutRef.current = null;
+      }
+      if (!stream) throw new Error("Microphone stream is unavailable");
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) {
-        stream.getTracks().forEach((track) => track.stop());
+        if (!canReuseStream) stream.getTracks().forEach((track) => track.stop());
         return;
       }
       const streamAcquiredAt = performance.now();
@@ -254,7 +288,7 @@ export function useVoiceRecorder({
         const blob = new Blob(chunksRef.current, { type: mimeType });
         recorderRef.current = null;
         chunksRef.current = [];
-        releaseMedia();
+        keepStreamWarm();
         if (!mountedRef.current) return;
         setStatus("idle");
         setLevel(0);
@@ -311,6 +345,7 @@ export function useVoiceRecorder({
     maxDurationSeconds,
     finishStartupMeasurement,
     monitorLevel,
+    keepStreamWarm,
     releaseMedia,
     status,
     stopRecording,

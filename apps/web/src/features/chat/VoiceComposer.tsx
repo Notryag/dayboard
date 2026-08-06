@@ -177,22 +177,22 @@ export function VoiceComposer({
   const primaryLabel = unavailableReason ?? t("voice.holdToTalk");
   const elapsedLabel = formatDuration(elapsedSeconds);
   const visualLabel =
-    status === "requesting"
+    cancelIntent
+      ? t("voice.releaseToCancel")
+      : status === "requesting"
       ? t("voice.connecting")
       : status === "recording"
-        ? cancelIntent
-          ? t("voice.releaseToCancel")
-          : t("voice.releaseToSend")
+        ? t("voice.releaseToSend")
         : status === "transcribing"
           ? t("voice.transcribing")
           : primaryLabel;
   const controlLabel =
-    status === "requesting"
+    cancelIntent
+      ? t("voice.releaseToCancel")
+      : status === "requesting"
       ? t("voice.connectingMicrophone")
       : status === "recording"
-        ? cancelIntent
-          ? t("voice.releaseToCancel")
-          : t("voice.recordingInfo", { elapsed: elapsedLabel, max: formatDuration(maxDurationSeconds) })
+        ? t("voice.recordingInfo", { elapsed: elapsedLabel, max: formatDuration(maxDurationSeconds) })
         : status === "transcribing"
           ? t("voice.transcribingVoice")
           : primaryLabel;

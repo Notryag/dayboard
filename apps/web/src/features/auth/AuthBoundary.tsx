@@ -140,7 +140,7 @@ function AuthContent({ children }: { children: React.ReactNode }) {
             resetToken={resetToken}
           />
         ) : (
-          <form className={styles.form} onSubmit={submit}>
+          <form className={styles.form} key={mode} onSubmit={submit}>
             {recoveryError ? <p className={styles.error}>{recoveryError}</p> : null}
             {notice ? <p className={styles.notice}>{notice}</p> : null}
             {mode === "login" ? (

@@ -53,6 +53,20 @@ test("register, login, and create a conversation thread", async ({ page }) => {
   expect(state.requests.filter((request) => request.path === "/api/conversation")).toHaveLength(2);
 });
 
+test("switching between login and registration clears password fields", async ({ page }) => {
+  await installApiFixture(page, { account: null });
+  await page.goto("/dayboard");
+
+  await page.getByLabel("密码", { exact: true }).fill("login-secret");
+  await page.getByRole("button", { name: "注册" }).click();
+  await expect(page.getByLabel("密码", { exact: true })).toHaveValue("");
+  await page.getByLabel("密码", { exact: true }).fill("registration-secret");
+  await page.getByLabel("确认密码", { exact: true }).fill("registration-secret");
+
+  await page.getByRole("button", { name: "登录", exact: true }).first().click();
+  await expect(page.getByLabel("密码", { exact: true })).toHaveValue("");
+});
+
 test("language selection updates the UI and survives a reload", async ({ page }) => {
   await page.addInitScript(() => {
     if (!window.localStorage.getItem("dayboard-locale")) {
@@ -505,11 +519,22 @@ test("voice gesture cancels immediately while requesting and tracks the cancel t
   await page.mouse.down();
   const requestingButton = page.getByRole("button", { name: "正在连接麦克风" });
   await expect(requestingButton).toBeVisible();
-  await expect(page.getByText("移到这里取消")).toBeVisible();
+  const requestingCancelTarget = page.getByText("移到这里取消").locator("..");
+  const requestingCancelBounds = await requestingCancelTarget.boundingBox();
+  expect(requestingCancelBounds).not.toBeNull();
+  await page.mouse.move(
+    requestingCancelBounds!.x + requestingCancelBounds!.width / 2,
+    requestingCancelBounds!.y + requestingCancelBounds!.height / 2,
+  );
+  await expect(page.getByRole("button", { name: "松开取消" })).toBeVisible();
   await page.mouse.up();
   await expect(idleButton).toBeVisible();
   await page.evaluate(() => (window as typeof window & { resolveVoiceStream: () => void }).resolveVoiceStream());
 
+  await page.mouse.move(
+    initialButtonBounds!.x + initialButtonBounds!.width / 2,
+    initialButtonBounds!.y + initialButtonBounds!.height / 2,
+  );
   await page.mouse.down();
   const recordingButton = page.getByRole("button", { name: /松开发送/ });
   await expect(recordingButton).toBeVisible();
