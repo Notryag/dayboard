@@ -3,7 +3,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.db.conversation_repositories import (
-    ConversationMessageRepository,
     ConversationStateRepository,
     ConversationThreadRepository,
 )
@@ -18,7 +17,6 @@ class SqlAlchemyPlatformUnitOfWork:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.threads = ConversationThreadRepository(session)
-        self.messages = ConversationMessageRepository(session)
         self.states = ConversationStateRepository(session)
         self.runs = AgentRunRepository(session)
         self.events = AgentRunEventRepository(session)

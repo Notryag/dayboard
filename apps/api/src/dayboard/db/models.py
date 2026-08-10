@@ -310,8 +310,13 @@ class AgentRunRow(TimestampMixin, Base):
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     status: Mapped[str] = mapped_column(String(40), nullable=False)
-    input_message: Mapped[str] = mapped_column(String(4000), nullable=False)
-    result_message: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    error: Mapped[str | None] = mapped_column(String(4000), nullable=True)
+    message_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    first_human_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    last_ai_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ConversationThreadRow(TimestampMixin, Base):
@@ -342,50 +347,6 @@ class ConversationThreadRow(TimestampMixin, Base):
     summary: Mapped[str | None] = mapped_column(String(8000), nullable=True)
     summary_through_message_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
-    )
-
-
-class ConversationMessageRow(Base):
-    __tablename__ = "conversation_messages"
-    __table_args__ = (
-        Index(
-            "uq_conversation_messages_user_run_role",
-            "user_id",
-            "run_id",
-            "role",
-            unique=True,
-        ),
-        CheckConstraint(
-            "presentation_schema_version IS NULL OR presentation_schema_version >= 1",
-            name="ck_conversation_message_presentation_schema_version",
-        ),
-        CheckConstraint(
-            "(presentation_kind IS NULL AND presentation_schema_version IS NULL "
-            "AND presentation_payload = '{}'::jsonb) OR "
-            "(presentation_kind IS NOT NULL AND presentation_schema_version IS NOT NULL)",
-            name="ck_conversation_message_presentation_complete",
-        ),
-        CheckConstraint(
-            "presentation_kind IS NULL OR role = 'assistant'",
-            name="ck_conversation_message_presentation_assistant_only",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), nullable=False)
-    content: Mapped[str] = mapped_column(String(4000), nullable=False)
-    presentation_kind: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    presentation_schema_version: Mapped[int | None] = mapped_column(nullable=True)
-    presentation_payload: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, default=dict
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
     )
 
 
@@ -459,8 +420,24 @@ class VoiceTranscriptRow(Base):
 class AgentRunEventRow(Base):
     __tablename__ = "agent_run_events"
     __table_args__ = (
-        Index("ix_agent_run_events_user_run_seq", "run_id", "seq", unique=True),
-        Index("ix_agent_run_events_user_run_created", "run_id", "created_at"),
+        Index("uq_agent_run_events_thread_seq", "thread_id", "seq", unique=True),
+        Index("ix_agent_run_events_user_thread_category_seq", "user_id", "thread_id", "category", "seq"),
+        Index("ix_agent_run_events_user_run_seq", "user_id", "run_id", "seq"),
+        Index(
+            "uq_agent_run_events_message_role",
+            "user_id",
+            "run_id",
+            "event_type",
+            unique=True,
+            postgresql_where=text("event_type IN ('message.human', 'message.ai')"),
+        ),
+        Index(
+            "uq_agent_run_events_execution_input",
+            "user_id",
+            "run_id",
+            unique=True,
+            postgresql_where=text("event_type = 'agent.input'"),
+        ),
         CheckConstraint(
             "extension_schema_version IS NULL OR extension_schema_version >= 1",
             name="ck_agent_run_event_extension_schema_version",
@@ -475,6 +452,8 @@ class AgentRunEventRow(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    thread_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     seq: Mapped[int] = mapped_column(nullable=False)
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)

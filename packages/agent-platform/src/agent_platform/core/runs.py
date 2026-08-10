@@ -22,6 +22,7 @@ class AgentRunStatus(StrEnum):
 
 class AgentRunEventCategory(StrEnum):
     lifecycle = "lifecycle"
+    message = "message"
     model = "model"
     tool = "tool"
     clarification = "clarification"
@@ -33,14 +34,20 @@ class AgentRun(BaseModel):
     user_id: UUID
     thread_id: UUID
     status: AgentRunStatus
-    input_message: str
-    result_message: str | None
+    model_name: str | None = None
+    error: str | None = None
+    message_count: int = 0
+    first_human_message: str | None = None
+    last_ai_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class AgentRunEvent(BaseModel):
     id: UUID
+    thread_id: UUID
     run_id: UUID
     seq: int
     event_type: str = Field(min_length=1, max_length=80)

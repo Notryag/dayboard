@@ -54,7 +54,7 @@ class FakeAcceptanceClient:
         self.calls.append(("GET", path, None))
         if path == "/api/runs/run-1":
             return FakeResponse(
-                {"status": "completed", "result_message": "没有找到需要修改的日程。"}
+                {"status": "completed", "last_ai_message": "没有找到需要修改的日程。"}
             )
         if path == "/api/runs/run-1/events":
             return FakeResponse(

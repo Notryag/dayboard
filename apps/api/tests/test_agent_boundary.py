@@ -393,8 +393,8 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         user_id=user_context.user_id,
         thread_id=uuid4(),
         status=AgentRunStatus.running,
-        input_message="安排会议",
-        result_message=None,
+        message_count=1,
+        first_human_message="安排会议",
         created_at=now,
         updated_at=now,
     )
@@ -451,7 +451,13 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         executor_factory=fake_executor_factory(fake_invoker),
     )
 
-    await driver.execute(user_context, run, on_completed=complete, on_failed=fail)
+    await driver.execute(
+        user_context,
+        run,
+        "安排会议",
+        on_completed=complete,
+        on_failed=fail,
+    )
 
     assert built["context"] == user_context
     assert built["run_id"] == run_id
@@ -483,8 +489,8 @@ async def test_dayboard_driver_logs_and_projects_failure(
         user_id=user_context.user_id,
         thread_id=uuid4(),
         status=AgentRunStatus.running,
-        input_message="安排会议",
-        result_message=None,
+        message_count=1,
+        first_human_message="安排会议",
         created_at=now,
         updated_at=now,
     )
@@ -510,6 +516,7 @@ async def test_dayboard_driver_logs_and_projects_failure(
             await driver.execute(
                 user_context,
                 run,
+                "安排会议",
                 on_completed=complete,
                 on_failed=fail,
             )

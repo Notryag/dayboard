@@ -70,9 +70,11 @@ reminders, and provider usage. Redis owns queue delivery, rate limits, coordinat
 live StreamBridge replay. Redis is not authoritative product storage.
 Conversation bootstrap resolves the owner's primary Thread from PostgreSQL; browser-local state
 cannot create a separate history boundary across devices.
-The primary Thread is protected by a partial unique database index. Conversation messages use
-cursor pagination rather than an unbounded history response; PostgreSQL remains authoritative on
-refresh and across devices.
+The primary Thread is protected by a partial unique database index. Conversation messages are
+`category=message` rows in the Thread-ordered `agent_run_events` journal and use cursor pagination
+rather than an unbounded history response; PostgreSQL remains authoritative on refresh and across
+devices. `agent_runs` owns status, timestamps, error and bounded list summaries, not complete input
+or output bodies.
 Thread lifecycle and role are orthogonal: `status` is the constrained `active | archived`
 lifecycle, while `is_primary` identifies the owner's single product conversation. Non-primary
 evaluation Threads are active lifecycle records rather than a third pseudo-status. New Runs require
@@ -242,9 +244,10 @@ completed or failed Run outcome.
 The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
 transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
 submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
-and `run_created` event, and appends the user message. Run lifecycle checkpoints share that explicit
-Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation locks the
-parent Run, so concurrent writers cannot select the same `max(seq) + 1` value.
+and `run.created` event, and appends the `message.human` event. Run lifecycle transitions share that
+explicit Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation
+locks the parent Thread, so events from different Runs cannot select the same Thread-level
+`max(seq) + 1` value.
 
 `RunExecutionCoordinator` owns the generic execution lifecycle. It commits `queued -> running`
 before invoking external work, ends any read transaction before waiting on the model, and uses a
@@ -254,13 +257,15 @@ assembly, usage settlement, and StreamBridge publication. Its runtime journal op
 Unit of Work for every durable event instead of sharing the Run's main session. North lifecycle
 callbacks deliver a typed `RuntimeExecutionResult`; Dayboard projects it into a Platform outcome
 before North emits its end sentinel, so PostgreSQL is already terminal when the browser observes
-stream completion. Redis carries only `run_id`; the worker reloads user ID, thread, and input from
-PostgreSQL and composes a new driver for that Run.
+stream completion. Redis carries only `run_id`; the worker reloads user ID and Thread from the Run,
+then loads execution input from the event journal and composes a new driver for that Run. Ordinary
+turns execute the `message.human` content; a clarification continuation may instead use its distinct
+trusted `agent.input` event while retaining safe user-visible text in conversation history.
 
 The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
 Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
 one transaction for the idempotency claim, expected-state-version consumption, Run and
-`run_created` event, and user message. Identical retries find the existing Run before requiring the
+`run.created` event, and user message. Identical retries find the existing Run before requiring the
 now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
 state schema contains only presentation options, never trusted candidate IDs or row versions.
 North may retain a temporary `clarification_request` inside its per-Run graph state, but exposes it

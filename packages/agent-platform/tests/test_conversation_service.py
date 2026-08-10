@@ -8,7 +8,8 @@ import pytest
 
 from agent_platform.application import ConversationService
 from agent_platform.core import (
-    ConversationMessage,
+    AgentRunEvent,
+    AgentRunEventCategory,
     ConversationRole,
     ConversationState,
     ConversationThread,
@@ -16,6 +17,7 @@ from agent_platform.core import (
     InteractionConflictError,
     PendingInteraction,
     PresentationEnvelope,
+    EventExtensionEnvelope,
 )
 from agent_platform.core import UserContext
 
@@ -86,11 +88,11 @@ class MemoryThreadStore:
         return updated
 
 
-class MemoryMessageStore:
+class MemoryRunEventStore:
     def __init__(self) -> None:
-        self.records: list[ConversationMessage] = []
+        self.records: list[AgentRunEvent] = []
 
-    async def append_once(
+    async def append_message_once(
         self,
         context: UserContext,
         *,
@@ -98,82 +100,89 @@ class MemoryMessageStore:
         run_id: UUID,
         role: ConversationRole,
         content: str,
-        presentation: PresentationEnvelope | None = None,
-    ) -> ConversationMessage:
+        extension: EventExtensionEnvelope | None = None,
+    ) -> AgentRunEvent:
         del context
+        event_type = {
+            ConversationRole.user: "message.human",
+            ConversationRole.assistant: "message.ai",
+        }[role]
         existing = next(
-            (message for message in self.records if (message.run_id, message.role) == (run_id, role)),
+            (
+                event
+                for event in self.records
+                if (event.run_id, event.event_type) == (run_id, event_type)
+            ),
             None,
         )
         if existing is not None:
+            if role == ConversationRole.assistant:
+                updates = {"extension": extension}
+                if content:
+                    updates["content"] = content
+                updated = existing.model_copy(update=updates)
+                self.records[self.records.index(existing)] = updated
+                return updated
             return existing
-        message = ConversationMessage(
+        event = AgentRunEvent(
             id=uuid4(),
             thread_id=thread_id,
             run_id=run_id,
-            role=role,
+            seq=len(self.records) + 1,
+            event_type=event_type,
+            category=AgentRunEventCategory.message,
             content=content,
-            presentation=presentation,
+            extension=extension,
             created_at=datetime.now(UTC),
         )
-        self.records.append(message)
-        return message
+        self.records.append(event)
+        return event
 
-    async def upsert_assistant(
-        self,
-        context: UserContext,
-        *,
-        thread_id: UUID,
-        run_id: UUID,
-        content: str,
-        presentation: PresentationEnvelope | None,
-    ) -> ConversationMessage:
-        self.records = [
-            message
-            for message in self.records
-            if (message.run_id, message.role) != (run_id, ConversationRole.assistant)
-        ]
-        return await self.append_once(
-            context,
-            thread_id=thread_id,
-            run_id=run_id,
-            role=ConversationRole.assistant,
-            content=content,
-            presentation=presentation,
-        )
-
-    async def get_assistant_for_run(
+    async def get_message_for_run(
         self,
         context: UserContext,
         run_id: UUID,
-    ) -> ConversationMessage | None:
+        role: ConversationRole,
+    ) -> AgentRunEvent | None:
         del context
+        event_type = {
+            ConversationRole.user: "message.human",
+            ConversationRole.assistant: "message.ai",
+        }[role]
         return next(
             (
-                message
-                for message in self.records
-                if message.run_id == run_id and message.role == ConversationRole.assistant
+                event
+                for event in self.records
+                if event.run_id == run_id and event.event_type == event_type
             ),
             None,
         )
 
-    async def list_for_thread(
+    async def get_execution_input_for_run(
+        self,
+        context: UserContext,
+        run_id: UUID,
+    ) -> AgentRunEvent | None:
+        del context, run_id
+        return None
+
+    async def list_messages_for_thread(
         self,
         context: UserContext,
         thread_id: UUID,
-    ) -> list[ConversationMessage]:
+    ) -> list[AgentRunEvent]:
         del context
-        return [message for message in self.records if message.thread_id == thread_id]
+        return [event for event in self.records if event.thread_id == thread_id]
 
-    async def list_page_for_thread(
+    async def list_message_page_for_thread(
         self,
         context: UserContext,
         thread_id: UUID,
         *,
         before: UUID | None,
         limit: int,
-    ) -> tuple[list[ConversationMessage], UUID | None]:
-        messages = await self.list_for_thread(context, thread_id)
+    ) -> tuple[list[AgentRunEvent], UUID | None]:
+        messages = await self.list_messages_for_thread(context, thread_id)
         if before is not None:
             cursor = next(index for index, item in enumerate(messages) if item.id == before)
             messages = messages[:cursor]
@@ -266,7 +275,7 @@ class MemoryStateStore:
 class MemoryConversationUnitOfWork:
     def __init__(self) -> None:
         self.threads = MemoryThreadStore()
-        self.messages = MemoryMessageStore()
+        self.events = MemoryRunEventStore()
         self.states = MemoryStateStore()
         self.commits = 0
         self.rollbacks = 0

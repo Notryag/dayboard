@@ -24,23 +24,25 @@ class AgentRunService:
         self,
         context: UserContext,
         *,
-        input_message: str,
-        thread_id: UUID | None = None,
+        first_human_message: str,
+        thread_id: UUID,
         run_id: UUID | None = None,
+        model_name: str | None = None,
     ) -> AgentRun:
         run = await self.runs.create(
             context,
-            input_message=input_message,
             thread_id=thread_id,
             status=AgentRunStatus.queued,
             run_id=run_id,
+            model_name=model_name,
+            first_human_message=first_human_message[:2000],
         )
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="run_created",
+            event_type="run.created",
             category=AgentRunEventCategory.lifecycle,
-            content=input_message,
         )
         return run
 
@@ -55,8 +57,9 @@ class AgentRunService:
             return False
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="run_started",
+            event_type="run.started",
             category=AgentRunEventCategory.lifecycle,
         )
         return True
@@ -64,6 +67,7 @@ class AgentRunService:
     async def append_progress(
         self,
         context: UserContext,
+        thread_id: UUID,
         run_id: UUID,
         *,
         event_type: str,
@@ -73,6 +77,7 @@ class AgentRunService:
     ) -> None:
         await self.events.append(
             context,
+            thread_id=thread_id,
             run_id=run_id,
             event_type=event_type,
             category=category,
@@ -93,16 +98,17 @@ class AgentRunService:
             run.id,
             from_statuses={AgentRunStatus.running},
             status=AgentRunStatus.completed,
-            result_message=result_message,
+            message_count=run.message_count + 1,
+            last_ai_message=result_message[:2000],
         )
         if transitioned is None:
             return False
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="run_completed",
+            event_type="run.completed",
             category=AgentRunEventCategory.lifecycle,
-            content=result_message,
             extension=extension,
         )
         return True
@@ -120,14 +126,16 @@ class AgentRunService:
             run.id,
             from_statuses={AgentRunStatus.running},
             status=AgentRunStatus.needs_clarification,
-            result_message=question,
+            message_count=run.message_count + 1,
+            last_ai_message=question[:2000],
         )
         if transitioned is None:
             return False
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="clarification_requested",
+            event_type="run.needs_clarification",
             category=AgentRunEventCategory.clarification,
             content=question,
             extension=extension,
@@ -148,14 +156,17 @@ class AgentRunService:
             run.id,
             from_statuses=from_statuses or {AgentRunStatus.queued, AgentRunStatus.running},
             status=AgentRunStatus.failed,
-            result_message=error_message,
+            error=f"{error_type}: {error_message}"[:4000],
+            message_count=run.message_count + 1,
+            last_ai_message=error_message[:2000],
         )
         if transitioned is None:
             return False
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="run_failed",
+            event_type="run.failed",
             category=AgentRunEventCategory.error,
             content=error_message,
             extension=build_run_failure_event_extension(error_type),
@@ -174,13 +185,16 @@ class AgentRunService:
             run.id,
             from_statuses={AgentRunStatus.queued, AgentRunStatus.running},
             status=AgentRunStatus.cancelled,
+            message_count=run.message_count + (1 if event_content else 0),
+            last_ai_message=event_content[:2000] if event_content else None,
         )
         if transitioned is None:
             return False
         await self.events.append(
             context,
+            thread_id=run.thread_id,
             run_id=run.id,
-            event_type="run_cancelled",
+            event_type="run.cancelled",
             category=AgentRunEventCategory.lifecycle,
             content=event_content,
         )

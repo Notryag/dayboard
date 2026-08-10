@@ -670,10 +670,23 @@ export interface components {
              */
             thread_id: string;
             status: components["schemas"]["AgentRunStatus"];
-            /** Input Message */
-            input_message: string;
-            /** Result Message */
-            result_message: string | null;
+            /** Model Name */
+            model_name?: string | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Message Count
+             * @default 0
+             */
+            message_count: number;
+            /** First Human Message */
+            first_human_message?: string | null;
+            /** Last Ai Message */
+            last_ai_message?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -692,6 +705,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Thread Id
+             * Format: uuid
+             */
+            thread_id: string;
             /**
              * Run Id
              * Format: uuid
@@ -715,7 +733,7 @@ export interface components {
          * AgentRunEventCategory
          * @enum {string}
          */
-        AgentRunEventCategory: "lifecycle" | "model" | "tool" | "clarification" | "error";
+        AgentRunEventCategory: "lifecycle" | "message" | "model" | "tool" | "clarification" | "error";
         /**
          * AgentRunStatus
          * @enum {string}

@@ -17,19 +17,21 @@ class MemoryRunStore:
         self,
         context: UserContext,
         *,
-        input_message: str,
-        thread_id: UUID | None,
+        thread_id: UUID,
         status: AgentRunStatus,
         run_id: UUID | None,
+        model_name: str | None = None,
+        first_human_message: str | None = None,
     ) -> AgentRun:
         now = datetime.now(UTC)
         run = AgentRun(
             id=run_id or uuid4(),
             user_id=context.user_id,
-            thread_id=thread_id or uuid4(),
+            thread_id=thread_id,
             status=status,
-            input_message=input_message,
-            result_message=None,
+            model_name=model_name,
+            message_count=1 if first_human_message else 0,
+            first_human_message=first_human_message,
             created_at=now,
             updated_at=now,
         )
@@ -43,7 +45,10 @@ class MemoryRunStore:
         *,
         from_statuses: set[AgentRunStatus],
         status: AgentRunStatus,
-        result_message: str | None = None,
+        error: str | None = None,
+        message_count: int | None = None,
+        first_human_message: str | None = None,
+        last_ai_message: str | None = None,
     ) -> AgentRun | None:
         run = self.records.get(run_id)
         if (
@@ -55,7 +60,10 @@ class MemoryRunStore:
         updated = run.model_copy(
             update={
                 "status": status,
-                "result_message": result_message or run.result_message,
+                "error": error or run.error,
+                "message_count": message_count if message_count is not None else run.message_count,
+                "first_human_message": first_human_message or run.first_human_message,
+                "last_ai_message": last_ai_message or run.last_ai_message,
                 "updated_at": datetime.now(UTC),
             }
         )
@@ -117,6 +125,7 @@ class MemoryRunEventStore:
         self,
         context: UserContext,
         *,
+        thread_id: UUID,
         run_id: UUID,
         event_type: str,
         category: AgentRunEventCategory,
@@ -125,6 +134,7 @@ class MemoryRunEventStore:
     ) -> AgentRunEvent:
         event = AgentRunEvent(
             id=uuid4(),
+            thread_id=thread_id,
             run_id=run_id,
             seq=len(self.events) + 1,
             event_type=event_type,
@@ -175,18 +185,22 @@ def test_run_lifecycle_is_storage_independent() -> None:
         unit_of_work = MemoryRunUnitOfWork()
         service = AgentRunService(unit_of_work)
 
-        run = await service.create_run(context, input_message="记录今天的饮食")
+        run = await service.create_run(
+            context,
+            thread_id=uuid4(),
+            first_human_message="记录今天的饮食",
+        )
         assert await service.mark_running(context, run)
         assert await service.mark_completed(context, run, result_message="已记录")
 
         completed = await service.get_run(context, run.id)
         assert completed is not None
         assert completed.status == AgentRunStatus.completed
-        assert completed.result_message == "已记录"
+        assert completed.last_ai_message == "已记录"
         assert [event.event_type for event in await service.list_events(context, run.id)] == [
-            "run_created",
-            "run_started",
-            "run_completed",
+            "run.created",
+            "run.started",
+            "run.completed",
         ]
 
     asyncio.run(scenario())
@@ -201,7 +215,11 @@ def test_failed_run_records_platform_owned_extension() -> None:
         )
         unit_of_work = MemoryRunUnitOfWork()
         service = AgentRunService(unit_of_work)
-        run = await service.create_run(context, input_message="记录今天的饮食")
+        run = await service.create_run(
+            context,
+            thread_id=uuid4(),
+            first_human_message="记录今天的饮食",
+        )
 
         assert await service.mark_failed(
             context,

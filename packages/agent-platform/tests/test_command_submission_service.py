@@ -12,7 +12,10 @@ import pytest
 from agent_platform.application import CommandSubmissionService
 from agent_platform.core import (
     AgentRun,
+    AgentRunEvent,
+    AgentRunEventCategory,
     AgentRunStatus,
+    ConversationRole,
     ConversationThread,
     ConversationThreadStatus,
     ConversationArchivedError,
@@ -53,8 +56,8 @@ def _run(context: UserContext, thread_id, run_id=None) -> AgentRun:
         user_id=context.user_id,
         thread_id=thread_id,
         status=AgentRunStatus.queued,
-        input_message="记录今天的数据",
-        result_message=None,
+        message_count=1,
+        first_human_message="记录今天的数据",
         created_at=now,
         updated_at=now,
     )
@@ -75,19 +78,30 @@ def _claim(context: UserContext, *, request_hash: str, created: bool) -> Idempot
 
 
 def _unit_of_work():
+    async def append_message_once(*args, **kwargs):
+        del args
+        role = kwargs["role"]
+        return AgentRunEvent(
+            id=uuid4(),
+            thread_id=kwargs["thread_id"],
+            run_id=kwargs["run_id"],
+            seq=1,
+            event_type={
+                ConversationRole.user: "message.human",
+                ConversationRole.assistant: "message.ai",
+            }[role],
+            category=AgentRunEventCategory.message,
+            content=kwargs["content"],
+            extension=kwargs.get("extension"),
+            created_at=datetime.now(UTC),
+        )
+
     return SimpleNamespace(
         threads=SimpleNamespace(
             create=AsyncMock(),
             get=AsyncMock(),
             get_or_create_primary=AsyncMock(),
             update_summary=AsyncMock(),
-        ),
-        messages=SimpleNamespace(
-            append_once=AsyncMock(),
-            upsert_assistant=AsyncMock(),
-            get_assistant_for_run=AsyncMock(),
-            list_for_thread=AsyncMock(),
-            list_page_for_thread=AsyncMock(),
         ),
         states=SimpleNamespace(
             get=AsyncMock(),
@@ -105,7 +119,16 @@ def _unit_of_work():
             list_stale_running=AsyncMock(),
             list_stale_queued=AsyncMock(),
         ),
-        events=SimpleNamespace(append=AsyncMock(), list_for_run=AsyncMock()),
+        events=SimpleNamespace(
+            append=AsyncMock(),
+            append_message_once=AsyncMock(side_effect=append_message_once),
+            append_execution_input_once=AsyncMock(),
+            get_execution_input_for_run=AsyncMock(return_value=None),
+            get_message_for_run=AsyncMock(),
+            list_for_run=AsyncMock(),
+            list_messages_for_thread=AsyncMock(),
+            list_message_page_for_thread=AsyncMock(),
+        ),
         idempotency=SimpleNamespace(
             get=AsyncMock(),
             claim=AsyncMock(),
@@ -129,7 +152,7 @@ def test_command_submission_commits_all_records_once() -> None:
 
         result = await CommandSubmissionService(unit_of_work).submit(
             context,
-            input_message=run.input_message,
+            input_message=run.first_human_message,
             thread_title=thread.title,
             idempotency_key=claim.record.key,
             request_identity="new:request",
@@ -138,7 +161,7 @@ def test_command_submission_commits_all_records_once() -> None:
         assert result.created
         assert result.run_id == run.id
         unit_of_work.events.append.assert_awaited_once()
-        unit_of_work.messages.append_once.assert_awaited_once()
+        unit_of_work.events.append_message_once.assert_awaited_once()
         unit_of_work.commit.assert_awaited_once()
         unit_of_work.rollback.assert_not_awaited()
 
@@ -161,7 +184,7 @@ def test_command_submission_reuses_matching_claim_without_new_records() -> None:
 
         result = await CommandSubmissionService(unit_of_work).submit(
             context,
-            input_message=existing.input_message,
+            input_message=existing.first_human_message,
             idempotency_key=claim.record.key,
             request_identity=request_identity,
         )
@@ -170,7 +193,7 @@ def test_command_submission_reuses_matching_claim_without_new_records() -> None:
         assert result.run_id == existing.id
         unit_of_work.threads.create.assert_not_awaited()
         unit_of_work.runs.create.assert_not_awaited()
-        unit_of_work.messages.append_once.assert_not_awaited()
+        unit_of_work.events.append_message_once.assert_not_awaited()
         unit_of_work.commit.assert_awaited_once()
         unit_of_work.rollback.assert_not_awaited()
 
@@ -232,9 +255,36 @@ def test_command_submission_consumes_interaction_in_the_creation_transaction() -
         assert result.created
         unit_of_work.states.consume_interaction.assert_awaited_once()
         unit_of_work.runs.create.assert_awaited_once()
-        unit_of_work.messages.append_once.assert_awaited_once()
+        unit_of_work.events.append_message_once.assert_awaited_once()
+        unit_of_work.events.append_execution_input_once.assert_not_awaited()
         unit_of_work.commit.assert_awaited_once()
         unit_of_work.rollback.assert_not_awaited()
+
+    asyncio.run(scenario())
+
+
+def test_command_submission_persists_distinct_trusted_execution_input() -> None:
+    async def scenario() -> None:
+        context = _context()
+        unit_of_work = _unit_of_work()
+        thread = _thread(context)
+        run = _run(context, thread.id)
+        unit_of_work.threads.get.return_value = thread
+        unit_of_work.runs.create.return_value = run
+
+        await CommandSubmissionService(unit_of_work).submit(
+            context,
+            input_message='{"candidate_id":"trusted-id"}',
+            conversation_message="选择候选案例",
+            thread_id=thread.id,
+        )
+
+        unit_of_work.events.append_execution_input_once.assert_awaited_once_with(
+            context,
+            thread_id=thread.id,
+            run_id=run.id,
+            content='{"candidate_id":"trusted-id"}',
+        )
 
     asyncio.run(scenario())
 
@@ -257,7 +307,7 @@ def test_command_submission_rejects_an_archived_thread_before_writing() -> None:
 
         unit_of_work.runs.create.assert_not_awaited()
         unit_of_work.events.append.assert_not_awaited()
-        unit_of_work.messages.append_once.assert_not_awaited()
+        unit_of_work.events.append_message_once.assert_not_awaited()
         unit_of_work.commit.assert_not_awaited()
         unit_of_work.rollback.assert_awaited_once()
 
@@ -282,7 +332,7 @@ def test_command_submission_rolls_back_when_interaction_compare_and_swap_fails()
 
         unit_of_work.runs.create.assert_not_awaited()
         unit_of_work.events.append.assert_not_awaited()
-        unit_of_work.messages.append_once.assert_not_awaited()
+        unit_of_work.events.append_message_once.assert_not_awaited()
         unit_of_work.commit.assert_not_awaited()
         unit_of_work.rollback.assert_awaited_once()
 

@@ -12,9 +12,9 @@ from dayboard.app.clarifications import ClarificationService
 from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.composition.platform import build_conversation_service
 from dayboard.api.routes import get_command_dispatcher
-from agent_platform.core import UserContext
+from agent_platform.core import AgentRunStatus, UserContext
 from dayboard.api.auth import get_user_context
-from dayboard.db.run_repositories import AgentRunEventRepository
+from dayboard.db.run_repositories import AgentRunEventRepository, AgentRunRepository
 from dayboard.db.models import ConversationThreadRow
 from agent_platform.core import ConversationRole
 from dayboard.domain.interactions import (
@@ -26,6 +26,20 @@ from dayboard.domain.interactions import (
     SuggestedChoiceOption,
     SuggestedChoicePresentation,
 )
+
+
+async def _create_run(
+    session: AsyncSession,
+    context: UserContext,
+    service,
+    message: str,
+):
+    thread = await build_conversation_service(session).create_thread(context)
+    return await service.create_run(
+        context,
+        thread_id=thread.id,
+        first_human_message=message,
+    )
 
 
 async def test_create_background_command_run_returns_before_execution(
@@ -56,10 +70,10 @@ async def test_create_background_command_run_returns_before_execution(
     assert response.status_code == 202
     assert body["status"] == "queued"
     assert body["thread_id"]
-    assert [event.event_type for event in events] == ["run_created"]
+    assert [event.event_type for event in events] == ["run.created", "message.human"]
     assert dispatcher.started == [UUID(body["run_id"])]
     assert run is not None
-    assert run.input_message == "安排明天上午九点的项目会议"
+    assert run.first_human_message == "安排明天上午九点的项目会议"
 
 
 async def test_thread_command_persists_user_message_once(
@@ -147,10 +161,16 @@ async def test_conversation_messages_use_stable_cursor_pagination(
     conversations = build_conversation_service(db_session)
     thread = await conversations.get_or_create_primary_thread(user_context)
     for index in range(35):
+        run = await AgentRunRepository(db_session).create(
+            user_context,
+            thread_id=thread.id,
+            status=AgentRunStatus.completed,
+            first_human_message=f"历史消息 {index + 1}",
+        )
         await conversations.append_message(
             user_context,
             thread_id=thread.id,
-            run_id=uuid4(),
+            run_id=run.id,
             role=ConversationRole.user,
             content=f"历史消息 {index + 1}",
         )
@@ -384,10 +404,16 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     assert conflicting_retry.status_code == 409
     assert response.json()["thread_id"] == str(thread.id)
     assert queued_run is not None
-    assert str(entry_id) in queued_run.input_message
-    assert '"local_start": "2026-07-12T15:00"' in queued_run.input_message
-    assert '"start_time"' not in queued_run.input_message
-    assert "Asia/Shanghai" not in queued_run.input_message
+    execution_input = await AgentRunEventRepository(db_session).get_execution_input_for_run(
+        user_context,
+        queued_run.id,
+    )
+    assert execution_input is not None
+    assert execution_input.content is not None
+    assert str(entry_id) in execution_input.content
+    assert '"local_start": "2026-07-12T15:00"' in execution_input.content
+    assert '"start_time"' not in execution_input.content
+    assert "Asia/Shanghai" not in execution_input.content
     assert messages.json()["items"][-1]["content"].startswith("选择“产品会议")
     assert str(entry_id) not in messages.json()["items"][-1]["content"]
     assert len(dispatcher.started) == 1
@@ -464,7 +490,10 @@ async def test_get_queued_run_and_events_after_creation(api_app: FastAPI) -> Non
 
     assert run_response.status_code == 200
     assert run_response.json()["status"] == "queued"
-    assert [event["event_type"] for event in events_response.json()] == ["run_created"]
+    assert [event["event_type"] for event in events_response.json()] == [
+        "run.created",
+        "message.human",
+    ]
 
 
 async def test_command_run_creation_is_idempotent(api_app: FastAPI) -> None:
@@ -538,7 +567,7 @@ async def test_queue_failure_marks_persisted_run_failed(api_app: FastAPI) -> Non
     assert response.json()["error"]["code"] == "COMMAND_QUEUE_UNAVAILABLE"
     assert response.json()["error"]["details"]["run_id"] == str(dispatcher.run_id)
     assert run_response.json()["status"] == "failed"
-    assert run_response.json()["result_message"] == "redis unavailable"
+    assert run_response.json()["last_ai_message"] == "redis unavailable"
 
 
 async def test_cancel_queued_run_is_persisted_and_dispatched(api_app: FastAPI) -> None:
@@ -558,8 +587,10 @@ async def test_cancel_queued_run_is_persisted_and_dispatched(api_app: FastAPI) -
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] == "cancelled"
     assert [event["event_type"] for event in events.json()] == [
-        "run_created",
-        "run_cancelled",
+        "run.created",
+        "message.human",
+        "run.cancelled",
+        "message.ai",
     ]
     assert dispatcher.cancelled == [UUID(run_id)]
 
@@ -570,7 +601,7 @@ async def test_cancel_terminal_run_does_not_overwrite_status(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     await service.mark_running(user_context, run)
     await service.mark_completed(user_context, run, result_message="已安排")
     await db_session.commit()
@@ -584,9 +615,9 @@ async def test_cancel_terminal_run_does_not_overwrite_status(
 
     assert response.json()["status"] == "completed"
     assert [event["event_type"] for event in events.json()] == [
-        "run_created",
-        "run_started",
-        "run_completed",
+        "run.created",
+        "run.started",
+        "run.completed",
     ]
 
 
@@ -596,7 +627,7 @@ async def test_stream_run_events_returns_terminal_run_state(
     user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, runs, "安排会议")
     await runs.mark_running(user_context, run)
     await runs.mark_needs_clarification(user_context, run, question="几点开始？")
     await build_conversation_service(db_session).upsert_assistant_message(
@@ -659,7 +690,7 @@ async def test_stream_run_events_forwards_live_structured_messages(
     user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(user_context, input_message="创建任务")
+    run = await _create_run(db_session, user_context, runs, "创建任务")
     await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
@@ -725,7 +756,7 @@ async def test_stream_run_events_drops_unprojected_canonical_and_raw_errors(
     user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(user_context, input_message="执行内部工具")
+    run = await _create_run(db_session, user_context, runs, "执行内部工具")
     await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
@@ -769,7 +800,7 @@ async def test_stream_run_events_resumes_from_last_event_id_header(
     user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(user_context, input_message="继续事件流")
+    run = await _create_run(db_session, user_context, runs, "继续事件流")
     await runs.mark_running(user_context, run)
     await db_session.commit()
     stream_bridge = api_app.state.test_stream_bridge
@@ -797,9 +828,8 @@ async def test_stream_run_events_rejects_invalid_last_event_id(
     db_session: AsyncSession,
     user_context: UserContext,
 ) -> None:
-    run = await build_run_service(db_session).create_run(
-        user_context, input_message="无效游标"
-    )
+    service = build_run_service(db_session)
+    run = await _create_run(db_session, user_context, service, "无效游标")
     await db_session.commit()
 
     async with AsyncClient(
@@ -820,7 +850,7 @@ async def test_stream_run_events_ignores_live_cursor_for_terminal_run(
     user_context: UserContext,
 ) -> None:
     runs = build_run_service(db_session)
-    run = await runs.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, runs, "安排会议")
     await runs.mark_running(user_context, run)
     await runs.mark_completed(user_context, run, result_message="已安排")
     await db_session.commit()

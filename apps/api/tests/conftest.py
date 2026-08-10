@@ -26,7 +26,7 @@ from dayboard.app.command_schemas import CommandRequest
 from dayboard.api.routes import get_command_dispatcher, get_stream_bridge
 from dayboard.api.dependencies import get_command_service
 from dayboard.composition.commands import build_command_service
-from dayboard.composition.platform import build_run_service
+from dayboard.composition.platform import build_platform_services, build_run_service
 from north.runtime import END_SENTINEL, StreamEvent
 from agent_platform.core import UserContext
 from dayboard.api.auth import get_user_context
@@ -34,7 +34,6 @@ from dayboard.db.models import (
     AgentRunEventRow,
     AgentRunRow,
     CalendarEntryRow,
-    ConversationMessageRow,
     ConversationStateRow,
     ConversationThreadRow,
     IdempotencyKeyRow,
@@ -62,12 +61,12 @@ class TestCommandService:
         context: UserContext,
         request: CommandRequest,
     ) -> UUID:
-        run = await build_run_service(self.session).create_run(
+        platform = build_platform_services(self.session)
+        submission = await platform.submissions.submit(
             context,
             input_message=request.message,
         )
-        await self.session.commit()
-        return run.id
+        return submission.run_id
 
     async def create_or_get_command_run(
         self,
@@ -77,16 +76,14 @@ class TestCommandService:
         idempotency_key: str | None = None,
         thread_id: UUID | None = None,
     ):
-        from agent_platform.core import CommandSubmission
-
         del idempotency_key
-        run = await build_run_service(self.session).create_run(
+        platform = build_platform_services(self.session)
+        submission = await platform.submissions.submit(
             context,
             input_message=request.message,
             thread_id=thread_id,
         )
-        await self.session.commit()
-        return CommandSubmission(run.id, run.status, True, run.thread_id)
+        return submission
 
     async def fail_command_run(
         self,
@@ -180,7 +177,6 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(UserProfileRow))
         await session.execute(delete(UserRow))
         await session.execute(delete(ReminderDeliveryRow))
-        await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))
@@ -199,7 +195,6 @@ async def db_session() -> AsyncIterator[AsyncSession]:
         await session.execute(delete(UserProfileRow))
         await session.execute(delete(UserRow))
         await session.execute(delete(ReminderDeliveryRow))
-        await session.execute(delete(ConversationMessageRow))
         await session.execute(delete(ConversationStateRow))
         await session.execute(delete(ProviderUsageRecordRow))
         await session.execute(delete(AgentRunEventRow))

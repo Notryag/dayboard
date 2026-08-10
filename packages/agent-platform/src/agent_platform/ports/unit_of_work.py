@@ -6,7 +6,6 @@ from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
 from agent_platform.ports.conversations import (
-    ConversationMessageStore,
     ConversationStateStore,
     ConversationThreadStore,
 )
@@ -22,8 +21,8 @@ class TransactionBoundary(Protocol):
 
 class ConversationUnitOfWork(TransactionBoundary, Protocol):
     threads: ConversationThreadStore
-    messages: ConversationMessageStore
     states: ConversationStateStore
+    events: RunEventStore
 
 
 class RunUnitOfWork(TransactionBoundary, Protocol):

@@ -78,9 +78,13 @@ class RunExecutionCoordinator:
             return transitioned
 
         try:
+            execution_input = await self.conversations.get_execution_input_for_run(context, run.id)
+            if execution_input is None:
+                raise RuntimeError(f"Run {run.id} has no persisted human message")
             await driver.execute(
                 context,
                 run,
+                execution_input,
                 on_completed=complete,
                 on_failed=fail,
             )

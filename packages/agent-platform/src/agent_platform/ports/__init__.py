@@ -1,7 +1,6 @@
 """Dependency-inversion ports implemented by platform adapters."""
 
 from agent_platform.ports.conversations import (
-    ConversationMessageStore,
     ConversationStateStore,
     ConversationThreadStore,
 )
@@ -18,7 +17,6 @@ from agent_platform.ports.unit_of_work import (
 )
 
 __all__ = [
-    "ConversationMessageStore",
     "ConversationStateStore",
     "ConversationThreadStore",
     "ConversationUnitOfWork",

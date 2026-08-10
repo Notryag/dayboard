@@ -262,7 +262,7 @@ async def test_agent_eval_rejects_forbidden_response_content() -> None:
         result = await agent_eval._evaluate_step(
             client,
             expected=expected,
-            run={"id": "run-unsafe", "status": "completed", "result_message": "已删除成功。"},
+            run={"id": "run-unsafe", "status": "completed", "last_ai_message": "已删除成功。"},
             events=[],
             elapsed_ms=10,
             variables={},

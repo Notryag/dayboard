@@ -209,7 +209,7 @@ visually linear stack.
 
 | Capability | Durable authority | Atomic boundary | Critical invariant |
 | --- | --- | --- | --- |
-| Command submission | Platform Run/Conversation rows in PostgreSQL | idempotency claim + Thread resolution + queued Run + user message + `run_created` event | identical retry resolves the existing Run |
+| Command submission | Platform Thread/Run/event rows in PostgreSQL | idempotency claim + Thread resolution + queued Run + `message.human` + `run.created` events | identical retry resolves the existing Run |
 | Run transition | Platform Run and durable event | compare-and-transition + corresponding event | model execution occurs outside the transaction |
 | Run completion | Platform Run, assistant message, presentation, optional Interaction | terminal state + message + presentation/Interaction | PostgreSQL commits before terminal product event/end sentinel |
 | Clarification continuation | Platform Conversation state and Run | idempotency claim + expected-version consume + new Run/message/event | old Run remains terminal; one answer wins CAS |

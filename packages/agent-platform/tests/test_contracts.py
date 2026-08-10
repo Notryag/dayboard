@@ -52,6 +52,7 @@ def test_run_event_rejects_empty_event_type() -> None:
     with pytest.raises(ValidationError):
         AgentRunEvent(
             id=uuid4(),
+            thread_id=uuid4(),
             run_id=uuid4(),
             seq=1,
             event_type="",

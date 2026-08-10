@@ -20,13 +20,27 @@ from agent_platform.core import AgentRunStatus
 from dayboard.domain.interactions import ClarificationPayload
 
 
+async def _create_run(
+    session: AsyncSession,
+    context: UserContext,
+    service,
+    message: str,
+):
+    thread = await build_platform_services(session).conversations.create_thread(context)
+    return await service.create_run(
+        context,
+        thread_id=thread.id,
+        first_human_message=message,
+    )
+
+
 async def test_agent_run_service_records_lifecycle_events(
     db_session: AsyncSession,
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
 
-    run = await service.create_run(user_context, input_message="安排明天的事情")
+    run = await _create_run(db_session, user_context, service, "安排明天的事情")
     await service.mark_running(user_context, run)
     await service.mark_needs_clarification(user_context, run, question="需要几点？")
     await db_session.commit()
@@ -38,9 +52,9 @@ async def test_agent_run_service_records_lifecycle_events(
     assert refreshed.status == AgentRunStatus.needs_clarification
     assert [event.seq for event in events] == [1, 2, 3]
     assert [event.event_type for event in events] == [
-        "run_created",
-        "run_started",
-        "clarification_requested",
+        "run.created",
+        "run.started",
+        "run.needs_clarification",
     ]
     assert events[-1].content == "需要几点？"
 
@@ -50,10 +64,11 @@ async def test_run_event_extension_round_trips(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     aware_time = datetime.now(UTC)
     await service.append_progress(
         user_context,
+        run.thread_id,
         run.id,
         event_type="time_resolved",
         content="时间已识别",
@@ -78,7 +93,7 @@ async def test_concurrent_run_events_receive_unique_ordered_sequences(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="并发事件")
+    run = await _create_run(db_session, user_context, service, "并发事件")
     await db_session.commit()
 
     async def append_progress(content: str) -> None:
@@ -86,6 +101,7 @@ async def test_concurrent_run_events_receive_unique_ordered_sequences(
             event_service = build_run_service(event_session)
             await event_service.append_progress(
                 user_context,
+                run.thread_id,
                 run.id,
                 event_type="parallel_progress",
                 content=content,
@@ -104,7 +120,7 @@ async def test_stale_running_runs_are_recovered_to_failed(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     await service.mark_running(user_context, run)
     stale_at = datetime.now(UTC) - timedelta(minutes=20)
     await db_session.execute(
@@ -125,7 +141,7 @@ async def test_stale_running_runs_are_recovered_to_failed(
     assert recovered == [run.id]
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.failed
-    assert events[-1].event_type == "run_failed"
+    assert events[-1].event_type == "run.failed"
     assert events[-1].extension is not None
     assert events[-1].extension.kind == "agent-platform.failure"
     assert events[-1].extension.payload["error_type"] == "StaleRunRecovered"
@@ -136,8 +152,8 @@ async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    stale = await service.create_run(user_context, input_message="旧请求")
-    recent = await service.create_run(user_context, input_message="新请求")
+    stale = await _create_run(db_session, user_context, service, "旧请求")
+    recent = await _create_run(db_session, user_context, service, "新请求")
     stale_at = datetime.now(UTC) - timedelta(minutes=40)
     await db_session.execute(
         update(AgentRunRow).where(AgentRunRow.id == stale.id).values(created_at=stale_at)
@@ -158,10 +174,10 @@ async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(
     assert recovered == [stale.id]
     assert refreshed_stale is not None
     assert refreshed_stale.status == AgentRunStatus.failed
-    assert refreshed_stale.result_message == "排队超时，请重试"
+    assert refreshed_stale.last_ai_message == "排队超时，请重试"
     assert refreshed_recent is not None
     assert refreshed_recent.status == AgentRunStatus.queued
-    assert events[-1].event_type == "run_failed"
+    assert events[-1].event_type == "run.failed"
     assert events[-1].extension is not None
     assert events[-1].extension.kind == "agent-platform.failure"
     assert events[-1].extension.payload["error_type"] == "QueueWaitTimeout"
@@ -172,7 +188,7 @@ async def test_queued_timeout_cannot_fail_a_run_that_has_started(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="正在启动")
+    run = await _create_run(db_session, user_context, service, "正在启动")
     await service.mark_running(user_context, run)
 
     transitioned = await service.mark_failed(
@@ -189,7 +205,7 @@ async def test_queued_timeout_cannot_fail_a_run_that_has_started(
     assert not transitioned
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.running
-    assert [event.event_type for event in events] == ["run_created", "run_started"]
+    assert [event.event_type for event in events] == ["run.created", "run.started"]
 
 
 async def test_run_reads_refresh_status_changed_by_another_session(
@@ -197,7 +213,7 @@ async def test_run_reads_refresh_status_changed_by_another_session(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     await service.mark_running(user_context, run)
     await db_session.commit()
 
@@ -219,7 +235,7 @@ async def test_cancelled_run_cannot_be_completed_by_worker_with_stale_state(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     await service.mark_running(user_context, run)
     await db_session.commit()
 
@@ -245,9 +261,9 @@ async def test_cancelled_run_cannot_be_completed_by_worker_with_stale_state(
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.cancelled.value
     assert [event.event_type for event in events] == [
-        "run_created",
-        "run_started",
-        "run_cancelled",
+        "run.created",
+        "run.started",
+        "run.cancelled",
     ]
 
 
@@ -256,7 +272,7 @@ async def test_completed_run_cannot_be_cancelled_by_request_with_stale_state(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     await service.mark_running(user_context, run)
     await db_session.commit()
 
@@ -281,11 +297,11 @@ async def test_completed_run_cannot_be_cancelled_by_request_with_stale_state(
     events = await service.list_events(user_context, run.id)
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.completed.value
-    assert refreshed.result_message == "已完成"
+    assert refreshed.last_ai_message == "已完成"
     assert [event.event_type for event in events] == [
-        "run_created",
-        "run_started",
-        "run_completed",
+        "run.created",
+        "run.started",
+        "run.completed",
     ]
 
 
@@ -332,7 +348,7 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
     thread = await platform.conversations.create_thread(user_context, title="同一会话")
     source = await platform.runs.create_run(
         user_context,
-        input_message="需要选择",
+        first_human_message="需要选择",
         thread_id=thread.id,
     )
     assert await platform.runs.mark_running(user_context, source)
@@ -350,7 +366,7 @@ async def test_failed_command_submission_rolls_back_its_idempotency_claim(
     )
     active = await platform.runs.create_run(
         user_context,
-        input_message="正在执行",
+        first_human_message="正在执行",
         thread_id=thread.id,
     )
     await platform.unit_of_work.commit()
@@ -399,7 +415,7 @@ async def test_run_lookup_is_owner_scoped_within_a_user(
     user_context: UserContext,
 ) -> None:
     service = build_run_service(db_session)
-    run = await service.create_run(user_context, input_message="安排会议")
+    run = await _create_run(db_session, user_context, service, "安排会议")
     other_context = UserContext(
         user_id=uuid4(),
         timezone=user_context.timezone,

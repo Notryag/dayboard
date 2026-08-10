@@ -10,9 +10,17 @@ supplies PostgreSQL stores through its composition root and keeps scheduling cla
 its product layer.
 
 Command submission uses an explicit Unit of Work to persist an idempotency claim, Thread, Run,
-`run_created` event, and user message atomically. Idempotency records and validation remain
+`run.created` event, and `message.human` event atomically. Idempotency records and validation remain
 persistence-neutral; the active PostgreSQL implementation is supplied by Dayboard until the adapter
 contract is ready to move into this package.
+
+The persistence contract has three authorities: the Thread store owns conversation metadata, the
+Run store owns execution status and bounded listing summaries, and the Run-event store owns durable
+messages plus lifecycle/runtime history. A separate messages table is not part of the contract.
+Presentation envelopes for cards and citations are stored on `message.ai` events. Streaming token
+deltas remain transient and only the completed assistant message is durable. When a trusted Agent
+input intentionally differs from user-visible text, the store records one separate `agent.input`
+event; ordinary turns do not duplicate the human message.
 
 The package is internally divided by dependency direction:
 

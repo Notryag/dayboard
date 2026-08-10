@@ -104,6 +104,7 @@ class DayboardRunExecutionDriver:
         self,
         context: UserContext,
         run: AgentRun,
+        input_message: str,
         *,
         on_completed: RunCompletionCallback,
         on_failed: RunFailureCallback,
@@ -127,6 +128,7 @@ class DayboardRunExecutionDriver:
                             raise asyncio.CancelledError()
                         await event_runs.append_progress(
                             context,
+                            run.thread_id,
                             run.id,
                             event_type=projected.event_type,
                             content=projected.content,
@@ -250,9 +252,9 @@ class DayboardRunExecutionDriver:
                 thread_id=str(run.thread_id),
                 user_id=str(context.user_id),
                 model=self.model_name,
-                message_length=len(run.input_message),
+                message_length=len(input_message),
             )
-            budget_estimate = self._check_budget(context, run)
+            budget_estimate = self._check_budget(context, run, input_message)
             logger.info(
                 "dayboard.command.north_invoke_started",
                 run_id=str(run.id),
@@ -273,7 +275,7 @@ class DayboardRunExecutionDriver:
                     run.id,
                     [record_compaction],
                 ),
-                graph_input={"messages": [HumanMessage(content=run.input_message)]},
+                graph_input={"messages": [HumanMessage(content=input_message)]},
                 config={
                     "configurable": {
                         "thread_id": str(run.thread_id),
@@ -331,8 +333,9 @@ class DayboardRunExecutionDriver:
         self,
         context: UserContext,
         run: AgentRun,
+        input_message: str,
     ) -> ProviderBudgetEstimate:
-        estimate = self.budget_guard.estimate(input_text=run.input_message)
+        estimate = self.budget_guard.estimate(input_text=input_message)
         logger.info(
             "dayboard.command.budget_check_started",
             run_id=str(run.id),

@@ -333,10 +333,11 @@ async def test_clarification_outcome_is_persisted_before_terminal_stream(
     assert state is not None and state.interaction is not None
     assert state.interaction.source_run_id == created.run_id
     assert messages[-1].content == "上午还是下午？"
-    assert events[-1].event_type == "clarification_requested"
-    assert events[-1].extension is not None
-    assert events[-1].extension.kind == "agent-platform.interaction-state"
-    assert events[-1].extension.payload == {"state_version": state.version}
+    assert events[-1].event_type == "message.ai"
+    assert events[-2].event_type == "run.needs_clarification"
+    assert events[-2].extension is not None
+    assert events[-2].extension.kind == "agent-platform.interaction-state"
+    assert events[-2].extension.payload == {"state_version": state.version}
     assert [event_type for _, event_type, _ in run_stream.events] == ["clarification_requested"]
 
 

@@ -19,6 +19,7 @@ class RunExecutionDriver(Protocol):
         self,
         context: UserContext,
         run: AgentRun,
+        input_message: str,
         *,
         on_completed: RunCompletionCallback,
         on_failed: RunFailureCallback,

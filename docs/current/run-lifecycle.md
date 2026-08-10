@@ -186,12 +186,18 @@ provider confirmation call. This optimization never runs for search results, too
 clarification, malformed output, partial completion, or unresolved work. The committed artifact is
 still projected and persisted before the Run becomes terminal.
 
-`agent_run_events` are durable observability records. Their generic event fields are product-neutral;
+`agent_run_events` are the ordered Thread journal for durable messages, lifecycle records, and
+observability records. `message.human` and `message.ai` are the authoritative conversation history;
+the assistant event also carries the versioned presentation used to restore schedule cards. Run
+rows contain lifecycle state and bounded list summaries, not authoritative request/response bodies.
+Token deltas remain only in the live StreamBridge and are never written one token at a time.
+
+The generic event fields are product-neutral;
 optional diagnostic data uses a versioned `EventExtensionEnvelope`. North model/tool extensions and
 Platform failure/interaction-state extensions are validated by their producing owner before
 persistence. The database rejects partial envelopes. These records are not polled as
 the primary live UI protocol, their extension payloads are not sent through user-facing SSE, and
-they are not used to reconstruct schedule cards.
+non-message runtime records are not used to reconstruct schedule cards.
 
 ## Reconnection And Replay
 
@@ -221,7 +227,7 @@ then atomically persists the `PendingInteraction`, assistant message, and termin
 The typed Thread-state endpoint returns the safe option presentation. A choice request carries the
 conversation-state version and stable option key. Dayboard validates the hidden product-owned
 candidate, then the Platform atomically consumes the expected Interaction version and creates the
-idempotent continuation Run, user message, and `run_created` event. An identical `Idempotency-Key`
+idempotent continuation Run, user message, and `run.created` event. An identical `Idempotency-Key`
 retry resolves the existing Run before reading Interaction state; a different or stale choice
 receives a conflict.
 

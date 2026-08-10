@@ -242,7 +242,7 @@ export function useRunStream(apiUrl: string) {
                   connect();
                   return;
                 }
-                finish(stream, run.result_message ?? getMessage(locale, "chat.ended"));
+                finish(stream, run.last_ai_message ?? getMessage(locale, "chat.ended"));
                 return;
               }
               retries += 1;

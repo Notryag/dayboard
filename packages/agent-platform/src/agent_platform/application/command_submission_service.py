@@ -111,7 +111,9 @@ class CommandSubmissionService:
 
             run = await self.runs.create_run(
                 context,
-                input_message=input_message,
+                first_human_message=(
+                    conversation_message if conversation_message is not None else input_message
+                ),
                 thread_id=thread_id,
                 run_id=run_id,
             )
@@ -124,6 +126,13 @@ class CommandSubmissionService:
                     conversation_message if conversation_message is not None else input_message
                 ),
             )
+            if conversation_message is not None and conversation_message != input_message:
+                await self.unit_of_work.events.append_execution_input_once(
+                    context,
+                    thread_id=thread_id,
+                    run_id=run.id,
+                    content=input_message,
+                )
             await self.unit_of_work.commit()
             return CommandSubmission(
                 run_id=run.id,

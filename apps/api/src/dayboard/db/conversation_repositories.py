@@ -9,16 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import UserContext
 from agent_platform.core import (
-    ConversationMessage,
-    ConversationRole,
     ConversationState,
     ConversationThread,
     ConversationThreadStatus,
     PendingInteraction,
-    PresentationEnvelope,
 )
 from dayboard.db.models import (
-    ConversationMessageRow,
     ConversationStateRow,
     ConversationThreadRow,
 )
@@ -34,27 +30,6 @@ def conversation_thread_from_row(row: ConversationThreadRow) -> ConversationThre
         summary=row.summary,
         created_at=row.created_at,
         updated_at=row.updated_at,
-    )
-
-
-def conversation_message_from_row(row: ConversationMessageRow) -> ConversationMessage:
-    presentation = None
-    if row.presentation_kind is not None:
-        if row.presentation_schema_version is None:
-            raise RuntimeError("Persisted presentation is incomplete")
-        presentation = PresentationEnvelope(
-            kind=row.presentation_kind,
-            schema_version=row.presentation_schema_version,
-            payload=row.presentation_payload,
-        )
-    return ConversationMessage(
-        id=row.id,
-        thread_id=row.thread_id,
-        run_id=row.run_id,
-        role=ConversationRole(row.role),
-        content=row.content,
-        presentation=presentation,
-        created_at=row.created_at,
     )
 
 
@@ -171,166 +146,6 @@ class ConversationThreadRepository:
             .returning(ConversationThreadRow)
         )
         return conversation_thread_from_row(row) if row else None
-
-
-class ConversationMessageRepository:
-    def __init__(self, session: AsyncSession) -> None:
-        self.session = session
-
-    async def append_once(
-        self,
-        context: UserContext,
-        *,
-        thread_id: UUID,
-        run_id: UUID,
-        role: ConversationRole,
-        content: str,
-        presentation: PresentationEnvelope | None = None,
-    ) -> ConversationMessage:
-        statement = (
-            insert(ConversationMessageRow)
-            .values(
-                user_id=context.user_id,
-                thread_id=thread_id,
-                run_id=run_id,
-                role=role.value,
-                content=content,
-                presentation_kind=presentation.kind if presentation is not None else None,
-                presentation_schema_version=(
-                    presentation.schema_version if presentation is not None else None
-                ),
-                presentation_payload=presentation.payload if presentation is not None else {},
-            )
-            .on_conflict_do_nothing(
-                index_elements=["user_id", "run_id", "role"],
-            )
-            .returning(ConversationMessageRow)
-        )
-        row = (await self.session.execute(statement)).scalar_one_or_none()
-        if row is not None:
-            return conversation_message_from_row(row)
-        existing = await self.session.scalar(
-            select(ConversationMessageRow).where(
-                ConversationMessageRow.run_id == run_id,
-                ConversationMessageRow.role == role.value,
-            )
-        )
-        if existing is None:
-            raise RuntimeError("Conversation message conflict was not persisted")
-        return conversation_message_from_row(existing)
-
-    async def upsert_assistant(
-        self,
-        context: UserContext,
-        *,
-        thread_id: UUID,
-        run_id: UUID,
-        content: str,
-        presentation: PresentationEnvelope | None,
-    ) -> ConversationMessage:
-        statement = (
-            insert(ConversationMessageRow)
-            .values(
-                user_id=context.user_id,
-                thread_id=thread_id,
-                run_id=run_id,
-                role=ConversationRole.assistant.value,
-                content=content,
-                presentation_kind=presentation.kind if presentation is not None else None,
-                presentation_schema_version=(
-                    presentation.schema_version if presentation is not None else None
-                ),
-                presentation_payload=presentation.payload if presentation is not None else {},
-            )
-            .on_conflict_do_update(
-                index_elements=["user_id", "run_id", "role"],
-                set_={
-                    "content": content,
-                    "presentation_kind": presentation.kind if presentation is not None else None,
-                    "presentation_schema_version": (
-                        presentation.schema_version if presentation is not None else None
-                    ),
-                    "presentation_payload": presentation.payload if presentation is not None else {},
-                },
-            )
-            .returning(ConversationMessageRow)
-        )
-        row = (await self.session.execute(statement)).scalar_one()
-        return conversation_message_from_row(row)
-
-    async def get_assistant_for_run(
-        self,
-        context: UserContext,
-        run_id: UUID,
-    ) -> ConversationMessage | None:
-        row = await self.session.scalar(
-            select(ConversationMessageRow).where(
-                ConversationMessageRow.user_id == context.user_id,
-                ConversationMessageRow.run_id == run_id,
-                ConversationMessageRow.role == ConversationRole.assistant.value,
-            )
-        )
-        return conversation_message_from_row(row) if row else None
-
-    async def list_for_thread(
-        self,
-        context: UserContext,
-        thread_id: UUID,
-    ) -> list[ConversationMessage]:
-        result = await self.session.scalars(
-            select(ConversationMessageRow)
-            .where(
-                ConversationMessageRow.user_id == context.user_id,
-                ConversationMessageRow.thread_id == thread_id,
-            )
-            .order_by(ConversationMessageRow.created_at.asc(), ConversationMessageRow.id.asc())
-        )
-        return [conversation_message_from_row(row) for row in result]
-
-    async def list_page_for_thread(
-        self,
-        context: UserContext,
-        thread_id: UUID,
-        *,
-        before: UUID | None,
-        limit: int,
-    ) -> tuple[list[ConversationMessage], UUID | None]:
-        statement = select(ConversationMessageRow).where(
-            ConversationMessageRow.user_id == context.user_id,
-            ConversationMessageRow.thread_id == thread_id,
-        )
-        if before is not None:
-            cursor = await self.session.scalar(
-                select(ConversationMessageRow).where(
-                    ConversationMessageRow.id == before,
-                    ConversationMessageRow.user_id == context.user_id,
-                    ConversationMessageRow.thread_id == thread_id,
-                )
-            )
-            if cursor is None:
-                raise LookupError("Conversation message cursor not found")
-            statement = statement.where(
-                (ConversationMessageRow.created_at < cursor.created_at)
-                | (
-                    (ConversationMessageRow.created_at == cursor.created_at)
-                    & (ConversationMessageRow.id < cursor.id)
-                )
-            )
-        rows = list(
-            await self.session.scalars(
-                statement.order_by(
-                    ConversationMessageRow.created_at.desc(),
-                    ConversationMessageRow.id.desc(),
-                ).limit(limit + 1)
-            )
-        )
-        has_more = len(rows) > limit
-        page = rows[:limit]
-        page.reverse()
-        return (
-            [conversation_message_from_row(row) for row in page],
-            page[0].id if has_more else None,
-        )
 
 
 class ConversationStateRepository:

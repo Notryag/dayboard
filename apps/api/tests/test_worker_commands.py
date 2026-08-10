@@ -29,7 +29,6 @@ async def test_worker_restores_execution_context_from_persisted_run(monkeypatch)
             assert requested_run_id == run_id
             return SimpleNamespace(
                 user_id=user_id,
-                input_message="数据库中的消息",
             )
 
     class FakeRunExecutionScope:

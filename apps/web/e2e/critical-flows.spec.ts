@@ -278,7 +278,7 @@ test("reload restores history and rejoins an active Run", async ({ page }) => {
   const entry = calendarEntry({ id: "calendar-active", title: "恢复后的日程" });
   const part = schedulePart(entry, "tool-active");
   const state = await installApiFixture(page, {
-    activeRun: { id: "run-active", status: "running", result_message: null },
+    activeRun: { id: "run-active", status: "running", last_ai_message: null },
     messages: [{
       id: "history-user",
       thread_id: "thread-existing",

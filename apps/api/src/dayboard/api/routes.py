@@ -175,7 +175,9 @@ def _terminal_stream_event(
         "cancelled": "run_cancelled",
     }.get(run.status.value)
     return (
-        (event_type, {"content": run.result_message, "parts": parts or []}) if event_type else None
+        (event_type, {"content": run.last_ai_message, "parts": parts or []})
+        if event_type
+        else None
     )
 
 
@@ -1115,7 +1117,7 @@ async def cancel_run(
             user_context,
             thread_id=run.thread_id,
             run_id=run.id,
-            content=run.result_message or "请求已取消",
+            content="请求已取消",
             presentation=build_dayboard_presentation(parts),
         )
     await platform.unit_of_work.commit()
@@ -1125,7 +1127,7 @@ async def cancel_run(
                 str(run.id),
                 "run_cancelled",
                 {
-                    "content": run.result_message or "请求已取消",
+                    "content": "请求已取消",
                     "parts": parts,
                 },
             )

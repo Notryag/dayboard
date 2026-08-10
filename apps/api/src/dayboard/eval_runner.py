@@ -494,7 +494,7 @@ async def _evaluate_step(
         variables,
     )
     schedule_match = all(assertion["passed"] for assertion in schedule_assertions)
-    result_message = run.get("result_message")
+    result_message = run.get("last_ai_message")
     normalized_result = result_message.casefold() if isinstance(result_message, str) else ""
     forbidden_response_matches = [
         render_template(value, variables)

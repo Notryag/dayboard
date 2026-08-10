@@ -128,8 +128,8 @@ async def test_command_service_checks_budget_before_model_execution(
             user_id=user_context.user_id,
             thread_id=uuid4(),
             status=AgentRunStatus.running,
-            input_message=message,
-            result_message=None,
+            message_count=1,
+            first_human_message=message,
             created_at=now,
             updated_at=now,
         )
@@ -137,6 +137,7 @@ async def test_command_service_checks_budget_before_model_execution(
     await build_driver().execute(
         user_context,
         build_run("安排明天开会"),
+        "安排明天开会",
         on_completed=complete,
         on_failed=fail,
     )
@@ -145,6 +146,7 @@ async def test_command_service_checks_budget_before_model_execution(
         await build_driver().execute(
             user_context,
             build_run("安排后天开会"),
+            "安排后天开会",
             on_completed=complete,
             on_failed=fail,
         )

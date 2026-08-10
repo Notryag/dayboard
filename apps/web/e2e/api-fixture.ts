@@ -272,7 +272,7 @@ export async function installApiFixture(
         events: [{ type: "run_completed", data: { content: "已处理完成。", parts: [] } }],
       };
       state.runs.set(runId, spec);
-      state.activeRun = { id: runId, status: "running", result_message: null };
+      state.activeRun = { id: runId, status: "running", last_ai_message: null };
       state.messages.push({
         id: `message-${sequence}-user`,
         thread_id: commandMatch[1],
@@ -302,7 +302,7 @@ export async function installApiFixture(
         events: [{ type: "run_completed", data: { content: "已处理完成。", parts: [] } }],
       };
       state.runs.set(runId, spec);
-      state.activeRun = { id: runId, status: "running", result_message: null };
+      state.activeRun = { id: runId, status: "running", last_ai_message: null };
       state.clarification = null;
       return json(route, { run_id: runId, status: "queued", thread_id: clarificationMatch[1] });
     }
@@ -320,7 +320,7 @@ export async function installApiFixture(
       return;
     }
     const runMatch = path.match(/^\/api\/runs\/([^/]+)$/);
-    if (runMatch) return json(route, state.activeRun ?? { id: runMatch[1], status: "completed", result_message: "已处理完成。" });
+    if (runMatch) return json(route, state.activeRun ?? { id: runMatch[1], status: "completed", last_ai_message: "已处理完成。" });
     if (path === "/api/reminders" && method === "GET") {
       return json(
         route,
