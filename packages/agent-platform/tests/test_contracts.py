@@ -4,17 +4,17 @@ from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from pydantic import ValidationError
 import pytest
-
 from agent_platform.core import (
+    AgentRunEvent,
+    AgentRunEventCategory,
     ConversationMessage,
     ConversationRole,
     EventExtensionEnvelope,
     PresentationEnvelope,
+    UserContext,
 )
-from agent_platform.core import UserContext
-from agent_platform.core import AgentRunEvent, AgentRunEventCategory
+from pydantic import ValidationError
 
 
 def test_user_context_is_trusted_immutable_data() -> None:
@@ -60,6 +60,15 @@ def test_run_event_rejects_empty_event_type() -> None:
             content=None,
             created_at=datetime.now(UTC),
         )
+
+
+def test_run_event_categories_cover_runtime_activity_without_product_names() -> None:
+    assert AgentRunEventCategory.subagent.value == "subagent"
+    assert AgentRunEventCategory.trace.value == "trace"
+    assert AgentRunEventCategory.outputs.value == "outputs"
+    assert AgentRunEventCategory.middleware.value == "middleware"
+    assert AgentRunEventCategory.context.value == "context"
+    assert AgentRunEventCategory.workspace.value == "workspace"
 
 
 def test_event_extension_requires_identity_and_version() -> None:

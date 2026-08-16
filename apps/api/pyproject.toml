@@ -32,7 +32,7 @@ dev = [
 
 [tool.uv.sources]
 agent-application-platform = { path = "../../packages/agent-platform", editable = true }
-north = { git = "https://github.com/Notryag/north-agent.git", rev = "bd6f65409d978b621e6d0fb8a92514104c2f045b", subdirectory = "packages/harness" }
+north = { git = "https://github.com/Notryag/north-agent.git", rev = "a41035a", subdirectory = "packages/harness" }
 
 [project.scripts]
 dayboard-api = "dayboard.main:main"

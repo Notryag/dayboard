@@ -22,9 +22,15 @@ class AgentRunStatus(StrEnum):
 
 class AgentRunEventCategory(StrEnum):
     lifecycle = "lifecycle"
+    trace = "trace"
+    outputs = "outputs"
     message = "message"
     model = "model"
     tool = "tool"
+    subagent = "subagent"
+    middleware = "middleware"
+    context = "context"
+    workspace = "workspace"
     clarification = "clarification"
     error = "error"
 
