@@ -1,6 +1,7 @@
 import type { ScheduleDisplayItem, ScheduleResultPart } from "@/features/schedule/types";
-import type { RunActivityStep } from "./RunActivityTicker";
 import { getMessage, type Locale } from "@/i18n";
+
+import type { RunActivityStep } from "./runActivity";
 
 const progressLabels = {
   run_created: "chat.progressQueued",
@@ -110,11 +111,36 @@ export function parseRunEvent(eventName: string, rawData: string, locale: Locale
   if (eventName in progressLabels) {
     const fallback = getMessage(locale, progressLabels[eventName as keyof typeof progressLabels]);
     const useContent = eventName !== "run_created" && eventName !== "run_started";
+    const activity = isRecord(value.activity) ? value.activity : null;
+    const kind = activity?.kind === "subagent" ? "subagent"
+      : activity?.kind === "tool" ? "tool"
+        : "run";
+    const callId = typeof activity?.call_id === "string" ? activity.call_id : null;
+    const taskId = typeof activity?.task_id === "string" ? activity.task_id : null;
+    const durationMs = typeof activity?.duration_ms === "number" && activity.duration_ms >= 0
+      ? activity.duration_ms
+      : undefined;
+    const name = typeof activity?.name === "string" ? activity.name : undefined;
+    const status = eventName === "tool_call_error" ? "failed"
+      : eventName === "tool_call_completed" ? "completed"
+        : "running";
     return {
       type: "progress",
       step: {
+        id: kind === "subagent" && taskId
+          ? `subagent:${taskId}`
+          : kind === "tool" && callId
+            ? `tool:${callId}`
+            : kind === "run"
+              ? "run"
+              : `legacy:${eventName}`,
         eventType: eventName,
         text: useContent && typeof value.content === "string" ? value.content : fallback,
+        kind,
+        state: status,
+        ...(name ? { name } : {}),
+        ...(taskId ? { taskId } : {}),
+        ...(durationMs !== undefined ? { durationMs } : {}),
       },
     };
   }

@@ -18,9 +18,16 @@ import {
   runEventNames,
   type RunEvent,
 } from "./runEvents";
-import type { RunActivityStep } from "./RunActivityTicker";
+import {
+  type RunActivityState,
+  type RunActivityStep,
+  settleRunActivitySteps,
+  upsertRunActivityStep,
+} from "./runActivity";
 
 type RunStreamState = {
+  activityRunId: string | null;
+  activityState: RunActivityState;
   messages: ChatMessage[];
   progress: RunActivityStep[];
   scheduleRevision: number;
@@ -31,6 +38,7 @@ type RunStreamAction =
   | { type: "messages_prepended"; messages: ChatMessage[] }
   | { type: "message_appended"; message: ChatMessage }
   | { type: "progress_reset" }
+  | { type: "activity_failed" }
   | { type: "run_result_received"; runId: string; text: string }
   | { type: "schedule_changed" }
   | { type: "run_event"; event: RunEvent; runId: string }
@@ -50,7 +58,12 @@ function reduceRunEvent(
   const { event, runId } = action;
   switch (event.type) {
     case "progress":
-      return { ...state, progress: [...state.progress, event.step] };
+      return {
+        ...state,
+        activityRunId: runId,
+        activityState: "running",
+        progress: upsertRunActivityStep(state.progress, event.step),
+      };
     case "assistant_delta":
       return {
         ...state,
@@ -79,14 +92,25 @@ function reduceRunEvent(
     case "completed":
     case "failed":
     case "cancelled":
-    case "clarification":
-      return event.parts ? {
+    case "clarification": {
+      const activityState = event.type === "failed" ? "failed"
+        : event.type === "cancelled" ? "cancelled"
+          : "completed";
+      return {
         ...state,
-        messages: upsertAssistantMessage(state.messages, runId, (message) => ({
-          ...message,
-          parts: event.parts,
-        })),
-      } : state;
+        activityRunId: runId,
+        activityState,
+        progress: settleRunActivitySteps(state.progress, activityState),
+        ...(event.parts
+          ? {
+              messages: upsertAssistantMessage(state.messages, runId, (message) => ({
+                ...message,
+                parts: event.parts,
+              })),
+            }
+          : {}),
+      };
+    }
     case "replay_gap":
       return state;
   }
@@ -125,7 +149,13 @@ function runStreamReducer(state: RunStreamState, action: RunStreamAction): RunSt
     case "message_appended":
       return { ...state, messages: [...state.messages, action.message] };
     case "progress_reset":
-      return { ...state, progress: [] };
+      return { ...state, activityRunId: null, activityState: "idle", progress: [] };
+    case "activity_failed":
+      return {
+        ...state,
+        activityState: "failed",
+        progress: settleRunActivitySteps(state.progress, "failed"),
+      };
     case "run_result_received":
       return {
         ...state,
@@ -158,9 +188,25 @@ function terminalFallback(event: RunEvent, locale: "zh-CN" | "en-US") {
   return getMessage(locale, "chat.completed");
 }
 
+function terminalEventFromRun(
+  status: AgentRunStatus,
+  content: string | null | undefined,
+): RunEvent | null {
+  const normalizedContent = content ?? null;
+  if (status === "completed") return { type: "completed", content: normalizedContent };
+  if (status === "needs_clarification") {
+    return { type: "clarification", content: normalizedContent };
+  }
+  if (status === "failed") return { type: "failed", content: normalizedContent };
+  if (status === "cancelled") return { type: "cancelled", content: normalizedContent };
+  return null;
+}
+
 export function useRunStream(apiUrl: string) {
   const { locale } = useI18n();
   const [state, dispatch] = useReducer(runStreamReducer, {
+    activityRunId: null,
+    activityState: "idle",
     messages: initialMessages(locale),
     progress: [],
     scheduleRevision: 0,
@@ -242,6 +288,13 @@ export function useRunStream(apiUrl: string) {
                   connect();
                   return;
                 }
+                const terminalEvent = terminalEventFromRun(run.status, run.last_ai_message);
+                if (terminalEvent === null) return;
+                dispatch({
+                  type: "run_event",
+                  runId,
+                  event: terminalEvent,
+                });
                 finish(stream, run.last_ai_message ?? getMessage(locale, "chat.ended"));
                 return;
               }

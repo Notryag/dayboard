@@ -152,6 +152,15 @@ run_cancelled
 stream_replay_gap
 ```
 
+User-visible runtime activity follows the call-accurate contract in ADR-011. Tool progress payloads
+carry the North `call_id`, safe product label, state, and optional duration. The browser updates one
+row for the started and terminal events of that call; two calls to the same tool remain two rows.
+Subagent child events additionally carry `task_id` when Dayboard adopts a specialist. Raw reasoning,
+unrestricted tool arguments/results, and provider errors are not part of this contract.
+
+The compact activity view is expanded while a Run is active or failed and collapses after successful
+completion. This is presentation state, not Run state. The Run row remains authoritative.
+
 The safe projector allowlists scheduling tool results and emits typed snapshots. Create and mutation
 tools emit `schedule_item_result`; calendar/task searches emit one `schedule_items_result` containing
 all safe matches. The browser never parses assistant prose to discover calendar entries or tasks.

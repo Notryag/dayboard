@@ -445,7 +445,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.116.0,<1.0.0" },
     { name = "httpx", specifier = ">=0.28.0,<1.0.0" },
     { name = "isodate", specifier = ">=0.7.0,<1.0.0" },
-    { name = "north", extras = ["postgres"], git = "https://github.com/Notryag/north-agent.git?subdirectory=packages%2Fharness&rev=6702944" },
+    { name = "north", extras = ["postgres"], git = "https://github.com/Notryag/north-agent.git?subdirectory=packages%2Fharness&rev=3c0fce4" },
     { name = "pwdlib", extras = ["argon2"], specifier = ">=0.3.0,<1.0.0" },
     { name = "pydantic-settings", specifier = ">=2.10.0,<3.0.0" },
     { name = "redis", specifier = ">=5.0.0,<7.0.0" },
@@ -1347,7 +1347,7 @@ wheels = [
 [[package]]
 name = "north"
 version = "0.1.0"
-source = { git = "https://github.com/Notryag/north-agent.git?subdirectory=packages%2Fharness&rev=6702944#67029445796de9c9564683ac8406dcf7b7aa65c2" }
+source = { git = "https://github.com/Notryag/north-agent.git?subdirectory=packages%2Fharness&rev=3c0fce4#3c0fce4696a08ed9e76c8f8e86bb6099ba4d6838" }
 dependencies = [
     { name = "langchain" },
     { name = "langchain-openai" },

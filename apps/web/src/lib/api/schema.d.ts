@@ -733,7 +733,7 @@ export interface components {
          * AgentRunEventCategory
          * @enum {string}
          */
-        AgentRunEventCategory: "lifecycle" | "message" | "model" | "tool" | "clarification" | "error";
+        AgentRunEventCategory: "lifecycle" | "trace" | "outputs" | "message" | "model" | "tool" | "subagent" | "middleware" | "context" | "workspace" | "clarification" | "error";
         /**
          * AgentRunStatus
          * @enum {string}

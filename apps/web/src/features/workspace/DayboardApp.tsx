@@ -10,9 +10,7 @@ import { AuthBoundary } from "@/features/auth/AuthBoundary";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { userFacingApiError } from "@/lib/api/client";
-import {
-  RunActivityTicker,
-} from "@/features/chat/RunActivityTicker";
+import { RunActivityTimeline } from "@/features/chat/RunActivityTimeline";
 import { ConversationBootstrapNotice } from "@/features/chat/ConversationBootstrapNotice";
 import { ChatMessageList } from "@/features/chat/ChatMessageList";
 import { useConversationSession } from "@/features/chat/useConversationSession";
@@ -37,6 +35,8 @@ function ChatHome() {
   const { account, logout } = useAuth();
   const {
     activeRunId,
+    activityRunId,
+    activityState,
     bootstrapError,
     cancelActiveRun,
     chooseClarification,
@@ -187,15 +187,11 @@ function ChatHome() {
                     onRetry={retryBootstrap}
                   />
                 ) : null}
-                {isSubmitting ? (
-                  <RunActivityTicker
-                    steps={
-                      activeProgress.length
-                        ? activeProgress
-                        : [{ eventType: "submitting", text: t("workspace.submitting") }]
-                    }
-                  />
-                ) : null}
+                <RunActivityTimeline
+                  runId={activityRunId ?? activeRunId}
+                  state={activityState}
+                  steps={activeProgress}
+                />
                 <Composer
                   activeRunId={activeRunId}
                   disabled={!threadId || isThreadBootstrapping}

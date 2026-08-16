@@ -167,6 +167,81 @@ test("multiple arrangements stream into separate schedule cards", async ({ page 
   await expect(restoredResults.getByText("客户访谈")).toBeVisible();
 });
 
+test("activity merges one call lifecycle but keeps repeated tool calls separate", async ({ page }) => {
+  const state = await installApiFixture(page);
+  state.onCommand = () => ({
+    events: [
+      { type: "run_started", data: {} },
+      {
+        type: "tool_call_started",
+        data: {
+          content: "正在查找任务",
+          activity: {
+            call_id: "search-1",
+            kind: "tool",
+            name: "search_task_items",
+            status: "running",
+          },
+        },
+      },
+      {
+        type: "tool_call_completed",
+        data: {
+          content: "找到 2 个任务",
+          activity: {
+            call_id: "search-1",
+            duration_ms: 125,
+            kind: "tool",
+            name: "search_task_items",
+            status: "completed",
+          },
+        },
+      },
+      {
+        type: "tool_call_started",
+        data: {
+          content: "正在再次查找任务",
+          activity: {
+            call_id: "search-2",
+            kind: "tool",
+            name: "search_task_items",
+            status: "running",
+          },
+        },
+      },
+      {
+        type: "tool_call_completed",
+        data: {
+          content: "没有找到更多任务",
+          activity: {
+            call_id: "search-2",
+            duration_ms: 80,
+            kind: "tool",
+            name: "search_task_items",
+            status: "completed",
+          },
+        },
+      },
+      { type: "run_completed", data: { content: "查找完成。", parts: [] } },
+    ],
+    persistedText: "查找完成。",
+  });
+  await page.goto("/dayboard");
+  const input = await openTextComposer(page);
+  await input.fill("帮我查一下任务");
+  await page.getByRole("button", { name: "发送" }).click();
+
+  const activity = page.getByRole("region", { name: "处理过程" });
+  const disclosure = activity.getByRole("button");
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await disclosure.click();
+  await expect(activity.getByText("找到 2 个任务")).toBeVisible();
+  await expect(activity.getByText("没有找到更多任务")).toBeVisible();
+  await expect(activity.getByText("正在查找任务", { exact: true })).toHaveCount(0);
+  await expect(activity.getByText("正在再次查找任务", { exact: true })).toHaveCount(0);
+  await expect(activity.locator("li")).toHaveCount(3);
+});
+
 test("calendar search streams every match before the assistant summary", async ({ page }) => {
   const first = calendarEntry({ id: "calendar-query-a", title: "明日晨会" });
   const second = calendarEntry({

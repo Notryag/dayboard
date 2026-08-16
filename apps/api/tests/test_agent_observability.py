@@ -1,6 +1,6 @@
 from north import RuntimeEvent
 
-from dayboard.agent.observability import project_runtime_event
+from dayboard.agent.observability import project_runtime_event, public_runtime_activity
 
 
 def test_tool_start_projection_exposes_only_safe_product_fields() -> None:
@@ -148,7 +148,34 @@ def test_end_time_reschedule_progress_exposes_only_safe_fields() -> None:
 
     assert projected is not None
     assert projected.content == "正在修改日程结束时间为 2026-07-14T17:00:00"
-    assert projected.extension.payload["inputs"]["new_local_end"] == (
-        "2026-07-14T17:00:00"
-    )
+    assert projected.extension.payload["inputs"]["new_local_end"] == ("2026-07-14T17:00:00")
     assert "must-not-leak" not in str(projected)
+
+
+def test_public_activity_correlates_one_tool_call_without_exposing_inputs() -> None:
+    projected = project_runtime_event(
+        RuntimeEvent(
+            event_type="tool.completed",
+            category="tool",
+            content={"secret": "must-not-leak"},
+            metadata={
+                "call_id": "tool-1",
+                "task_id": "task-1",
+                "tool_name": "search_task_items",
+                "caller": "subagent:scheduler",
+                "parent_call_id": "parent-1",
+                "latency_ms": 125,
+            },
+        )
+    )
+
+    assert projected is not None
+    assert public_runtime_activity(projected) == {
+        "call_id": "tool-1",
+        "task_id": "task-1",
+        "kind": "tool",
+        "name": "search_task_items",
+        "status": "completed",
+        "duration_ms": 125,
+    }
+    assert "must-not-leak" not in str(public_runtime_activity(projected))

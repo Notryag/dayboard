@@ -24,6 +24,41 @@ class ProjectedRuntimeEvent:
     extension: EventExtensionEnvelope
 
 
+def public_runtime_activity(event: ProjectedRuntimeEvent) -> dict[str, Any] | None:
+    """Build the bounded browser payload for one projected runtime call."""
+
+    if event.extension.kind != NORTH_TOOL_CALL_EVENT_KIND:
+        return None
+    payload = event.extension.payload
+    call_id = _optional_text(payload.get("call_id"))
+    tool_name = _optional_text(payload.get("tool_name"))
+    if call_id is None or tool_name is None:
+        return None
+    status = {
+        "tool_call_started": "running",
+        "tool_call_completed": "completed",
+        "tool_call_error": "failed",
+    }.get(event.event_type)
+    if status is None:
+        return None
+    return {
+        "call_id": call_id,
+        "kind": "tool",
+        "name": tool_name,
+        "status": status,
+        **(
+            {"task_id": task_id}
+            if (task_id := _optional_text(payload.get("task_id"))) is not None
+            else {}
+        ),
+        **(
+            {"duration_ms": duration_ms}
+            if (duration_ms := _non_negative_number(payload.get("latency_ms"))) is not None
+            else {}
+        ),
+    }
+
+
 def project_runtime_event(event: RuntimeEvent) -> ProjectedRuntimeEvent | None:
     if event.event_type == "model.started":
         call_index = event.metadata.get("call_index")
@@ -106,9 +141,7 @@ def _model_extension(
             caller=_optional_text(metadata.get("caller")),
             latency_ms=_non_negative_number(metadata.get("latency_ms")),
             usage=ModelUsageEventPayload.model_validate(safe_usage),
-            error_type=(
-                _optional_text(metadata.get("error_type")) if include_error else None
-            ),
+            error_type=(_optional_text(metadata.get("error_type")) if include_error else None),
         ),
     )
 
@@ -129,12 +162,13 @@ def _tool_extension(
         NORTH_TOOL_CALL_EVENT_KIND,
         NorthToolCallEventPayload(
             call_id=_optional_text(metadata.get("call_id")),
+            task_id=_optional_text(metadata.get("task_id")),
             tool_name=tool_name,
+            caller=_optional_text(metadata.get("caller")),
+            parent_call_id=_optional_text(metadata.get("parent_call_id")),
             inputs=inputs or {},
             latency_ms=_non_negative_number(metadata.get("latency_ms")),
-            error_type=(
-                _optional_text(metadata.get("error_type")) if include_error else None
-            ),
+            error_type=(_optional_text(metadata.get("error_type")) if include_error else None),
         ),
     )
 
@@ -186,9 +220,7 @@ def _tool_started_text(tool_name: str, inputs: dict[str, Any]) -> str:
     if tool_name == "create_task_item":
         return "正在创建任务" + (f"“{title}”" if title else "")
     if tool_name == "search_calendar_entries":
-        return "正在查找日程" + _time_suffix(
-            inputs.get("local_start"), inputs.get("local_end")
-        )
+        return "正在查找日程" + _time_suffix(inputs.get("local_start"), inputs.get("local_end"))
     if tool_name == "reschedule_calendar_entry":
         start = inputs.get("new_local_start") or inputs.get("new_date")
         end = inputs.get("new_local_end")

@@ -42,7 +42,7 @@ export function useConversationSession() {
   const { locale, t } = useI18n();
   const apiUrl = useMemo(() => apiBaseUrl(), []);
   const {
-    state: { messages, progress, scheduleRevision },
+    state: { activityRunId, activityState, messages, progress, scheduleRevision },
     dispatch,
     followRun,
   } = useRunStream(apiUrl);
@@ -100,7 +100,6 @@ export function useConversationSession() {
         await consumeRun(activeRun.id, resolvedThreadId);
       } finally {
         setIsSubmitting(false);
-        dispatch({ type: "progress_reset" });
         setActiveRunId(null);
       }
     }
@@ -124,6 +123,7 @@ export function useConversationSession() {
       const command = await createCommandRun(threadId, { message: text });
       await consumeRun(command.run_id, threadId);
     } catch (error) {
+      dispatch({ type: "activity_failed" });
       dispatch({
         type: "message_appended",
         message: createMessage(
@@ -136,7 +136,6 @@ export function useConversationSession() {
       });
     } finally {
       setIsSubmitting(false);
-      dispatch({ type: "progress_reset" });
       setActiveRunId(null);
     }
   }, [consumeRun, dispatch, isSubmitting, locale, t, threadId]);
@@ -157,6 +156,7 @@ export function useConversationSession() {
       });
       await consumeRun(command.run_id, threadId);
     } catch {
+      dispatch({ type: "activity_failed" });
       await refreshConversationState(threadId).catch(() => undefined);
       dispatch({
         type: "message_appended",
@@ -164,7 +164,6 @@ export function useConversationSession() {
       });
     } finally {
       setIsSubmitting(false);
-      dispatch({ type: "progress_reset" });
       setActiveRunId(null);
     }
   }, [consumeRun, conversationState, dispatch, isSubmitting, locale, refreshConversationState, t, threadId]);
@@ -214,6 +213,8 @@ export function useConversationSession() {
 
   return {
     activeRunId,
+    activityRunId,
+    activityState,
     bootstrapError,
     cancelActiveRun,
     chooseClarification,

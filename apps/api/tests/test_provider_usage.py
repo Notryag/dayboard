@@ -179,9 +179,7 @@ async def test_runtime_events_are_serialized_with_independent_sessions(
         "north.tool-call"
     }
     assert {
-        event.extension.payload["call_id"]
-        for event in starts
-        if event.extension is not None
+        event.extension.payload["call_id"] for event in starts if event.extension is not None
     } == {"tool-1", "tool-2"}
 
 
@@ -192,10 +190,12 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
     class RecordingBridge:
         def __init__(self) -> None:
             self.events: list[str] = []
+            self.payloads: list[tuple[str, object]] = []
 
         async def publish(self, run_id, event, data, namespace=()):
-            del run_id, data, namespace
+            del run_id, namespace
             self.events.append(event)
+            self.payloads.append((event, data))
 
     async def fake_invoker(**kwargs):
         sink = kwargs["event_sink"]
@@ -233,6 +233,15 @@ async def test_model_lifecycle_is_audited_without_user_stream_publication(
     assert "tool_call_started" in {event.event_type for event in events}
     assert "agent_model_completed" not in bridge.events
     assert "tool_call_started" in bridge.events
+    assert next(data for event, data in bridge.payloads if event == "tool_call_started") == {
+        "content": "正在创建任务“会议”",
+        "activity": {
+            "call_id": "tool-1",
+            "kind": "tool",
+            "name": "create_task_item",
+            "status": "running",
+        },
+    }
 
 
 async def test_command_service_does_not_invent_missing_provider_usage(

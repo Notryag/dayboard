@@ -32,7 +32,10 @@ class NorthModelCallEventPayload(BaseModel):
 
 class NorthToolCallEventPayload(BaseModel):
     call_id: str | None = None
+    task_id: str | None = None
     tool_name: str = Field(min_length=1)
+    caller: str | None = None
+    parent_call_id: str | None = None
     inputs: dict[str, Any] = Field(default_factory=dict)
     latency_ms: int | float | None = Field(default=None, ge=0)
     error_type: str | None = None

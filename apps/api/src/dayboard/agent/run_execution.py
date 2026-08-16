@@ -31,7 +31,7 @@ from agent_platform.core import (
 from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
-from dayboard.agent.observability import project_runtime_event
+from dayboard.agent.observability import project_runtime_event, public_runtime_activity
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.app.provider_usage_ports import (
@@ -140,10 +140,14 @@ class DayboardRunExecutionDriver:
                         await event_unit_of_work.rollback()
                         raise
             if projected.event_type in USER_VISIBLE_RUNTIME_EVENTS:
+                data: dict[str, Any] = {"content": projected.content}
+                activity = public_runtime_activity(projected)
+                if activity is not None:
+                    data["activity"] = activity
                 await self._publish_run_event(
                     run.id,
                     projected.event_type,
-                    {"content": projected.content},
+                    data,
                 )
 
         async def record_stream_event(event: RuntimeStreamEvent) -> None:
