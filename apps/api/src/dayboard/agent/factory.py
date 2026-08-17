@@ -7,10 +7,9 @@ from uuid import UUID
 
 from north import AppConfig, build_agent
 from north import CompactionHook
-from north.tools.builtin import ask_clarification
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from dayboard.agent.middleware import SchedulingToolBindingMiddleware
+from dayboard.agent.plugins import build_dayboard_plugins
 from dayboard.agent.prompts import (
     DAYBOARD_SUMMARY_PROMPT,
     build_dayboard_system_prompt,
@@ -107,8 +106,6 @@ def build_dayboard_agent(
             session_lock=session_lock,
         )
     resolved_tools = list(resolved_tools or [])
-    if not any(getattr(tool, "name", None) == ask_clarification.name for tool in resolved_tools):
-        resolved_tools.append(ask_clarification)
     _validate_model_visible_tool_fields(resolved_tools)
 
     resolved_context = context or UserContext(
@@ -139,12 +136,10 @@ def build_dayboard_agent(
     )
     return build_agent(
         config,
-        tools=resolved_tools,
-        additional_middlewares=[
-            SchedulingToolBindingMiddleware(
-                runtime_context=build_runtime_scheduling_context(resolved_context)
-            )
-        ],
+        plugins=build_dayboard_plugins(
+            tools=resolved_tools,
+            runtime_context=build_runtime_scheduling_context(resolved_context),
+        ),
         checkpointer=checkpointer,
         compaction_hooks=compaction_hooks,
     )

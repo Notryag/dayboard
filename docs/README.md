@@ -25,6 +25,8 @@ implementation that changes them.
 ## Engineering Guides
 
 - [engineering-guidelines.md](./engineering-guidelines.md): coding, layering, testing, and safety.
+- [architecture-evolution.md](./architecture-evolution.md): cross-project North, Agent Platform,
+  RAG, and Lexora ownership direction and incremental migration gates.
 - [agent-platform-extraction.md](./agent-platform-extraction.md): target three-layer ownership map
   and incremental extraction gates.
 - [ui-design.md](./ui-design.md): current visual and interaction rules.

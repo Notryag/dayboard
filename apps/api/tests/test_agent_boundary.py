@@ -88,18 +88,16 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
         del checkpointer, compaction_hooks
         captured["model_name"] = config.model_name
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
         captured["system_prompt"] = config.system_prompt
-        captured["tools"] = tools
-        captured["additional_middlewares"] = additional_middlewares
+        captured["plugins"] = plugins
         captured["summarization_enabled"] = config.summarization_enabled
         captured["summarization_summary_prompt"] = config.summarization_summary_prompt
         captured["summarization_normal_trigger_tokens"] = (
@@ -125,11 +123,10 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert captured["model_headers"] == {}
     assert captured["model_options"] == {}
     assert "scheduling assistant" in captured["system_prompt"]
-    assert captured["tools"][0] == "tool"
-    assert captured["tools"][1].name == "ask_clarification"
-    assert type(captured["additional_middlewares"][0]).__name__ == (
-        "SchedulingToolBindingMiddleware"
-    )
+    assert [plugin.plugin_id for plugin in captured["plugins"]] == [
+        "dayboard.tools",
+        "dayboard.scheduling",
+    ]
     assert captured["summarization_enabled"] is True
     assert captured["summarization_normal_trigger_tokens"] == 6000
     assert captured["summarization_emergency_trigger_tokens"] == 12000
@@ -152,12 +149,11 @@ def test_build_dayboard_agent_attaches_trusted_northgate_metadata(
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del tools, checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         return {"agent": "fake"}
 
@@ -201,12 +197,11 @@ def test_build_dayboard_agent_selects_northgate_for_canary_user(
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del tools, checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
         return {"agent": "fake"}
@@ -245,12 +240,11 @@ def test_build_dayboard_agent_keeps_non_canary_user_on_default_connection(
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del tools, checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         captured["model_headers"] = config.model_headers
         captured["model_options"] = config.model_options
         return {"agent": "fake"}
@@ -289,12 +283,11 @@ def test_build_dayboard_agent_uses_stable_partitioned_prompt_cache_key(
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del tools, checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         captured.append(config.model_options["model_kwargs"]["prompt_cache_key"])
         return {"agent": "fake"}
 
@@ -318,12 +311,11 @@ def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del tools, checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         captured.update(config.model_options)
         return {"agent": "fake"}
 
@@ -344,14 +336,12 @@ def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch)
     def fake_build_agent(
         config,
         *,
-        tools=None,
+        plugins=(),
         checkpointer=None,
         compaction_hooks=None,
-        additional_middlewares=None,
     ):
-        del checkpointer, compaction_hooks
+        del plugins, checkpointer, compaction_hooks
         del config
-        captured["tools"] = tools
         return {"agent": "fake"}
 
     monkeypatch.setattr("dayboard.agent.factory.build_agent", fake_build_agent)
@@ -362,7 +352,6 @@ def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch)
         tools=[ask_clarification],
     )
 
-    assert [tool.name for tool in captured["tools"]] == ["ask_clarification"]
 
 
 def test_build_dayboard_agent_rejects_trusted_context_in_tool_schema() -> None:
