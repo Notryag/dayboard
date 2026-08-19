@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Literal
 
 from north import RuntimeStreamEvent
@@ -18,6 +19,41 @@ class ProjectedStreamEvent:
     data: dict[str, Any]
 
 
+_REASONING_BLOCK = re.compile(
+    r"<(?:think|thinking|analysis|reasoning)\b[^>]*>.*?</(?:think|thinking|analysis|reasoning)\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_REASONING_TAG = re.compile(r"</?(?:think|thinking|analysis|reasoning)\b[^>]*>", re.IGNORECASE)
+_REASONING_TYPES = {"reasoning", "reasoning_content", "thinking", "analysis"}
+
+
+def public_text(value: Any) -> str:
+    """Keep user-visible text while dropping provider reasoning blocks."""
+
+    if isinstance(value, str):
+        return _strip_reasoning_markup(value)
+    if not isinstance(value, list):
+        return ""
+
+    parts: list[str] = []
+    for block in value:
+        if not isinstance(block, dict):
+            continue
+        block_type = block.get("type")
+        if isinstance(block_type, str) and block_type.lower() in _REASONING_TYPES:
+            continue
+        text = block.get("text")
+        if not isinstance(text, str):
+            text = block.get("content")
+        if isinstance(text, str):
+            parts.append(_strip_reasoning_markup(text))
+    return "".join(parts)
+
+
+def _strip_reasoning_markup(value: str) -> str:
+    return _REASONING_TAG.sub("", _REASONING_BLOCK.sub("", value))
+
+
 def project_runtime_stream_event(event: RuntimeStreamEvent) -> ProjectedStreamEvent | None:
     if (
         event.mode != "messages"
@@ -29,6 +65,9 @@ def project_runtime_stream_event(event: RuntimeStreamEvent) -> ProjectedStreamEv
     message = event.data[0]
     if not isinstance(message, dict):
         return None
+    metadata = event.data[1] if len(event.data) > 1 else None
+    if _is_internal_summary_message(metadata):
+        return None
 
     message_type = message.get("type")
     tool_call_id = message.get("tool_call_id")
@@ -39,8 +78,8 @@ def project_runtime_stream_event(event: RuntimeStreamEvent) -> ProjectedStreamEv
 
     if message_type not in {"AIMessageChunk", "ai"}:
         return None
-    content = message.get("content")
-    if not isinstance(content, str) or not content:
+    content = public_text(message.get("content"))
+    if not content:
         return None
     return ProjectedStreamEvent(
         "assistant_text_delta",
@@ -49,6 +88,12 @@ def project_runtime_stream_event(event: RuntimeStreamEvent) -> ProjectedStreamEv
             "delta": content,
         },
     )
+
+
+def _is_internal_summary_message(metadata: Any) -> bool:
+    """Keep context-compaction output out of the user conversation stream."""
+
+    return isinstance(metadata, dict) and metadata.get("lc_source") == "summarization"
 
 
 def _project_tool_message(

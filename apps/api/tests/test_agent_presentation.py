@@ -97,6 +97,62 @@ def test_projects_ai_message_chunk_to_text_delta() -> None:
     assert projected.data == {"message_id": "message-1", "delta": "已创建"}
 
 
+def test_drops_internal_summarization_message_chunks() -> None:
+    projected = project_runtime_stream_event(
+        RuntimeStreamEvent(
+            mode="messages",
+            data=[
+                {
+                    "type": "AIMessageChunk",
+                    "content": "summary: Insert\nSUMMARY\n内部上下文",
+                },
+                {"lc_source": "summarization", "langgraph_node": "NorthSummarizationMiddleware.before_model"},
+            ],
+        )
+    )
+
+    assert projected is None
+
+
+def test_drops_reasoning_content_from_streamed_message_blocks() -> None:
+    projected = project_runtime_stream_event(
+        RuntimeStreamEvent(
+            mode="messages",
+            data=[
+                {
+                    "type": "AIMessageChunk",
+                    "content": [
+                        {"type": "reasoning", "reasoning": "内部推理不应显示"},
+                        {"type": "text", "text": "最终回答"},
+                    ],
+                },
+                {},
+            ],
+        )
+    )
+
+    assert projected is not None
+    assert projected.data["delta"] == "最终回答"
+
+
+def test_drops_reasoning_markup_from_streamed_text() -> None:
+    projected = project_runtime_stream_event(
+        RuntimeStreamEvent(
+            mode="messages",
+            data=[
+                {
+                    "type": "AIMessageChunk",
+                    "content": "<think>内部推理</think>最终回答",
+                },
+                {},
+            ],
+        )
+    )
+
+    assert projected is not None
+    assert projected.data["delta"] == "最终回答"
+
+
 def test_rejects_tool_message_without_presentation_artifact() -> None:
     projected = project_runtime_stream_event(
         RuntimeStreamEvent(
