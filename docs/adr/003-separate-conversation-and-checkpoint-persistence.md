@@ -1,44 +1,34 @@
-# ADR-003 Separate Conversation and Checkpoint Persistence
+# ADR-003 分离会话与检查点持久化
 
-## Status
+## 状态
 
-Accepted on 2026-07-10.
+于 2026-07-10 接受。
 
-## Context
+## 背景
 
-North accepts a LangGraph `thread_id`, but its original fallback created an in-memory saver for
-each agent build. Dayboard also passed `run.id` as `thread_id`, so every command was isolated even
-though `agent_runs` already records a distinct thread identifier.
+North 接受 LangGraph 的 `thread_id`，但原有回退逻辑会为每次 Agent 构建创建内存 saver。Dayboard 还将 `run.id` 作为 `thread_id` 传入，因此每个命令都被隔离，尽管 `agent_runs` 已经记录了独立的 Thread 标识符。
 
-DeerFlow separates thread metadata, LangGraph checkpoints, run journals, and thread-scoped files.
-Its checkpointer supports memory, SQLite, and PostgreSQL; summarization compacts runtime messages
-into `summary_text`, while run history preserves messages the product UI must continue to show.
+DeerFlow 将 Thread 元数据、LangGraph 检查点、Run 日志和 Thread 范围文件分离。其 checkpointer 支持内存、SQLite 和 PostgreSQL；摘要功能将运行时消息压缩为 `summary_text`，而 Run 历史保留产品 UI 必须继续显示的消息。
 
-## Decision
+## 决策
 
-- Dayboard owns product conversations, tenant authorization, visible messages, retention,
-  structured pending actions, and summaries exposed to users.
-- North owns reusable checkpointer construction and runtime state continuity.
-- `conversation_thread.id` is the runnable `thread_id`; `agent_run.id` identifies one execution.
-- Checkpoints are runtime internals and are not Dayboard's chat-history API.
-- Context compaction may remove messages from LangGraph state only after a host hook can archive
-  them. It must never delete the product's visible message history.
-- The worker owns the async checkpointer lifecycle and injects one shared saver into all agents.
+- Dayboard 负责产品会话、租户授权、可见消息、保留策略、结构化待处理操作以及向用户公开的摘要。
+- North 负责可复用的 checkpointer 构建和运行时状态连续性。
+- `conversation_thread.id` 是可运行的 `thread_id`；`agent_run.id` 标识一次执行。
+- 检查点是运行时内部数据，不是 Dayboard 的聊天历史 API。
+- 只有宿主 hook 能够归档消息后，上下文压缩才可以从 LangGraph 状态移除消息。它绝不能删除产品的可见消息历史。
+- Worker 负责异步 checkpointer 生命周期，并将一个共享 saver 注入所有 Agent。
 
-## Rollout
+## 推进步骤
 
-1. Add North's configurable async checkpointer provider and use the real run `thread_id`.
-2. Add Dayboard conversation/thread and message persistence plus thread-scoped run APIs.
-3. Enable North's PostgreSQL saver in the worker.
-4. Add configurable summarization and a pre-compaction archive hook.
-5. Assemble model context from durable product state, summary, and recent complete turns.
+1. 增加 North 的可配置异步 checkpointer 提供商，并使用真实 Run 的 `thread_id`。
+2. 增加 Dayboard 会话/Thread 和消息持久化，以及 Thread 范围的 Run API。
+3. 在 Worker 中启用 North 的 PostgreSQL saver。
+4. 增加可配置摘要和压缩前归档 hook。
+5. 根据持久化产品状态、摘要和最近完整轮次组装模型上下文。
 
-The first rollout step keeps the worker on the memory backend until Dayboard exposes stable
-product threads. This avoids accumulating permanent checkpoints that no client can resume yet.
+第一步推进期间，Worker 会继续使用内存后端，直到 Dayboard 暴露稳定的产品 Thread。这样可以避免积累当前还没有客户端能够恢复的永久检查点。
 
-## Structured Pending State
+## 结构化待处理状态
 
-Dayboard persists clarification state separately from messages and checkpoints. The state stores
-only the pending action, user-facing question, bounded structured data, version, and expiration.
-A successful follow-up clears it; a failed or cancelled follow-up leaves it available for retry.
-This state is product data and remains available even when North compacts runtime messages.
+Dayboard 将澄清状态与消息和检查点分开持久化。该状态只存储待处理操作、面向用户的问题、有界结构化数据、版本和过期时间。成功的后续操作会清除它；失败或取消的后续操作会保留它以便重试。该状态属于产品数据，即使 North 压缩运行时消息，也仍然可用。

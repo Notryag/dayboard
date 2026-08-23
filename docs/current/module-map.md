@@ -1,12 +1,10 @@
-# Current Module Map
+# 当前模块地图
 
-This document tells maintainers and coding agents where a change belongs. It describes the code on
-`main`, not a speculative package split. Read [architecture.md](./architecture.md) first for system
-and ownership boundaries, then use this file before moving or adding backend code.
+本文档告诉维护者和 coding agents 一项变更应放在哪里。它描述 `main` 上的代码，而不是推测性的 package 拆分。先阅读 [architecture.md](./architecture.md) 了解系统和所有权边界，再在移动或新增 backend code 前使用本文档。
 
-## Change Routing
+## 变更路由
 
-Choose the narrowest owner before editing:
+编辑前先选择最窄的所有者：
 
 ```mermaid
 flowchart TD
@@ -43,28 +41,26 @@ flowchart TD
     Browser -->|no| Reconsider[Recheck the ownership question]
 ```
 
-| Change | Primary location | Keep out of |
+| 变更 | 主要位置 | 排除在外 |
 | --- | --- | --- |
-| Calendar, task, reminder, or voice state rule | `dayboard.domain` | API, ORM rows, North |
-| Product use case or deterministic orchestration | `dayboard.app` | FastAPI routes, repositories |
-| Storage/provider interface needed by a use case | `dayboard.app.*_ports` | `db`, API schemas |
-| Conversation, Run, Interaction, envelope lifecycle | `agent_platform` | scheduling domain, North |
-| Prompt, model-visible schema, tool binding, runtime projection | `dayboard.agent` | Platform, domain entities |
-| Serialized scheduling tool operation | `dayboard.tools` and `dayboard.agent.tools` | North, API routes |
-| SQLAlchemy row, query, lock, mapping, Unit of Work | `dayboard.db` | application or domain modules |
-| Concrete construction of services and adapters | `dayboard.composition` | domain and Platform Core |
-| HTTP, auth, request validation, SSE framing | `dayboard.api` | long-running Agent execution |
-| Queue or cron entry point | `dayboard.workers` | business rules, provider clients |
-| ASR, email, or another external provider adapter | `dayboard.integrations` | product policy |
-| Browser presentation and interaction | `apps/web/src/features` | trusted policy, persistence |
+| Calendar、task、reminder 或 voice state rule | `dayboard.domain` | API、ORM rows、North |
+| Product use case 或 deterministic orchestration | `dayboard.app` | FastAPI routes、repositories |
+| use case 所需的 storage/provider interface | `dayboard.app.*_ports` | `db`、API schemas |
+| Conversation、Run、Interaction、封装生命周期 | `agent_platform` | 调度领域、North |
+| Prompt、模型可见 schema、工具绑定、运行时投影 | `dayboard.agent` | Platform、领域实体 |
+| Serialized scheduling tool operation | `dayboard.tools` 和 `dayboard.agent.tools` | North、API routes |
+| SQLAlchemy row、query、lock、mapping、Unit of Work | `dayboard.db` | application 或 domain modules |
+| Services 和 adapters 的具体构造 | `dayboard.composition` | domain 和 Platform Core |
+| HTTP、auth、request validation、SSE framing | `dayboard.api` | 长时间运行的 Agent execution |
+| Queue 或 cron entry point | `dayboard.workers` | business rules、provider clients |
+| ASR、email 或其他 external provider adapter | `dayboard.integrations` | product policy |
+| Browser presentation 和 interaction | `apps/web/src/features` | trusted policy、persistence |
 
-If a change appears to require a domain or application module to import `dayboard.db`,
-`dayboard.composition`, FastAPI, SQLAlchemy, or North, introduce or reuse an inward-facing port and
-wire it in composition instead.
+如果某项变更看起来要求 domain 或 application module 导入 `dayboard.db`、`dayboard.composition`、FastAPI、SQLAlchemy 或 North，应当引入或复用一个 inward-facing port，再在 composition 中连接它。
 
-## Dependency Rules
+## 依赖规则
 
-Arrows point from importer to imported code:
+箭头从 importer 指向 imported code：
 
 ```text
 api / workers / serialized tool boundaries
@@ -90,157 +86,123 @@ agent_platform
   -> Pydantic and its own core/application/ports; never Dayboard or North
 ```
 
-`agent_platform` and North are sibling lower-level dependencies. Dayboard's Run driver implements
-the Platform execution port by invoking North. Do not introduce `agent_platform -> North` to make a
-visually linear stack.
+`agent_platform` 和 North 是同级的底层依赖。Dayboard 的 Run driver 通过调用 North 实现 Platform execution port。不要为了构造视觉上直线式的 stack 而引入 `agent_platform -> North`。
 
-## Package Contracts
+## Package 契约
 
 ### Agent Platform
 
-- **Purpose:** durable, product-neutral identity, Conversation, Run, idempotency, Interaction, and
-  versioned-envelope lifecycle.
-- **Owns:** framework-free core records, lifecycle services, storage/runtime ports, state-machine
-  invariants.
-- **Public contracts:** `UserContext`, Conversation and Run records, `PendingInteraction`,
-  `PresentationEnvelope`, `EventExtensionEnvelope`, `PlatformUnitOfWork`, `RunExecutionDriver`.
-- **Allowed dependencies:** its own layers and framework-free validation types.
-- **Forbidden dependencies:** Dayboard, North, SQLAlchemy, FastAPI, product tools and payload meaning.
-- **Transaction owner:** Platform application services declare atomic groups; the injected Unit of
-  Work commits them.
-- **Invariant:** opaque product payloads always have an owner-defined kind and schema version.
+- **用途：** 持久化、产品中立的 identity、Conversation、Run、idempotency、Interaction 以及 versioned-envelope lifecycle。
+- **负责：** framework-free core records、lifecycle services、storage/runtime ports、state-machine invariants。
+- **公共契约：** `UserContext`、Conversation 和 Run records、`PendingInteraction`、`PresentationEnvelope`、`EventExtensionEnvelope`、`PlatformUnitOfWork`、`RunExecutionDriver`。
+- **允许的依赖：** 自身的 layers 和 framework-free validation types。
+- **禁止的依赖：** Dayboard、North、SQLAlchemy、FastAPI、product tools 以及 payload meaning。
+- **事务所有者：** Platform application services 声明 atomic groups；注入的 Unit of Work 提交这些 groups。
+- **不变量：** opaque product payloads 始终拥有 owner-defined kind 和 schema version。
 
-### Dayboard Domain
+### Dayboard 领域
 
-- **Purpose:** deterministic Calendar, Task, Reminder, and Voice state and validation.
-- **Owns:** product entities, timing shapes, statuses, value objects, and state rules.
-- **Public contracts:** domain records consumed by application ports and adapters.
-- **Allowed dependencies:** standard library and framework-free validation.
-- **Forbidden dependencies:** app orchestration, API, composition, db, workers, tools, North,
-  FastAPI, and SQLAlchemy.
-- **Transaction owner:** none; domain code does not commit.
-- **Invariant:** product meaning remains explicit rather than becoming a generic JSON `Item`.
+- **用途：** 确定性的 Calendar、Task、Reminder 和 Voice state 与 validation。
+- **负责：** product entities、timing shapes、statuses、value objects 和 state rules。
+- **公共契约：** application ports 和 adapters 消费的 domain records。
+- **允许的依赖：** standard library 和 framework-free validation。
+- **禁止的依赖：** app orchestration、API、composition、db、workers、tools、North、FastAPI 和 SQLAlchemy。
+- **事务所有者：** 无；domain code 不 commit。
+- **不变量：** product meaning 保持显式，不会变成通用 JSON `Item`。
 
-### Dayboard Application
+### Dayboard 应用
 
-- **Purpose:** product use cases and deterministic orchestration over domain records and ports.
-- **Owns:** Scheduling, Reminder, Voice, Account Recovery, clarification, query, recovery, and
-  command-facing product policy.
-- **Public contracts:** application services plus storage/provider protocols in `*_ports.py`.
-- **Allowed dependencies:** Dayboard Domain and Agent Platform contracts/application services.
-- **Forbidden dependencies:** API, composition, db, integrations, workers, North, FastAPI, and
-  SQLAlchemy.
-- **Transaction owner:** the outer API, Worker, serialized tool boundary, or a deliberately
-  self-contained settlement adapter; services do not hide commits.
-- **Invariant:** ORM rows and provider-specific response objects never cross application ports.
+- **用途：** 在 domain records 和 ports 之上执行 product use cases 与 deterministic orchestration。
+- **负责：** Scheduling、Reminder、Voice、Account Recovery、clarification、query、recovery 以及面向 command 的 product policy。
+- **公共契约：** application services，以及 `*_ports.py` 中的 storage/provider protocols。
+- **允许的依赖：** Dayboard Domain 和 Agent Platform contracts/application services。
+- **禁止的依赖：** API、composition、db、integrations、workers、North、FastAPI 和 SQLAlchemy。
+- **事务所有者：** 外层 API、Worker、serialized tool boundary，或刻意自包含的 settlement adapter；services 不隐藏 commits。
+- **不变量：** ORM rows 和 provider-specific response objects 不会跨越 application ports。
 
 ### Dayboard Agent
 
-- **Purpose:** Dayboard prompt, model-visible tools, dynamic binding, North assembly, stream
-  projection, compact receipts, presentation artifacts, and Run execution bridge.
-- **Owns:** scheduling language policy and the conversion between North runtime output and Platform
-  execution outcomes.
-- **Public contracts:** Agent factory, `DayboardRunExecutionDriver`, result projectors, tool schemas.
-- **Allowed dependencies:** North, Agent Platform public contracts, and Dayboard app/domain/tool
-  contracts. Serialized tool construction is an outer boundary and may request a composed
-  Scheduling scope.
-- **Forbidden dependencies:** Platform or North owning Dayboard scheduling semantics; Run driver
-  importing API, db, settings, or composition.
-- **Transaction owner:** each serialized write tool commits only after its compact receipt and UI
-  artifact have been constructed successfully.
-- **Invariant:** model-visible receipts contain local product time; complete UTC entities remain in
-  UI artifacts and never enter the same model context.
+- **用途：** Dayboard prompt、model-visible tools、dynamic binding、North assembly、stream projection、compact receipts、presentation artifacts 和 Run execution bridge。
+- **负责：** scheduling language policy，以及 North runtime output 到 Platform execution outcomes 的转换。
+- **公共契约：** Agent factory、`DayboardRunExecutionDriver`、result projectors、tool schemas。
+- **允许的依赖：** North、Agent Platform public contracts 以及 Dayboard app/domain/tool contracts。Serialized tool construction 属于外层 boundary，可以请求 composed Scheduling scope。
+- **禁止的依赖：** 由 Platform 或 North 拥有 Dayboard scheduling semantics；Run driver 导入 API、db、settings 或 composition。
+- **事务所有者：** 每个 serialized write tool 只有在其 compact receipt 和 UI artifact 成功构造后才 commit。
+- **不变量：** model-visible receipts 包含 local product time；complete UTC entities 保留在 UI artifacts 中，永远不会进入同一 model context。
 
-### Database Adapters
+### 数据库适配器
 
-- **Purpose:** PostgreSQL schema, SQLAlchemy queries, mappings, locks, constraints, and concrete
-  Units of Work.
-- **Owns:** ORM rows and translation between rows and framework-neutral records.
-- **Public contracts:** implementations of Dayboard application and Agent Platform ports.
-- **Allowed dependencies:** domain/core records and declared ports.
-- **Forbidden dependencies:** natural-language policy, prompt decisions, HTTP presentation.
-- **Transaction owner:** concrete Unit of Work exposes commit/rollback; it does not decide use-case
-  atomicity.
-- **Invariant:** every product query is user scoped where the contract requires it.
+- **用途：** PostgreSQL schema、SQLAlchemy queries、mappings、locks、constraints 和 concrete Units of Work。
+- **负责：** ORM rows，以及 rows 与 framework-neutral records 之间的转换。
+- **公共契约：** Dayboard application 和 Agent Platform ports 的实现。
+- **允许的依赖：** domain/core records 和 declared ports。
+- **禁止的依赖：** natural-language policy、prompt decisions、HTTP presentation。
+- **事务所有者：** concrete Unit of Work 暴露 commit/rollback；它不决定 use-case atomicity。
+- **不变量：** contract 要求时，每个 product query 都按 user scope 限定。
 
-### Composition
+### 组合根
 
-- **Purpose:** construct complete API and Worker scopes from settings and concrete adapters.
-- **Owns:** dependency wiring only.
-- **Public contracts:** small explicit builders for Platform, Runs, Scheduling, Reminders, Voice,
-  Account Recovery, and Provider Usage; scopes are used only when callers need a grouped lifecycle
-  or transaction boundary.
-- **Allowed dependencies:** all concrete outer implementations required for construction.
-- **Forbidden dependencies:** product decisions or duplicate workflows.
-- **Transaction owner:** none beyond choosing the Unit of Work supplied to an outer caller.
-- **Invariant:** no service locator or mutable global request context.
+- **用途：** 从 settings 和 concrete adapters 构造完整的 API 与 Worker scopes。
+- **负责：** 仅 dependency wiring。
+- **公共契约：** Platform、Runs、Scheduling、Reminders、Voice、Account Recovery 和 Provider Usage 的小型显式 builders；只有调用方需要 grouped lifecycle 或 transaction boundary 时才使用 scopes。
+- **允许的依赖：** 构造所需的所有 concrete outer implementations。
+- **禁止的依赖：** product decisions 或重复 workflows。
+- **事务所有者：** 除选择提供给 outer caller 的 Unit of Work 外，无其他事务所有权。
+- **不变量：** 不使用 service locator 或可变的 global request context。
 
-### API And Workers
+### API 与 Worker
 
-- **Purpose:** API owns HTTP/auth/SSE boundaries; Worker owns queued and cron entry points.
-- **Owns:** transport validation, trusted context resolution, dispatch, job restoration, and commit
-  or rollback at declared use-case boundaries.
-- **Allowed dependencies:** application services and composition scopes.
-- **Forbidden dependencies:** domain policy in routes/jobs or model execution inside API requests.
-- **Transaction owner:** the endpoint/job commits the complete use case when its service contract
-  assigns that boundary to the caller.
-- **Invariant:** queue payloads carry only `run_id`; the Worker restores identity and input from
-  PostgreSQL.
+- **用途：** API 负责 HTTP/auth/SSE boundaries；Worker 负责 queued 和 cron entry points。
+- **负责：** transport validation、trusted context resolution、dispatch、job restoration，以及在声明的 use-case boundaries 上 commit 或 rollback。
+- **允许的依赖：** application services 和 composition scopes。
+- **禁止的依赖：** routes/jobs 中的 domain policy，或 API requests 内的 model execution。
+- **事务所有者：** 当 service contract 将该 boundary 分配给 endpoint/job 时，由 endpoint/job 提交完整 use case。
+- **不变量：** queue payloads 只携带 `run_id`；Worker 从 PostgreSQL 恢复 identity 和 input。
 
-### Integrations
+### 集成
 
-- **Purpose:** concrete ASR, email, and future external-provider adapters.
-- **Owns:** provider protocol translation, authentication, timeout, and provider-safe failures.
-- **Allowed dependencies:** application provider ports and provider SDKs.
-- **Forbidden dependencies:** domain policy and database transaction ownership.
-- **Invariant:** no database transaction remains open across an external network call.
+- **用途：** concrete ASR、email 和未来的 external-provider adapters。
+- **负责：** provider protocol translation、authentication、timeout 和 provider-safe failures。
+- **允许的依赖：** application provider ports 和 provider SDKs。
+- **禁止的依赖：** domain policy 和 database transaction ownership。
+- **不变量：** 外部 network call 期间不会保持 database transaction 打开。
 
 ### Web
 
-- **Purpose:** authenticated mobile presentation, REST/SSE transport, gestures, recording, and
-  server-state caching.
-- **Owns:** generated OpenAPI consumption, validated Run reducer, TanStack Query caches, and UI-only
-  state.
-- **Forbidden dependencies:** intent classification, user identity authority, direct persistence,
-  or parsing assistant prose into schedule objects.
-- **Invariant:** live and refreshed schedule results use the same versioned presentation contract.
+- **用途：** authenticated mobile presentation、REST/SSE transport、gestures、recording 和 server-state caching。
+- **负责：** generated OpenAPI consumption、validated Run reducer、TanStack Query caches 和 UI-only state。
+- **禁止的依赖：** intent classification、user identity authority、direct persistence，或将 assistant prose 解析为 schedule objects。
+- **不变量：** live 和 refreshed schedule results 使用同一个 versioned presentation contract。
 
-## Capability And Transaction Map
+## 能力与事务地图
 
-| Capability | Durable authority | Atomic boundary | Critical invariant |
+| 能力 | 持久化权威 | 原子边界 | 关键不变量 |
 | --- | --- | --- | --- |
-| Command submission | Platform Thread/Run/event rows in PostgreSQL | idempotency claim + Thread resolution + queued Run + `message.human` + `run.created` events | identical retry resolves the existing Run |
-| Run transition | Platform Run and durable event | compare-and-transition + corresponding event | model execution occurs outside the transaction |
-| Run completion | Platform Run, assistant message, presentation, optional Interaction | terminal state + message + presentation/Interaction | PostgreSQL commits before terminal product event/end sentinel |
-| Clarification continuation | Platform Conversation state and Run | idempotency claim + expected-version consume + new Run/message/event | old Run remains terminal; one answer wins CAS |
-| Schedule mutation | Calendar/Task and Reminder delivery rows | row-version write + Reminder cancellation/replacement | product write and reminder state cannot diverge |
-| Reminder delivery | Reminder delivery plus source projection | source lock + due claim + delivered/expired/cancelled transition | lock source before delivery; queue states are not inbox states |
-| Voice transcription | Voice transcript row | commit `processing`; external ASR; separate terminal commit | never hold a transaction across ASR |
-| Provider usage | immutable aggregate keyed by user ID and Run | independent user-scoped settlement transaction | accounting failure cannot replace terminal Run outcome |
-| Password reset | credential, reset tokens, sessions | password update + token consumption + session revocation | raw reset token is never stored |
+| Command submission | PostgreSQL 中的 Platform Thread/Run/event rows | idempotency claim + Thread resolution + queued Run + `message.human` + `run.created` events | 相同 retry 会解析到已有 Run |
+| Run transition | Platform Run 和 durable event | compare-and-transition + corresponding event | model execution 在 transaction 外执行 |
+| Run completion | Platform Run、assistant message、presentation、可选 Interaction | terminal state + message + presentation/Interaction | PostgreSQL 在 terminal product event/end sentinel 前提交 |
+| Clarification continuation | Platform Conversation state 和 Run | idempotency claim + expected-version consume + new Run/message/event | old Run 保持 terminal；一个 answer 获胜 CAS |
+| Schedule mutation | Calendar/Task 和 Reminder delivery rows | row-version write + Reminder cancellation/replacement | product write 和 reminder state 不会分叉 |
+| Reminder delivery | Reminder delivery 加 source projection | source lock + due claim + delivered/expired/cancelled transition | 先锁 source；queue states 不是 inbox states |
+| Voice transcription | Voice transcript row | commit `processing`；external ASR；独立的 terminal commit | 绝不跨 ASR 持有 transaction |
+| Provider usage | 以 user ID 和 Run 为 key 的 immutable aggregate | 独立的 user-scoped settlement transaction | accounting failure 不会替换 terminal Run outcome |
+| Password reset | credential、reset tokens、sessions | password update + token consumption + session revocation | raw reset token 从不存储 |
 
-## Event And Payload Ownership
+## Event 与 payload 所有权
 
-| Contract | Envelope/lifecycle owner | Payload meaning owner | Consumer |
+| 契约 | 封装/生命周期所有者 | 载荷含义所有者 | 消费者 |
 | --- | --- | --- | --- |
-| `PresentationEnvelope` | Agent Platform | Dayboard | conversation history and Web |
-| `EventExtensionEnvelope` | Agent Platform | producing Dayboard/North adapter | durable diagnostics only |
-| `PendingInteraction` | Agent Platform | Dayboard clarification schema | continuation API and Web |
-| `ToolMessage.content` | North transport | Dayboard compact receipt | model context |
-| `ToolMessage.artifact` | North transport | Dayboard presentation part | live projection and persistence |
-| Browser `RunEvent` | Dayboard API/Web boundary | Dayboard safe projector | one Web reducer |
+| `PresentationEnvelope` | Agent Platform | Dayboard | conversation history 和 Web |
+| `EventExtensionEnvelope` | Agent Platform | producing Dayboard/North adapter | 仅 durable diagnostics |
+| `PendingInteraction` | Agent Platform | Dayboard clarification schema | continuation API 和 Web |
+| `ToolMessage.content` | North 传输 | Dayboard 紧凑回执 | 模型上下文 |
+| `ToolMessage.artifact` | North transport | Dayboard presentation part | live projection 和 persistence |
+| Browser `RunEvent` | Dayboard API/Web boundary | Dayboard safe projector | 一个 Web reducer |
 
-Do not replace any of these with an unversioned `dict[str, Any]` public protocol. Do not make
-RuntimeJournal extensions the browser message protocol, and do not reconstruct historical cards by
-querying current schedule rows.
+不要用未版本化的 `dict[str, Any]` public protocol 替换其中任何一项。不要让 RuntimeJournal extensions 成为 browser message protocol，也不要通过查询当前 schedule rows 来重建历史 cards。
 
-## Documentation Maintenance
+## 文档维护
 
-Update this file only when module ownership, allowed dependencies, a public cross-module contract,
-or a transaction boundary changes. Update [architecture.md](./architecture.md) for system/process/
-data authority changes and [run-lifecycle.md](./run-lifecycle.md) for ordering or recovery changes.
-Record reasons for costly decisions in `docs/adr/`; do not duplicate ADRs under another directory.
+只有在 module ownership、allowed dependencies、public cross-module contract 或 transaction boundary 发生变化时，才更新本文档。系统/进程/数据权威发生变化时更新 [architecture.md](./architecture.md)，ordering 或 recovery 发生变化时更新 [run-lifecycle.md](./run-lifecycle.md)。高成本决策的原因记录在 `docs/adr/`；不要在其他目录重复 ADR。
 
-Do not create one design document per Python file. Add a dedicated module document only when a
-stable public contract and several non-obvious invariants cannot be kept clear here; link it from
-this map and remove duplicated prose.
+不要为每个 Python file 创建一份 design document。只有当稳定的 public contract 和多个不明显的不变量无法在此处保持清晰时，才新增专门的 module document；将其链接到本地图，并移除重复的 prose。

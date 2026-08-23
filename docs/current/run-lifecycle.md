@@ -1,12 +1,12 @@
-# Current Run Lifecycle
+# 当前 Run 生命周期
 
-This document describes the implemented command Run, live-stream, persistence, and recovery path.
-The architectural rationale is recorded in
-[ADR-007](../adr/007-stream-canonical-agent-messages.md).
+本文档描述已实现的命令 Run、实时流、持久化和恢复路径。
+架构设计依据记录在
+[ADR-007](../adr/007-stream-canonical-agent-messages.md) 中。
 
-## State Model
+## 状态模型
 
-An Agent Run has one of these states:
+Agent Run 具有以下状态之一：
 
 ```text
 queued -> running -> completed
@@ -17,58 +17,49 @@ queued ----------------> failed
 queued ----------------> cancelled
 ```
 
-`completed`, `needs_clarification`, `failed`, and `cancelled` are terminal for that Run. A
-clarification response creates a follow-up Run on the same thread rather than reopening the old Run.
+`completed`、`needs_clarification`、`failed` 和 `cancelled` 对该 Run 而言都是终态。澄清回复会在同一 Thread 上创建后续 Run，而不是重新打开旧 Run。
 
-## Creation And Queueing
+## 创建与排队
 
 ```text
 POST /api/threads/{thread_id}/command-runs
-  -> authenticate and resolve UserContext
-  -> validate command, Idempotency-Key, and active Thread lifecycle
-  -> persist user message and queued agent_run in PostgreSQL
-  -> commit
-  -> enqueue only run_id in arq/Redis
-  -> return run_id immediately
+  -> 认证并解析 UserContext
+  -> 校验 command、Idempotency-Key 和 active Thread lifecycle
+  -> 在 PostgreSQL 中持久化 user message 和 queued agent_run
+  -> 提交
+  -> 仅在 arq/Redis 中将 run_id 入队
+  -> 立即返回 run_id
 ```
 
-The request does not execute the model. Queue delivery is at least once, so the worker restores the
-Run from PostgreSQL and checks its state before doing work. The `run_id` is also the queue job
-identity, preventing duplicate queued jobs for the same Run.
-An archived Thread remains readable but rejects a new command or clarification continuation with a
-stable conflict response. An idempotent retry of an already accepted request still resolves its
-existing Run before this lifecycle check.
+请求不会执行模型。队列投递至少一次，因此 Worker 会从 PostgreSQL 恢复 Run，并在开始工作前检查其状态。`run_id` 同时也是队列作业的身份标识，可防止同一个 Run 被重复排入队列。
+已归档的 Thread 仍可读取，但会使用稳定的冲突响应拒绝新命令或澄清续接。对于已经接受的请求，即使是幂等重试，也会先解析其已有 Run，再执行本生命周期检查。
 
-## Worker Execution
+## Worker 执行
 
 ```text
-arq worker receives run_id
-  -> open independent database session
-  -> load Run, user ID, thread, and input from PostgreSQL
-  -> Platform coordinator transitions queued to running and commits
-  -> close the lifecycle transaction before external execution
-  -> assemble bounded history, prompt, tools, and trusted context
-  -> Dayboard RunExecutionDriver invokes North RunExecutor
-  -> North performs the only production agent.astream loop
-  -> tools commit scoped product changes
-  -> lifecycle callback projects a Platform outcome
-  -> Platform atomically persists message, Interaction, and terminal Run state
-  -> Dayboard publishes the terminal product event
-  -> North publishes its end sentinel
-  -> independently settle provider usage idempotently after the terminal outcome
+arq worker 接收 run_id
+  -> 打开独立数据库会话
+  -> 从 PostgreSQL 加载 Run、user ID、thread 和 input
+  -> Platform coordinator 将 queued 转为 running 并提交
+  -> 在外部执行前关闭生命周期事务
+  -> 组装有界历史、prompt、tools 和受信任上下文
+  -> Dayboard RunExecutionDriver 调用 North RunExecutor
+  -> North 执行唯一的生产环境 agent.astream 循环
+  -> tools 提交有范围的产品变更
+  -> 生命周期回调投影 Platform 结果
+  -> Platform 原子地持久化 message、Interaction 和终态 Run 状态
+  -> Dayboard 发布终态产品事件
+  -> North 发布其 end sentinel
+  -> 在终态结果之后独立地幂等结算 provider 用量
 ```
 
-Dayboard does not call `agent.astream` directly. There is no synchronous production worker or
-`stream_agent_once` path beside North `RunExecutor`.
+Dayboard 不会直接调用 `agent.astream`。除 North `RunExecutor` 外，不存在同步生产 Worker 或 `stream_agent_once` 路径。
 
-The Worker composes a new Run driver for each job and always supplies the Redis StreamBridge. Runtime
-journal callbacks open fresh Platform Unit-of-Work sessions, while the main coordinator keeps the
-Run lifecycle transaction boundary separate from those event writes.
+Worker 会为每个作业组合一个新的 Run 驱动器，并始终提供 Redis StreamBridge。运行时 journal 回调会打开新的 Platform Unit of Work 会话，而主 coordinator 会将 Run 生命周期事务边界与这些事件写入分开。
 
-### Command Sequence
+### 命令时序
 
-This sequence shows ordering and authority. Redis queue delivery and live streaming use the same
-Redis deployment but are separate roles.
+该时序展示了顺序和权威归属。Redis 队列投递和实时流使用同一 Redis 部署，但承担不同角色。
 
 ```mermaid
 sequenceDiagram
@@ -76,65 +67,61 @@ sequenceDiagram
     participant API
     participant Platform
     participant PG as PostgreSQL
-    participant Queue as Redis queue
+    participant Queue as Redis 队列
     participant Worker
-    participant Driver as Dayboard driver
+    participant Driver as Dayboard 驱动器
     participant North
     participant Tool
-    participant Stream as Redis Run stream
+    participant Stream as Redis Run 流
 
     Web->>API: POST command + Idempotency-Key
-    API->>Platform: submit command
-    Platform->>PG: claim key + Thread + user message + queued Run + event
-    PG-->>Platform: commit
+    API->>Platform: 提交命令
+    Platform->>PG: 认领 key + Thread + user message + queued Run + event
+    PG-->>Platform: 提交
     Platform-->>API: run_id
-    API->>Queue: enqueue(run_id)
-    API-->>Web: accepted run_id
+    API->>Queue: enqueue(run_id)：将 run_id 入队
+    API-->>Web: 已接受 run_id
     Web->>API: join SSE(run_id)
-    API->>Stream: subscribe with replay cursor
+    API->>Stream: 使用 replay cursor 订阅
 
     Queue->>Worker: execute_command_run(run_id)
     Worker->>Platform: CAS queued to running
-    Platform->>PG: running state + event commit
-    Worker->>Driver: execute persisted Run
-    Driver->>North: execute bounded context
-    North->>Stream: canonical progress and model events
-    North->>Tool: validated tool call
-    Tool->>PG: scoped product transaction
-    PG-->>Tool: commit authoritative object
-    Tool-->>North: compact receipt + presentation artifact
-    North->>Driver: typed RuntimeExecutionResult
-    Driver->>Platform: projected completion outcome
-    Platform->>PG: assistant message + presentation/interaction + terminal Run
-    PG-->>Platform: atomic commit
-    Driver->>Stream: terminal product event
+    Platform->>PG: running 状态 + event 提交
+    Worker->>Driver: 执行已持久化的 Run
+    Driver->>North: 执行有界上下文
+    North->>Stream: 规范进度和模型事件
+    North->>Tool: 已校验的工具调用
+    Tool->>PG: 有范围的产品事务
+    PG-->>Tool: 提交权威对象
+    Tool-->>North: 紧凑回执 + presentation artifact
+    North->>Driver: 类型化 RuntimeExecutionResult
+    Driver->>Platform: 投影完成结果
+    Platform->>PG: assistant 消息 + presentation/interaction + 终态 Run
+    PG-->>Platform: 原子提交
+    Driver->>Stream: 终态产品事件
     North->>Stream: end sentinel
-    Stream-->>API: ordered Run events
-    API-->>Web: projected product SSE
+    Stream-->>API: 有序 Run 事件
+    API-->>Web: 投影后的产品 SSE
 ```
 
-Canonical stream events can arrive throughout execution; they are not delayed until the terminal
-database write. A successful tool result follows its product commit. The terminal product event and
-North end sentinel follow the Platform terminal transaction.
+规范流事件可以在整个执行过程中到达，不会等到数据库终态写入时才发送。成功的工具结果会在其产品事务提交之后到达。终态产品事件和 North end sentinel 会在 Platform 终态事务之后到达。
 
-## Live Stream
+## 实时流
 
-North publishes canonical model and tool chunks through its Redis `StreamBridge`. The Worker and
-API construct bridge clients against the same Redis deployment.
+North 通过其 Redis `StreamBridge` 发布规范的模型和工具分块。Worker 和 API 针对同一 Redis 部署构造 bridge 客户端。
 
 ```text
 North RunExecutor
-  -> canonical messages/values chunks
-  -> Redis Stream keyed by Run
+  -> 规范 messages/values 分块
+  -> 以 Run 为键的 Redis Stream
   -> FastAPI SSE join endpoint
-  -> Dayboard safe projector
-  -> browser Run reducer
+  -> Dayboard 安全 projector
+  -> 浏览器 Run reducer
 ```
 
-Redis Streams are bounded, expiring, cross-process fanout. PostgreSQL remains authoritative for
-Run state and conversation history.
+Redis Streams 是有界、会过期并支持跨进程扇出的。PostgreSQL 仍是 Run 状态和会话历史的权威来源。
 
-The browser-visible event contract includes:
+浏览器可见的事件契约包括：
 
 ```text
 assistant_text_delta
@@ -152,167 +139,99 @@ run_cancelled
 stream_replay_gap
 ```
 
-User-visible runtime activity follows the call-accurate contract in ADR-011. Tool progress payloads
-carry the North `call_id`, safe product label, state, and optional duration. The browser updates one
-row for the started and terminal events of that call; two calls to the same tool remain two rows.
-Subagent child events additionally carry `task_id` when Dayboard adopts a specialist. Raw reasoning,
-unrestricted tool arguments/results, and provider errors are not part of this contract.
+面向用户的运行时活动遵循 ADR-011 中按调用精确对应的契约。工具进度载荷携带 North 的 `call_id`、安全的产品标签、状态和可选的持续时间。浏览器会更新该调用的开始事件和终态事件对应的一行；对同一工具的两次调用仍然显示为两行。Dayboard 采用 specialist 时，子 Agent 事件还会携带 `task_id`。原始推理、不受限制的工具参数/结果以及 provider 错误不属于该契约。
 
-The compact activity view is expanded while a Run is active or failed and collapses after successful
-completion. This is presentation state, not Run state. The Run row remains authoritative.
+Run 处于活动状态或失败时，紧凑活动视图会展开；成功完成后会折叠。这是展示状态，而不是 Run 状态。Run 行仍然是权威来源。
 
-The safe projector allowlists scheduling tool results and emits typed snapshots. Create and mutation
-tools emit `schedule_item_result`; calendar/task searches emit one `schedule_items_result` containing
-all safe matches. The browser never parses assistant prose to discover calendar entries or tasks.
-It upserts result parts by schedule kind and entity ID, so an item found and then changed in the same
-Run renders once with its latest snapshot. All named events pass through one state reducer.
+安全 projector 会将调度工具结果列入允许列表，并发出类型化快照。创建和变更工具发出 `schedule_item_result`；日历/任务搜索会发出一个包含所有安全匹配项的 `schedule_items_result`。浏览器绝不会解析 assistant prose 来发现日历条目或任务。它会按调度类型和实体 ID 对结果片段执行 upsert，因此同一 Run 中先找到、后被变更的条目只会以最新快照渲染一次。所有命名事件都经过同一个状态 reducer。
 
-Model and summarization lifecycle events remain in the durable RuntimeJournal for usage and audit,
-but are not published through the user-facing SSE contract. Tool artifacts carry complete safe
-presentation snapshots independently from compact model-visible ToolMessage content.
+模型和摘要生命周期事件会保留在持久化 RuntimeJournal 中，用于用量统计和审计，但不会通过面向用户的 SSE 契约发布。工具 artifact 会独立携带完整的安全展示快照，而模型可见的 ToolMessage 内容保持精简。
 
-## Ordering And Durability
+## 顺序与持久性
 
-A tool's product transaction commits before its successful ToolMessage is projected. Before North
-publishes the end sentinel, its lifecycle callback enters the Platform coordinator, which persists
-in one transaction:
+工具的产品事务会先于其成功 ToolMessage 的投影提交。North 发布 end sentinel 之前，其生命周期回调会进入 Platform coordinator，并在一个事务中持久化：
 
-- terminal Run status and result message;
-- assistant conversation text;
-- safe schedule result parts in `dayboard.schedule-results@1` presentation envelopes;
-- clarification state when required;
-- durable RuntimeJournal events used for diagnostics and usage correlation.
+- 终态 Run 状态和结果消息；
+- assistant 会话文本；
+- 位于 `dayboard.schedule-results@1` presentation envelope 中的安全调度结果片段；
+- 必要时的澄清状态；
+- 用于诊断和用量关联的持久化 RuntimeJournal 事件。
 
-The Platform persists only the generic execution outcome and presentation kind, schema version, and
-opaque payload. Dayboard validates the known payload before handing it to Platform and again when
-projecting history through the public API. The complete UTC schedule snapshots used by the UI live
-in the presentation payload, while compact local-time ToolMessage receipts remain model-only. Run
-lifecycle status is read from the authoritative Run row and is not repeated in the presentation.
+Platform 只持久化通用执行结果以及展示类型、schema 版本和不透明载荷。Dayboard 在将已知载荷交给 Platform 之前会进行校验，并在通过公共 API 投影历史时再次校验。UI 使用的完整 UTC 调度快照位于 presentation payload 中，而紧凑的本地时间 ToolMessage 回执仅供模型使用。Run 生命周期状态从权威的 Run 行读取，不会在 presentation 中重复保存。
 
-When the trailing tool-call batch contains only successful terminal schedule writes, Dayboard's
-Agent middleware returns a deterministic grounded AI message and ends the loop without a final
-provider confirmation call. This optimization never runs for search results, tool errors,
-clarification, malformed output, partial completion, or unresolved work. The committed artifact is
-still projected and persisted before the Run becomes terminal.
+当末尾的工具调用批次只包含成功的终态调度写入时，Dayboard 的 Agent middleware 会返回确定性的、基于事实的 AI 消息，并在没有最终 provider 确认调用的情况下结束循环。搜索结果、工具错误、澄清、格式错误的输出、部分完成或未解决的工作都不会触发这一优化。提交的 artifact 仍会在 Run 进入终态前完成投影和持久化。
 
-`agent_run_events` are the ordered Thread journal for durable messages, lifecycle records, and
-observability records. `message.human` and `message.ai` are the authoritative conversation history;
-the assistant event also carries the versioned presentation used to restore schedule cards. Run
-rows contain lifecycle state and bounded list summaries, not authoritative request/response bodies.
-Token deltas remain only in the live StreamBridge and are never written one token at a time.
+`agent_run_events` 是用于持久化消息、生命周期记录和可观测性记录的有序 Thread journal。`message.human` 和 `message.ai` 是权威的会话历史；assistant 事件还携带用于恢复调度卡片的带版本 presentation。Run 行包含生命周期状态和有界的列表摘要，而不是权威的请求/响应正文。Token 增量只保留在实时 StreamBridge 中，不会逐 token 写入。
 
-The generic event fields are product-neutral;
-optional diagnostic data uses a versioned `EventExtensionEnvelope`. North model/tool extensions and
-Platform failure/interaction-state extensions are validated by their producing owner before
-persistence. The database rejects partial envelopes. These records are not polled as
-the primary live UI protocol, their extension payloads are not sent through user-facing SSE, and
-non-message runtime records are not used to reconstruct schedule cards.
+通用事件字段与产品无关；可选诊断数据使用带版本的 `EventExtensionEnvelope`。North 模型/工具扩展以及 Platform 失败/交互状态扩展，都会由产生它们的 owner 在持久化前完成校验。数据库会拒绝不完整的 envelope。这些记录不会作为主要实时 UI 协议被轮询，其扩展载荷不会经过面向用户的 SSE 发送，非消息运行时记录也不会用于重建调度卡片。
 
-## Reconnection And Replay
+## 重连与重放
 
-The SSE endpoint accepts `Last-Event-ID` and subscribes through the Redis StreamBridge cursor. If the
-cursor is older than retained live history, the bridge emits `stream_replay_gap`. The web client
-reloads persisted conversation history and ignores late replay recovery after the Run has reached a
-terminal result.
+SSE endpoint 接受 `Last-Event-ID`，并通过 Redis StreamBridge cursor 订阅。如果 cursor 早于保留的实时历史，bridge 会发出 `stream_replay_gap`。Web 客户端会重新加载已持久化的会话历史；Run 到达终态结果后，客户端会忽略较晚的重放恢复。
 
-If a live terminal event is unavailable, the SSE endpoint reads the terminal Run state from
-PostgreSQL and emits the appropriate terminal event. A page reload asks for the thread's active Run
-and rejoins it when present.
+如果实时终态事件不可用，SSE endpoint 会从 PostgreSQL 读取终态 Run 状态，并发出相应的终态事件。页面重新加载时会请求 Thread 的 active Run，并在存在时重新加入。
 
-Historical assistant messages render schedule cards from their persisted, versioned presentation.
-The same typed parts are used for live SSE and refresh recovery, and a browser test verifies that
-cards remain identical after reload. History does not query current business rows by
-`created_by_run_id`, because those rows may have changed since the original conversation.
+历史 assistant 消息会从其持久化的、带版本的 presentation 渲染调度卡片。实时 SSE 和刷新恢复使用相同的类型化片段，并由浏览器测试验证刷新后卡片保持一致。历史不会通过 `created_by_run_id` 查询当前业务行，因为这些行可能已在原始会话之后发生变化。
 
-## Clarification
+## 澄清
 
-`ask_clarification` writes North's one-Run `clarification_request` signal. `RunExecutor` validates it
-and completes with a typed `RuntimeExecutionResult` carrying `ClarificationRequest`; Dayboard never
-interprets `thread_data` or scans final ToolMessages. The Dayboard driver combines that signal with
-already validated schedule presentation parts and maps it once to the Platform outcome. Platform
-then atomically persists the `PendingInteraction`, assistant message, and terminal
-`needs_clarification` Run state before SSE emits the question.
+`ask_clarification` 写入 North 的单 Run `clarification_request` 信号。`RunExecutor` 会校验该信号，并以携带 `ClarificationRequest` 的类型化 `RuntimeExecutionResult` 完成；Dayboard 不会解释 `thread_data`，也不会扫描最终 ToolMessage。Dayboard 驱动器会将该信号与已经校验的调度 presentation 片段合并一次，并映射为 Platform 结果。随后 Platform 会原子地持久化 `PendingInteraction`、assistant 消息和终态 `needs_clarification` Run 状态，然后 SSE 才会发出问题。
 
-The typed Thread-state endpoint returns the safe option presentation. A choice request carries the
-conversation-state version and stable option key. Dayboard validates the hidden product-owned
-candidate, then the Platform atomically consumes the expected Interaction version and creates the
-idempotent continuation Run, user message, and `run.created` event. An identical `Idempotency-Key`
-retry resolves the existing Run before reading Interaction state; a different or stale choice
-receives a conflict.
+类型化 Thread-state endpoint 返回安全的选项 presentation。选择请求携带会话状态版本和稳定的选项 key。Dayboard 会校验由产品隐藏并持有的候选项，然后 Platform 原子地消费预期的 Interaction 版本，并创建幂等的续接 Run、用户消息和 `run.created` 事件。相同 `Idempotency-Key` 的重试会在读取 Interaction 状态前解析已有 Run；不同或过期的选择会收到冲突响应。
 
 ```mermaid
 sequenceDiagram
     participant North
-    participant Driver as Dayboard driver
+    participant Driver as Dayboard 驱动器
     participant Platform
     participant PG as PostgreSQL
     participant API
     participant Web
-    participant Queue as Redis queue
-    participant Stream as Redis Run stream
+    participant Queue as Redis 队列
+    participant Stream as Redis Run 流
 
-    North->>Driver: typed ClarificationRequest
-    Driver->>Platform: needs-interaction outcome
-    Platform->>PG: assistant message + PendingInteraction + old Run needs_clarification
-    PG-->>Platform: atomic commit
+    North->>Driver: 类型化 ClarificationRequest
+    Driver->>Platform: needs-interaction 结果
+    Platform->>PG: assistant 消息 + PendingInteraction + old Run needs_clarification
+    PG-->>Platform: 原子提交
     Driver->>Stream: clarification_requested
-    Stream-->>API: safe interaction event
-    API-->>Web: projected SSE
+    Stream-->>API: 安全交互事件
+    API-->>Web: 投影后的 SSE
 
-    Web->>API: option_key + expected state version
-    API->>Platform: load current Interaction state
-    API->>API: validate Dayboard-owned candidate
-    API->>Platform: submit continuation and consume version
-    Platform->>PG: idempotency claim + CAS consume + new Run/message/event
-    PG-->>Platform: atomic commit
-    Platform-->>API: new run_id
-    API->>Queue: enqueue(new run_id)
-    API-->>Web: accepted continuation Run
+    Web->>API: option_key + 预期状态版本
+    API->>Platform: 加载当前 Interaction 状态
+    API->>API: 校验 Dayboard 持有的候选项
+    API->>Platform: 提交续接并消费版本
+    Platform->>PG: 幂等性认领 + CAS 消费 + 新 Run/消息/事件
+    PG-->>Platform: 原子提交
+    Platform-->>API: 新 run_id
+    API->>Queue: enqueue(new run_id)：将 new run_id 入队
+    API-->>Web: 已接受的续接 Run
 ```
 
-The old Run remains terminal. Clarification never reopens or resumes it; the answer creates a new
-Run on the same Thread after the pending Interaction is consumed exactly once.
+旧 Run 仍然是终态。澄清不会重新打开或恢复旧 Run；答案会在待处理 Interaction 被精确消费一次后，于同一 Thread 上创建新的 Run。
 
-## Cancellation And Failure
+## 取消与失败
 
-Cancellation is explicit. Queued and running Runs transition atomically to `cancelled`. Workers
-check cancellation before execution, during lifecycle boundaries, and before publishing results.
+取消是显式操作。排队中和运行中的 Run 会原子地转为 `cancelled`。Worker 会在执行前、生命周期边界期间以及发布结果前检查取消状态。
 
-Provider, tool, queue, and unexpected runtime failures transition the Run to `failed` with a safe
-user-facing result. Detailed correlation remains in structured logs and durable events without
-logging credentials, cookies, raw audio, or full command text.
+Provider、工具、队列和意外运行时失败会使 Run 转为 `failed`，并返回安全的面向用户结果。详细关联信息会保留在结构化日志和持久化事件中，但不会记录凭据、cookie、原始音频或完整命令文本。
 
-Each queued Run has one execution attempt. arq does not automatically replay a Run after the
-coordinator has persisted terminal `failed`, because scheduling tools can commit product side
-effects before a later model or runtime failure. A user retry creates a new idempotent command Run;
-automatic retries require an explicit attempt lifecycle and end-to-end tool-effect idempotency.
+每个排队中的 Run 只有一次执行尝试。在 coordinator 已持久化终态 `failed` 后，arq 不会自动重放 Run，因为调度工具可能已在后续模型或运行时失败之前提交产品副作用。用户重试会创建新的幂等命令 Run；自动重试需要显式的尝试生命周期以及端到端的工具效果幂等性。
 
-The worker scans stale active Runs. Queued and running Runs have separate timeout rules and
-status-specific atomic failure transitions. A delayed job exits when it observes that recovery has
-already made the Run terminal.
+Worker 会扫描过期的活动 Run。排队中和运行中的 Run 使用分别独立的超时规则和按状态区分的原子失败转换。当延迟作业发现恢复操作已经使 Run 进入终态时，它会退出。
 
-## Usage And Budgets
+## 用量与预算
 
-North normalizes usage per model call. Dayboard attempts settlement after the Platform has committed
-the terminal Run outcome, using a fresh Unit of Work and an immutable unique aggregate per
-`(user_id, run_id)`. The PostgreSQL adapter derives user ID from the trusted Run during
-insert, so a mismatched caller cannot occupy the idempotency key. Only the transaction that creates
-the row reconciles the prior Redis budget reservation; retries observe the existing aggregate and do
-not charge twice. Usage persistence and Redis reconciliation are ordered after, but are not atomic
-with, Run completion and cannot replace its outcome.
+North 会按模型调用规范化用量。Dayboard 会在 Platform 提交终态 Run 结果后尝试结算，使用新的 Unit of Work 和 `(user_id, run_id)` 上不可变的唯一聚合。PostgreSQL adapter 会从受信任的 Run 推导 user ID 再执行插入，因此不匹配的调用方无法占用该幂等 key。只有创建该行的事务会协调此前的 Redis 预算预留；重试会发现已有聚合，不会重复计费。用量持久化和 Redis 协调发生在 Run 完成之后，且二者与 Run 完成不具备原子性，不能替代 Run 结果。
 
-A hard process exit before the settlement `finally` block can still omit usage. A crash after the
-PostgreSQL usage commit but before Redis reconciliation can leave the reservation inaccurate. Full
-recovery requires a durable usage outbox or reconciliation job; it is not hidden behind an in-memory
-retry. Admission currently occurs in Dayboard, while migration of scoped provider-token policy to
-Northgate remains future work. Northgate's current policy is gateway-scoped, so it cannot replace
-Dayboard's user/model admission until it accepts trusted dynamic identity and atomically
-enforces explicit policy scopes.
+如果进程在 settlement `finally` 块之前硬退出，用量仍可能丢失。如果 PostgreSQL 用量提交之后、Redis 协调之前发生崩溃，预留可能不准确。完整恢复需要持久化的用量 outbox 或协调作业；它不会被隐藏在内存重试之后。当前 admission 发生在 Dayboard，而将有范围的 provider-token policy 迁移到 Northgate 仍是未来工作。Northgate 当前的 policy 以 gateway 为范围，因此在它接受受信任的动态身份并原子地执行显式 policy scope 之前，无法替代 Dayboard 的用户/模型 admission。
 
-Operator diagnosis follows:
+运维诊断遵循以下链路：
 
 ```text
 request_id -> user_id -> thread_id -> run_id -> runtime/tool event -> product object
 ```
 
-Token and cache diagnostics live in [../token-usage-diagnostics.md](../token-usage-diagnostics.md).
+Token 和缓存诊断位于
+[operations/token-usage-diagnostics.md](../operations/token-usage-diagnostics.md) 中。

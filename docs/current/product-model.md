@@ -1,33 +1,30 @@
-# Current Product Model
+# 当前产品模型
 
-Dayboard is a self-service, voice-first scheduling product. A user speaks or types an instruction,
-Dayboard creates or changes a calendar entry or task through tools, and the conversation renders the
-authoritative result alongside an inspectable day view.
+Dayboard 是一款自助式、语音优先的日程产品。用户通过语音或文字输入指令，Dayboard 通过 tools 创建或修改 calendar entry 或 task，并在可检查的日视图旁边渲染权威结果。
 
-## Scheduling Classification
+## 日程分类
 
-Classification follows the temporal anchor in the user's meaning:
+分类依据用户表达中的时间锚点：
 
-| Meaning | Product object |
+| 含义 | 产品对象 |
 | --- | --- |
-| Resolvable date, clock time, or daypart | Calendar entry |
-| Date without a clock or daypart | `anytime` calendar entry |
-| No resolvable temporal anchor | Undated task |
-| Vague time such as “later” or “when free” | Undated task |
+| 可解析的日期、时刻或 daypart | Calendar entry |
+| 没有时刻或 daypart 的日期 | `anytime` calendar entry |
+| 没有可解析的时间锚点 | Undated task |
+| “later” 或 “when free”等模糊时间 | Undated task |
 
-Examples:
+示例：
 
-- “明天早上 8 点吃药” creates a timed calendar entry at 08:00.
-- “明天下午提交报告” creates a timed calendar entry using the afternoon default.
-- “明天提交报告” creates an `anytime` calendar entry for tomorrow.
-- “晚点整理资料” creates an undated task.
+- “明天早上 8 点吃药”会创建一个 08:00 的 timed calendar entry。
+- “明天下午提交报告”会使用 afternoon default 创建一个 timed calendar entry。
+- “明天提交报告”会为明天创建一个 `anytime` calendar entry。
+- “晚点整理资料”会创建一个 undated task。
 
-Daypart defaults are deterministic and apply only after an action is classified as a calendar
-entry. The current defaults are defined in the Agent policy and protected by prompt tests.
+Daypart defaults 是确定性的，并且仅在 action 被分类为 calendar entry 后应用。当前 defaults 定义在 Agent policy 中，并由 prompt tests 保护。
 
-## Calendar Entry
+## 日历条目
 
-A calendar entry is one of two timing shapes:
+一个 calendar entry 有两种 timing shapes 之一：
 
 ```text
 timed
@@ -41,131 +38,78 @@ anytime
   start_time and end_time are null
 ```
 
-Common fields include title, trusted IANA timezone, participants, reminder, status, user
-scope, audit timestamps, and Run correlation. Status is `scheduled`, `completed`, or `cancelled`.
+公共字段包括 title、可信的 IANA timezone、participants、reminder、status、user scope、audit timestamps 和 Run correlation。Status 为 `scheduled`、`completed` 或 `cancelled`。
 
-Timed entries default to one hour when duration is omitted. Dayboard automatically checks clock
-overlap during timed creation and rescheduling. Anytime entries have no clock overlap and no clock
-reminder.
+如果未提供 duration，timed entries 默认持续一小时。Dayboard 在创建和 rescheduling timed entries 时会自动检查时钟冲突。Anytime entries 没有时钟冲突，也没有 clock reminder。
 
-## Task Item
+## 任务项
 
-A task represents an action without a resolvable temporal anchor. It has a title and status
-(`open`, `completed`, or `cancelled`). The storage model still supports `due_at`, but current Agent
-classification sends any resolvable date or time to the calendar domain; the normal creation path
-therefore creates undated tasks.
+Task 表示没有可解析时间锚点的 action。它有 title 和 status（`open`、`completed` 或 `cancelled`）。Storage model 仍支持 `due_at`，但当前 Agent classification 会将任何可解析的日期或时间发送到 calendar domain；因此正常的 creation path 会创建 undated tasks。
 
-Tasks do not occupy a calendar interval. A task reminder requires a due timestamp and is anchored to
-that timestamp.
+Tasks 不占据 calendar interval。Task reminder 需要 due timestamp，并锚定到该 timestamp。
 
-## Reminder
+## 提醒
 
-Reminder intent uses an ISO 8601 offset and an anchor. Timed Agent-created calendar entries default
-to an at-start `PT0M` reminder unless the user disables or overrides it. Anytime entries do not
-invent clock reminders.
+Reminder intent 使用 ISO 8601 offset 和 anchor。由 Agent 创建的 timed calendar entries 默认使用 at-start 的 `PT0M` reminder，除非用户禁用或覆盖它。Anytime entries 不会凭空创建 clock reminders。
 
-Application services synchronize schedule changes with durable reminder-delivery rows. The current
-delivery channel is `in_app`. Delivery attempts, status, provider identifiers, and errors are stored
-for inspection. Delivered rows carry durable per-account `read_at` state. The Web header exposes an
-in-app reminder center with unread count, source-date navigation, read marking, delivery status,
-and failed-delivery retry. Users may opt into browser Notifications while the Web app is active;
-the same reminder ID is shown once per browser session. Retry returns the row to `pending`; the
-worker remains the only delivery executor.
+Application services 会将 schedule changes 与持久化的 reminder-delivery rows 同步。当前 delivery channel 为 `in_app`。Delivery attempts、status、provider identifiers 和 errors 会被存储以供检查。Delivered rows 携带持久化的 per-account `read_at` state。Web header 提供 in-app reminder center，支持 unread count、source-date navigation、read marking、delivery status 和 failed-delivery retry。用户可以在 Web app active 时选择浏览器 Notifications；同一个 reminder ID 在每个 browser session 中只显示一次。Retry 会将 row 返回 `pending`；worker 仍是唯一的 delivery executor。
 
-Delivery lifecycle is explicit:
+Delivery lifecycle 是显式的：
 
-| State | Meaning | User inbox |
+| 状态 | 含义 | 用户 inbox |
 | --- | --- | --- |
-| `pending` | Waiting for its delivery time or an explicit retry | Hidden |
-| `processing` | Claimed by one Worker | Hidden |
-| `delivered` | In-app delivery completed | Visible |
-| `failed` | Delivery attempted but failed and may be retried | Visible |
-| `expired` | A calendar reminder was not delivered before the entry started | Hidden |
-| `cancelled` | The source was completed, cancelled, deleted, or replaced | Hidden |
+| `pending` | 等待 delivery time 或显式 retry | 隐藏 |
+| `processing` | 已由一个 Worker claim | 隐藏 |
+| `delivered` | In-app delivery 已完成 | 可见 |
+| `failed` | Delivery 已尝试但失败，可以 retry | 可见 |
+| `expired` | Calendar reminder 未能在 entry 开始前投递 | 隐藏 |
+| `cancelled` | Source 已完成、取消、删除或替换 | 隐藏 |
 
-`read_at` is independent inbox state, not another delivery status. Future timed calendar entries and
-entries still within the delivery grace can own a pending reminder. The Worker has a deterministic
-two-minute claim grace after the calendar start so an at-start `PT0M` reminder survives the
-15-second polling interval and brief scheduling jitter; exactly two minutes late is still
-deliverable, while anything later is `expired` and is never redelivered. A future entry whose
-configured reminder offset has just passed may be delivered immediately. Open task reminders remain
-actionable after their due time and may still be delivered.
-Completing, cancelling, rescheduling, or replacing a source changes every retryable active delivery
-(`pending`, `processing`, or `failed`) to `cancelled`; already delivered rows remain as reminder
-history. Completed calendar entries and tasks remain visible in the schedule view so users can
-inspect or reopen them.
+`read_at` 是独立的 inbox state，不是另一种 delivery status。未来的 timed calendar entries，以及仍处于 delivery grace 内的 entries，可以拥有 pending reminder。Worker 在 calendar start 后提供确定性的 two-minute claim grace，使 at-start `PT0M` reminder 能够跨过 15-second polling interval 和短暂的 scheduling jitter；恰好迟到两分钟仍可投递，之后的任何时间都属于 `expired`，且永远不会再次投递。配置的 reminder offset 刚刚经过的 future entry 可以立即投递。Open task reminders 在 due time 之后仍可操作，也仍然可以投递。
+完成、取消、rescheduling 或替换 source 时，会将每个可重试的 active delivery（`pending`、`processing` 或 `failed`）改为 `cancelled`；已经 delivered 的 rows 保留为 reminder history。Completed calendar entries 和 tasks 仍会显示在 schedule view 中，便于用户检查或重新打开。
 
-The delivery queue is not the user inbox. The Web reminder center receives only `delivered` and
-`failed` items. Each inbox item projects the source's current title, occurrence time, and lifecycle
-status from the authoritative calendar/task row. Rescheduled or renamed items therefore navigate
-to and display the current source; cancelled or deleted sources remain honest, non-actionable
-history. A missing source is reported as deleted rather than silently presenting stale payload data
-as a live schedule item.
+Delivery queue 不是 user inbox。Web reminder center 只接收 `delivered` 和 `failed` items。每个 inbox item 都从权威的 calendar/task row 投影 source 当前的 title、occurrence time 和 lifecycle status。因此，rescheduled 或 renamed items 会导航到并显示当前 source；cancelled 或 deleted sources 会保留为诚实且不可操作的 history。Source 缺失时会报告为 deleted，而不是静默地把过期 payload data 当作 live schedule item 展示。
 
-## Conversation And Clarification
+## 会话与澄清
 
-Conversation threads and messages are durable and user-scoped. Bounded context and persisted
-compaction summaries prevent full history from being sent to every model call.
-The mobile client resolves the owner's primary Thread from PostgreSQL before loading history.
-Device-local storage never determines conversation ownership, so another device restores
-the same durable history instead of silently creating a separate conversation.
-The product exposes one primary conversation per owner. The first screen loads the newest 30
-messages, and scrolling upward follows an user-scoped `(created_at, id)` cursor to fetch older
-pages without shifting the visible scroll position. Isolated evaluation Threads are active,
-non-primary records (`is_primary = false`); they are not product conversations and do not appear in
-this history. `active | archived` describes lifecycle only, and archived Threads cannot accept new
-Runs.
+Conversation threads 和 messages 是持久化的，并按 user scope 限定。有界 context 和持久化的 compaction summaries 防止每次 model call 都发送完整历史。
+Mobile client 在加载历史前，会从 PostgreSQL 解析所有者的 primary Thread。
+Device-local storage 永远不决定 conversation ownership，因此其他设备会恢复同一份 durable history，而不会静默创建独立 conversation。
+产品为每个 owner 暴露一个 primary conversation。首屏加载最新的 30 条 messages，向上滚动时使用 user-scoped `(created_at, id)` cursor 获取更早的 pages，同时不改变可见的 scroll position。隔离的 evaluation Threads 是 active、non-primary records（`is_primary = false`）；它们不是 product conversations，也不会出现在该 history 中。`active | archived` 只描述 lifecycle，archived Threads 不能接受新的 Runs。
 
-When missing information would materially change the result, the Agent uses structured
-clarification. Dayboard persists the question and trusted option mapping in `conversation_states`.
-The browser receives stable option keys and display data, not database IDs or optimistic-lock
-versions. The persisted Interaction has a schema identity, source Run, expiry, and monotonically
-increasing state version. A selected option compare-and-consumes that exact version in the same
-transaction that creates the idempotent follow-up Run, lifecycle event, and user message. Two
-competing choices cannot both succeed, while retrying the same accepted request returns its existing
-Run even though the Interaction has already been consumed.
+当缺少的信息会实质性地改变结果时，Agent 使用 structured clarification。Dayboard 将问题和可信的 option mapping 持久化到 `conversation_states`。Browser 收到稳定的 option keys 和 display data，而不是 database IDs 或 optimistic-lock versions。持久化的 Interaction 具有 schema identity、source Run、expiry 和单调递增的 state version。选择的 option 会在创建幂等 follow-up Run、lifecycle event 和 user message 的同一个 transaction 中 compare-and-consume 该 exact version。两个相互竞争的 choices 不会同时成功；即使 Interaction 已被 consumed，对同一已接受请求的 retry 仍会返回其现有 Run。
 
-The Agent does not ask for confirmation when the target and requested action are unambiguous.
+当 target 和 requested action 明确无歧义时，Agent 不会要求确认。
 
-## Identity And Ownership
+## 身份与所有权
 
-Users can register with password authentication. Server-side sessions use secure `HttpOnly`
-cookies. Profile records resolve trusted user, timezone, and locale context.
+用户可以通过 password authentication 注册。Server-side sessions 使用安全的 `HttpOnly` cookies。Profile records 解析可信的 user、timezone 和 locale context。
 
-Every conversation, Run, schedule object, transcript, reminder, and provider usage record is scoped
-by user. Browser headers, user text, queued job payloads, and model arguments cannot
-override that scope.
+每个 conversation、Run、schedule object、transcript、reminder 和 provider usage record 都按 user scope 限定。Browser headers、user text、queued job payloads 和 model arguments 都不能覆盖该 scope。
 
-Scheduling currently resolves local time with the trusted account context, which defaults to
-`Asia/Shanghai`. Explicit foreign-timezone conversion is not supported.
+Scheduling 当前使用可信 account context 解析 local time，默认值为 `Asia/Shanghai`。不支持显式的 foreign-timezone conversion。
 
-The product displays this zone as `北京时间`. Model-visible scheduling values use Beijing local
-wall-clock time without an offset; PostgreSQL stores absolute instants as `timestamptz` under a UTC
-session. See [Time And Concurrency Protocol](time-protocol.md).
+产品将该时区显示为 `北京时间`。Model-visible scheduling values 使用不带 offset 的 Beijing local wall-clock time；PostgreSQL 在 UTC session 下将 absolute instants 存储为 `timestamptz`。见 [Time And Concurrency Protocol](time-protocol.md)。
 
-## Product Surfaces
+## 产品界面
 
-The mobile H5 application has two equal surfaces:
+移动 H5 application 有两个同等重要的 surfaces：
 
-- conversation for voice/text capture, streaming progress, clarification, and result cards;
-- schedule for a date rail, chronological agenda, undated tasks, editing, completion, cancellation,
-  settings, appearance, and logout.
+- conversation：用于 voice/text capture、streaming progress、clarification 和 result cards；
+- schedule：用于 date rail、chronological agenda、undated tasks、editing、completion、cancellation、settings、appearance 和 logout。
 
-One full-width surface is selected from the transparent header and horizontal swipe. Dayboard does
-not define a desktop layout or desktop fallback. Conversation schedule cards omit the completion
-checkbox; mutations are available from the detail interaction.
+用户通过透明 header 和 horizontal swipe 选择一个 full-width surface。Dayboard 不定义 desktop layout 或 desktop fallback。Conversation schedule cards 不显示 completion checkbox；mutations 可从 detail interaction 中执行。
 
-## Current Scope Limits
+## 当前范围限制
 
-Not implemented:
+尚未实现：
 
-- recurring schedule engine;
-- external calendar synchronization;
-- multi-user collaboration and organization administration;
-- billing;
-- native mobile applications;
-- foreign-timezone natural-language conversion;
-- installed-PWA background notification delivery.
+- 周期调度引擎；
+- 外部日历同步；
+- multi-user collaboration 和 organization administration；
+- 计费；
+- 原生移动应用；
+- 外国时区自然语言转换；
+- 已安装 PWA 的后台通知投递。
 
-The canonical tool contract is documented in [../tool-design.md](../tool-design.md). Historical
-product phases are retained only under [../archive](../archive/README.md).
+规范的 tool contract 记录在 [agent/tools.md](./agent/tools.md) 中。历史产品阶段仅保留在 [../archive](../archive/README.md) 下。

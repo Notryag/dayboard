@@ -1,140 +1,124 @@
-# Phase 2 Plan: Public Product Readiness
+# Phase 2 计划：面向公众的产品就绪
 
-> Archived: milestone statuses and next-work lists below are historical and must not guide current
-> implementation. Use [Project State](../PROJECT_STATE.md) for the active milestone.
+> 已归档：以下里程碑状态和后续工作列表属于历史记录，不得用于指导当前实现。当前里程碑请使用[项目状态](../PROJECT_STATE.md)。
 
-## Product Goal
+## 产品目标
 
-Move Dayboard from a shared-user technical MVP to a releasable product where anyone can create an
-account and safely manage their own schedules and reminders.
+将 Dayboard 从共享用户的技术 MVP 发展为可发布产品，使任何人都能创建账号并安全管理自己的日程和提醒。
 
-Phase 1 proved the Agent loop. Phase 2 is not primarily an Agent-capability phase. It closes
-the product boundaries required for real use: identity, ownership, personal settings, reminder
-delivery, abuse protection, and a minimal inspectable experience.
+Phase 1 证明了 Agent loop。Phase 2 主要不是 Agent-capability 阶段，而是补齐实际使用所需的产品边界：identity、ownership、
+personal settings、reminder delivery、abuse protection，以及最小可检查体验。
 
-Public self-service registration is an intentional product capability. It must remain available in
-production. Release protection should come from identity isolation, endpoint-specific rate limits,
-login abuse protection, provider budgets, and operational visibility rather than an invitation gate.
+公开自助注册是有意提供的产品能力，生产环境必须保持可用。发布保护应来自 identity isolation、endpoint-specific rate limits、
+login abuse protection、provider budgets 和 operational visibility，而不是 invitation gate。
 
-## Current Product Assessment
+## 当前产品评估
 
-The natural-language scheduling backend is an MVP-quality closed loop:
+自然语言 scheduling backend 已形成 MVP 质量的闭环：
 
-- create, find, change, complete, and cancel calendar entries and tasks;
-- execute multiple instructions from one message;
-- clarify ambiguous targets with structured choices;
-- persist conversations and bounded Agent context;
-- expose durable Run progress and safe tool observability;
-- protect writes with tenant scoping, idempotency, optimistic concurrency, and audit fields;
-- run API, worker, PostgreSQL, Redis, migrations, usage accounting, and budgets in production.
+- 创建、查找、修改、完成和取消 calendar entries 与 tasks；
+- 从一条消息执行多个指令；
+- 使用结构化选项澄清含糊目标；
+- 持久化 conversations 和有界 Agent context；
+- 暴露持久化的 Run progress 和安全的 tool observability；
+- 使用 tenant scoping、idempotency、optimistic concurrency 和 audit fields 保护写入；
+- 在生产环境运行 API、worker、PostgreSQL、Redis、migrations、usage accounting 和 budgets。
 
-Password authentication, self-service registration, tenant ownership, and the same-site web/API
-deployment are running in production. The scheduling backend is ahead of the product surface: users
-still need an inspectable calendar/task view, reconnectable Run execution, stable error handling,
-and release-grade abuse controls. The reminder inbox is not rendered, and browser voice capture is
-not connected.
+Password authentication、self-service registration、tenant ownership 和 same-site web/API deployment 已在生产环境运行。
+scheduling backend 超前于产品界面：用户仍需要可检查的 calendar/task view、可重新连接的 Run execution、稳定的 error handling
+以及发布级 abuse controls。reminder inbox 尚未渲染，browser voice capture 也尚未连接。
 
-## Milestone Order
+## 里程碑顺序
 
-### P2.1 Real Identity And Ownership
+### P2.1 真实 Identity 和 Ownership
 
-Status: backend, web session flow, isolation acceptance, and production enablement complete.
+状态：backend、web session flow、isolation acceptance 和 production enablement 已完成。
 
-Completed:
+已完成：
 
-- username/password registration and login in FastAPI;
-- Argon2id password hashes and revocable server-side sessions in `HttpOnly` cookies;
-- Dayboard users, memberships, timezone/locale profiles, and an external-identity extension point;
-- trusted `TenantContext` resolution from sessions and memberships;
-- minimal web registration, login, logout, session recovery, and credentialed SSE;
-- optional-email password recovery with single-use expiring tokens, SMTP delivery, and global
-  session revocation after reset;
-- two-user ownership acceptance for threads and Run status, events, streaming, and cancellation.
+- 在 FastAPI 中实现 username/password registration 和 login；
+- 在 `HttpOnly` cookies 中使用 Argon2id password hashes 和可撤销的 server-side sessions；
+- Dayboard users、memberships、timezone/locale profiles 和 external-identity extension point；
+- 从 sessions 和 memberships 解析可信 `TenantContext`；
+- 最小 web registration、login、logout、session recovery 和 credentialed SSE；
+- 支持 optional-email password recovery，使用 single-use expiring tokens、SMTP delivery，并在重置后全局撤销 sessions；
+- 针对 threads 以及 Run status、events、streaming 和 cancellation 的双用户 ownership acceptance。
 
-Remaining:
+剩余：
 
-- run the expanded same-tenant/different-owner acceptance set at the next release gate;
+- 在下一个 release gate 运行扩展的 same-tenant/different-owner acceptance set；
 
-Production startup rejects development auth or insecure cookies. Registration, login, command, and
-voice endpoints have separate Redis-backed abuse limits without disabling public registration.
-Repository access for conversations, Runs, calendar entries, tasks, transcripts, reminders, and
-provider usage is constrained by both tenant and owner. The Run and provider-usage boundaries were
-tightened after a repository audit.
+生产启动会拒绝 development auth 或 insecure cookies。Registration、login、command 和 voice endpoints 分别使用 Redis-backed
+abuse limits，同时不禁用 public registration。conversations、Runs、calendar entries、tasks、transcripts、reminders 和
+provider usage 的 repository access 同时受 tenant 和 owner 约束。repository audit 后，Run 和 provider-usage boundaries 已收紧。
 
-Completion means two users cannot read, mutate, stream, or infer each other's data, and a
-production deployment cannot start in development-auth mode by accident.
+完成意味着两个用户无法读取、修改、stream 或推断彼此的数据，且生产部署不会意外以 development-auth mode 启动。
 
-Backend acceptance now covers password-session isolation for threads, Run status, durable Run
-events, SSE, and cancellation. The same-site web/API deployment and coordinated password-auth
-release are complete. Password recovery is implemented; production delivery additionally requires
-SMTP configuration.
+Backend acceptance 现在覆盖 threads、Run status、durable Run events、SSE 和 cancellation 的 password-session isolation。
+same-site web/API deployment 和 coordinated password-auth release 已完成。Password recovery 已实现；生产 delivery 还需要
+SMTP configuration。
 
-### P2.2 Reminder Delivery
+### P2.2 提醒投递
 
-Status: durable in-app delivery foundation complete; user-visible inbox and external provider pending.
+状态：durable in-app delivery foundation 已完成；user-visible inbox 和 external provider 待完成。
 
-Completed:
+已完成：
 
-- normalize fixed-duration reminder intent into a scheduled delivery time;
-- synchronize create, reschedule, completion, and cancellation with a PostgreSQL outbox;
-- claim due in-app reminders through the existing worker using `FOR UPDATE SKIP LOCKED`;
-- persist tenant-scoped status, attempts, provider IDs, and delivery timestamps;
-- expose delivery records through `GET /api/reminders`.
+- 将 fixed-duration reminder intent 规范化为 scheduled delivery time；
+- 使用 PostgreSQL outbox 同步 create、reschedule、completion 和 cancellation；
+- 通过现有 worker 使用 `FOR UPDATE SKIP LOCKED` claim 到期的 in-app reminders；
+- 持久化 tenant-scoped status、attempts、provider IDs 和 delivery timestamps；
+- 通过 `GET /api/reminders` 暴露 delivery records。
 
-Remaining:
+剩余：
 
-- render a minimal in-app reminder inbox;
-- select one external provider suitable for target users in China;
-- implement provider acknowledgement, retry scheduling, and terminal failure acceptance.
+- 渲染最小 in-app reminder inbox；
+- 选择一个适合中国目标用户的 external provider；
+- 实现 provider acknowledgement、retry scheduling 和 terminal failure acceptance。
 
-Completion means a created reminder produces one observable notification or one explicit,
-recoverable failure record.
+完成意味着创建的 reminder 会产生一个可观察的 notification，或一条明确且可恢复的 failure record。
 
-The PostgreSQL outbox, fixed-duration normalization, source replacement/cancellation rules,
-tenant-scoped query API, worker claiming, and idempotent `in_app` delivery are implemented.
-Remaining work is a minimal web notification surface and, after product-channel selection, one
-external provider adapter with retry and acknowledgement acceptance.
+PostgreSQL outbox、固定时长规范化、来源替换/取消规则、租户范围查询 API、Worker 认领
+和幂等的 `in_app` delivery 已实现。剩余工作是最小 web notification surface，以及在选择产品渠道后增加一个带 retry 和
+acknowledgement acceptance 的 external provider adapter。
 
-### P2.3 Minimal Usable Experience
+### P2.3 最小可用体验
 
-- expose tenant-scoped, cursor-paginated calendar and task query APIs (completed);
-- show today, tomorrow, and open-task views using those APIs (completed);
-- render created/changed objects from structured results;
-- preserve structured clarification controls;
-- provide clear retry behavior for provider-unavailable failures;
-- connect browser recording to transcription, editable text confirmation, and normal command
-  submission (implemented with selectable Cloudflare Workers AI and Alibaba Cloud adapters;
-  authenticated browser acceptance with non-sensitive Chinese recordings remains).
+- 暴露 tenant-scoped、cursor-paginated calendar 和 task query APIs（已完成）；
+- 使用这些 APIs 展示 today、tomorrow 和 open-task views（已完成）；
+- 根据 structured results 渲染已创建/已修改的对象；
+- 保留 structured clarification controls；
+- 为 provider-unavailable failures 提供清晰的 retry behavior；
+- 将 browser recording 连接到 transcription、editable text confirmation 和 normal command submission（已使用可选择的
+  Cloudflare Workers AI 和 Alibaba Cloud adapters 实现；仍需使用非敏感中文录音完成 authenticated browser acceptance）。
 
-This milestone should keep TypeScript API and feature logic reusable for the planned visual
-redesign. It does not include brand polish or a large component-system migration.
+本里程碑应保持 TypeScript API 和 feature logic 可复用，以支持计划中的 visual redesign。不包含 brand polish 或大型
+组件系统迁移。
 
-## Explicitly Deferred
+## 明确延期
 
-- multi-Agent orchestration;
-- external calendar synchronization;
-- organization administration and billing UI;
-- multiple notification channels at once;
-- native mobile applications;
-- detailed visual redesign;
-- per-step token cost UI.
+- 多 Agent 编排；
+- 外部日历同步；
+- organization administration 和 billing UI；
+- 同时支持多个 notification channels；
+- 原生移动应用；
+- 详细视觉重设计；
+- 按步骤显示 token 成本的 UI。
 
-## Immediate Next Work
+## 近期后续工作
 
-1. Add release protection: production auth fail-closed, endpoint-specific limits, login abuse
-   protection, and reproducible deployment checks while keeping registration open.
-2. Build the minimal inspectable calendar/task experience for registered users.
-3. Add Run reconnection and stable API errors so users can recover from network and provider faults.
-4. Keep reminder UI and external provider work deferred until it becomes a product priority.
+1. 增加 release protection：production auth fail-closed、endpoint-specific limits、login abuse protection 和 reproducible deployment checks，同时保持 registration open。
+2. 为注册用户构建最小可检查的 calendar/task experience。
+3. 增加 Run reconnection 和 stable API errors，使用户能从 network 和 provider faults 中恢复。
+4. 将 reminder UI 和 external provider work 延后，直到它们成为产品优先事项。
 
-## Operational Acceptance
+## 运维验收
 
-A support report must be traceable without reading private user content. API logs and durable Run
-events should allow an operator to follow:
+无需读取私有用户内容，也必须能够追踪 support report。API logs 和 durable Run events 应允许 operator 跟踪：
 
 ```text
 request_id -> authenticated user/tenant -> thread_id -> run_id -> runtime/tool event -> object id
 ```
 
-Logs record status, latency, provider request IDs when available, safe error types, and correlation
-IDs. They do not record passwords, session tokens, cookies, raw audio, or full command text.
+Logs 记录 status、latency、provider request IDs（如可用）、safe error types 和 correlation IDs。不记录 passwords、session
+tokens、cookies、raw audio 或完整 command text。

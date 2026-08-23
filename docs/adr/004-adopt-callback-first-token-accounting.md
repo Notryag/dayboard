@@ -1,28 +1,24 @@
-# ADR-004 Adopt Callback-First Token Accounting
+# ADR-004 采用 callback 优先的 Token 计量
 
-## Status
+## 状态
 
-Accepted
+已接受
 
-## Context
+## 背景
 
-Dayboard needs accurate provider usage for cost visibility, tenant budgets, and future
-billing. Model usage is a runtime fact, but tenant attribution, pricing, persistence, and
-budget policy are product concerns.
+Dayboard 需要准确的 provider 用量，以支持成本可见性、租户预算和未来计费。模型用量是运行时事实，
+但租户归属、定价、持久化和预算策略属于产品关注点。
 
-Reading usage only from the final LangGraph state is incomplete because intermediate model
-calls can select tools, perform clarification, or fail before a final message is produced.
-Putting basic counting in agent middleware would also mix observation with execution state
-and could make accounting depend on message rewriting.
+仅从最终 LangGraph 状态读取用量是不完整的，因为中间模型调用可能选择工具、执行澄清，或在生成最终
+消息前失败。在 agent middleware 中进行基础计数也会混淆观测与执行状态，并可能使计量依赖于消息重写。
 
-DeerFlow uses a callback-based RunJournal as the authoritative observer, persists Run usage
-from the worker finalization path, and reserves middleware for step attribution and active
-budget enforcement. Dayboard should follow the same boundary while its runtime remains
-simpler and has no subagents.
+DeerFlow 使用基于 callback 的 RunJournal 作为权威观测器，从 worker finalization path 持久化 Run
+用量，并将 middleware 保留给步骤归属和主动预算执行。Dayboard 的运行时更简单且没有 subagents，
+但应遵循相同的边界。
 
-## Decision
+## 决策
 
-Use the following ownership model:
+采用以下所有权模型：
 
 ```text
 provider model call
@@ -35,64 +31,52 @@ provider model call
   -> Dayboard applies tenant budgets, pricing, and reconciliation
 ```
 
-North owns:
+North 负责：
 
-- observing every model call through callbacks;
-- normalizing common provider fields to `input_tokens`, `output_tokens`, and
-  `total_tokens`;
-- deriving `total_tokens` when a provider omits it;
-- deduplicating repeated callback delivery by model call ID;
-- exposing product-neutral usage events and in-memory aggregation.
+- 通过 callbacks 观测每次模型调用；
+- 将常见 provider 字段规范化为 `input_tokens`、`output_tokens` 和 `total_tokens`；
+- 在 provider 未提供 `total_tokens` 时推导该值；
+- 按模型调用 ID 对重复的 callback 交付去重；
+- 暴露与产品无关的用量事件和内存聚合结果。
 
-Dayboard owns:
+Dayboard 负责：
 
-- associating usage with tenant, user, Run, provider, and configured model;
-- durable PostgreSQL usage records;
-- database-level exactly-once guarantees per Run;
-- admission budgets, plan limits, pricing, and actual-versus-estimated reconciliation;
-- deciding which usage metadata is safe to expose in product observability.
+- 将用量关联到租户、用户、Run、provider 和已配置模型；
+- 持久化 PostgreSQL 用量记录；
+- 为每个 Run 提供数据库级 exactly-once 保证；
+- 负责准入预算、计划限制、定价以及实际值与估算值的对账；
+- 决定哪些用量元数据可以安全地暴露在产品可观测性中。
 
-Basic token accounting is not agent middleware. A callback observes execution without
-changing agent state or control flow. Middleware is introduced only when a policy must
-participate in execution, such as warning an agent near a per-Run limit, preventing new
-tool calls after a hard limit, or attributing subagent usage back to a parent step.
+基础 Token 计量不是 agent middleware。callback 在不改变 agent 状态或控制流的情况下观测执行。只有当
+某项策略必须参与执行时，才引入 middleware，例如在 agent 接近每个 Run 的限制时发出警告、在达到硬
+限制后阻止新的工具调用，或将 subagent 用量归属回父步骤。
 
-## Current Implementation
+## 当前实现
 
-North emits normalized usage and `RuntimeUsageAccumulator` aggregates successful
-`model.completed` callbacks by `call_id`. Dayboard consumes that accumulator and settles a
-single `provider_usage_records` row from the Run's `finally` path using an independent database
-session. Success, clarification, failure, interruption, and cancellation therefore share the
-same settlement path whenever a model completion reported usage.
+North 发出规范化用量，`RuntimeUsageAccumulator` 按 `call_id` 聚合成功的 `model.completed` callbacks。
+Dayboard 使用独立的数据库 session 消费该 accumulator，并从 Run 的 `finally` path 结算一条
+`provider_usage_records` 记录。因此，只要模型完成事件报告了用量，成功、澄清、失败、中断和取消都会
+共用同一条结算路径。
 
-The database enforces uniqueness on `(tenant_id, run_id)`. Settlement inserts an immutable
-aggregate and treats a conflict as an already-settled Run, so retries do not create a duplicate
-or charge the budget again. A settlement failure is logged independently and does not replace
-the Run's product outcome.
+数据库对 `(tenant_id, run_id)` 强制唯一性。结算会插入不可变的聚合记录，并将冲突视为 Run 已经结算，
+因此重试不会创建重复记录，也不会再次扣除预算。结算失败会单独记录日志，不会替换 Run 的产品结果。
 
-Dayboard also performs a conservative pre-call budget admission check. The first successful
-settlement charges `max(actual_tokens - estimated_tokens, 0)` to the same fixed window. A lower
-actual value is not refunded because a Run may settle after its admission window expires; a
-negative adjustment could otherwise corrupt the next window. The PostgreSQL record remains the
-authoritative actual usage fact.
+Dayboard 还会执行保守的调用前预算准入检查。首次成功结算会在同一固定窗口中计入
+`max(actual_tokens - estimated_tokens, 0)`。实际值较低时不会退款，因为 Run 可能在准入窗口过期后
+才结算；否则负向调整可能破坏下一个窗口。PostgreSQL 记录仍是实际用量这一事实的权威来源。
 
-## Required Follow-Up
+## 必要的后续工作
 
-Add an operational recovery path for the rare case where independent settlement exhausts its
-database retry opportunity; the structured settlement failure log is the current detection
-mechanism. If exact refunds become commercially necessary, replace fixed-window reservations
-with a durable reservation model instead of applying negative counter adjustments.
+为独立结算耗尽数据库重试机会这一罕见情况增加运维恢复路径；结构化结算失败日志是当前的检测机制。
+如果商业上确实需要精确退款，应使用持久化预留模型替代固定窗口预留，而不是应用负向计数器调整。
 
-Per-model buckets, cache-read tokens, lead/middleware/subagent attribution, running snapshots,
-and token-budget middleware are deferred until the product uses multiple models, subagents,
-or long-running executions that require active cost control.
+按模型划分的桶、缓存读取 Token、lead/middleware/subagent 归属、运行中快照以及 token-budget
+middleware 均推迟到产品使用多个模型、subagents，或需要主动成本控制的长时间运行任务之后再实现。
 
-## Consequences
+## 后果
 
-The accounting source remains reusable across products without making North aware of tenants,
-databases, prices, or plans. Dayboard can evolve billing independently while retaining the same
-runtime usage facts.
+计量来源仍可跨产品复用，同时无需让 North 感知租户、数据库、价格或计划。Dayboard 可以在保留相同
+运行时用量事实的同时独立演进计费能力。
 
-Short scheduling commands avoid DeerFlow's full attribution and enforcement complexity. The
-remaining tradeoff is that a database outage during settlement requires operational recovery;
-the architecture treats that as accounting reliability work rather than a new middleware feature.
+简短的调度命令避免了 DeerFlow 完整的归属和执行复杂性。剩余的权衡是：结算期间发生数据库故障时需要
+运维恢复；该架构将其视为计量可靠性工作，而不是新的 middleware 功能。

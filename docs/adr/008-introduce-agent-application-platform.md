@@ -1,175 +1,121 @@
-# ADR-008 Introduce An Agent Application Platform Layer
+# ADR-008 引入 Agent 应用平台层
 
-## Status
+## 状态
 
-Accepted. The original strict dependency-chain diagram is superseded by
-[ADR-009](./009-keep-platform-and-north-independent.md); the ownership decision remains accepted.
+已接受。原始的严格依赖链图已由 [ADR-009](./009-keep-platform-and-north-independent.md) 取代；所有权决策仍然有效。
 
-## Context
+## 背景
 
-Dayboard currently has two architectural layers:
+Dayboard 当前有两个架构层：
 
 ```text
 North runtime <- Dayboard product
 ```
 
-This keeps scheduling concepts out of North, but Dayboard now also contains application capabilities
-that are not specific to scheduling: authenticated identity context, conversations, Runs, persisted
-message history, artifact recovery, clarification, media input, reminder delivery infrastructure,
-and provider usage accounting.
+这使调度概念不会进入 North，但 Dayboard 现在还包含一些并非调度专属的应用能力：已认证身份上下文、对话、Runs、持久化消息历史、工件恢复、澄清、媒体输入、提醒交付基础设施以及提供商用量核算。
 
-Future products such as a nutrition or exercise recorder need many of those capabilities without
-depending on Dayboard's calendar, task, prompt, tool, or presentation models. Copying them would
-split fixes and operational behavior across products. Moving them into North would make the runtime
-aware of application policy and persistence, reversing the dependency direction that keeps North
-reusable.
+未来的产品（例如营养或锻炼记录器）需要其中许多能力，但不应依赖 Dayboard 的日历、任务、提示词、工具或呈现模型。复制这些能力会使修复和运维行为分散到多个产品中。将它们移入 North 会让 runtime 了解应用策略和持久化，从而反转使 North 保持可复用的依赖方向。
 
-## Decision
+## 决策
 
-> The diagram below records the original ownership decision. Its strict Platform-to-North import
-> link is superseded by [ADR-009](./009-keep-platform-and-north-independent.md).
+> 下图记录了原始的所有权决策。其中严格的 Platform-to-North 导入链接已由 [ADR-009](./009-keep-platform-and-north-independent.md) 取代。
 
-Introduce a third, independently installable layer:
+引入第三个可独立安装的层：
 
 ```text
 North <- Agent Application Platform <- Dayboard
                                    <- future products
 ```
 
-The original proposal treated the arrows as an import dependency:
-`Dayboard -> Agent Application Platform -> North`. That strict direction is no longer current;
-ADR-009 retains the no-upward-import rule while making North and Platform independent lower-level
-dependencies. Runtime calls and data may flow in both directions through declared interfaces without
-reversing source-code dependency.
+原始提案将箭头视为导入依赖：`Dayboard -> Agent Application Platform -> North`。这一严格方向已不再是当前规则；ADR-009 保留了禁止向上导入的规则，同时让 North 和 Platform 成为彼此独立的底层依赖。runtime 调用和数据可以通过声明的接口双向流动，而不会反转源代码依赖。
 
-### North owns runtime primitives
+### North 负责 runtime 原语
 
-North owns product-neutral model invocation, agent loops, middleware execution, checkpoints,
-canonical runtime events, Run execution mechanics, stream bridges, and runtime compaction timing.
-It does not own users, tenants, HTTP APIs, product conversations, product reminders, or domain
-artifacts.
+North 负责与产品无关的模型调用、Agent 循环、中间件执行、检查点、规范 runtime 事件、Run 执行机制、流桥和 runtime 压缩时机。它不负责用户、租户、HTTP API、产品对话、产品提醒或领域工件。
 
-### Agent Application Platform owns reusable application capabilities
+### Agent 应用平台负责可复用的应用能力
 
-The platform layer owns contracts and use cases that are valuable across multiple conversational
-products:
+平台层负责对多个对话产品都有价值的契约和用例：
 
-- trusted tenant and user context;
-- conversation threads, cursor-paginated messages, and durable history;
-- product Run records, idempotent command submission, recovery, cancellation, and status mapping;
-- typed message artifacts and refresh recovery;
-- clarification and other resumable user interactions;
-- media ingestion boundaries;
-- notification delivery infrastructure;
-- provider usage and budget records.
+- 可信的租户和用户上下文；
+- 对话线程、基于游标分页的消息和持久化历史；
+- 产品 Run 记录、幂等命令提交、恢复、取消和状态映射；
+- 类型化消息工件和刷新恢复；
+- 澄清及其他可恢复的用户交互；
+- 媒体摄取边界；
+- 通知交付基础设施；
+- 提供商用量和预算记录。
 
-The platform does not decide what a calendar entry, task, meal, calorie, workout, or product card
-means. Reusable infrastructure must accept explicit product adapters instead of importing product
-modules.
+平台不决定日历条目、任务、餐食、卡路里、锻炼或产品卡片的含义。可复用基础设施必须接受明确的产品适配器，而不是导入产品模块。
 
-The three layers describe logical ownership, not one flat module per layer. The platform is
-internally separated into:
+这三层描述的是逻辑所有权，而不是每层各对应一个扁平模块。平台内部划分为：
 
-- `core`: identity, Conversation, Run, Interaction, and error contracts without framework imports;
-- `application`: transaction-scoped use cases and lifecycle state machines;
-- `ports`: storage, runtime execution, event publication, and product projection interfaces;
-- `adapters`: optional PostgreSQL and North integrations that implement those ports.
+- `core`：不导入框架的 identity、Conversation、Run、Interaction 和错误契约；
+- `application`：限定在事务范围内的用例和生命周期状态机；
+- `ports`：存储、runtime 执行、事件发布和产品投影接口；
+- `adapters`：实现这些 port 的可选 PostgreSQL 和 North 集成。
 
-Adapters depend inward on platform contracts. Platform Core and application use cases do not
-depend on SQLAlchemy, FastAPI, a product package, or a concrete model provider. A North adapter may
-depend on North without allowing North concepts to leak into the product-neutral contracts.
+Adapters 向内依赖平台契约。Platform Core 和应用用例不依赖 SQLAlchemy、FastAPI、产品包或具体模型提供商。North adapter 可以依赖 North，但不得让 North 概念泄漏到与产品无关的契约中。
 
-### Dayboard owns scheduling product semantics
+### Dayboard 负责调度产品语义
 
-Dayboard owns calendar entries, tasks, reminders as scheduling policy, scheduling repositories and
-services, tool schemas, prompts, time classification, schedule receipts, schedule presentation
-parts, and the Dayboard UI.
+Dayboard 负责日历条目、作为调度策略的提醒、调度 repository 和 service、工具 schema、提示词、时间分类、调度回执、调度呈现部分以及 Dayboard UI。
 
-Northgate remains a sidecar for measurement and diagnostics. It is not part of the three-layer
-application dependency chain and must not mutate application context.
+Northgate 仍是用于测量和诊断的 sidecar。它不属于三层应用依赖链，也不得修改应用上下文。
 
-## Consistency And Extension Boundaries
+## 一致性与扩展边界
 
-Platform use cases own their atomicity requirements. A Run transition and its durable lifecycle
-event, or an idempotency claim and the Run/message created by that claim, must commit or roll back as
-one unit. Store ports must therefore be composed through an explicit Unit of Work; correctness may
-not rely on several repositories happening to share an unexpressed SQLAlchemy Session.
+平台用例负责自身的原子性要求。Run 转换及其持久化生命周期事件，或者幂等声明及由该声明创建的 Run/消息，必须作为一个单元一起提交或回滚。因此，存储 port 必须通过显式的 Unit of Work 组合；正确性不能依赖多个 repository 恰好共享一个未表达出来的 SQLAlchemy Session。
 
-Product data crosses the platform boundary in versioned envelopes. The platform owns envelope
-identity, schema version, lifecycle, persistence, and replay. The product owns and validates the
-payload. This permits Dayboard schedule cards and a future nutrition product to use the same durable
-pipeline without introducing a universal domain `Item` or allowing unversioned `dict[str, Any]` to
-become a permanent protocol.
+产品数据通过带版本的 envelope 穿过平台边界。平台负责 envelope 的身份、schema 版本、生命周期、持久化和重放。产品负责 payload 及其校验。这样，Dayboard 调度卡片和未来的营养产品可以使用同一条持久化管道，而无需引入通用领域 `Item`，也不会让无版本的 `dict[str, Any]` 变成永久协议。
 
-Resumable interactions use optimistic concurrency. The platform owns source Run correlation,
-expiry, state version, and atomic claim/resolve behavior. Dayboard owns scheduling candidates,
-choice labels, local-time projection, and the command produced from a selected choice.
+可恢复交互使用乐观并发。平台负责源 Run 关联、过期、状态版本以及原子声明/解决行为。Dayboard 负责调度候选项、选项标签、本地时间投影以及根据所选选项生成的命令。
 
-## Package Boundary
+## 包边界
 
-The platform package lives at `packages/agent-platform` and imports as `agent_platform`. Dayboard
-will consume it through public package APIs after each extraction slice is complete. Imports from
-`agent_platform` to `dayboard` are prohibited and checked in CI.
+平台包位于 `packages/agent-platform`，导入名为 `agent_platform`。每个提取切片完成后，Dayboard 将通过公共包 API 使用它。`agent_platform` 导入 `dayboard` 是禁止的，CI 会对此进行检查。
 
-North is maintained in its own repository. Its existing rule that it must not import Dayboard or
-the platform remains enforced there. Dynamic imports may not be used to bypass either boundary.
+North 在自己的 repository 中维护。North 不得导入 Dayboard 或平台的现有规则仍在那里执行。不得使用动态导入绕过任一边界。
 
-The dependency guard is expanded incrementally to cover platform Core framework independence and
-Dayboard's internal direction. Passing an import check is necessary but not sufficient: adapter
-contract tests, transaction rollback tests, optimistic-concurrency tests, and tenant-isolation tests
-must also exercise the assembled production path.
+依赖防护会逐步扩展，以覆盖平台 Core 的框架独立性和 Dayboard 的内部依赖方向。通过导入检查是必要条件，但并不充分：adapter 契约测试、事务回滚测试、乐观并发测试和租户隔离测试也必须覆盖组装后的生产路径。
 
-The package is introduced before runtime migration so ownership has a real destination and new
-reusable code does not continue accumulating inside Dayboard.
+在 runtime 迁移之前引入该包，是为了让所有权拥有真实的归属位置，并防止新的可复用代码继续积累在 Dayboard 内部。
 
-## Extraction Strategy
+## 提取策略
 
-Use tested vertical slices rather than moving folders wholesale:
+使用经过测试的垂直切片，而不是整体移动文件夹：
 
-1. establish the package, ownership map, and dependency guard;
-2. extract Conversation + Run together with the minimum identity and artifact contracts they need;
-3. switch Dayboard to the extracted public API and remove the original implementation;
-4. make transaction ownership, idempotency, and persistence-neutral records explicit before moving
-   more orchestration;
-5. extract versioned presentation and resumable-interaction envelopes with atomic resolution;
-6. split generic command submission and Run coordination from Dayboard Agent execution and result
-   projection;
-7. extract media, usage, and notification infrastructure only when their product adapters are
-   explicit;
-8. keep scheduling reminders, tools, prompts, domain models, and UI in Dayboard.
+1. 建立包、所有权映射和依赖防护；
+2. 连同所需的最小 identity 和 artifact 契约一起提取 Conversation + Run；
+3. 让 Dayboard 切换到提取后的公共 API，并移除原始实现；
+4. 在迁移更多编排之前，明确事务所有权、幂等性和与持久化无关的记录；
+5. 提取带版本的呈现 envelope 和可恢复交互 envelope，并进行原子解决；
+6. 将通用命令提交和 Run 协调从 Dayboard Agent 执行及结果投影中拆分出来；
+7. 只有在产品适配器明确后，才提取媒体、用量和通知基础设施；
+8. 将调度提醒、工具、提示词、领域模型和 UI 保留在 Dayboard 中。
 
-There is no compatibility layer for unreleased internal imports. Each completed slice has one
-implementation and removes the previous path.
+对于尚未发布的内部导入，不设置兼容层。每个已完成的切片只有一个实现，并移除之前的路径。
 
-## Rejected Alternatives
+## 被否决的替代方案
 
-### Put all reusable behavior in North
+### 将所有可复用行为放入 North
 
-Rejected because authentication, product persistence, HTTP policy, and notification delivery are
-application concerns. North would become coupled to one deployment model and eventually import
-concepts from its consumers.
+否决原因是：身份验证、产品持久化、HTTP 策略和通知交付属于应用层关注点。North 会与一种部署模型耦合，并最终导入其消费者的概念。
 
-### Build a universal item model
+### 构建通用 item 模型
 
-Rejected because calendars, meals, workouts, and future products have different invariants. A
-generic JSON item would move domain validation out of the database and into convention.
+否决原因是：日历、餐食、锻炼和未来产品具有不同的不变量。通用 JSON item 会把领域校验从数据库移到约定中。
 
-### Copy Dayboard for each new product
+### 为每个新产品复制 Dayboard
 
-Rejected because Run recovery, conversation history, usage accounting, and security fixes would
-diverge immediately.
+否决原因是：Run 恢复、对话历史、用量核算和安全修复会立即产生分歧。
 
-### Perform a big-bang extraction
+### 执行一次性大规模提取
 
-Rejected because the current modules mix reusable orchestration with scheduling policy. Moving the
-files first would preserve the wrong coupling under a new package name.
+否决原因是：当前模块将可复用编排与调度策略混在一起。先移动文件只会在新的包名下保留错误的耦合。
 
-## Consequences
+## 后果
 
-The architecture gains a reusable middle layer without contaminating North or weakening product
-domain models. Dependency violations fail in CI, and extraction can proceed one complete workflow
-at a time.
+该架构获得了一个可复用的中间层，同时不会污染 North 或削弱产品领域模型。依赖违规会在 CI 中失败，提取工作可以一次完成一个完整工作流。
 
-The immediate cost is another package, explicit transaction boundaries, versioned extension
-contracts, and adapter design. Until a slice is migrated, the current Dayboard implementation
-remains authoritative; target ownership is never presented as an implemented platform feature.
+直接成本是增加一个包、明确的事务边界、带版本的扩展契约和 adapter 设计。在某个切片完成迁移之前，当前 Dayboard 实现仍是权威实现；目标所有权绝不会被描述成已经实现的平台功能。

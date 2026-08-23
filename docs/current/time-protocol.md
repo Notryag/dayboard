@@ -1,30 +1,26 @@
-# Time And Concurrency Protocol
+# 时间与并发协议
 
-Status: canonical current contract  
-Last reviewed: 2026-07-23
+状态：当前规范契约  
+最后审阅：2026-07-23
 
-## Invariants
+## 不变量
 
-Dayboard currently supports one trusted scheduling timezone. Its product name is `北京时间` and
-its machine identifier is the IANA zone `Asia/Shanghai`.
+Dayboard 当前支持一个可信的调度时区。其产品名称为 `北京时间`，机器标识符是 IANA 时区 `Asia/Shanghai`。
 
-| Boundary | Representation |
+| 边界 | 表示 |
 | --- | --- |
-| Product display | Beijing Time |
-| Model-visible tool input and receipt | Beijing local wall-clock value, no offset |
-| Application/domain layer | timezone-aware Python `datetime` |
-| PostgreSQL | `timestamp with time zone`, operated with a UTC database session |
+| 产品显示 | 北京时间 |
+| 模型可见的工具输入和回执 | 北京本地墙上时钟值，不带偏移 |
+| 应用/领域层 | 带时区的 Python `datetime` |
+| PostgreSQL | `timestamp with time zone`，使用 UTC 数据库会话操作 |
 
-`Asia/Shanghai` remains the internal IANA identifier. It must not be globally replaced with a
-display label or a non-standard zone name. PostgreSQL stores absolute instants; the separate
-`timezone` column preserves the trusted business zone used for display and local-date semantics.
+`Asia/Shanghai` 仍是内部 IANA 标识符。不得在全局范围用显示标签或非标准时区名称替换它。PostgreSQL 存储绝对时刻；独立的 `timezone` 列保留用于显示和本地日期语义的可信业务时区。
 
-An anytime calendar entry stores `scheduled_date` as a PostgreSQL `date`. It has no invented clock
-instant and therefore no UTC conversion.
+全天日历条目将 `scheduled_date` 存储为 PostgreSQL `date`。它没有虚构的时钟时刻，因此不进行 UTC 转换。
 
-## Model-Visible Contract
+## 模型可见契约
 
-The model reads and writes only Beijing local wall-clock values:
+模型只读取和写入北京本地墙上时钟值：
 
 ```json
 {
@@ -36,12 +32,9 @@ The model reads and writes only Beijing local wall-clock values:
 }
 ```
 
-The canonical precision is minutes and format is `YYYY-MM-DDTHH:mm`. Model-visible local fields
-never contain `Z`, `+00:00`, `+08:00`, an IANA timezone, or a UTC timestamp. The model must not add
-or subtract eight hours. Trusted runtime code attaches `Asia/Shanghai` at the tool boundary and
-converts the resulting instant for storage.
+规范精度为分钟，格式为 `YYYY-MM-DDTHH:mm`。模型可见的本地字段绝不包含 `Z`、`+00:00`、`+08:00`、IANA 时区或 UTC 时间戳。模型不得加减八小时。可信运行时代码在工具边界附加 `Asia/Shanghai`，并转换所得时刻进行存储。
 
-Duration requests use duration rather than model-computed end times:
+时长请求使用时长，而不是由模型计算结束时间：
 
 ```json
 {
@@ -51,54 +44,43 @@ Duration requests use duration rather than model-computed end times:
 }
 ```
 
-Explicit clock changes use `new_local_start` or `new_local_end` in the same format. Calendar search,
-creation, mutation and conflict receipts, task due receipts, clarification-resume messages, and the
-system reference clock must all follow this local-only rule.
+明确的时钟变更使用相同格式的 `new_local_start` 或 `new_local_end`。日历搜索、创建、变更和冲突回执，任务截止回执，澄清恢复消息以及系统参考时钟都必须遵循这一仅本地值规则。
 
-The same model context must never contain both an absolute field and its local equivalent, for
-example `start_time=08:00+00:00` together with `local_start=16:00`.
+同一个模型上下文绝不能同时包含绝对字段及其本地等价字段，例如同时包含 `start_time=08:00+00:00` 和 `local_start=16:00`。
 
-## ToolMessage Boundary
+## ToolMessage 边界
 
 ```text
 ToolMessage.content  -> compact local-time receipt for the model
 ToolMessage.artifact -> complete UTC/offset-aware entity for UI, SSE, and history restoration
 ```
 
-Artifacts may include `start_time`, `end_time`, `due_at`, `timezone`, and audit timestamps. Artifact
-data must never be serialized into a provider request. Provider-boundary tests must inspect the
-actual messages sent to the model and reject absolute scheduling timestamps in ToolMessage content.
+工件可以包含 `start_time`、`end_time`、`due_at`、`timezone` 和审计时间戳。工件数据绝不能序列化到提供商请求中。提供商边界测试必须检查实际发送给模型的消息，并拒绝 ToolMessage 内容中的绝对调度时间戳。
 
-Structured clarification stores the complete presentation candidate for the UI. When a selected
-candidate resumes Agent execution, Dayboard creates a model candidate containing only local fields
-and `row_version`; it must not copy artifact timestamps into the generated user message.
+结构化澄清会为 UI 存储完整的呈现候选项。选定候选项恢复 Agent 执行时，Dayboard 创建只包含本地字段和 `row_version` 的模型候选项；不得将工件时间戳复制到生成的用户消息中。
 
-## Database Conversion
+## 数据库转换
 
-The trusted conversion is program-owned:
+可信转换由程序负责：
 
 ```python
 local_value = datetime.strptime(value, "%Y-%m-%dT%H:%M")
 aware_value = local_value.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
 ```
 
-SQLAlchemy sends the aware value to PostgreSQL `timestamptz`. PostgreSQL normalizes the instant;
-the production database session timezone is UTC. Reads return aware instants, which are converted
-back to `Asia/Shanghai` only when building model receipts or product display values.
+SQLAlchemy 将带时区的值发送给 PostgreSQL `timestamptz`。PostgreSQL 规范化该时刻；生产数据库会话时区为 UTC。读取结果返回带时区的时刻，只有在构建模型回执或产品显示值时才转换回 `Asia/Shanghai`。
 
-Browser REST APIs may carry offset-aware instants because they belong to the typed UI/artifact
-boundary, not the model boundary. Browser rendering must use the trusted account timezone rather
-than the device timezone.
+浏览器 REST API 可以携带带偏移的时刻，因为它们属于类型化 UI/工件边界，而不是模型边界。浏览器渲染必须使用可信账户时区，而不是设备时区。
 
-## Optimistic Concurrency
+## 乐观并发
 
-Schedule entities use an integer database version instead of an audit timestamp:
+调度实体使用整数数据库版本，而不是审计时间戳：
 
 ```sql
 row_version BIGINT NOT NULL DEFAULT 1
 ```
 
-Every effective calendar or task mutation atomically applies:
+每次有效的日历或任务变更都原子地应用：
 
 ```sql
 UPDATE ...
@@ -110,31 +92,25 @@ WHERE id = :id
 RETURNING *;
 ```
 
-Zero updated rows means the selected entity changed concurrently. `updated_at` remains available
-for audit and ordering but is not a concurrency token. Model tools use `expected_row_version`, and
-sequence creation uses `expected_anchor_row_version`. The Anchor row remains locked while its
-version, active state, and authoritative `end_time` are checked.
+更新行数为零表示所选实体发生了并发变化。`updated_at` 仍可用于审计和排序，但不是并发令牌。模型工具使用 `expected_row_version`，序列创建使用 `expected_anchor_row_version`。检查锚点行的版本、活动状态和权威 `end_time` 时，该行会保持锁定。
 
-All mutation paths increment the version: Agent reschedule/cancel/update, Web edit/cancel, calendar
-complete/reopen, and task complete/reopen/cancel.
+所有变更路径都会递增版本：Agent 重排/取消/更新、Web 编辑/取消、日历完成/重新打开，以及任务完成/重新打开/取消。
 
-## Runtime Context Isolation
+## 运行时上下文隔离
 
-Agent checkpoints use the `dayboard-time-v2` namespace. Provider-boundary sanitization removes UI
-artifacts and rewrites absolute scheduling fields before every main-model request. Summary input
-contains only compact local-time receipts, so UTC artifact values never enter model context.
+Agent 检查点使用 `dayboard-time-v2` 命名空间。每次主模型请求前，提供商边界脱敏都会移除 UI 工件并重写绝对调度字段。摘要输入只包含紧凑的本地时间回执，因此 UTC 工件值不会进入模型上下文。
 
-## Required Tests
+## 必需测试
 
-Tests must prove:
+测试必须证明：
 
-1. Local input and receipt fields use the same `YYYY-MM-DDTHH:mm` format.
-2. Tool code, not the model, attaches `Asia/Shanghai` and PostgreSQL stores the correct instant.
-3. Model receipts contain no `start_time`, `end_time`, `due_at`, timezone, `Z`, or numeric offset.
-4. UI artifacts retain complete absolute timestamps and render identically after refresh.
-5. Provider-bound messages never include artifact scheduling timestamps.
-6. Duration updates modify only the selected entry unless another mutation is explicitly requested.
-7. Adjacent entries are independent; shortening the first creates a gap and does not move the next.
-8. Every mutation increments `row_version`, and stale versions fail atomically.
-9. Anchor creation rejects a stale `expected_anchor_row_version`.
-10. Clarification resume sends local fields and version only.
+1. 本地输入和回执字段使用相同的 `YYYY-MM-DDTHH:mm` 格式。
+2. 由工具代码而非模型附加 `Asia/Shanghai`，并由 PostgreSQL 存储正确时刻。
+3. 模型回执不包含 `start_time`、`end_time`、`due_at`、timezone、`Z` 或数字偏移。
+4. UI 工件保留完整绝对时间戳，刷新后渲染保持一致。
+5. 发往提供商的消息绝不包含工件调度时间戳。
+6. 时长更新只修改选定条目，除非明确请求其他变更。
+7. 相邻条目彼此独立；缩短第一个条目会产生间隔，不会移动下一个条目。
+8. 每次变更都会递增 `row_version`，过期版本会原子失败。
+9. 锚点创建会拒绝过期的 `expected_anchor_row_version`。
+10. 澄清恢复只发送本地字段和版本。

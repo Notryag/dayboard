@@ -1,28 +1,21 @@
-# ADR-009 Keep Platform And North Independent
+# ADR-009 保持 Platform 与 North 独立
 
-## Status
+## 状态
 
-Accepted
+已接受
 
-## Context
+## 背景
 
-ADR-008 introduced `agent_platform` for application lifecycle capabilities that do not belong to a
-scheduling product or the Agent runtime. Its original dependency diagram described a strict chain:
+ADR-008 引入了 `agent_platform`，用于承载不属于调度产品或 Agent 运行时的应用生命周期能力。它最初的依赖图描述了一条严格链路：
 `Dayboard -> agent_platform -> North`.
 
-The implemented Run boundary proves that this link is unnecessary and harmful. North already owns
-the Agent loop, model invocation, LangGraph checkpointing, and runtime streaming. Agent Platform
-owns durable tenant-scoped Conversation, Run, idempotency, envelope, and interaction lifecycle.
-The Platform does not need a North import to express those rules; Dayboard supplies a
-`RunExecutionDriver` that bridges the two packages.
+已实现的 Run 边界证明这条链接既不必要又有害。North 已经负责 Agent 循环、模型调用、LangGraph 检查点和运行时流。Agent Platform 负责持久化的租户范围 Conversation、Run、幂等性、封装和交互生命周期。Platform 不需要导入 North 来表达这些规则；Dayboard 提供 `RunExecutionDriver` 连接两个包。
 
-Forcing Platform to import North only to preserve a visual three-layer stack would duplicate runtime
-concepts in application code and make every future consumer adopt North even when its runtime needs
-differ.
+为了保留视觉上的三层栈而强迫 Platform 导入 North，会在应用代码中重复运行时概念，并使每个未来消费者都必须采用 North，即使其运行时需求不同。
 
-## Decision
+## 决策
 
-Keep North and Agent Platform as independent lower-level dependencies:
+保持 North 和 Agent Platform 为彼此独立的底层依赖：
 
 ```text
 Dayboard ------> agent_platform
@@ -33,23 +26,14 @@ future product -> agent_platform
 future product -> its chosen runtime
 ```
 
-Dayboard's composition root creates the product-owned adapter implementing Platform's
-`RunExecutionDriver` port. North and Platform do not import each other. North graph state is
-temporary runtime state; Platform's PostgreSQL-backed Conversation and `PendingInteraction` state
-is the durable application authority.
+Dayboard 的 composition root 创建产品所有的适配器，实现 Platform 的 `RunExecutionDriver` port。North 和 Platform 不互相导入。North 图状态是临时运行时状态；Platform 基于 PostgreSQL 的 Conversation 和 `PendingInteraction` 状态是持久化的应用权威来源。
 
-An optional North adapter package is permitted only if a second product proves a stable,
-product-neutral integration contract. It must depend inward on Platform ports and must not change
-the framework-free Core or Application packages.
+只有当第二个产品证明存在稳定且与产品无关的集成契约时，才允许添加可选的 North 适配器包。它必须向内依赖 Platform ports，且不得改变无框架的 Core 或 Application 包。
 
-## Consequences
+## 后果
 
-- Platform remains small and only depends on Pydantic today.
-- North continues to evolve its runtime, checkpoint, stream, and compaction APIs without being
-  coupled to tenant persistence or product semantics.
-- Products own the explicit bridge and can choose another runtime without replacing their durable
-  Conversation/Run lifecycle.
-- PostgreSQL adapters remain Dayboard-owned until a second product proves a shared persistence
-  schema and transaction contract.
-- The clarification bridge must converge North's temporary signal into one Platform outcome; it
-  must not create a second durable interaction authority.
+- Platform 保持精简，目前只依赖 Pydantic。
+- North 可以继续演进运行时、检查点、流和压缩 API，而不与租户持久化或产品语义耦合。
+- 产品拥有明确的桥接，并可以选择其他运行时，而不必替换其持久化 Conversation/Run 生命周期。
+- 在第二个产品证明存在共享持久化 schema 和事务契约之前，PostgreSQL 适配器仍归 Dayboard 所有。
+- 澄清桥接必须将 North 的临时信号收敛为一个 Platform 结果；不得创建第二个持久化交互权威来源。

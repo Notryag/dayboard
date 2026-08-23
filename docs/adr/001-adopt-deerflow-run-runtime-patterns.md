@@ -1,55 +1,54 @@
-# ADR-001 Adopt DeerFlow Run and Runtime Patterns
+# ADR-001 采用 DeerFlow Run 和运行时模式
 
-## Status
+## 状态
 
-Accepted
+已接受
 
-## Context
+## 背景
 
-Dayboard began with a synchronous command endpoint and a small `north` harness. That design was intentional for the first implementation slices: it kept the scheduling tools, PostgreSQL persistence, tenant context, and model boundary easy to verify before long-running execution existed.
+Dayboard 最初使用同步命令端点和一个小型 `north` harness。这是首批实现阶段的有意设计：在引入长时间运行的执行之前，它让调度工具、PostgreSQL 持久化、租户上下文和模型边界都易于验证。
 
-The original design stopped being a good fit once Dayboard needed background execution, reconnectable event streams, cancellation, durable usage records, and multiple clients following the same run. Keeping synchronous and asynchronous command paths would duplicate interpretation and lifecycle behavior.
+当 Dayboard 需要后台执行、可重连事件流、取消、持久化用量记录以及多个客户端跟踪同一个 Run 后，原设计就不再合适。保留同步和异步命令路径会重复解释和生命周期行为。
 
-DeerFlow already addresses these runtime concerns at a larger scale. Its useful design properties include:
+DeerFlow 已在更大规模上解决这些运行时问题。其有价值的设计特性包括：
 
-- threads and runs are explicit resources rather than HTTP request implementation details
-- creating, streaming, joining, waiting for, and cancelling runs are distinct operations
-- run management, persisted event history, and live stream fanout have separate responsibilities
-- model construction is configuration-driven and supports provider-specific adapters
-- middleware supports the same behavior on synchronous and asynchronous graph paths
-- the Gateway owns HTTP, authentication, and task lifetime while the harness remains reusable
+- Thread 和 Run 是明确的资源，而不是 HTTP 请求的实现细节
+- 创建、流式跟踪、加入、等待和取消 Run 是不同的操作
+- Run 管理、持久化事件历史和实时流扇出各自承担不同职责
+- 模型构建由配置驱动，并支持提供商专用适配器
+- 中间件在同步和异步图路径上支持相同的行为
+- Gateway 负责 HTTP、身份认证和任务生命周期，同时保留 harness 的可复用性
 
-DeerFlow is a general agent platform, while Dayboard is a scheduling product. Copying the complete DeerFlow Gateway would introduce unrelated sandbox, MCP, artifact, channel, and administration complexity.
+DeerFlow 是通用 Agent 平台，而 Dayboard 是调度产品。复制完整的 DeerFlow Gateway 会引入无关的 sandbox、MCP、工件、频道和管理复杂性。
 
-## Decision
+## 决策
 
-Use `/root/deer-flow` as the primary reference for evolving `north` and Dayboard's run lifecycle.
+使用 `/root/deer-flow` 作为演进 `north` 和 Dayboard Run 生命周期的主要参考。
 
-Adopt these principles:
+采用以下原则：
 
-1. A command creates and commits a queued run before execution starts.
-2. Background execution uses an independent database session.
-3. PostgreSQL run records and events remain the recoverable source of truth.
-4. Live streams are projections of the run lifecycle, not the only copy of events.
-5. Run creation, stream/join, wait, cancellation, messages, and event history have explicit contracts.
-6. Natural-language interpretation has one production path through `north`.
-7. `north` owns reusable model factories, provider adapters, middleware contracts, run primitives, and stream abstractions.
-8. Dayboard owns FastAPI routes, tenant and authorization policy, PostgreSQL product persistence, provider budgets, and scheduling tools.
-9. North's asynchronous Run executor is the only production owner of `agent.astream`; products
-   must not bypass it with direct invocation or callback-only streaming helpers.
+1. 命令在执行开始前创建并提交一个排队中的 Run。
+2. 后台执行使用独立的数据库会话。
+3. PostgreSQL Run 记录和事件仍是可恢复的事实来源。
+4. 实时流是 Run 生命周期的投影，而不是事件的唯一副本。
+5. Run 创建、流式跟踪/加入、等待、取消、消息和事件历史都有明确契约。
+6. 自然语言解释在生产环境只有一条通过 `north` 的路径。
+7. `north` 负责可复用的模型工厂、提供商适配器、中间件契约、Run 原语和流抽象。
+8. Dayboard 负责 FastAPI 路由、租户与授权策略、PostgreSQL 产品持久化、提供商预算和调度工具。
+9. North 的异步 Run 执行器是生产环境中 `agent.astream` 的唯一所有者；产品不得通过直接调用或仅回调式流辅助函数绕过它。
 
-Do not adopt DeerFlow application features merely because they exist. A DeerFlow component is moved into `north` only when it is product-neutral and needed by a concrete Dayboard runtime requirement.
+不要仅因为 DeerFlow 中存在某项应用功能就采用它。只有当某个 DeerFlow 组件与产品无关且被具体的 Dayboard 运行时需求所需要时，才将其移入 `north`。
 
-## Enforcement
+## 执行约束
 
-- API tests must assert that run creation returns before execution and that persisted events can be replayed.
-- Boundary tests must prevent `north` from importing Dayboard or its product schemas.
-- Middleware that wraps tool execution must test asynchronous behavior.
-- There must be no parallel synchronous command interpretation endpoint.
-- Architecture changes that diverge from this lifecycle require a new ADR that supersedes this one.
+- API 测试必须断言 Run 创建在执行前返回，并且持久化事件可以重放。
+- 边界测试必须阻止 `north` 导入 Dayboard 或其产品 schema。
+- 包装工具执行的中间件必须测试异步行为。
+- 不得存在并行的同步命令解释端点。
+- 偏离该生命周期的架构变更需要新的 ADR 来取代本 ADR。
 
-## Consequences
+## 后果
 
-The API becomes easier to reconnect to, observe, cancel, and move across worker processes. The web client can follow one stable run resource rather than keeping an HTTP request open for model execution. Provider and middleware behavior can improve in `north` without leaking Dayboard concepts into it.
+API 更容易重连、观测、取消以及跨 Worker 进程迁移。Web 客户端可以跟踪一个稳定的 Run 资源，而不必为模型执行保持 HTTP 请求打开。提供商和中间件行为可以在 `north` 中改进，而不会将 Dayboard 概念泄漏进去。
 
-The design requires explicit task lifecycle management, idempotency, cancellation semantics, and a durable queue. Dayboard uses arq with Redis and treats delivery as at least once: the run id is the unique job id, workers re-check PostgreSQL state, and product tools must remain transactionally safe to retry. Operational stale-running recovery is still required for workers terminated between the running transition and terminal commit.
+该设计要求明确的任务生命周期管理、幂等性、取消语义和持久化队列。Dayboard 使用基于 Redis 的 arq，并将投递视为至少一次：Run ID 是唯一作业 ID，Worker 会重新检查 PostgreSQL 状态，产品工具必须保持事务安全以支持重试。对于在进入运行状态和终止提交之间被终止的 Worker，仍需要运维层面的过期运行恢复。

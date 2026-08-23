@@ -1,20 +1,14 @@
-# Current Architecture
+# 当前架构
 
-This document describes the system implemented on `main`. It does not describe historical phases
-or speculative replacements. Run transport details live in [run-lifecycle.md](./run-lifecycle.md),
-product semantics live in [product-model.md](./product-model.md), and code-placement contracts live
-in [module-map.md](./module-map.md).
+本文档描述 `main` 上已实现的系统，不描述历史阶段或推测性的替代方案。运行传输细节见
+[run-lifecycle.md](./run-lifecycle.md)，产品语义见 [product-model.md](./product-model.md)，代码放置契约见
+[module-map.md](./module-map.md)。
 
-Each view below answers one question. System context shows external systems; deployment shows
-runtime processes; source dependencies show imports; ownership shows authority. Do not merge these
-views into one diagram.
+下面的每个视图都回答一个问题。系统上下文展示外部系统；部署视图展示运行时进程；源码依赖展示导入关系；所有权视图展示权威归属。不要把这些视图合并到一张图中。
 
-## System Context
+## 系统上下文
 
-North and Agent Platform are libraries inside Dayboard's code boundary, not separately operated
-products. Northgate is an independent network service. Production model traffic can use the
-Northgate canary route or the configured direct-provider fallback until the gateway migration is
-complete.
+North 和 Agent Platform 是 Dayboard 代码边界内的库，不是分别运维的产品。Northgate 是独立的网络服务。在网关迁移完成前，生产模型流量可以使用 Northgate canary 路由，或使用已配置的 direct-provider fallback。
 
 ```mermaid
 flowchart LR
@@ -25,11 +19,9 @@ flowchart LR
     Dayboard --> ASR[ASR provider]
 ```
 
-## Deployment And Runtime Components
+## 部署与运行时组件
 
-Docker Compose deploys one Web process, one API process, and one arq Worker process. North executes
-inside the Worker. Command jobs, stale-Run recovery, idempotency cleanup, and Reminder cron jobs all
-share that Worker; `Reminder Worker` is a logical role, not another container.
+Docker Compose 部署一个 Web 进程、一个 API 进程和一个 arq Worker 进程。North 在 Worker 内执行。命令任务、过期 Run 恢复、幂等清理和 Reminder cron 任务都共享该 Worker；`Reminder Worker` 是逻辑角色，不是另一个容器。
 
 ```mermaid
 flowchart LR
@@ -65,48 +57,32 @@ flowchart LR
     Northgate --> Model
 ```
 
-PostgreSQL is the source of truth for accounts, schedules, conversations, Runs, durable Run events,
-reminders, and provider usage. Redis owns queue delivery, rate limits, coordination, and bounded
-live StreamBridge replay. Redis is not authoritative product storage.
-Conversation bootstrap resolves the owner's primary Thread from PostgreSQL; browser-local state
-cannot create a separate history boundary across devices.
-The primary Thread is protected by a partial unique database index. Conversation messages are
-`category=message` rows in the Thread-ordered `agent_run_events` journal and use cursor pagination
-rather than an unbounded history response; PostgreSQL remains authoritative on refresh and across
-devices. `agent_runs` owns status, timestamps, error and bounded list summaries, not complete input
-or output bodies.
-Thread lifecycle and role are orthogonal: `status` is the constrained `active | archived`
-lifecycle, while `is_primary` identifies the owner's single product conversation. Non-primary
-evaluation Threads are active lifecycle records rather than a third pseudo-status. New Runs require
-an active Thread; archived history remains readable but cannot accept new commands.
+PostgreSQL 是账户、日程、会话、Run、持久化 Run 事件、提醒和 provider usage 的事实来源。Redis 负责队列投递、限流、协调以及有界的实时 StreamBridge 重放。Redis 不是权威的产品存储。
+会话初始化会从 PostgreSQL 解析所有者的 primary Thread；浏览器本地状态不能在不同设备之间创建独立的历史边界。
+primary Thread 由部分唯一数据库索引保护。会话消息是 Thread 有序的 `agent_run_events` 日志中
+`category=message` 的行，使用游标分页而不是无界的历史响应；刷新和跨设备访问时 PostgreSQL 仍然是权威来源。
+`agent_runs` 负责状态、时间戳、错误和有界的列表摘要，而不是完整的输入或输出正文。
+Thread 的生命周期和角色彼此正交：`status` 是受约束的 `active | archived` 生命周期，而 `is_primary` 标识所有者唯一的产品会话。非 primary 的评估 Thread 是 active 生命周期记录，不是第三种伪状态。新 Run 要求 Thread 处于 active；归档历史仍可读，但不能接受新命令。
 
-## Ownership
+## 所有权
 
-| Boundary | Owns | Must not own |
+| 边界 | 负责 | 不得负责 |
 | --- | --- | --- |
-| Web | authenticated presentation, recording gestures, REST/SSE clients | intent policy, trusted identity, persistence |
-| FastAPI | auth, validation, user context, direct reads/writes, Run creation, SSE framing | long-running Agent execution |
-| Worker | queued job execution, dependency composition, stale-Run recovery, reminder delivery | browser sessions |
-| North | generic Agent loop, model/tool execution, canonical runtime streaming | Dayboard product concepts |
-| Agent Platform | identity, Conversation/Run contracts, lifecycle coordination, persistence ports | North or scheduling concepts |
-| Dayboard Agent | prompt, seven scheduling tools, North adapter, safe result projection | user identity or direct model-authorized writes |
-| Services/repositories | deterministic rules, scoped transactions, optimistic concurrency | natural-language interpretation |
-| PostgreSQL | durable product and execution state | queue delivery or live fanout |
-| Redis | arq queue, rate limits, locks, Redis Streams | durable product truth |
+| Web | 已认证的展示、录音手势、REST/SSE 客户端 | 意图策略、可信身份、持久化 |
+| FastAPI | auth、校验、用户上下文、直接读写、Run 创建、SSE framing | 长时间运行的 Agent 执行 |
+| Worker | 队列任务执行、依赖组装、过期 Run 恢复、提醒投递 | 浏览器会话 |
+| North | 通用 Agent loop、模型/工具执行、规范的运行时流 | Dayboard 产品概念 |
+| Agent Platform | identity、Conversation/Run contracts、生命周期协调、持久化 ports | North 或 scheduling concepts |
+| Dayboard Agent | prompt、七个 scheduling tools、North adapter、安全结果投影 | 用户身份或由模型直接授权的写入 |
+| Services/repositories | 确定性规则、受范围约束的事务、乐观并发 | 自然语言解释 |
+| PostgreSQL | 持久化的产品和执行状态 | 队列投递或实时扇出 |
+| Redis | arq queue、rate limits、locks、Redis Streams | 持久化的产品事实 |
 
-Agent Platform and North are independent lower-level capabilities; neither imports the other.
-Dayboard depends on both and bridges them through a Dayboard-owned adapter implementing the
-Platform `RunExecutionDriver` port. Runtime callbacks and results flow through declared interfaces
-without reversing source dependencies. North does not understand application identity or
-persistence; Agent Platform does not understand North events, calendars, tasks, scheduling prompts,
-or the Dayboard UI.
+Agent Platform 和 North 是彼此独立的底层能力；任何一方都不导入另一方。Dayboard 依赖二者，并通过由 Dayboard 拥有、实现 Platform `RunExecutionDriver` port 的 adapter 将它们桥接起来。运行时回调和结果通过声明的接口流转，不反转源码依赖。North 不理解应用身份或持久化；Agent Platform 不理解 North events、calendars、tasks、scheduling prompts 或 Dayboard UI。
 
-## Source Dependency Direction
+## 源码依赖方向
 
-Arrows below mean source imports, not runtime callbacks or data flow. Outer entry points and adapters
-depend inward on contracts. Composition is the only general-purpose place that connects concrete
-SQLAlchemy, North, settings, and provider implementations. The serialized Agent tool boundary is
-also an outer entry point and may request a composed Scheduling scope for one tool transaction.
+下面的箭头表示源码导入，而不是运行时回调或数据流。外层入口和 adapter 依赖内层契约。Composition 是连接具体 SQLAlchemy、North、settings 和 provider 实现的唯一通用位置。序列化的 Agent tool boundary 也是外层入口，并且可以为一次 tool transaction 请求一个已组装的 Scheduling scope。
 
 ```mermaid
 flowchart TD
@@ -144,12 +120,11 @@ flowchart TD
     Integrations --> App
 ```
 
-`dayboard.domain` imports none of the outer layers. `agent_platform` imports neither Dayboard nor
-North. Dayboard owns the driver that implements the Platform execution port with North.
+`dayboard.domain` 不导入任何外层。`agent_platform` 既不导入 Dayboard，也不导入 North。Dayboard 拥有通过 North 实现 Platform execution port 的 driver。
 
-## Backend Shape
+## 后端形态
 
-The reusable application package currently owns shared identity and Conversation/Run contracts:
+当前，可复用的 application package 拥有共享的 identity 和 Conversation/Run contracts：
 
 ```text
 agent_platform.core          identity, Conversation/Run, Interaction, Presentation, execution outcome
@@ -157,7 +132,7 @@ agent_platform.ports         persistence-neutral stores, Unit of Work, Run execu
 agent_platform.application   Conversation/Run lifecycle, submission, idempotency, execution coordinator
 ```
 
-The Dayboard API package is split by responsibility:
+Dayboard API package 按职责拆分：
 
 ```text
 dayboard.api           HTTP, SSE, request and response schemas
@@ -171,145 +146,41 @@ dayboard.workers       arq Run and reminder jobs
 dayboard.integrations  ASR and external provider adapters
 ```
 
-Trusted `UserContext` is resolved from the authenticated server session or the dedicated Eval
-Bearer identity configured by token digest and user ID. Eval authentication revalidates the active
-database user on every request; it does not accept caller-supplied identity fields. User ID,
-timezone, thread, Run, operation keys, and permissions are injected by the runtime and never
-exposed as model-supplied tool arguments. Repository queries scope business data by user ID.
+可信 `UserContext` 从已认证的 server session，或从由 token digest 和 user ID 配置的专用 Eval Bearer identity 解析。Eval authentication 会在每次请求中重新验证 active database user；不会接受调用方提供的 identity fields。User ID、timezone、thread、Run、operation keys 和 permissions 由 runtime 注入，永远不会暴露为模型提供的 tool arguments。Repository queries 按 user ID 限定业务数据范围。
 
-Dayboard's composition roots connect Platform Conversation and Run services to PostgreSQL adapters.
-`dayboard.composition.platform` builds an explicit per-session Platform scope and a fresh
-`PlatformUnitOfWorkFactory` for short runtime-journal transactions. `dayboard.composition.commands`
-builds the storage-free command application service, while `dayboard.composition.runs` builds one
-North driver per persisted Run with its stream bridge, trusted Agent factory, Provider Usage
-settlement port, and budget guard. The platform owns persistence use cases, paging, state
-transitions and lifecycle event policy; adapters own SQLAlchemy rows, constraint translation,
-user-scoped queries, and individual database operations. Dayboard's clarification service owns
-scheduling candidate validation, local-time projection, public state filtering, and user-facing
-choice text.
+Dayboard 的 composition roots 将 Platform Conversation 和 Run services 连接到 PostgreSQL adapters。`dayboard.composition.platform` 构建显式的 per-session Platform scope，以及用于短时 runtime-journal transactions 的新 `PlatformUnitOfWorkFactory`。`dayboard.composition.commands` 构建无存储的 command application service，而 `dayboard.composition.runs` 为每个已持久化的 Run 构建一个 North driver，并提供其 stream bridge、可信 Agent factory、Provider Usage settlement port 和 budget guard。Platform 负责 persistence use cases、分页、状态转换和生命周期事件策略；adapters 负责 SQLAlchemy rows、constraint translation、user-scoped queries 以及单个 database operations。Dayboard 的 clarification service 负责 scheduling candidate validation、local-time projection、public state filtering 和面向用户的 choice text。
 
-Dayboard scheduling has a separate product-owned Unit of Work. `SchedulingService` and
-`ScheduleQueryService` depend only on scheduling store ports and domain objects; SQLAlchemy row
-mapping stays in `dayboard.db`. Calendar/task writes and the corresponding Reminder Outbox
-replacement share one `AsyncSession` through `SqlAlchemySchedulingUnitOfWork`. The application
-service never commits. The API commits after a complete direct mutation, while the serialized Agent
-tool boundary commits only after its receipt and presentation artifact have been built; either
-boundary rolls the whole transaction back on failure. There is no `SchedulingService(session)`
-compatibility constructor.
+Dayboard scheduling 使用独立的 product-owned Unit of Work。`SchedulingService` 和 `ScheduleQueryService` 只依赖 scheduling store ports 和 domain objects；SQLAlchemy row mapping 留在 `dayboard.db`。Calendar/task writes 与对应的 Reminder Outbox replacement 通过 `SqlAlchemySchedulingUnitOfWork` 共享一个 `AsyncSession`。application service 从不 commit。API 在一次完整的 direct mutation 后 commit，而序列化 Agent tool boundary 只有在其 receipt 和 presentation artifact 构建完成后才 commit；任一边界失败都会回滚整个 transaction。不存在 `SchedulingService(session)` compatibility constructor。
 
-Reminder inbox and delivery processing use a separate product-owned Unit of Work. The application
-service depends on delivery and source-projection ports and receives domain snapshots rather than
-SQLAlchemy rows; `dayboard.composition` wires those ports to the SQLAlchemy Unit of Work for API and
-Worker processes. API mutations and the Worker own the commit boundary. Due processing first reads
-candidate deliveries, locks their user-scoped source rows in stable order, and only then
-claims still-due Reminder rows. This matches Scheduling's source-then-delivery lock order and makes
-concurrent rescheduling linearizable rather than mixing an old reminder with an uncommitted new
-source. Source checking plus transitions to `delivered`, `expired`, or `cancelled` happen in one
-short database transaction. No transaction is held across an external notification provider; a
-future Web Push adapter must commit the claim before network delivery and finalize the result in a
-second transaction. Queue-only states are not exposed as inbox entries.
+Reminder inbox 和 delivery processing 使用另一个 product-owned Unit of Work。application service 依赖 delivery 和 source-projection ports，接收 domain snapshots 而不是 SQLAlchemy rows；`dayboard.composition` 将这些 ports 连接到 API 和 Worker 进程使用的 SQLAlchemy Unit of Work。API mutations 和 Worker 拥有 commit boundary。Due processing 首先读取 candidate deliveries，按稳定顺序锁定 user-scoped source rows，然后才 claim 仍然到期的 Reminder rows。这与 Scheduling 的 source-then-delivery lock order 一致，使并发 rescheduling 具备线性化语义，而不会把旧 reminder 与尚未提交的新 source 混在一起。Source checking 以及向 `delivered`、`expired` 或 `cancelled` 的 transitions 在一个短 database transaction 中完成。跨越外部 notification provider 时不会持有 transaction；未来的 Web Push adapter 必须在网络投递前 commit claim，并在第二个 transaction 中完成结果。仅属于 queue 的 states 不会暴露为 inbox entries。
 
-Voice transcription uses its own product-owned Unit of Work and an application-owned ASR provider
-port. The application service first commits a user-scoped `processing` transcript, calls the
-external provider without an open database transaction, and then commits exactly one terminal
-`completed` or `failed` transition. Terminal updates lock and match only rows that are still
-`processing`; repository adapters return domain transcripts and keep ORM rows plus provider request
-metadata inside `dayboard.db`. `dayboard.composition.voice` is the only module that connects the
-application service to the SQLAlchemy Unit of Work.
+Voice transcription 使用自己的 product-owned Unit of Work 和 application-owned ASR provider port。application service 首先提交 user-scoped 的 `processing` transcript，在没有打开 database transaction 的情况下调用 external provider，然后恰好提交一次终态的 `completed` 或 `failed` transition。Terminal updates 只锁定并匹配仍处于 `processing` 的 rows；repository adapters 返回 domain transcripts，并将 ORM rows 与 provider request metadata 保留在 `dayboard.db` 内。`dayboard.composition.voice` 是唯一将 application service 连接到 SQLAlchemy Unit of Work 的模块。
 
-Account Recovery uses a separate Dayboard-owned Unit of Work because credentials and reset tokens
-are global user identity data rather than user-scoped scheduling records. The application service
-owns CSPRNG token generation, SHA-256 token digests, password-hasher orchestration, and expiry
-policy, but it never imports SQLAlchemy or commits. The API commits token issue or successful
-consumption before scheduling email delivery or deleting the browser cookie. Repository operations
-serialize by locking `UserRow` first, then revalidate and lock reset tokens and credentials. Login
-first reads only a credential snapshot, ends that read transaction, and verifies the password in a
-worker thread without holding a database lock. A short write transaction then takes the same
-User-row gate, revalidates the password hash and active account state, and creates the Session. A
-concurrent reset therefore either invalidates the snapshot or revokes a Session committed before
-the reset. Password update, all unused-token consumption, and all active-Session revocation commit
-or roll back together. Raw reset tokens exist only in the outbound reset URL and are never stored.
+Account Recovery 使用单独的 Dayboard-owned Unit of Work，因为 credentials 和 reset tokens 是全局用户身份数据，而不是 user-scoped scheduling records。application service 负责 CSPRNG token generation、SHA-256 token digests、password-hasher orchestration 和 expiry policy，但从不导入 SQLAlchemy 或 commit。API 在安排 email delivery 或删除 browser cookie 之前，提交 token issue 或 successful consumption。Repository operations 首先锁定 `UserRow`，再重新验证并锁定 reset tokens 和 credentials。Login 首先只读取 credential snapshot，结束该 read transaction，然后在 worker thread 中验证 password，期间不持有 database lock。随后，一个短 write transaction 获取同一个 User-row gate，重新验证 password hash 和 active account state，并创建 Session。因此，并发 reset 要么使 snapshot 失效，要么撤销 reset 之前提交的 Session。Password update、所有 unused-token consumption 和所有 active-Session revocation 要么一起 commit，要么一起 rollback。Raw reset tokens 只存在于 outbound reset URL 中，从不存储。
 
-Provider Usage crosses a narrow settlement port after the Run has reached its authoritative
-terminal state. The SQLAlchemy settlement adapter opens its own short Session, delegates SQL to the
-repository, and commits or rolls back without a feature-specific Unit-of-Work or application
-service. Typed aggregates and storage-neutral settlement results cross the port; SQLAlchemy rows
-remain inside `dayboard.db`. PostgreSQL inserts through a user-scoped `INSERT ... SELECT` from the
-trusted Run, so an incorrect user cannot create a record or occupy the unique
-`(user_id, run_id)` key. Concurrent settlement is idempotent and immutable: exactly one
-transaction creates the aggregate, and only that winner may reconcile the prior Redis budget
-reservation. Usage persistence or budget-reconciliation failures are logged without changing the
-completed or failed Run outcome.
+Provider Usage 在 Run 到达其权威终态后，通过一个狭窄的 settlement port。SQLAlchemy settlement adapter 打开自己的短 Session，将 SQL 委托给 repository，并在没有 feature-specific Unit-of-Work 或 application service 的情况下 commit 或 rollback。Typed aggregates 和 storage-neutral settlement results 跨越该 port；SQLAlchemy rows 保留在 `dayboard.db` 中。PostgreSQL 通过对可信 Run 执行 user-scoped 的 `INSERT ... SELECT` 来插入，因此错误的 user 无法创建记录或占用唯一的 `(user_id, run_id)` key。并发 settlement 具有幂等性且不可变：恰好一个 transaction 创建 aggregate，且只有该 winner 可以协调之前的 Redis budget reservation。Usage persistence 或 budget-reconciliation failures 会被记录，但不会改变 completed 或 failed Run outcome。
 
-The Platform defines narrow Conversation, Run, and Idempotency Unit-of-Work ports plus their combined
-transaction boundary. Dayboard's composition root implements them with one `AsyncSession`. Command
-submission now atomically claims its idempotency key, resolves or creates the Thread, creates the Run
-and `run.created` event, and appends the `message.human` event. Run lifecycle transitions share that
-explicit Unit of Work with durable conversation updates. PostgreSQL Run-event sequence allocation
-locks the parent Thread, so events from different Runs cannot select the same Thread-level
-`max(seq) + 1` value.
+Platform 定义狭窄的 Conversation、Run 和 Idempotency Unit-of-Work ports，以及它们组合后的 transaction boundary。Dayboard 的 composition root 使用一个 `AsyncSession` 实现这些 ports。Command submission 现在会原子地 claim idempotency key，resolve 或 create Thread，创建 Run 和 `run.created` event，并追加 `message.human` event。Run lifecycle transitions 与 durable conversation updates 共享该显式 Unit of Work。PostgreSQL 的 Run-event sequence allocation 会锁定 parent Thread，因此不同 Run 的 events 不能选择相同的 Thread-level `max(seq) + 1` 值。
 
-`RunExecutionCoordinator` owns the generic execution lifecycle. It commits `queued -> running`
-before invoking external work, ends any read transaction before waiting on the model, and uses a
-row lock to atomically persist the terminal Run state, assistant message, and optional Interaction.
-The injected Dayboard driver owns North execution, runtime-event projection, schedule presentation
-assembly, usage settlement, and StreamBridge publication. Its runtime journal opens a fresh Platform
-Unit of Work for every durable event instead of sharing the Run's main session. North lifecycle
-callbacks deliver a typed `RuntimeExecutionResult`; Dayboard projects it into a Platform outcome
-before North emits its end sentinel, so PostgreSQL is already terminal when the browser observes
-stream completion. Redis carries only `run_id`; the worker reloads user ID and Thread from the Run,
-then loads execution input from the event journal and composes a new driver for that Run. Ordinary
-turns execute the `message.human` content; a clarification continuation may instead use its distinct
-trusted `agent.input` event while retaining safe user-visible text in conversation history.
+`RunExecutionCoordinator` 负责通用 execution lifecycle。它在调用 external work 前提交 `queued -> running`，等待模型前结束任何 read transaction，并使用 row lock 原子地持久化 terminal Run state、assistant message 和可选的 Interaction。注入的 Dayboard driver 负责 North execution、runtime-event projection、schedule presentation assembly、usage settlement 和 StreamBridge publication。其 runtime journal 为每个 durable event 打开一个新的 Platform Unit of Work，而不是共享 Run 的 main session。North lifecycle callbacks 传递 typed `RuntimeExecutionResult`；Dayboard 在 North 发出 end sentinel 之前将其投影为 Platform outcome，因此浏览器观察到 stream completion 时，PostgreSQL 已经处于 terminal 状态。Redis 只携带 `run_id`；worker 从 Run 重新加载 user ID 和 Thread，再从 event journal 加载 execution input，并为该 Run 组装新的 driver。普通 turn 执行 `message.human` content；clarification continuation 则可以使用独立且可信的 `agent.input` event，同时在 conversation history 中保留安全的面向用户文本。
 
-The Platform owns a versioned `PendingInteraction` envelope and compare-and-consume lifecycle while
-Dayboard owns and validates the versioned clarification payload. A clarification continuation uses
-one transaction for the idempotency claim, expected-state-version consumption, Run and
-`run.created` event, and user message. Identical retries find the existing Run before requiring the
-now-consumed Interaction; competing choices cannot both create a continuation. The public Dayboard
-state schema contains only presentation options, never trusted candidate IDs or row versions.
-North may retain a temporary `clarification_request` inside its per-Run graph state, but exposes it
-to Dayboard only as a typed `ClarificationRequest`. Dayboard combines it with already validated
-presentation parts instead of interpreting graph dictionaries or ToolMessages. The signal is not
-durable application truth: the Platform `PendingInteraction` is the sole authority for refresh,
-cross-device recovery, expiry, and CAS consumption.
+Platform 拥有带版本的 `PendingInteraction` envelope 及 compare-and-consume lifecycle，而 Dayboard 拥有并校验带版本的 clarification payload。Clarification continuation 在一个 transaction 中完成 idempotency claim、expected-state-version consumption、Run 和 `run.created` event 以及 user message。相同的 retries 会在要求已经 consumed 的 Interaction 之前找到现有 Run；相互竞争的 choices 不能同时创建 continuation。公开的 Dayboard state schema 只包含 presentation options，从不包含可信的 candidate IDs 或 row versions。North 可以在 per-Run graph state 中暂存 `clarification_request`，但只以 typed `ClarificationRequest` 的形式暴露给 Dayboard。Dayboard 将它与已经校验的 presentation parts 组合，而不是解释 graph dictionaries 或 ToolMessages。该 signal 不是 durable application truth：Platform `PendingInteraction` 是 refresh、跨设备恢复、expiry 和 CAS consumption 的唯一权威。
 
-The Platform also owns the generic `PresentationEnvelope` identity, schema version, persistence,
-and replay contract. Dayboard owns `dayboard.schedule-results@1`, validates every schedule part,
-and projects only that known kind and version into the public message API. PostgreSQL stores the
-envelope as separate kind, version, and JSONB payload columns; a database constraint permits a
-presentation only on assistant messages. Run status is not duplicated into the payload because the
-Run row is authoritative. Unknown product kinds or versions remain opaque to the Platform and are
-not interpreted as Dayboard cards; malformed payloads for the known Dayboard version fail
-validation.
+Platform 还拥有通用 `PresentationEnvelope` 的 identity、schema version、persistence 和 replay contract。Dayboard 拥有 `dayboard.schedule-results@1`，校验每个 schedule part，并只将该已知 kind 和 version 投影到 public message API。PostgreSQL 将 envelope 存储为独立的 kind、version 和 JSONB payload columns；database constraint 只允许 assistant messages 携带 presentation。Run status 不会复制到 payload，因为 Run row 才是权威。未知的 product kinds 或 versions 对 Platform 保持不透明，不会被解释为 Dayboard cards；已知 Dayboard version 的 malformed payload 会校验失败。
 
-Durable Run-event extensions follow the same ownership rule through
-`EventExtensionEnvelope(kind, schema_version, payload)`. Generic event type, category, content, and
-ordering remain Platform fields. Dayboard's North adapter constructs typed model/tool payloads,
-while the Platform constructs failure and interaction-state payloads before persistence. PostgreSQL stores
-extension kind, version, and JSONB payload separately and rejects partial envelopes. User-facing
-SSE receives only projected product status and never exposes the diagnostic extension payload.
+持久化 Run-event extensions 通过 `EventExtensionEnvelope(kind, schema_version, payload)` 遵循同一所有权规则。通用的 event type、category、content 和 ordering 仍是 Platform fields。Dayboard 的 North adapter 构造 typed model/tool payloads，而 Platform 在 persistence 前构造 failure 和 interaction-state payloads。PostgreSQL 分别存储 extension kind、version 和 JSONB payload，并拒绝不完整的 envelopes。面向用户的 SSE 只接收投影后的 product status，永远不会暴露 diagnostic extension payload。
 
-The architecture check enforces Platform Core, Ports, and Application import direction, prevents
-Dayboard Domain and Application from importing outer product/framework layers, and keeps the Run
-driver independent of settings, persistence, and composition. Explicit composition modules connect
-those dependencies.
+architecture check 强制 Platform Core、Ports 和 Application 的 import direction，阻止 Dayboard Domain 和 Application 导入外层 product/framework layers，并确保 Run driver 独立于 settings、persistence 和 composition。显式的 composition modules 负责连接这些依赖。
 
-Writes use PostgreSQL transactions. Scheduling mutations use optimistic concurrency through
-`expected_row_version`; retryable Agent writes also use server-derived operation identities. A
-schedule mutation and its pending-reminder cancellation/replacement are one transaction, so neither
-can survive without the other.
+写入使用 PostgreSQL transactions。Scheduling mutations 通过 `expected_row_version` 使用乐观并发；可重试的 Agent writes 也使用 server-derived operation identities。Schedule mutation 与其 pending-reminder cancellation/replacement 属于同一个 transaction，因此二者不会有任何一个脱离另一个而存活。
 
-## Agent Boundary
+## Agent 边界
 
-Natural-language classification happens in the model tool-calling turn. There is no keyword
-classifier or second routing model. The model receives bounded conversation context, exact trusted
-local date context, scheduling policy, and the currently bound tool schemas.
+自然语言分类发生在模型的 tool-calling turn 中。不存在 keyword classifier 或 second routing model。模型会收到有界的 conversation context、精确且可信的 local date context、scheduling policy 和当前绑定的 tool schemas。
 
-The model may propose actions, but only tools mutate product data. Tool wrappers inject trusted
-context and call services; a successful tool result is based on the committed database object.
+模型可以提出 actions，但只有 tools 能修改 product data。Tool wrappers 注入可信 context 并调用 services；成功的 tool result 以已提交的 database object 为依据。
 
-The model-visible business tools are:
+模型可见的 business tools 是：
 
 ```text
 create_calendar_entry
@@ -321,13 +192,11 @@ search_task_items
 update_task_item
 ```
 
-`ask_clarification` is a runtime interaction tool rather than a scheduling business tool. Tool
-binding narrows to the active calendar or task domain after the first tool result and restores the
-full set once when recovery is necessary. See [../tool-design.md](../tool-design.md).
+`ask_clarification` 是 runtime interaction tool，而不是 scheduling business tool。第一次 tool result 之后，tool binding 会收窄到 active calendar 或 task domain；需要恢复时再完整恢复一次工具集合。见 [Agent Tool Contract](./agent/tools.md)。
 
-## Frontend Shape
+## 前端形态
 
-The web application uses Next.js, React, TypeScript, and local shadcn/ui components:
+Web application 使用 Next.js、React、TypeScript 和本地 shadcn/ui components：
 
 ```text
 app/page.tsx                         route entry only
@@ -343,28 +212,13 @@ lib/api/schema.d.ts                 generated FastAPI OpenAPI types
 lib/api/typedClient.ts              openapi-fetch client and shared error middleware
 ```
 
-Named SSE events are validated and converted to a discriminated `RunEvent` union before entering
-one reducer. EventSource transport callbacks do not inspect arbitrary payload fields or
-independently assemble message, progress, and schedule state. Persisted schedule data remains
-server-backed in TanStack Query; the reducer holds only conversation presentation state and a
-schedule invalidation revision. Live schedule parts and refresh history share the generated
-`ScheduleResultPart` contract; persisted messages expose the typed versioned presentation rather
-than a handwritten metadata mapping.
+具名 SSE events 在进入一个 reducer 前会经过校验并转换为有区分的 `RunEvent` union。EventSource transport callbacks 不会检查任意 payload fields，也不会独立组装 message、progress 和 schedule state。持久化的 schedule data 仍由 TanStack Query 在 server 端提供；reducer 只保存 conversation presentation state 和 schedule invalidation revision。实时 schedule parts 和刷新历史共享生成的 `ScheduleResultPart` contract；持久化 messages 暴露 typed versioned presentation，而不是手写的 metadata mapping。
 
-API transport types are generated with `npm run api:types`. Handwritten code consumes aliases from
-`lib/api/types.ts`, and all ordinary Web REST endpoints use `openapi-fetch`, including Auth, Voice,
-Conversation, and Run recovery calls. EventSource framing and named Run-event payload validation
-remain a dedicated SSE protocol boundary rather than being forced through the REST client. The API
-CI job exports OpenAPI directly
-from the current FastAPI application; the Web CI job runs `npm run api:types:check` against that
-artifact, so schema drift fails before build or deployment. The generated file is not edited and
-is exempt from the 600-line ESLint limit. All handwritten TypeScript and TSX files are limited to
-600 lines.
+API transport types 使用 `npm run api:types` 生成。手写代码从 `lib/api/types.ts` 使用 aliases，所有普通 Web REST endpoints（包括 Auth、Voice、Conversation 和 Run recovery calls）都使用 `openapi-fetch`。EventSource framing 和具名 Run-event payload validation 仍是独立的 SSE protocol boundary，而不是强行通过 REST client。API CI job 直接从当前 FastAPI application 导出 OpenAPI；Web CI job 针对该 artifact 运行 `npm run api:types:check`，因此 schema drift 会在 build 或 deployment 前失败。生成文件不会编辑，并免于 600-line ESLint limit。所有手写的 TypeScript 和 TSX files 都限制在 600 行以内。
 
-Dayboard theme colors originate in `--dayboard-color-*` variables and map into shadcn theme tokens.
-Feature CSS Modules and shared components therefore use the same light/dark theme source.
+Dayboard theme colors 来源于 `--dayboard-color-*` variables，并映射到 shadcn theme tokens。因此 Feature CSS Modules 和 shared components 使用同一个 light/dark theme source。
 
-## Data And Infrastructure
+## 数据与基础设施
 
 ```mermaid
 flowchart TB
@@ -381,59 +235,41 @@ flowchart TB
     Provider[Model provider] --> NoAuthority[Request responses only; no product authority]
 ```
 
-Dayboard PostgreSQL is authoritative for product and Platform lifecycle state. North owns only its
-checkpoint tables within that database. Redis state is operational and reconstructable; Northgate
-owns gateway accounting rather than Dayboard product state; model providers own no Dayboard truth.
+Dayboard PostgreSQL 是 product 和 Platform lifecycle state 的权威来源。North 只拥有该数据库内自己的 checkpoint tables。Redis state 属于运行运维状态，可以重建；Northgate 拥有 gateway accounting，而不是 Dayboard product state；model providers 不拥有任何 Dayboard truth。
 
-PostgreSQL stores:
+PostgreSQL 存储：
 
-- users, credentials, sessions, external identities, and profiles;
-- calendar entries, tasks, reminders, and delivery records;
-- conversation threads, messages, compaction summaries, and clarification state;
-- Agent Runs, durable RuntimeJournal events, and provider usage settlement;
-- user ID, audit timestamps, soft-deletion state, and Run correlation.
+- users、credentials、sessions、external identities 和 profiles；
+- calendar entries、tasks、reminders 和 delivery records；
+- conversation threads、messages、compaction summaries 和 clarification state；
+- Agent Runs、持久化 RuntimeJournal events 和 provider usage settlement；
+- user ID、audit timestamps、soft-deletion state 和 Run correlation。
 
-Dayboard Alembic owns and compares only Dayboard tables. North's checkpoint saver owns
-`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`, and `checkpoint_migrations`; those tables
-share the PostgreSQL database but are explicitly excluded from Dayboard autogeneration. Forward
-migrations reconcile deployed physical schemas with current ORM metadata, and CI runs
-`alembic check` after upgrading a clean test database so owned type, index, and constraint drift
-cannot silently accumulate.
+Dayboard Alembic 只拥有并比较 Dayboard tables。North 的 checkpoint saver 拥有 `checkpoints`、`checkpoint_blobs`、`checkpoint_writes` 和 `checkpoint_migrations`；这些 tables 与 Dayboard 共用 PostgreSQL database，但明确排除在 Dayboard autogeneration 之外。Forward migrations 将已部署的 physical schemas 与当前 ORM metadata 对齐；CI 在升级干净的 test database 后运行 `alembic check`，因此 owned type、index 和 constraint drift 不会无声累积。
 
-Redis provides:
+Redis 提供：
 
-- arq job delivery using `run_id` as the job identity;
-- endpoint and provider-budget counters;
-- short-lived coordination;
-- per-Run Redis Streams for cross-process canonical message fanout and bounded replay.
+- 使用 `run_id` 作为 job identity 的 arq job delivery；
+- endpoint 和 provider-budget counters；
+- 短生命周期的 coordination；
+- 跨进程 canonical message fanout 和有界 replay 所需的 per-Run Redis Streams。
 
-Short voice commands are validated, sent synchronously through the application-owned ASR port,
-normalized to text, and then enter the normal command path. Only transcript lifecycle and provider
-metadata are persisted; raw audio is not persisted. Production currently uses Cloudflare
-`whisper-large-v3-turbo`; the Alibaba adapter remains available.
+短语音命令通过 application-owned ASR port 进行校验并同步发送，归一化为文本后进入普通 command path。只持久化 transcript lifecycle 和 provider metadata；不持久化 raw audio。生产环境当前使用 Cloudflare `whisper-large-v3-turbo`；Alibaba adapter 仍可用。
 
-Reminder intent is normalized into PostgreSQL delivery rows. Workers claim due in-app deliveries
-with `FOR UPDATE SKIP LOCKED`. The authenticated Web reminder center polls the typed reminder API,
-persists read state, and can return failed rows to the Outbox queue. Browser/PWA background Push is
-intentionally deferred because it requires a Service Worker, durable Push subscriptions, Web Push
-credentials, and a separate device-delivery lifecycle. The current optional browser Notification is
-driven by authenticated foreground polling and is not represented as background delivery.
+Reminder intent 会被归一化为 PostgreSQL delivery rows。Workers 使用 `FOR UPDATE SKIP LOCKED` claim 到期的 in-app deliveries。已认证的 Web reminder center 轮询 typed reminder API，持久化 read state，并可以将 failed rows 返回 Outbox queue。Browser/PWA background Push 被有意延期，因为它需要 Service Worker、持久化 Push subscriptions、Web Push credentials 和独立的 device-delivery lifecycle。当前可选的 browser Notification 由 authenticated foreground polling 驱动，不代表 background delivery。
 
-## Deployment
+## 部署
 
-Docker Compose owns PostgreSQL, Redis, API, Worker, and Web. Nginx terminates the public same-site
-connection and proxies the Web and API. Application containers run as non-root users. Host systemd
-owns the daily PostgreSQL backup timer, not the application processes.
+Docker Compose 管理 PostgreSQL、Redis、API、Worker 和 Web。Nginx 终止 public same-site connection，并代理 Web 和 API。Application containers 以 non-root users 运行。Host systemd 管理每日 PostgreSQL backup timer，而不是 application processes。
 
-Operational procedures live in [../deploy.md](../deploy.md) and
-[../postgres-backup.md](../postgres-backup.md).
+运维流程见 [Deployment](../operations/deploy.md) 和 [PostgreSQL Backup And Recovery](../operations/postgres-backup.md)。
 
-## Invariants
+## 不变量
 
-- PostgreSQL remains the product and Run source of truth.
-- Redis Streams are live transport and bounded replay, not durable history.
-- Worker execution has one production path: North `RunExecutor` plus `StreamBridge`.
-- RuntimeJournal events are diagnostics, not the browser's canonical message protocol.
-- Tool success follows committed persistence; model text never creates product state.
-- user ID, timezone, Run, and idempotency context are server-controlled.
-- Unreleased superseded paths are removed rather than retained as compatibility layers.
+- PostgreSQL 始终是 product 和 Run 的事实来源。
+- Redis Streams 是实时传输和有界重放，不是持久化历史。
+- Worker execution 只有一条生产路径：North `RunExecutor` 加 `StreamBridge`。
+- RuntimeJournal events 是诊断信息，不是浏览器的规范 message protocol。
+- Tool success 以已提交的 persistence 为准；model text 永远不会创建 product state。
+- user ID、timezone、Run 和 idempotency context 由 server 控制。
+- 未发布的 superseded paths 应被移除，而不是作为 compatibility layers 保留。

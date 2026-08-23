@@ -1,11 +1,10 @@
-# Identity And Data Scope
+# 身份与数据范围
 
-This is the implemented identity model after the pre-release tenant removal refactor.
+这是移除预发布租户后的已实现身份模型。
 
-## Decision
+## 决策
 
-Dayboard is currently a multi-user personal scheduling application, not a workspace or
-organization product. The authorization and persistence boundary is the authenticated user:
+Dayboard 当前是多用户个人调度应用，而不是工作区或组织产品。授权和持久化边界是已认证用户：
 
 ```text
 UserContext(
@@ -15,17 +14,13 @@ UserContext(
 )
 ```
 
-There is no `Tenant`, `TenantMembership`, `tenant_id`, or `owner_user_id` in the active schema or
-application contracts. All user-owned business rows use `user_id`. Repositories require an
-explicit `UserContext` and include `user_id` in every user-scoped read, write, lock, and delete.
+活动 schema 或应用契约中不存在 `Tenant`、`TenantMembership`、`tenant_id` 或 `owner_user_id`。所有用户所有的业务行都使用 `user_id`。Repository 要求显式传入 `UserContext`，并在每次用户范围的读取、写入、锁定和删除中包含 `user_id`。
 
-This does not prevent a future shared product. If Dayboard adds shared calendars, teams, or
-workspaces, introduce a real `Workspace` and membership model at that point. Do not preserve a
-placeholder tenant abstraction whose selection and authorization semantics do not exist yet.
+这不妨碍未来构建共享产品。如果 Dayboard 增加共享日历、团队或工作区，应在那时引入真正的 `Workspace` 和成员模型。不要保留一个选择和授权语义尚不存在的占位租户抽象。
 
-## Request And Worker Boundaries
+## 请求与 Worker 边界
 
-HTTP authentication resolves a trusted `UserContext` through FastAPI dependency injection:
+HTTP 身份认证通过 FastAPI 依赖注入解析可信的 `UserContext`：
 
 ```text
 session or Eval bearer identity
@@ -35,10 +30,9 @@ session or Eval bearer identity
   -> repository(user_id = context.user_id)
 ```
 
-The request middleware only owns request IDs and structured logging cleanup. It does not infer
-authorization from a caller-supplied header, and user scope is not hidden in a global ORM filter.
+请求中间件只负责请求 ID 和结构化日志清理。它不会从调用方提供的 header 推断授权，用户范围也不会隐藏在全局 ORM 过滤器中。
 
-Workers keep a separate explicit recovery path:
+Worker 保留一条单独且明确的恢复路径：
 
 ```text
 Redis job(run_id)
@@ -48,17 +42,12 @@ Redis job(run_id)
   -> user-scoped service and repositories
 ```
 
-Redis carries only `run_id`; it is not an identity authority. The Worker must never reconstruct
-ownership from queue metadata or model arguments.
+Redis 只携带 `run_id`，不是身份权威来源。Worker 绝不能从队列元数据或模型参数重建所有权。
 
-## Database Rules
+## 数据库规则
 
-- `users`, credentials, profiles, sessions, and external identities are global account records.
-- Conversations, Runs, idempotency keys, schedules, reminders, voice transcripts, and provider
-  usage records carry `user_id` when they are user-owned.
-- Child records that are naturally scoped by a globally unique Run ID may rely on `run_id` for
-  lookup, but their parent Run remains user-scoped.
-- Unique constraints include `user_id` whenever the uniqueness rule is user-local, for example
-  `(user_id, key)` for idempotency and `(user_id, run_id)` for provider usage.
-- A missing user predicate is a storage defect. Application services must not query first and
-  authorize later.
+- `users`、凭据、资料、会话和外部身份是全局账户记录。
+- 会话、Run、幂等键、日程、提醒、语音转写和提供商用量记录在属于用户时携带 `user_id`。
+- 如果子记录天然由全局唯一的 Run ID 限定，可以依靠 `run_id` 查询，但其父 Run 仍然是用户范围的。
+- 只要唯一性规则是用户本地的，唯一约束就必须包含 `user_id`，例如幂等使用 `(user_id, key)`，提供商用量使用 `(user_id, run_id)`。
+- 缺少用户谓词属于存储缺陷。应用服务不得先查询、之后才授权。

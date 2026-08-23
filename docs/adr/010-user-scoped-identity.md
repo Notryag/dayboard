@@ -1,36 +1,28 @@
-# ADR-010 Use User Scope Until Shared Workspaces Exist
+# ADR-010 在共享工作区出现前使用用户范围
 
-## Status
+## 状态
 
-Accepted
+已接受
 
-## Context
+## 背景
 
-Dayboard currently provides personal calendars, tasks, reminders, and Agent conversations. It has
-users and sessions, but no workspace switcher, membership permissions, shared resources, or
-organization boundary. The previous Tenant and TenantMembership tables therefore added schema and
-authentication complexity without representing a real product capability.
+Dayboard 当前提供个人日历、任务、提醒和 Agent 会话。它有用户和会话，但没有工作区切换器、成员权限、共享资源或组织边界。因此，之前的 Tenant 和 TenantMembership 表增加了 schema 和身份认证复杂性，却没有表示真实的产品能力。
 
-## Decision
+## 决策
 
-Use the authenticated user as the application isolation boundary:
+使用已认证用户作为应用隔离边界：
 
-- resolve an immutable `UserContext(user_id, timezone, locale)` at the HTTP boundary;
-- pass `UserContext` explicitly through services and repositories;
-- store `user_id` on user-owned business records and include it in user-local unique constraints;
-- let Workers load `Run.user_id` from PostgreSQL before constructing `UserContext`;
-- put only `run_id` in Redis jobs;
-- defer a real `Workspace` and membership model until shared product workflows exist.
+- 在 HTTP 边界解析不可变的 `UserContext(user_id, timezone, locale)`；
+- 通过服务和 repository 显式传递 `UserContext`；
+- 在用户所有的业务记录上存储 `user_id`，并将其纳入用户范围的唯一约束；
+- Worker 在构建 `UserContext` 前从 PostgreSQL 加载 `Run.user_id`；
+- Redis 作业中只放入 `run_id`；
+- 等共享产品工作流出现后，再引入真正的 `Workspace` 和成员模型。
 
-The pre-release schema is reset and the initial Alembic migration is regenerated. There is no
-compatibility layer or dual representation of scope.
+预发布 schema 已重置，初始 Alembic 迁移已重新生成。不保留兼容层或范围的双重表示。
 
-## Consequences
+## 后果
 
-The active model is smaller and has one unambiguous scope. It does not claim to support multi-tenant
-sharing. Repository filtering remains an application-level invariant; PostgreSQL row-level
-security is not currently enabled.
+当前模型更小，并且只有一个明确的范围。它不声称支持多租户共享。Repository 过滤仍是应用层不变量；当前未启用 PostgreSQL 行级安全。
 
-When shared calendars or teams are introduced, add a first-class Workspace, membership, selected
-workspace context, and authorization policy as one product change. Do not reintroduce a Tenant name
-only to preserve an unused abstraction.
+引入共享日历或团队时，应作为一次产品变更添加一等 Workspace、成员关系、选定工作区上下文和授权策略。不要仅为保留未使用的抽象而重新引入 Tenant 名称。

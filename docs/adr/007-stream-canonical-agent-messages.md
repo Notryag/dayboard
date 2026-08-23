@@ -1,65 +1,55 @@
-# ADR-007 Stream Canonical Agent Messages
+# ADR-007 流式规范 Agent 消息
 
-## Status
+## 状态
 
-Accepted
+已接受
 
-## Context
+## 背景
 
-Dayboard currently tails `agent_run_events` from PostgreSQL and uses those observability records as
-its live UI protocol. The events describe lifecycle and progress, but discard canonical AI and tool
-messages. When a Run finishes, the web client queries `/api/schedule-items/by-runs` and infers chat
-cards from business rows whose `created_by_run_id` matches the Run.
+Dayboard 当前从 PostgreSQL 追踪 `agent_run_events`，并将这些可观测性记录用作实时 UI 协议。这些事件描述生命周期和进度，但丢弃了规范的 AI 消息和工具消息。Run 完成后，Web 客户端查询 `/api/schedule-items/by-runs`，再根据 `created_by_run_id` 与该 Run 匹配的业务行推断聊天卡片。
 
-That design has four problems:
+这种设计有四个问题：
 
-- a tool result cannot render when it arrives;
-- model output is delivered only when the Run reaches a terminal state;
-- updated and cancelled objects cannot be reconstructed reliably from `created_by_run_id`;
-- observability events, product presentation, and business persistence are conflated.
+- 工具结果到达时无法立即渲染；
+- 只有当 Run 到达终止状态时，模型输出才会被交付；
+- 无法可靠地根据 `created_by_run_id` 重建已更新和已取消的对象；
+- 可观测性事件、产品呈现和业务持久化被混为一谈。
 
-DeerFlow uses a different boundary. The graph emits canonical `values`, `messages`, and `custom`
-chunks. A stream bridge transports those chunks to clients, and the frontend reduces AI message
-chunks and ToolMessages into UI. Its durable journal is an observability concern, not the primary
-presentation protocol.
+DeerFlow 使用了不同的边界。图会发出规范的 `values`、`messages` 和 `custom` 分块。流桥将这些分块传输给客户端，前端再把 AI 消息分块和 ToolMessages 归约为 UI。其持久化日志属于可观测性范畴，而不是主要的呈现协议。
 
-Dayboard is still in development. There is no released client contract to preserve, so the old
-`/api/schedule-items/by-runs` inference path will be removed instead of retained as compatibility.
+Dayboard 仍在开发中。目前没有需要保留的已发布客户端契约，因此旧的 `/api/schedule-items/by-runs` 推断路径将被移除，而不是作为兼容路径保留。
 
-## Decision
+## 决策
 
-Adopt a canonical message stream with explicit North and Dayboard ownership.
+采用规范消息流，并明确 North 与 Dayboard 的所有权。
 
-### North owns
+### North 负责
 
-- the only production `agent.astream` loop, implemented by an asynchronous Run executor;
-- Run execution ordering: metadata, canonical chunks, lifecycle finalization, error, and end;
-- normalizing graph stream modes into `RuntimeStreamEvent`;
-- preserving serialized message data, stream mode, namespace, message IDs, and tool call IDs;
-- an asynchronous `StreamBridge` contract with replay cursors, heartbeat and end sentinels;
-- product-neutral in-memory and Redis Stream bridge implementations;
-- publishing canonical chunks directly from the Run executor to the StreamBridge;
-- returning the latest `values` state to callers after the stream ends.
+- 唯一的生产 `agent.astream` 循环，由异步 Run executor 实现；
+- Run 执行顺序：元数据、规范分块、生命周期收尾、错误和结束；
+- 将图流模式规范化为 `RuntimeStreamEvent`；
+- 保留序列化的消息数据、流模式、命名空间、消息 ID 和工具调用 ID；
+- 带有重放游标、心跳和结束哨兵的异步 `StreamBridge` 契约；
+- 与产品无关的内存版和 Redis Stream bridge 实现；
+- 由 Run executor 直接向 StreamBridge 发布规范分块；
+- 流结束后向调用方返回最新的 `values` 状态。
 
-North must not know about tasks, calendar entries, tenants, FastAPI, Redis deployment, or Dayboard
-presentation schemas.
+North 不得了解任务、日历条目、租户、FastAPI、Redis 部署或 Dayboard 呈现 schema。
 
-### Dayboard owns
+### Dayboard 负责
 
-- selecting the North stream modes used by the product;
-- projecting canonical ToolMessages through a strict per-tool allowlist;
-- presenting scheduling ToolMessages only from the root graph namespace unless a future ADR
-  explicitly trusts a named subgraph;
-- mapping safe scheduling tool results to typed conversation parts;
-- tenant and owner authorization;
-- PostgreSQL business writes and conversation history;
-- selecting and configuring North's Redis-backed live fanout;
-- lifecycle hooks that persist Dayboard Run status, conversation messages, and product state before
-  North publishes the end sentinel;
-- SSE framing, reconnect cursors, heartbeats, and terminal Run semantics;
-- the frontend reducer and rendering of text and schedule parts.
+- 选择产品使用的 North 流模式；
+- 通过严格的逐工具 allowlist 投影规范 ToolMessages；
+- 仅从根图命名空间呈现调度 ToolMessages，除非未来的 ADR 明确认可某个具名子图；
+- 将安全的调度工具结果映射为类型化的对话部分；
+- 租户和所有者授权；
+- PostgreSQL 业务写入和对话历史；
+- 选择并配置 North 基于 Redis 的实时扇出；
+- 在 North 发布结束哨兵前，持久化 Dayboard Run 状态、对话消息和产品状态的生命周期钩子；
+- SSE 成帧、重连游标、心跳和终止 Run 语义；
+- 前端归约器以及文本和调度部分的渲染。
 
-The live path is:
+实时路径为：
 
 ```text
 North async RunExecutor
@@ -71,7 +61,7 @@ North async RunExecutor
   -> assistant text and schedule cards
 ```
 
-The recovery path is:
+恢复路径为：
 
 ```text
 safe projected tool parts collected during Run
@@ -80,12 +70,11 @@ safe projected tool parts collected during Run
   -> web message renderer
 ```
 
-Tool writes commit before their ToolMessage can be treated as a successful product result. The
-ToolMessage is presentation data, not the authority that creates or mutates a schedule object.
+工具写入必须先提交，之后其 ToolMessage 才能被视为成功的产品结果。ToolMessage 是呈现数据，不是创建或修改调度对象的权威来源。
 
-## Stream Contract
+## 流协议
 
-North emits product-neutral events:
+North 发出与产品无关的事件：
 
 ```text
 RuntimeStreamEvent:
@@ -94,7 +83,7 @@ RuntimeStreamEvent:
   data: JSON-compatible serialized graph chunk
 ```
 
-The transport contract is:
+传输协议为：
 
 ```text
 StreamBridge:
@@ -104,7 +93,7 @@ StreamBridge:
   cleanup(run_id)
 ```
 
-Dayboard exposes only projected events to the browser:
+Dayboard 只向浏览器暴露经过投影的事件：
 
 ```text
 assistant_text_delta:
@@ -119,79 +108,68 @@ schedule_item_result:
 run_completed | clarification_requested | run_failed | run_cancelled
 ```
 
-The browser never parses natural-language model content to discover product objects. It keys tool
-results by `tool_call_id` and deduplicates retransmitted stream entries. Final assistant text is a
-separate message from schedule result cards.
+浏览器绝不解析自然语言模型内容来发现产品对象。它通过 `tool_call_id` 对工具结果建立索引，并对重传的流条目去重。最终的助手文本与调度结果卡片是彼此独立的消息。
 
-## Persistence And Reconnection
+## 持久化与重连
 
-- PostgreSQL remains the source of truth for Runs, conversations, tasks, and calendar entries.
-- Redis Streams provide live cross-process fanout and bounded replay, not product truth.
-- The SSE join endpoint uses the standard `Last-Event-ID` cursor and resumes through the Bridge.
-- If a cursor predates Redis retention, the Bridge emits an explicit replay-gap signal before
-  replaying the earliest retained event; the gap is never treated as a complete replay.
-- On expired live history or after a terminal Run, the client reloads canonical conversation
-  history from PostgreSQL.
-- Assistant conversation message metadata stores safe projected parts so historical cards do not
-  require querying business objects by Run ID.
-- RuntimeJournal events remain in `agent_run_events` for audit, progress, usage, and diagnostics.
-  They are not parsed as canonical messages.
+- PostgreSQL 仍是 Runs、对话、任务和日历条目的事实来源。
+- Redis Streams 提供跨进程实时扇出和有界重放，而不是产品事实来源。
+- SSE join endpoint 使用标准的 `Last-Event-ID` 游标，并通过 Bridge 恢复传输。
+- 如果游标早于 Redis 的保留范围，Bridge 会在重放最早的保留事件前发出明确的重放缺口信号；该缺口绝不会被视为完整重放。
+- 实时历史过期或 Run 终止后，客户端从 PostgreSQL 重新加载规范对话历史。
+- 助手对话消息元数据存储安全的投影部分，因此历史卡片不需要通过 Run ID 查询业务对象。
+- RuntimeJournal 事件仍保留在 `agent_run_events` 中，用于审计、进度、用量和诊断。它们不会被解析为规范消息。
 
-## Removal
+## 移除内容
 
-The migration removes:
+本次迁移将移除：
 
-- `GET /api/schedule-items/by-runs`;
-- `RunScheduleItemGroup` and the frontend batch-fetch effect;
-- product event labels such as `calendar_entry_created` and `task_item_created` from the generic
-  progress parser;
-- the assumption that `tool_call_completed` contains enough data to render a product result.
+- `GET /api/schedule-items/by-runs`；
+- `RunScheduleItemGroup` 和前端批量获取 effect；
+- 通用进度解析器中的 `calendar_entry_created`、`task_item_created` 等产品事件标签；
+- 认为 `tool_call_completed` 包含足够数据来渲染产品结果的假设。
 
-## Prohibited Shortcuts
+## 禁止的捷径
 
-The following are architectural violations, even when they reduce implementation work:
+以下做法即使能减少实现工作量，也属于架构违规：
 
-- a Dayboard service calling `agent.astream` directly;
-- a helper such as `stream_agent_once` that returns streamed chunks through a callback while
-  bypassing RunExecutor and StreamBridge;
-- using a stream sink callback as the primary live transport;
-- maintaining synchronous and asynchronous production Run workers in parallel;
-- publishing an end sentinel before Dayboard's lifecycle hook has durably finalized the Run;
-- polling `agent_run_events` as a substitute for the live StreamBridge;
-- adding compatibility paths for unreleased development contracts instead of removing them.
+- Dayboard 服务直接调用 `agent.astream`；
+- 使用诸如 `stream_agent_once` 的 helper，通过 callback 返回流式分块，同时绕过 RunExecutor 和 StreamBridge；
+- 使用 stream sink callback 作为主要实时传输方式；
+- 并行维护同步和异步生产 Run worker；
+- 在 Dayboard 生命周期钩子持久化完成 Run 之前发布结束哨兵；
+- 轮询 `agent_run_events`，以此替代实时 StreamBridge；
+- 为尚未发布的开发契约增加兼容路径，而不是将其移除。
 
-Code review and tests must enforce one production execution path:
+代码审查和测试必须强制使用唯一的生产执行路径：
 
 ```text
 Dayboard Worker -> North RunExecutor -> North StreamBridge -> Dayboard SSE
 ```
 
-## Implementation Map
+## 实现映射
 
-North implementation:
+North 实现：
 
-- `north/runtime/worker.py`: `RunExecutor`, lifecycle ordering, canonical mode publication;
-- `north/runtime/stream_bridge/base.py`: asynchronous transport contract and sentinels;
-- `north/runtime/stream_bridge/memory.py`: in-process replay for SDK use and tests;
-- `north/runtime/stream_bridge/redis.py`: cross-process Redis Streams transport;
-- `north/runtime/service.py`: async Run orchestration using the same executor;
-- `north/client.py`: synchronous SDK adapter over the async runtime, not a second worker.
+- `north/runtime/worker.py`：`RunExecutor`、生命周期顺序、规范模式发布；
+- `north/runtime/stream_bridge/base.py`：异步传输协议和哨兵；
+- `north/runtime/stream_bridge/memory.py`：供 SDK 使用和测试使用的进程内重放；
+- `north/runtime/stream_bridge/redis.py`：跨进程 Redis Streams 传输；
+- `north/runtime/service.py`：使用同一 executor 的异步 Run 编排；
+- `north/client.py`：基于异步 runtime 的同步 SDK 适配器，而不是第二个 worker。
 
-Dayboard implementation:
+Dayboard 实现：
 
-- `dayboard/workers/commands.py`: constructs the North Redis bridge for the Worker;
-- `dayboard/app/commands.py`: supplies product lifecycle hooks and persists safe parts;
-- `dayboard/agent/presentation.py`: allowlisted canonical message projection;
-- `dayboard/main.py`: constructs the same North Redis bridge for the API process;
-- `dayboard/api/routes.py`: authorization, bridge subscription, projection and SSE framing;
-- `apps/web/src/app/page.tsx`: Run event reduction and browser reconnection behavior;
-- `apps/web/src/features/chat/ChatMessageList.tsx`: text and schedule part rendering.
+- `dayboard/workers/commands.py`：为 Worker 构造 North Redis bridge；
+- `dayboard/app/commands.py`：提供产品生命周期钩子并持久化安全部分；
+- `dayboard/agent/presentation.py`：allowlist 规范消息投影；
+- `dayboard/main.py`：为 API 进程构造同一个 North Redis bridge；
+- `dayboard/api/routes.py`：授权、Bridge 订阅、投影和 SSE 成帧；
+- `apps/web/src/app/page.tsx`：Run 事件归约和浏览器重连行为；
+- `apps/web/src/features/chat/ChatMessageList.tsx`：文本和调度部分渲染。
 
-## Consequences
+## 后果
 
-Schedule cards and model text can render incrementally, reconnect has an explicit protocol, and
-historical chat rendering no longer depends on reverse queries against mutable business rows.
+调度卡片和模型文本可以增量渲染，重连拥有明确的协议，历史聊天渲染也不再依赖针对可变业务行的反向查询。
 
-The implementation is larger than polling one PostgreSQL table. It requires a Redis stream adapter,
-a safe projection layer, persisted conversation parts, and a frontend reducer. These boundaries are
-deliberate because they keep live transport, observability, history, and business state distinct.
+这项实现比轮询一张 PostgreSQL 表更加复杂。它需要 Redis stream adapter、安全投影层、持久化的对话部分和前端归约器。这些边界是有意设置的，因为它们让实时传输、可观测性、历史和业务状态彼此分离。
