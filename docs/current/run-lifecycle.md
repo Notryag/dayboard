@@ -159,7 +159,7 @@ Run 处于活动状态或失败时，紧凑活动视图会展开；成功完成�
 
 Platform 只持久化通用执行结果以及展示类型、schema 版本和不透明载荷。Dayboard 在将已知载荷交给 Platform 之前会进行校验，并在通过公共 API 投影历史时再次校验。UI 使用的完整 UTC 调度快照位于 presentation payload 中，而紧凑的本地时间 ToolMessage 回执仅供模型使用。Run 生命周期状态从权威的 Run 行读取，不会在 presentation 中重复保存。
 
-当末尾的工具调用批次只包含成功的终态调度写入时，Dayboard 的 Agent middleware 会返回确定性的、基于事实的 AI 消息，并在没有最终 provider 确认调用的情况下结束循环。搜索结果、工具错误、澄清、格式错误的输出、部分完成或未解决的工作都不会触发这一优化。提交的 artifact 仍会在 Run 进入终态前完成投影和持久化。
+成功写入之后，Agent 仍返回模型判断并执行剩余工作；不会根据最后一个工具批次直接完成 Run。搜索、写入和恢复均保留完整工具面，只有连续两批失败才移除工具并解释部分完成情况。已提交的 artifact 在 Run 进入终态前完成投影和持久化。
 
 `agent_run_events` 是用于持久化消息、生命周期记录和可观测性记录的有序 Thread journal。`message.human` 和 `message.ai` 是权威的会话历史；assistant 事件还携带用于恢复调度卡片的带版本 presentation。Run 行包含生命周期状态和有界的列表摘要，而不是权威的请求/响应正文。Token 增量只保留在实时 StreamBridge 中，不会逐 token 写入。
 
@@ -223,7 +223,13 @@ Worker 会扫描过期的活动 Run。排队中和运行中的 Run 使用分别�
 
 ## 用量与预算
 
-North 会按模型调用规范化用量。Dayboard 会在 Platform 提交终态 Run 结果后尝试结算，使用新的 Unit of Work 和 `(user_id, run_id)` 上不可变的唯一聚合。PostgreSQL adapter 会从受信任的 Run 推导 user ID 再执行插入，因此不匹配的调用方无法占用该幂等 key。只有创建该行的事务会协调此前的 Redis 预算预留；重试会发现已有聚合，不会重复计费。用量持久化和 Redis 协调发生在 Run 完成之后，且二者与 Run 完成不具备原子性，不能替代 Run 结果。
+North 会按模型调用规范化用量。Dayboard 在 Run 准入时预留第一轮请求与输入预算，并通过调用配置中的 `RunModelBudget` 回调，在每次实际模型调用之前检查共享用户/模型额度以及 Run 上限。该回调由 North/LangChain 传递至主模型和独立摘要模型；首次调用补足准入预留，后续调用分别预留请求和 token，不重复收取首次请求。
+
+预留包含完整消息、工具 schema 和输出上限；文本以 UTF-8 字节数保守估算，避免中文按字符数除以四而被低估。这是估算而非提供商 tokenizer 的精确计费。默认每 Run 最多 12 次模型调用、60,000 个累计 token（未知用量保留估算），单次模型输出最多 2,048 token；配置分别为 `DAYBOARD_AGENT_MAX_MODEL_CALLS`、`DAYBOARD_AGENT_MAX_RUN_TOKENS`、`DAYBOARD_AGENT_MAX_OUTPUT_TOKENS`。Provider SDK 自动重试关闭，避免绕过逐次调用检查。即使关闭共享预算，Run 上限仍有效。
+
+回调根据可用的实际用量更新 Run 计数，超出预留的部分补记共享预算；共享固定窗口不退款，失败或未知用量保留预留。预算拒绝在同一 Run 内保持生效；摘要 helper 即使把异常转换为文本，也会在持久化摘要前被 Run driver 拒绝，不能用错误文本覆盖记忆。
+
+Platform 提交终态 Run 结果后，Dayboard 使用新的 Unit of Work 和 `(user_id, run_id)` 上不可变的唯一聚合结算用量。PostgreSQL adapter 从受信任的 Run 推导 user ID，因此不匹配的调用方无法占用该幂等 key。只有新建聚合才协调累计预留之外的剩余差额，不重复收取逐次调用已经预留的 token。用量持久化和 Redis 协调与 Run 完成不具备原子性，不能替代 Run 结果。
 
 如果进程在 settlement `finally` 块之前硬退出，用量仍可能丢失。如果 PostgreSQL 用量提交之后、Redis 协调之前发生崩溃，预留可能不准确。完整恢复需要持久化的用量 outbox 或协调作业；它不会被隐藏在内存重试之后。当前 admission 发生在 Dayboard，而将有范围的 provider-token policy 迁移到 Northgate 仍是未来工作。Northgate 当前的 policy 以 gateway 为范围，因此在它接受受信任的动态身份并原子地执行显式 policy scope 之前，无法替代 Dayboard 的用户/模型 admission。
 

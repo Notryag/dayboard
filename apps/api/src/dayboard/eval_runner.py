@@ -90,7 +90,7 @@ def _parse_eval_turn(raw: object, defaults: dict[str, Any]) -> EvalTurn:
 
 
 def load_corpus(path: Path) -> list[EvalCase]:
-    payload = json.loads(path.read_text())
+    payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("version") != 1:
         raise ValueError("unsupported Agent Eval corpus version")
     cases: list[EvalCase] = []

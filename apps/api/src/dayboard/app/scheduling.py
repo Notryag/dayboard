@@ -99,6 +99,7 @@ class SchedulingService:
         start_time: datetime,
         end_time: datetime,
         title_query: str | None = None,
+        limit: int = 50,
     ) -> Sequence[CalendarEntry]:
         local_zone = ZoneInfo(context.timezone)
         local_end = end_time.astimezone(local_zone)
@@ -113,6 +114,7 @@ class SchedulingService:
                 else local_end.date() + timedelta(days=1)
             ),
             title_query=title_query,
+            limit=limit,
         )
 
     async def get_calendar_entry(
@@ -319,11 +321,13 @@ class SchedulingService:
         context: UserContext,
         *,
         title_query: str | None = None,
+        limit: int = 50,
         status: TaskStatus | None = TaskStatus.open,
     ) -> Sequence[TaskItem]:
         return await self.task_items.search(
             context,
             title_query=title_query,
+            limit=limit,
             status=status,
         )
 

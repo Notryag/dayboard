@@ -16,7 +16,7 @@ def _register_tools(context: PluginContext, tools: Sequence[Any]) -> Registratio
 def build_dayboard_plugins(
     *,
     tools: Sequence[Any],
-    runtime_context: dict[str, Any],
+    runtime_context: str,
 ) -> tuple[FunctionPlugin, ...]:
     """Compose Dayboard's lead-agent plugins."""
 

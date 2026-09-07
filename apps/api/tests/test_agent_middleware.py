@@ -44,51 +44,24 @@ def _write_result(
 
 
 def _search_result(name: str) -> ToolMessage:
-    return ToolMessage(content="[]", tool_call_id=f"call-{name}", name=name)
+    return ToolMessage(
+        content='{"items": [], "has_more": false}', tool_call_id=f"call-{name}", name=name
+    )
 
 
 def _names(request: ModelRequest) -> list[str]:
     return [tool.name for tool in request.tools]
 
 
-def test_terminal_single_domain_writes_remove_tools() -> None:
+def test_search_and_writes_preserve_every_domain() -> None:
     middleware = SchedulingToolBindingMiddleware()
-    request = _request([_write_result("create_calendar_entry", "calendar_entry_created")])
-
-    assert middleware._prepare_request(request).tools == []
-
-
-def test_mixed_domain_batch_retains_full_surface() -> None:
-    middleware = SchedulingToolBindingMiddleware()
-    request = _request(
-        [
-            _write_result("create_calendar_entry", "calendar_entry_created"),
-            _write_result("create_task_item", "task_item_created"),
-        ]
-    )
-
-    assert _names(middleware._prepare_request(request)) == TOOL_NAMES
-
-
-def test_successful_search_narrows_to_domain_and_clarification() -> None:
-    middleware = SchedulingToolBindingMiddleware()
-
-    calendar = middleware._prepare_request(_request([_search_result("search_calendar_entries")]))
-    task = middleware._prepare_request(_request([_search_result("search_task_items")]))
-
-    assert _names(calendar) == [
-        "create_calendar_entry",
-        "search_calendar_entries",
-        "reschedule_calendar_entry",
-        "cancel_calendar_entry",
-        "ask_clarification",
-    ]
-    assert _names(task) == [
-        "create_task_item",
-        "search_task_items",
-        "update_task_item",
-        "ask_clarification",
-    ]
+    for result in [
+        _search_result("search_calendar_entries"),
+        _search_result("search_task_items"),
+        _write_result("create_calendar_entry", "calendar_entry_created"),
+        _write_result("create_task_item", "task_item_created"),
+    ]:
+        assert _names(middleware._prepare_request(_request([result]))) == TOOL_NAMES
 
 
 def test_error_or_malformed_result_restores_full_surface() -> None:
@@ -178,61 +151,75 @@ def test_runtime_context_injection_is_idempotent() -> None:
     assert sum(isinstance(message, SystemMessage) for message in prepared_again.messages) == 1
 
 
-def test_async_wrapper_completes_terminal_write_without_calling_model() -> None:
-    async def run() -> tuple[AIMessage, bool]:
+def test_successful_write_returns_to_model_for_remaining_dependent_work() -> None:
+    async def run():
         middleware = SchedulingToolBindingMiddleware()
-        request = _request([_write_result("update_task_item", "task_item_updated")])
-        called = False
+        request = _request(
+            [
+                HumanMessage(content="明天九点跳舞，跳完再唱歌，再完成买菜待办"),
+                AIMessage(content=""),
+                _write_result("create_calendar_entry", "calendar_entry_created"),
+            ]
+        )
 
         async def handler(prepared):
-            nonlocal called
-            called = True
-            return prepared.tools
+            assert _names(prepared) == TOOL_NAMES
+            return AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "search_calendar_entries",
+                        "args": {"title_query": "跳舞"},
+                        "id": "anchor-search",
+                    }
+                ],
+            )
 
-        response = await middleware.awrap_model_call(request, handler)
-        return response, called
+        return await middleware.awrap_model_call(request, handler)
 
-    response, called = asyncio.run(run())
-
-    assert isinstance(response, AIMessage)
-    assert response.content == "待办已更新。"
-    assert called is False
+    response = asyncio.run(run())
+    assert response.tool_calls[0]["name"] == "search_calendar_entries"
 
 
-def test_mixed_terminal_batch_completes_without_calling_model() -> None:
-    middleware = SchedulingToolBindingMiddleware()
+def test_mixed_write_batch_still_allows_model_to_finish_or_continue() -> None:
     request = _request(
         [
             _write_result("create_calendar_entry", "calendar_entry_created"),
             _write_result("create_task_item", "task_item_created"),
         ]
     )
-
-    def handler(prepared):
-        raise AssertionError(f"model should not be called with {prepared.tools}")
-
-    response = middleware.wrap_model_call(request, handler)
-
-    assert isinstance(response, AIMessage)
-    assert response.content == "已完成 2 项安排。"
-
-
-def test_terminal_completion_preserves_conflict_warning() -> None:
-    middleware = SchedulingToolBindingMiddleware()
-    request = _request(
-        [
-            _write_result(
-                "create_calendar_entry",
-                "calendar_entry_created",
-                conflicts=[{"id": "conflict-1"}],
-            )
-        ]
+    expected = AIMessage(content="完成，还需要处理取消操作")
+    assert (
+        SchedulingToolBindingMiddleware().wrap_model_call(request, lambda prepared: expected)
+        is expected
     )
 
-    response = middleware.wrap_model_call(request, lambda prepared: prepared)
 
-    assert isinstance(response, AIMessage)
-    assert response.content == "日程已创建，检测到 1 项时间冲突。"
+def test_two_errors_in_one_batch_get_one_recovery_round() -> None:
+    request = _request(
+        [
+            HumanMessage(content="安排两件事"),
+            AIMessage(content=""),
+            _write_result("create_calendar_entry", "error", status="error"),
+            _write_result("create_task_item", "error", status="error"),
+        ]
+    )
+    assert _names(SchedulingToolBindingMiddleware()._prepare_request(request)) == TOOL_NAMES
+
+
+def test_successful_recovery_resets_failed_rounds_for_later_operations() -> None:
+    request = _request(
+        [
+            HumanMessage(content="安排两件事"),
+            AIMessage(content=""),
+            _write_result("create_calendar_entry", "error", status="error"),
+            AIMessage(content=""),
+            _write_result("create_calendar_entry", "calendar_entry_created"),
+            AIMessage(content=""),
+            _write_result("create_task_item", "error", status="error"),
+        ]
+    )
+    assert _names(SchedulingToolBindingMiddleware()._prepare_request(request)) == TOOL_NAMES
 
 
 def test_search_and_error_results_still_call_model() -> None:

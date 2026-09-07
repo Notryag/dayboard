@@ -10,7 +10,7 @@ Agent Eval 是定量实时模型基准。它与确定性的 CI 以及小型部�
 - Agent Eval 在广泛且版本化的中文调度语料上测量模型行为。
 
 提交的语料是 `apps/api/evals/agent_eval.json`，已安装的运行器命令是
-`dayboard-eval`。语料包含 128 个案例：16 个类别各 8 个案例，覆盖相对日期、时钟时间、时间段、截止时间、calendar/task
+`dayboard-eval`。语料包含 130 个案例：16 个类别各 8 个基础案例，加上同轮依赖步骤和跨领域变更两个回归案例，覆盖相对日期、时钟时间、时间段、截止时间、calendar/task
 classification、multiple actions、无标点语音转写、修改、取消、同名歧义、错别字、上下文引用、冲突、目标缺失、foreign
 timezones 以及 privilege/prompt-injection attempts。案例可以包含 setup turns 和多个 evaluated turns。每个 evaluated turn
 声明精确的 expected tool counts、expected terminal status 和 forbidden tools。被测的关键 turns 还可以断言普通 user-scoped

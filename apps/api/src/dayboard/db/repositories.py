@@ -14,9 +14,6 @@ from dayboard.domain.calendar import CalendarEntry, CalendarEntryCreate, Calenda
 from dayboard.domain.tasks import TaskItem, TaskItemCreate, TaskItemUpdate, TaskStatus
 
 
-SEARCH_RESULT_LIMIT = 50
-
-
 class CalendarEntryRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -116,6 +113,7 @@ class CalendarEntryRepository:
         start_date: date,
         end_date: date,
         title_query: str | None = None,
+        limit: int = 50,
     ) -> list[CalendarEntry]:
         conditions = [
             CalendarEntryRow.user_id == context.user_id,
@@ -147,9 +145,10 @@ class CalendarEntryRepository:
                 func.coalesce(
                     CalendarEntryRow.start_time,
                     cast(CalendarEntryRow.scheduled_date, DateTime(timezone=True)),
-                ).asc()
+                ).asc(),
+                CalendarEntryRow.id.asc(),
             )
-            .limit(SEARCH_RESULT_LIMIT)
+            .limit(limit)
         )
         return [calendar_entry_from_row(row) for row in result]
 
@@ -539,6 +538,7 @@ class TaskItemRepository:
         context: UserContext,
         *,
         title_query: str | None = None,
+        limit: int = 50,
         status: TaskStatus | None = TaskStatus.open,
     ) -> list[TaskItem]:
         conditions = [
@@ -552,8 +552,12 @@ class TaskItemRepository:
         result = await self.session.scalars(
             select(TaskItemRow)
             .where(*conditions)
-            .order_by(TaskItemRow.due_at.asc().nulls_last(), TaskItemRow.created_at.desc())
-            .limit(SEARCH_RESULT_LIMIT)
+            .order_by(
+                TaskItemRow.due_at.asc().nulls_last(),
+                TaskItemRow.created_at.desc(),
+                TaskItemRow.id.asc(),
+            )
+            .limit(limit)
         )
         return [task_item_from_row(row) for row in result]
 

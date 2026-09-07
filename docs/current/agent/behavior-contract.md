@@ -36,20 +36,22 @@ Dayboard 的 Agent 将自然语言调度意图转换为类型化产品操作。�
 ```text
 new user turn
   -> full scheduling + clarification tool surface
-  -> successful search
-       -> same-domain tools + clarification
-  -> successful terminal write batch
-       -> deterministic localized completion; no extra model call
-  -> malformed or failed result
-       -> restore full surface for one recovery attempt
-  -> second failed result in the same user turn
-       -> remove tools, stop tool retries, and let the model explain the failure
+  -> successful search or write
+       -> return receipts to model; continue remaining work with the full tool surface
+  -> failed tool batch
+       -> one recovery round, regardless of the number of failed calls in the batch
+  -> consecutive failed recovery batch
+       -> remove tools and explain completed and unresolved work accurately
+  -> fully successful batch
+       -> reset the consecutive-failure counter
   -> clarification request
        -> current Run ends as needs_clarification
        -> answer creates a new Run on the same Thread
 ```
 
-混合领域批次在解决前保留完整工具面。搜索结果、错误、部分完成结果和未解决工作会返回模型。成功的终止写入根据经过校验的回执完成，因此模型不能改写已提交的结果。
+最近一批写入成功不代表整条用户指令完成。Agent 必须能继续执行依赖前一步结果的操作，以及跨日历/任务领域的操作。模型负责判断是否还有剩余工作；确定性回执和呈现工件仍是写入事实来源。不得重放已成功的写入。
+
+失败预算按连续失败的工具批次计算，而不是按 ToolMessage 数量累计。同批多个失败只消耗一次尝试；完整成功的批次结束本次恢复阶段。Run 级模型调用次数和 token 预算另外限制搜索循环及反复成功/失败的路径，见 [Run 生命周期](../run-lifecycle.md#用量与预算)。
 
 ## 呈现与安全
 
@@ -60,7 +62,7 @@ new user turn
 - 提示词分类和交互规则：
   [`prompts.py`](../../../apps/api/src/dayboard/agent/prompts.py) and
   [`test_agent_prompts.py`](../../../apps/api/tests/test_agent_prompts.py).
-- 工具循环收窄、恢复、终止完成和模型可见脱敏：
+- 完整工具面、按批恢复、继续执行和模型可见脱敏：
   [`middleware.py`](../../../apps/api/src/dayboard/agent/middleware.py) and
   [`test_agent_middleware.py`](../../../apps/api/tests/test_agent_middleware.py).
 - 工具 schema 和产品操作：[tools.md](./tools.md) 以及

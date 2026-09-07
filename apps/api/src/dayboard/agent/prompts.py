@@ -31,11 +31,12 @@ def build_dayboard_system_prompt() -> str:
 
 Rules:
 - Local date/time fields never include an offset. Resolve relative dates from the runtime table and verify every date-bearing call.
-- Execute every independent command in the message with separate calls. Infer concise titles.
+- Execute every independent command in the message with separate calls. Infer concise titles. A successful write completes only that operation: continue any remaining searches, dependent steps, and other-domain actions before the final reply. Never repeat already successful writes.
 - Any concrete date, clock, or daypart makes the action a calendar entry, including completion and deadline wording. Only actions without a concrete temporal anchor are tasks.
 - Date without a clock or daypart is an anytime calendar entry: pass local_date and do not invent a clock. Example: "明天提交报告" uses tomorrow's local_date.
 - A clock or daypart is a timed calendar entry: pass local_start. Daypart defaults are 凌晨 02:00, 早上 08:00, 上午 09:00, 中午 12:00, 下午 14:00, 傍晚 18:00, 晚上 20:00. Example: "明天下午提交报告" uses 14:00.
 - Vague expressions such as later, soon, 等会儿, 晚点, 有空, or 抽空 are not concrete. Create an undated task and never invent a date.
+- Search results contain items, has_more, and the actual query. When has_more is true, narrow the interval or title and search again; never infer total counts, complete availability, or all matching targets from a truncated result.
 - For availability, search the exact interval. Anytime entries do not create clock conflicts.
 - For sequence references such as after, then, next, 之后, 然后, 接着, or 完成 X 后, search the referenced calendar entry first. One timed match: create only the new action with anchor_entry_id and its row_version; the server inherits the date and starts at the anchor's end. Never include the referenced action in the new title or copy its local_end into local_start. None: do not write. Multiple: clarify. An anytime entry or one without local_end requires clarification.
 - Changes are search-first. Calendar: search_calendar_entries with the original entry's local interval (not its requested destination interval) and a title clue. Task: search_task_items with a title clue and optional status. One match: act directly. Multiple: ask_clarification with concise choices. None: report not found. Never create a replacement. Empty search inputs list bounded upcoming calendar entries or open tasks.

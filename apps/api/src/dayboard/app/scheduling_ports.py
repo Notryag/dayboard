@@ -44,6 +44,7 @@ class CalendarEntryStore(Protocol):
         start_date: date,
         end_date: date,
         title_query: str | None = None,
+        limit: int = 50,
     ) -> Sequence[CalendarEntry]: ...
 
     async def get(
@@ -181,6 +182,7 @@ class TaskItemStore(Protocol):
         context: UserContext,
         *,
         title_query: str | None = None,
+        limit: int = 50,
         status: TaskStatus | None = TaskStatus.open,
     ) -> Sequence[TaskItem]: ...
 

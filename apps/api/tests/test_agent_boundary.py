@@ -121,7 +121,7 @@ def test_build_dayboard_agent_uses_configured_model_name(monkeypatch) -> None:
     assert agent == {"agent": "fake"}
     assert captured["model_name"] == "openai:gpt-test"
     assert captured["model_headers"] == {}
-    assert captured["model_options"] == {}
+    assert captured["model_options"] == {"max_tokens": 2048, "max_retries": 0}
     assert "scheduling assistant" in captured["system_prompt"]
     assert [plugin.plugin_id for plugin in captured["plugins"]] == [
         "dayboard.tools",
@@ -327,12 +327,10 @@ def test_build_dayboard_agent_does_not_send_openai_cache_key_to_other_providers(
         context=user_context,
     )
 
-    assert captured == {}
+    assert captured == {"max_tokens": 2048, "max_retries": 0}
 
 
 def test_build_dayboard_agent_does_not_duplicate_clarification_tool(monkeypatch) -> None:
-    captured = {}
-
     def fake_build_agent(
         config,
         *,

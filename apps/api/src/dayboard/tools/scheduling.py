@@ -254,6 +254,8 @@ async def search_calendar_entries(
     session: AsyncSession,
     context: UserContext,
     data: SearchCalendarEntriesInput,
+    *,
+    limit: int = 50,
 ) -> list[CalendarEntry]:
     return list(
         await build_scheduling_service(session).search_calendar_entries(
@@ -261,6 +263,7 @@ async def search_calendar_entries(
             start_time=data.start_time,
             end_time=data.end_time,
             title_query=data.title_query,
+            limit=limit,
         )
     )
 
@@ -476,10 +479,12 @@ async def search_task_items(
     session: AsyncSession,
     context: UserContext,
     data: SearchTaskItemsInput,
+    *,
+    limit: int = 50,
 ) -> list[TaskItem]:
     return list(
         await build_scheduling_service(session).search_task_items(
-            context, title_query=data.title_query, status=data.status
+            context, title_query=data.title_query, status=data.status, limit=limit
         )
     )
 

@@ -76,10 +76,10 @@ def test_provider_budget_reconciles_actual_tokens_once_above_reservation(
         context=user_context,
         model_name="openai:gpt-test",
         estimate=estimate,
-        actual_tokens=20,
+        actual_tokens=40,
     )
 
-    assert charged == 20 - estimate.token_units
+    assert charged == 40 - estimate.token_units
     with pytest.raises(ProviderBudgetExceeded) as exc_info:
         guard.check(context=user_context, model_name="openai:gpt-test", estimate=estimate)
     assert exc_info.value.budget_type == "token"

@@ -96,6 +96,8 @@ def merge_presentation_parts(
 
 def safe_error_message(exc: Exception) -> str:
     if isinstance(exc, ProviderBudgetExceeded):
+        if exc.budget_type in {"run_requests", "run_tokens"}:
+            return "本次操作已达到 AI 执行上限，请查看已完成的安排，并将剩余操作分开提交。"
         if exc.budget_type == "request":
             return "请求有点频繁，请稍等一分钟后再试。"
         return "今天的 AI 使用额度已用完，请明天再试。"

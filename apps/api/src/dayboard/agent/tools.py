@@ -370,8 +370,19 @@ def build_scheduling_tools(
                 end_time=end_time,
                 title_query=input_data.title_query,
             ),
+            limit=51,
         )
-        content = [_calendar_entry_receipt(entry) for entry in entries]
+        has_more = len(entries) > 50
+        entries = entries[:50]
+        content = {
+            "items": [_calendar_entry_receipt(entry) for entry in entries],
+            "has_more": has_more,
+            "query": {
+                "local_start": local_start.isoformat(timespec="minutes"),
+                "local_end": local_end.isoformat(timespec="minutes"),
+                "title_query": input_data.title_query,
+            },
+        }
         artifact = _schedule_items_artifact(
             "calendar_entry_found",
             "calendar",
@@ -470,8 +481,14 @@ def build_scheduling_tools(
 
     async def agent_search_task_items(**kwargs):
         input_data = SearchTaskItemsInput.model_validate(kwargs)
-        tasks = await search_task_items(session, context, input_data)
-        content = [_task_item_receipt(task) for task in tasks]
+        tasks = await search_task_items(session, context, input_data, limit=51)
+        has_more = len(tasks) > 50
+        tasks = tasks[:50]
+        content = {
+            "items": [_task_item_receipt(task) for task in tasks],
+            "has_more": has_more,
+            "query": input_data.model_dump(mode="json"),
+        }
         artifact = _schedule_items_artifact(
             "task_item_found",
             "task",

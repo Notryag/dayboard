@@ -192,7 +192,7 @@ search_task_items
 update_task_item
 ```
 
-`ask_clarification` 是 runtime interaction tool，而不是 scheduling business tool。第一次 tool result 之后，tool binding 会收窄到 active calendar 或 task domain；需要恢复时再完整恢复一次工具集合。见 [Agent Tool Contract](./agent/tools.md)。
+`ask_clarification` 是 runtime interaction tool，而不是 scheduling business tool。搜索和写入后保留完整工具集合，以继续依赖步骤与跨领域操作；连续失败的工具批次最多允许一轮恢复。见 [Agent Tool Contract](./agent/tools.md)。
 
 ## 前端形态
 

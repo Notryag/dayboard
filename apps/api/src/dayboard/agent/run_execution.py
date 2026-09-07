@@ -30,7 +30,7 @@ from agent_platform.core import (
 )
 from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
-from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard
+from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard, RunModelBudget
 from dayboard.agent.observability import project_runtime_event, public_runtime_activity
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
@@ -112,6 +112,7 @@ class DayboardRunExecutionDriver:
         usage_accumulator = RuntimeUsageAccumulator()
         runtime_event_lock = asyncio.Lock()
         budget_estimate: ProviderBudgetEstimate | None = None
+        model_budget: RunModelBudget | None = None
         terminal_callback_called = False
 
         async def record_runtime_event(event) -> None:
@@ -183,6 +184,10 @@ class DayboardRunExecutionDriver:
                     raise
 
         async def record_compaction(event: CompactionEvent) -> None:
+            # LangChain's summary helper turns provider exceptions into text.
+            # Never persist that text as memory after a budget rejection.
+            if model_budget is not None and model_budget.rejected is not None:
+                raise model_budget.rejected
             async with self.session_lock:
                 try:
                     await self.conversations.update_summary(
@@ -259,6 +264,9 @@ class DayboardRunExecutionDriver:
                 message_length=len(input_message),
             )
             budget_estimate = self._check_budget(context, run, input_message)
+            model_budget = RunModelBudget(
+                self.budget_guard, context, self.model_name, budget_estimate
+            )
             logger.info(
                 "dayboard.command.north_invoke_started",
                 run_id=str(run.id),
@@ -281,10 +289,12 @@ class DayboardRunExecutionDriver:
                 ),
                 graph_input={"messages": [HumanMessage(content=input_message)]},
                 config={
+                    "callbacks": [model_budget],
+                    "recursion_limit": 64,
                     "configurable": {
                         "thread_id": str(run.thread_id),
                         "checkpoint_ns": "dayboard-time-v2",
-                    }
+                    },
                 },
                 context={
                     "user_id": str(context.user_id),
@@ -327,7 +337,7 @@ class DayboardRunExecutionDriver:
                 context,
                 run.id,
                 usage_accumulator,
-                budget_estimate,
+                model_budget.reservation if model_budget is not None else budget_estimate,
             )
 
     def failure_from_exception(self, exc: Exception) -> RunExecutionFailure:

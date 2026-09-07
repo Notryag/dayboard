@@ -14,7 +14,7 @@ from dayboard.eval_oracles import BEIJING_TIMEZONE, EvalTemplateContext, Expecte
 def test_agent_eval_corpus_has_required_size_and_categories() -> None:
     cases = agent_eval.load_corpus(Path(__file__).parents[1] / "evals" / "agent_eval.json")
 
-    assert len(cases) == 128
+    assert len(cases) == 130
     assert {case.category for case in cases} == {
         "relative_date",
         "clock_time",
@@ -234,7 +234,7 @@ def test_agent_eval_setup_and_clarification_contracts_are_explicit() -> None:
     setup_steps = [step for case in cases for step in case.setup]
     same_name = next(case for case in cases if case.id == "same-01")
 
-    assert len(setup_steps) == 17
+    assert len(setup_steps) == 19
     assert all(step.expected_tools for step in setup_steps)
     assert len(same_name.setup[0].expected_schedule) == 1
     assert len(same_name.setup[1].expected_schedule) == 2

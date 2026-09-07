@@ -7,6 +7,8 @@
 
 ## Agent 运行时与 Eval
 
+- [ ] 搜索/写入后保留完整工具并继续模型循环后，重新测量生产 token 基线，复核 `context-01` 原有 2,500 token 发布门禁。旧测量不得当作新控制流程的成本证明；此次确定性修复不触发付费模型验收。
+
 - [ ] 移除 `ask_clarification` 后 North 多余的一轮模型调用；在
   [north-agent#1](https://github.com/Notryag/north-agent/issues/1) 中跟踪。v0.3.25 澄清 Run
   中跟踪运行时修复。v0.3.25 澄清 Run 通过三次调用使用了 11,304 个 token，其中多余的最后一次调用使用 3,981 个 token。

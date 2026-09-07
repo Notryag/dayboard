@@ -204,6 +204,9 @@ class Settings(BaseSettings):
         default=None, alias="DAYBOARD_RATE_LIMIT_STORAGE_URL"
     )
     provider_budget_enabled: bool = Field(default=True, alias="DAYBOARD_PROVIDER_BUDGET_ENABLED")
+    agent_max_model_calls: int = Field(default=12, ge=1, alias="DAYBOARD_AGENT_MAX_MODEL_CALLS")
+    agent_max_run_tokens: int = Field(default=60000, ge=1, alias="DAYBOARD_AGENT_MAX_RUN_TOKENS")
+    agent_max_output_tokens: int = Field(default=2048, ge=1, alias="DAYBOARD_AGENT_MAX_OUTPUT_TOKENS")
     provider_budget_request_limit: str = Field(
         default="30/minute",
         alias="DAYBOARD_PROVIDER_BUDGET_REQUEST_LIMIT",

@@ -56,7 +56,11 @@ def _model_options(
     settings: Settings,
     context: UserContext | None,
 ) -> dict[str, object]:
-    options: dict[str, object] = {}
+    options: dict[str, object] = {
+        "max_tokens": settings.agent_max_output_tokens,
+        # Each provider attempt must pass RunModelBudget; do not retry below it.
+        "max_retries": 0,
+    }
     if context is not None and settings.agent_model_name.startswith("openai:"):
         identity = str(context.user_id).encode()
         shard = int.from_bytes(sha256(identity).digest()[:2], "big") % PROMPT_CACHE_KEY_SHARDS
