@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dayboard.db.models import CalendarEntryRow, TaskItemRow
-from dayboard.domain.calendar import CalendarEntry, Reminder
+from dayboard.domain.calendar import CalendarEntry, CalendarTimingKind, Reminder
 from dayboard.domain.tasks import TaskItem, TaskStatus
 
 
@@ -13,7 +13,7 @@ def calendar_entry_from_row(row: CalendarEntryRow) -> CalendarEntry:
         row_version=row.row_version,
         user_id=row.user_id,
         title=row.title,
-        timing_kind=row.timing_kind,
+        timing_kind=CalendarTimingKind(row.timing_kind),
         scheduled_date=row.scheduled_date,
         start_time=row.start_time,
         end_time=row.end_time,

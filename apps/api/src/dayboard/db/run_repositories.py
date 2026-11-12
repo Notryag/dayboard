@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -171,7 +171,7 @@ class AgentRunRepository:
             .values(**values)
             .execution_options(synchronize_session="fetch")
         )
-        if result.rowcount != 1:
+        if cast(CursorResult[Any], result).rowcount != 1:
             return None
         row = await self.get(context, run_id)
         if row is None:
@@ -229,9 +229,7 @@ class AgentRunRepository:
             .where(
                 AgentRunRow.user_id == context.user_id,
                 AgentRunRow.thread_id == thread_id,
-                AgentRunRow.status.in_(
-                    (AgentRunStatus.queued.value, AgentRunStatus.running.value)
-                ),
+                AgentRunRow.status.in_((AgentRunStatus.queued.value, AgentRunStatus.running.value)),
                 AgentRunRow.deleted_at.is_(None),
             )
             .order_by(AgentRunRow.created_at.desc())
@@ -317,7 +315,8 @@ class PostgresIdempotencyStore:
         result = await self.session.execute(
             delete(IdempotencyKeyRow).where(IdempotencyKeyRow.created_at < cutoff)
         )
-        return int(result.rowcount or 0)
+        return int(cast(CursorResult[Any], result).rowcount or 0)
+
 
 class AgentRunEventRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -344,9 +343,7 @@ class AgentRunEventRepository:
             category=category.value,
             content=content,
             extension_kind=extension.kind if extension is not None else None,
-            extension_schema_version=(
-                extension.schema_version if extension is not None else None
-            ),
+            extension_schema_version=(extension.schema_version if extension is not None else None),
             extension_payload=extension.payload if extension is not None else {},
         )
         self.session.add(row)
@@ -521,6 +518,7 @@ class AgentRunEventRepository:
                 AgentRunEventRow.thread_id == thread_id,
             )
         )
+        assert result is not None
         return int(result)
 
     async def _get_message_row(

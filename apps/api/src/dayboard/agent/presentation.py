@@ -106,9 +106,7 @@ def _project_tool_message(
     tool_name = message.get("name")
     artifact_type = artifact.get("type")
     if tool_name in {"search_calendar_entries", "search_task_items"}:
-        if artifact_type != "schedule_items_result" or not isinstance(
-            artifact.get("items"), list
-        ):
+        if artifact_type != "schedule_items_result" or not isinstance(artifact.get("items"), list):
             return None
         item_kind: ScheduleKind = "calendar" if tool_name == "search_calendar_entries" else "task"
         expected_operation = (
@@ -147,6 +145,8 @@ def _project_tool_message(
         return None
 
     operation = artifact.get("operation")
+    if not isinstance(operation, str):
+        return None
     item_kind: ScheduleKind
     raw_item: Any
     expected_tools = {

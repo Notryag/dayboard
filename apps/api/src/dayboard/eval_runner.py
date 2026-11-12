@@ -62,8 +62,14 @@ class EvalCase:
 
 
 def _parse_eval_turn(raw: object, defaults: dict[str, Any]) -> EvalTurn:
-    turn = {"message": raw} if isinstance(raw, str) else raw
-    if not isinstance(turn, dict) or not isinstance(turn.get("message"), str):
+    turn: dict[str, Any]
+    if isinstance(raw, str):
+        turn = {"message": raw}
+    elif isinstance(raw, dict):
+        turn = raw
+    else:
+        raise ValueError("every Agent Eval step must be a string or an object with message")
+    if not isinstance(turn.get("message"), str):
         raise ValueError("every Agent Eval step must be a string or an object with message")
     return EvalTurn(
         message=turn["message"],
@@ -484,9 +490,9 @@ async def _evaluate_step(
     }
     status_match = run["status"] == expected.expected_status
     token_usage = _token_usage(events)
-    token_budget_match = (
-        expected.max_total_tokens is None
-        or token_usage["total_tokens"] <= expected.max_total_tokens
+    token_budget_match = expected.max_total_tokens is None or (
+        token_usage["total_tokens"] is not None
+        and token_usage["total_tokens"] <= expected.max_total_tokens
     )
     schedule_assertions = await evaluate_schedule_expectations(
         client,

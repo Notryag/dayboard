@@ -191,6 +191,8 @@ def _failed_result(message: ToolMessage) -> bool:
         return True
     if message.name in INTERACTION_TOOLS:
         return False
+    if not isinstance(message.content, str) or message.name is None:
+        return True
     try:
         payload = json.loads(message.content)
     except (TypeError, json.JSONDecodeError):

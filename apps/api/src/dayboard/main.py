@@ -73,8 +73,9 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        if speech_provider is not None:
-            await speech_provider.aclose()
+        close_speech_provider = getattr(speech_provider, "aclose", None)
+        if close_speech_provider is not None:
+            await close_speech_provider()
         await redis.aclose()
 
 

@@ -80,7 +80,7 @@ async def _account_for_session(
         .limit(1)
     )
     result = (await session.execute(statement)).one_or_none()
-    return result if result is not None else None
+    return result._tuple() if result is not None else None
 
 
 async def _account_for_eval_identity(
@@ -99,7 +99,7 @@ async def _account_for_eval_identity(
         .limit(1)
     )
     result = (await session.execute(statement)).one_or_none()
-    return result if result is not None else None
+    return result._tuple() if result is not None else None
 
 
 def _bearer_token(request: Request) -> str | None:
@@ -204,7 +204,7 @@ async def _account_for_login(
         .with_for_update(of=UserCredentialRow)
     )
     account = (await session.execute(statement)).one_or_none()
-    return account if account is not None else None
+    return account._tuple() if account is not None else None
 
 
 def _response(
@@ -270,9 +270,7 @@ async def get_user_context(
             locale=profile.locale,
         )
         request.state.authentication_kind = authentication_kind
-    structlog.contextvars.bind_contextvars(
-        user_id=str(context.user_id)
-    )
+    structlog.contextvars.bind_contextvars(user_id=str(context.user_id))
     return context
 
 
@@ -363,9 +361,7 @@ async def login(
     )
     await session.commit()
     _set_session_cookie(response, raw_token, settings)
-    logger.info(
-        "dayboard.auth.login_succeeded", user_id=str(user.id)
-    )
+    logger.info("dayboard.auth.login_succeeded", user_id=str(user.id))
     return _response(user, profile, timezone=profile.timezone)
 
 

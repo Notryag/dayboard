@@ -175,9 +175,7 @@ def _terminal_stream_event(
         "cancelled": "run_cancelled",
     }.get(run.status.value)
     return (
-        (event_type, {"content": run.last_ai_message, "parts": parts or []})
-        if event_type
-        else None
+        (event_type, {"content": run.last_ai_message, "parts": parts or []}) if event_type else None
     )
 
 
@@ -1107,6 +1105,7 @@ async def cancel_run(
         run,
         event_content="请求已取消",
     )
+    parts: list[dict] = []
     if transitioned:
         conversations = platform.conversations
         existing_message = await conversations.get_assistant_message_for_run(user_context, run.id)

@@ -31,8 +31,12 @@ class SchedulingService:
             and entry.cancelled_at is None
         )
         reminder = entry.reminder if active else None
-        scheduled_for = entry.start_time - reminder.as_timedelta() if reminder else None
-        payload = (
+        scheduled_for = (
+            entry.start_time - reminder.as_timedelta()
+            if reminder is not None and entry.start_time is not None
+            else None
+        )
+        payload: dict[str, object] | None = (
             {
                 "title": entry.title,
                 "source_type": ReminderSourceType.calendar_entry.value,
@@ -64,7 +68,7 @@ class SchedulingService:
             if active and task.due_at is not None and task.reminder is not None
             else None
         )
-        payload = (
+        payload: dict[str, object] | None = (
             {
                 "title": task.title,
                 "source_type": ReminderSourceType.task_item.value,

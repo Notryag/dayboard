@@ -154,9 +154,11 @@ class ScheduleQueryService:
         next_cursor = None
         if has_more:
             last = page_entries[-1]
-            cursor_time = last.start_time or datetime.combine(
-                last.scheduled_date, time.min, tzinfo=UTC
-            )
+            if last.start_time is not None:
+                cursor_time = last.start_time
+            else:
+                assert last.scheduled_date is not None
+                cursor_time = datetime.combine(last.scheduled_date, time.min, tzinfo=UTC)
             next_cursor = _encode_cursor(
                 {"kind": "calendar", "start_time": cursor_time.isoformat(), "id": str(last.id)}
             )

@@ -167,6 +167,13 @@ class TaskItemChangedError(RuntimeError):
     pass
 
 
+def _calendar_entry_time(entry: CalendarEntry) -> str:
+    if entry.start_time is not None:
+        return entry.start_time.isoformat()
+    assert entry.scheduled_date is not None
+    return entry.scheduled_date.isoformat()
+
+
 async def create_calendar_entry(
     session: AsyncSession,
     context: UserContext,
@@ -185,7 +192,7 @@ async def create_calendar_entry(
                 summary=(
                     f"{existing.title} on {existing.scheduled_date.isoformat()}"
                     if existing.scheduled_date
-                    else f"{existing.title} at {existing.start_time.isoformat()}"
+                    else f"{existing.title} at {_calendar_entry_time(existing)}"
                 ),
                 calendar_entry=existing,
             )
@@ -236,13 +243,13 @@ async def create_calendar_entry(
     )
     return CalendarEntryToolResult(
         summary=(
-            f"{entry.title} at {entry.start_time.isoformat()}; created with "
+            f"{entry.title} at {_calendar_entry_time(entry)}; created with "
             f"{len(conflicts)} calendar conflict(s)."
             if conflicts
             else (
                 f"{entry.title} on {entry.scheduled_date.isoformat()}"
                 if entry.scheduled_date
-                else f"{entry.title} at {entry.start_time.isoformat()}"
+                else f"{entry.title} at {_calendar_entry_time(entry)}"
             )
         ),
         calendar_entry=entry,
@@ -323,7 +330,7 @@ async def reschedule_calendar_entry(
                 previous_start_time=None,
                 previous_end_time=None,
                 calendar_entry=updated,
-                summary=f"{updated.title} moved to {updated.scheduled_date.isoformat()}",
+                summary=f"{updated.title} moved to {_calendar_entry_time(updated)}",
             )
         duration = timedelta(hours=1)
     else:
@@ -333,6 +340,7 @@ async def reschedule_calendar_entry(
     if data.new_start_time is not None:
         resolved_start_time = data.new_start_time
     elif data.new_date is not None:
+        assert existing.start_time is not None
         local_start = existing.start_time.astimezone(ZoneInfo(existing.timezone))
         resolved_start_time = datetime.combine(
             data.new_date,
@@ -340,6 +348,7 @@ async def reschedule_calendar_entry(
             tzinfo=ZoneInfo(existing.timezone),
         )
     else:
+        assert existing.start_time is not None
         resolved_start_time = existing.start_time
     resolved_end_time = (
         resolved_start_time + timedelta(minutes=data.new_duration_minutes)
@@ -372,6 +381,7 @@ async def reschedule_calendar_entry(
         raise CalendarEntryChangedError(
             "Calendar entry changed after it was selected; search again before updating"
         )
+    assert updated.start_time is not None and updated.end_time is not None
     return CalendarEntryRescheduleResult(
         previous_scheduled_date=existing.scheduled_date,
         previous_start_time=existing.start_time,
@@ -379,7 +389,7 @@ async def reschedule_calendar_entry(
         calendar_entry=updated,
         conflicts=list(conflicts),
         summary=(
-            f"Changed {updated.title} from {existing.start_time.isoformat()}"
+            f"Changed {updated.title} from {_calendar_entry_time(existing)}"
             f"-{existing.end_time.isoformat() if existing.end_time else 'open'} to "
             f"{updated.start_time.isoformat()}-{updated.end_time.isoformat()} "
             f"with {len(conflicts)} conflict(s)"
@@ -433,7 +443,7 @@ async def cancel_calendar_entry(
         )
     return CalendarEntryCancellationResult(
         calendar_entry=cancelled,
-        summary=f"Cancelled {cancelled.title} at {cancelled.start_time.isoformat()}",
+        summary=f"Cancelled {cancelled.title} at {_calendar_entry_time(cancelled)}",
     )
 
 

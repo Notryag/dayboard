@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -28,6 +28,51 @@ from dayboard.tools import (
     search_task_items,
     update_task_item,
 )
+
+
+@pytest.mark.parametrize("operation", ["cancel", "add_clock"])
+async def test_anytime_mutations_render_date_in_summary(
+    db_session: AsyncSession,
+    user_context: UserContext,
+    operation: str,
+) -> None:
+    created = await create_calendar_entry(
+        db_session,
+        user_context,
+        CreateCalendarEntryInput(
+            title="年度体检",
+            scheduled_date=date(2026, 11, 13),
+            timezone=user_context.timezone,
+        ),
+        created_by_run_id=uuid4(),
+        operation_key="create-anytime-summary",
+    )
+    entry = created.calendar_entry
+    if operation == "cancel":
+        result = await cancel_calendar_entry(
+            db_session,
+            user_context,
+            CancelCalendarEntryInput(
+                calendar_entry_id=entry.id, expected_row_version=entry.row_version
+            ),
+            cancelled_by_run_id=uuid4(),
+            operation_key="cancel-anytime-summary",
+        )
+        assert result.calendar_entry.cancelled_at is not None
+    else:
+        result = await reschedule_calendar_entry(
+            db_session,
+            user_context,
+            RescheduleCalendarEntryInput(
+                calendar_entry_id=entry.id,
+                expected_row_version=entry.row_version,
+                new_start_time=datetime(2026, 11, 13, 9, tzinfo=ZoneInfo("Asia/Shanghai")),
+            ),
+            updated_by_run_id=uuid4(),
+            operation_key="time-anytime-summary",
+        )
+        assert result.calendar_entry.start_time is not None
+    assert "2026-11-13" in result.summary
 
 
 async def test_create_and_list_calendar_entry(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from collections.abc import Mapping
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
@@ -51,7 +52,7 @@ def _response(
     code: str,
     message: str,
     details: dict[str, Any] | list[Any] | None = None,
-    headers: dict[str, str] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     body = ApiErrorResponse(
         error=ApiErrorBody(
@@ -68,7 +69,8 @@ def _response(
     )
 
 
-async def api_problem_handler(request: Request, exc: ApiProblem) -> JSONResponse:
+async def api_problem_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, ApiProblem)
     return _response(
         request,
         status_code=exc.status_code,
@@ -79,7 +81,8 @@ async def api_problem_handler(request: Request, exc: ApiProblem) -> JSONResponse
     )
 
 
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, HTTPException)
     details = exc.detail if isinstance(exc.detail, dict) else None
     message = exc.detail if isinstance(exc.detail, str) else "Request failed"
     return _response(
@@ -94,8 +97,9 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 async def validation_exception_handler(
     request: Request,
-    exc: RequestValidationError,
+    exc: Exception,
 ) -> JSONResponse:
+    assert isinstance(exc, RequestValidationError)
     return _response(
         request,
         status_code=422,
