@@ -78,6 +78,7 @@ async def recover_stale_command_runs(ctx: dict[str, Any]) -> None:
         service = platform.runs
         recovered_running = await recover_stale_running_runs(
             service,
+            conversations=platform.conversations,
             updated_before=running_cutoff,
             timezone=settings.default_timezone,
             locale=settings.default_locale,

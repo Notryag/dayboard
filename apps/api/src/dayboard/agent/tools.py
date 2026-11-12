@@ -12,7 +12,12 @@ from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import UserContext
+from agent_platform.core import AgentRunStatus
+from agent_platform.ports import PlatformUnitOfWork
+from dayboard.app.run_receipts import ScheduleReceipt, load_run_receipts, save_run_receipt
+from dayboard.app.conversation_presentations import ScheduleResultPart
 from dayboard.composition.scheduling import build_scheduling_services
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 from dayboard.domain.calendar import Reminder
 from dayboard.domain.tasks import TaskStatus
 from dayboard.timezones import resolve_local_datetime
@@ -282,6 +287,8 @@ def build_scheduling_tools(
     context: UserContext,
     run_id: UUID | None,
     session_lock: asyncio.Lock | None = None,
+    clarification_candidates: RunClarificationCandidates | None = None,
+    run_unit_of_work: PlatformUnitOfWork | None = None,
 ) -> list[StructuredTool]:
     """Build agent-safe scheduling tools with trusted context injected.
 
@@ -291,11 +298,45 @@ def build_scheduling_tools(
     tool_lock = session_lock or asyncio.Lock()
     scheduling_scope = build_scheduling_services(session)
 
-    def serialize_tool(function):
+    def serialize_tool(function, write_schema=None):
         async def serialized(**kwargs):
             async with tool_lock:
                 try:
+                    run = None
+                    receipt_key = None
+                    if write_schema is not None and run_unit_of_work is not None:
+                        if run_id is None:
+                            raise RuntimeError("Durable scheduling writes require a Run")
+                        run = await run_unit_of_work.runs.get_for_update(context, run_id)
+                        if run is None or run.status != AgentRunStatus.running:
+                            raise asyncio.CancelledError()
+                        receipt_key = _create_operation_key(
+                            function.__name__, write_schema.model_validate(kwargs)
+                        )
+                        for receipt in await load_run_receipts(run_unit_of_work, context, run_id):
+                            if receipt.operation_key == receipt_key:
+                                await scheduling_scope.unit_of_work.commit()
+                                part = receipt.part
+                                return receipt.content, {
+                                    "type": "schedule_item_result",
+                                    "operation": part.operation,
+                                    "item": part.item.model_dump(mode="json"),
+                                }
                     result = await function(**kwargs)
+                    if run is not None and run_unit_of_work is not None and receipt_key is not None:
+                        content, artifact = result
+                        receipt = ScheduleReceipt(
+                            operation_key=receipt_key,
+                            content=content,
+                            part=ScheduleResultPart.model_validate(
+                                {
+                                    "tool_call_id": f"receipt:{receipt_key}",
+                                    "operation": artifact["operation"],
+                                    "item": artifact["item"],
+                                }
+                            ),
+                        )
+                        await save_run_receipt(run_unit_of_work, context, run, receipt)
                     await scheduling_scope.unit_of_work.commit()
                     return result
                 except BaseException:
@@ -358,6 +399,7 @@ def build_scheduling_tools(
             local_end = local_start + timedelta(days=90)
         else:
             local_start = _parse_local_minute(input_data.local_start)
+            assert input_data.local_end is not None
             local_end = _parse_local_minute(input_data.local_end)
         assert local_end is not None
         start_time = resolve_local_datetime(local_start, context.timezone)
@@ -388,6 +430,10 @@ def build_scheduling_tools(
             "calendar",
             [_calendar_entry_view(entry) for entry in entries],
         )
+        if clarification_candidates is not None:
+            content["candidate_set_key"] = clarification_candidates.register(
+                [_calendar_entry_view(entry) for entry in entries], has_more=has_more
+            )
         return content, artifact
 
     async def agent_reschedule_calendar_entry(**kwargs):
@@ -526,7 +572,7 @@ def build_scheduling_tools(
 
     return [
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_create_calendar_entry),
+            coroutine=serialize_tool(agent_create_calendar_entry, AgentCreateCalendarEntryInput),
             name="create_calendar_entry",
             description=(
                 "Create a calendar entry on a concrete local date, with or without a clock time."
@@ -542,7 +588,9 @@ def build_scheduling_tools(
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_reschedule_calendar_entry),
+            coroutine=serialize_tool(
+                agent_reschedule_calendar_entry, AgentRescheduleCalendarEntryInput
+            ),
             name="reschedule_calendar_entry",
             description=(
                 "Change one identified calendar entry's local date, start, and/or end time."
@@ -551,14 +599,14 @@ def build_scheduling_tools(
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_cancel_calendar_entry),
+            coroutine=serialize_tool(agent_cancel_calendar_entry, CancelCalendarEntryInput),
             name="cancel_calendar_entry",
             description="Cancel one identified calendar entry.",
             args_schema=CancelCalendarEntryInput,
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_create_task_item),
+            coroutine=serialize_tool(agent_create_task_item, AgentCreateTaskItemInput),
             name="create_task_item",
             description=("Create an action with no resolvable date or time."),
             args_schema=AgentCreateTaskItemInput,
@@ -572,7 +620,7 @@ def build_scheduling_tools(
             response_format="content_and_artifact",
         ),
         StructuredTool.from_function(
-            coroutine=serialize_tool(agent_update_task_item),
+            coroutine=serialize_tool(agent_update_task_item, AgentUpdateTaskItemInput),
             name="update_task_item",
             description=("Update one identified task's title or status."),
             args_schema=AgentUpdateTaskItemInput,

@@ -6,7 +6,6 @@ from typing import Any
 from uuid import UUID
 
 from north import ClarificationRequest, RuntimeExecutionResult
-from pydantic import ValidationError
 
 from agent_platform.core import (
     RunExecutionFailure,
@@ -14,10 +13,11 @@ from agent_platform.core import (
     RunExecutionOutcomeKind,
 )
 from dayboard.agent.budget import ProviderBudgetExceeded
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
+from dayboard.agent.presentation import public_text
 from dayboard.app.clarifications import ClarificationService
 from dayboard.app.conversation_presentations import build_dayboard_presentation
 from dayboard.domain.interactions import (
-    CalendarEntryChoiceCandidate,
     CalendarEntryChoiceOption,
     CalendarEntryChoicePresentation,
     ClarificationPayload,
@@ -32,6 +32,7 @@ def project_run_result(
     *,
     run_id: UUID,
     presentation_parts: list[dict[str, Any]],
+    clarification_candidates: RunClarificationCandidates | None = None,
 ) -> RunExecutionOutcome:
     presentation = build_dayboard_presentation(presentation_parts)
     clarification = result.clarification
@@ -45,7 +46,7 @@ def project_run_result(
     pending = ClarificationService.build_pending(
         run_id=run_id,
         question=clarification.question,
-        payload=extract_clarification_payload(clarification, presentation_parts),
+        payload=extract_clarification_payload(clarification, clarification_candidates),
     )
     return RunExecutionOutcome(
         kind=RunExecutionOutcomeKind.needs_interaction,
@@ -109,16 +110,20 @@ def safe_error_message(exc: Exception) -> str:
 
 def extract_clarification_payload(
     clarification: ClarificationRequest,
-    presentation_parts: list[dict[str, Any]],
+    binding: RunClarificationCandidates | None = None,
 ) -> ClarificationPayload:
-    candidates = _calendar_candidates(presentation_parts)
+    if binding is not None and binding.error is not None:
+        raise ValueError(binding.error)
+    candidates = list(binding.selected) if binding is not None else []
+    if binding is not None and candidates and binding.question != clarification.question:
+        raise ValueError("Clarification question does not match the selected candidate set")
     if not candidates:
         return _suggested_choice_payload(clarification) or ClarificationPayload(
             response_kind="free_text"
         )
     return ClarificationPayload(
         response_kind="calendar_choice",
-        candidates=candidates,
+        candidates=[candidate for candidate in candidates],
         presentation=CalendarEntryChoicePresentation(
             options=[
                 CalendarEntryChoiceOption.model_validate(
@@ -131,20 +136,28 @@ def extract_clarification_payload(
 
 
 def extract_final_message(result: Any) -> str:
-    if not isinstance(result, dict):
-        return "Done."
-    messages = result.get("messages")
+    # Earlier assistant text may describe an intermediate step or a previous turn.
+    # Only a final assistant message without pending tool calls can summarize a Run.
+    fallback = "本次执行未返回最终说明，请先查看操作结果，核实后再继续，避免重复提交。"
+    messages = result.get("messages") if isinstance(result, dict) else None
     if not isinstance(messages, list) or not messages:
-        return "Done."
-    for message in reversed(messages):
+        return fallback
+    message = messages[-1]
+    if isinstance(message, dict):
+        kind = message.get("type") or message.get("role")
+        content = message.get("content")
+        tool_calls = message.get("tool_calls")
+        additional = message.get("additional_kwargs") or {}
+    else:
+        kind = getattr(message, "type", None)
         content = getattr(message, "content", None)
-        if isinstance(content, str) and content.strip():
-            return content.strip()
-        if isinstance(message, dict):
-            dict_content = message.get("content")
-            if isinstance(dict_content, str) and dict_content.strip():
-                return dict_content.strip()
-    return "Done."
+        tool_calls = getattr(message, "tool_calls", None)
+        additional = getattr(message, "additional_kwargs", {})
+    if kind not in {"ai", "assistant", "AIMessageChunk"} or tool_calls:
+        return fallback
+    if isinstance(additional, dict) and additional.get("tool_calls"):
+        return fallback
+    return public_text(content).strip() or fallback
 
 
 def _presentation_entity_key(part: dict[str, Any]) -> tuple[str, str] | None:
@@ -179,40 +192,10 @@ def _suggested_choice_payload(
         return None
     return ClarificationPayload(
         response_kind="single_choice",
-        candidates=choices,
+        candidates=[choice for choice in choices],
         presentation=SuggestedChoicePresentation(
             options=[
                 SuggestedChoiceOption(key=choice.key, label=choice.label) for choice in choices
             ]
         ),
     )
-
-
-def _calendar_candidates(
-    presentation_parts: list[dict[str, Any]],
-) -> list[CalendarEntryChoiceCandidate]:
-    candidates: list[CalendarEntryChoiceCandidate] = []
-    for part in presentation_parts:
-        item = part.get("item") if isinstance(part, dict) else None
-        if (
-            not isinstance(item, dict)
-            or item.get("kind") != "calendar"
-            or not isinstance(item.get("value"), dict)
-            or part.get("operation") != "calendar_entry_found"
-        ):
-            continue
-        try:
-            candidates.append(
-                CalendarEntryChoiceCandidate.model_validate(
-                    {
-                        "kind": "calendar",
-                        "key": f"candidate_{len(candidates) + 1}",
-                        **item["value"],
-                    }
-                )
-            )
-        except ValidationError:
-            continue
-        if len(candidates) == 10:
-            break
-    return candidates

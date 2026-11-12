@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Sequence
 from hashlib import sha256
+from typing import cast
 from uuid import UUID
 
-from north import AppConfig, build_agent
+from north import AgentPlugin, AppConfig, build_agent
 from north import CompactionHook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from dayboard.agent.plugins import build_dayboard_plugins
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 from dayboard.agent.prompts import (
     DAYBOARD_SUMMARY_PROMPT,
     build_dayboard_system_prompt,
@@ -18,6 +21,7 @@ from dayboard.agent.prompts import (
 from dayboard.agent.tools import build_scheduling_tools
 from dayboard.config import Settings, get_settings
 from agent_platform.core import UserContext
+from agent_platform.ports import PlatformUnitOfWork
 
 
 TRUSTED_TOOL_CONTEXT_FIELDS = frozenset(
@@ -99,6 +103,8 @@ def build_dayboard_agent(
     session_lock: asyncio.Lock | None = None,
     checkpointer=None,
     compaction_hooks: list[CompactionHook] | None = None,
+    clarification_candidates: RunClarificationCandidates | None = None,
+    run_unit_of_work: PlatformUnitOfWork | None = None,
 ):
     resolved_settings = settings or get_settings()
     resolved_tools = tools
@@ -108,6 +114,8 @@ def build_dayboard_agent(
             context=context,
             run_id=run_id,
             session_lock=session_lock,
+            clarification_candidates=clarification_candidates,
+            run_unit_of_work=run_unit_of_work,
         )
     resolved_tools = list(resolved_tools or [])
     _validate_model_visible_tool_fields(resolved_tools)
@@ -138,12 +146,16 @@ def build_dayboard_agent(
             resolved_settings.agent_summarization_max_emergency_compactions
         ),
     )
+    plugins = build_dayboard_plugins(
+        tools=resolved_tools,
+        runtime_context=build_runtime_scheduling_context(resolved_context),
+        clarification_candidates=clarification_candidates,
+    )
+    # North's own frozen FunctionPlugin is compatible at runtime, but its
+    # AgentPlugin protocol incorrectly declares these metadata fields writable.
     return build_agent(
         config,
-        plugins=build_dayboard_plugins(
-            tools=resolved_tools,
-            runtime_context=build_runtime_scheduling_context(resolved_context),
-        ),
+        plugins=cast(Sequence[AgentPlugin], plugins),
         checkpointer=checkpointer,
         compaction_hooks=compaction_hooks,
     )

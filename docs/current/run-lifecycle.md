@@ -106,6 +106,12 @@ sequenceDiagram
 
 规范流事件可以在整个执行过程中到达，不会等到数据库终态写入时才发送。成功的工具结果会在其产品事务提交之后到达。终态产品事件和 North end sentinel 会在 Platform 终态事务之后到达。
 
+### 成功操作与中断恢复
+
+Dayboard 的已提交调度写入在既有 Run 事件表中保存 `dayboard.schedule-receipt@1`，与业务数据、Reminder Outbox 和 assistant 结果卡片共享一个事务；不依赖后续 North 工具流事件才能恢复卡片。该产品回执由 Dayboard 解释，Platform 只负责通用的版本化事件存储。详情见 [工具规范](agent/tools.md)。
+
+Driver 在正常完成或失败投影前重读当前 Run 的回执，按实体合并最后成功的快照，避免丢失已提交但尚未经过流投影的结果。过期 running Run 恢复时先锁定并重新检查状态及过期时间，再从回执与现有消息重建卡片，将失败状态、失败事件和 assistant 消息放在同一恢复事务中提交。有成功回执时，提示“部分操作已完成”，要求核实结果后只继续未完成部分，避免重发整条指令。回执是本次操作的历史快照，并不取代当前调度实体的权威状态。旧 Run 没有回执时只能保留已有卡片，不反推历史写入。
+
 ## 实时流
 
 North 通过其 Redis `StreamBridge` 发布规范的模型和工具分块。Worker 和 API 针对同一 Redis 部署构造 bridge 客户端。
@@ -175,7 +181,7 @@ SSE endpoint 接受 `Last-Event-ID`，并通过 Redis StreamBridge cursor 订阅
 
 ## 澄清
 
-`ask_clarification` 写入 North 的单 Run `clarification_request` 信号。`RunExecutor` 会校验该信号，并以携带 `ClarificationRequest` 的类型化 `RuntimeExecutionResult` 完成；Dayboard 不会解释 `thread_data`，也不会扫描最终 ToolMessage。Dayboard 驱动器会将该信号与已经校验的调度 presentation 片段合并一次，并映射为 Platform 结果。随后 Platform 会原子地持久化 `PendingInteraction`、assistant 消息和终态 `needs_clarification` Run 状态，然后 SSE 才会发出问题。
+`ask_clarification` 写入 North 的单 Run `clarification_request` 信号。`RunExecutor` 会校验该信号，并以携带 `ClarificationRequest` 的类型化 `RuntimeExecutionResult` 完成；Dayboard 不会解释 `thread_data`，也不会扫描最终 ToolMessage。Dayboard 驱动器将该信号和当前 Run 内由澄清工具明确选定的可信搜索候选映射为 Platform 结果；未引用候选组的问题保持普通文字交互，绝不从展示卡片推断候选。调度 presentation 独立构造。随后 Platform 会原子地持久化 `PendingInteraction`、assistant 消息和终态 `needs_clarification` Run 状态，然后 SSE 才会发出问题。
 
 类型化 Thread-state endpoint 返回安全的选项 presentation。选择请求携带会话状态版本和稳定的选项 key。Dayboard 会校验由产品隐藏并持有的候选项，然后 Platform 原子地消费预期的 Interaction 版本，并创建幂等的续接 Run、用户消息和 `run.created` 事件。相同 `Idempotency-Key` 的重试会在读取 Interaction 状态前解析已有 Run；不同或过期的选择会收到冲突响应。
 

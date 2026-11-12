@@ -182,7 +182,7 @@ agent_platform
 | Run transition | Platform Run 和 durable event | compare-and-transition + corresponding event | model execution 在 transaction 外执行 |
 | Run completion | Platform Run、assistant message、presentation、可选 Interaction | terminal state + message + presentation/Interaction | PostgreSQL 在 terminal product event/end sentinel 前提交 |
 | Clarification continuation | Platform Conversation state 和 Run | idempotency claim + expected-version consume + new Run/message/event | old Run 保持 terminal；一个 answer 获胜 CAS |
-| Schedule mutation | Calendar/Task 和 Reminder delivery rows | row-version write + Reminder cancellation/replacement | product write 和 reminder state 不会分叉 |
+| Schedule mutation | Calendar/Task 和 Reminder delivery rows；Agent 写入另保存 Run receipt | row-version write + Reminder cancellation/replacement；Agent 边界在同一事务保存版本化成功回执及 assistant 卡片 | product write 和 reminder state 不会分叉；Run 锁串行化写入、幂等回执重放和取消 |
 | Reminder delivery | Reminder delivery 加 source projection | source lock + due claim + delivered/expired/cancelled transition | 先锁 source；queue states 不是 inbox states |
 | Voice transcription | Voice transcript row | commit `processing`；external ASR；独立的 terminal commit | 绝不跨 ASR 持有 transaction |
 | Provider usage | 以 user ID 和 Run 为 key 的 immutable aggregate | 独立的 user-scoped settlement transaction | accounting failure 不会替换 terminal Run outcome |

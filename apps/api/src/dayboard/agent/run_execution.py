@@ -31,9 +31,11 @@ from agent_platform.core import (
 from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from agent_platform.ports.execution import RunCompletionCallback, RunFailureCallback
 from dayboard.agent.budget import ProviderBudgetEstimate, ProviderBudgetGuard, RunModelBudget
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 from dayboard.agent.observability import project_runtime_event, public_runtime_activity
 from dayboard.agent.presentation import project_runtime_stream_event
 from dayboard.app.conversation_presentations import build_dayboard_presentation
+from dayboard.app.run_receipts import load_run_receipts, merge_receipt_parts
 from dayboard.app.provider_usage_ports import (
     ProviderUsageAggregate,
     ProviderUsageCall,
@@ -86,6 +88,7 @@ class DayboardRunExecutionDriver:
         stream_bridge: StreamBridge,
         executor_factory: RunExecutorFactory = RunExecutor,
         session_lock: asyncio.Lock | None = None,
+        clarification_candidates: RunClarificationCandidates | None = None,
     ) -> None:
         self.unit_of_work = unit_of_work
         self.conversations = conversations
@@ -99,6 +102,7 @@ class DayboardRunExecutionDriver:
         self.executor_factory = executor_factory
         self.session_lock = session_lock or asyncio.Lock()
         self.presentation_parts: list[dict[str, Any]] = []
+        self.clarification_candidates = clarification_candidates
 
     async def execute(
         self,
@@ -109,6 +113,8 @@ class DayboardRunExecutionDriver:
         on_completed: RunCompletionCallback,
         on_failed: RunFailureCallback,
     ) -> None:
+        if self.clarification_candidates is not None:
+            self.clarification_candidates.reset()
         usage_accumulator = RuntimeUsageAccumulator()
         runtime_event_lock = asyncio.Lock()
         budget_estimate: ProviderBudgetEstimate | None = None
@@ -209,12 +215,14 @@ class DayboardRunExecutionDriver:
 
         async def complete_run(result: RuntimeExecutionResult) -> None:
             nonlocal terminal_callback_called
-            outcome = project_run_result(
-                result,
-                run_id=run.id,
-                presentation_parts=self.presentation_parts,
-            )
             async with self.session_lock:
+                await self._restore_receipts(context, run.id)
+                outcome = project_run_result(
+                    result,
+                    run_id=run.id,
+                    presentation_parts=self.presentation_parts,
+                    clarification_candidates=self.clarification_candidates,
+                )
                 await on_completed(outcome)
             terminal_callback_called = True
             event_type = (
@@ -240,8 +248,9 @@ class DayboardRunExecutionDriver:
 
         async def fail_run(exc: Exception) -> None:
             nonlocal terminal_callback_called
-            failure = self.failure_from_exception(exc)
             async with self.session_lock:
+                await self._restore_receipts(context, run.id)
+                failure = self.failure_from_exception(exc)
                 transitioned = await on_failed(failure)
             terminal_callback_called = True
             if transitioned:
@@ -311,19 +320,7 @@ class DayboardRunExecutionDriver:
             raise
         except Exception as exc:
             if not terminal_callback_called:
-                async with self.session_lock:
-                    transitioned = await on_failed(self.failure_from_exception(exc))
-                terminal_callback_called = True
-                if transitioned:
-                    failure = self.failure_from_exception(exc)
-                    await self._publish_run_event(
-                        run.id,
-                        "run_failed",
-                        {
-                            "content": failure.error_message,
-                            "parts": self.presentation_parts,
-                        },
-                    )
+                await fail_run(exc)
             logger.exception(
                 "dayboard.command.failed",
                 run_id=str(run.id),
@@ -342,6 +339,10 @@ class DayboardRunExecutionDriver:
 
     def failure_from_exception(self, exc: Exception) -> RunExecutionFailure:
         return project_run_failure(exc, presentation_parts=self.presentation_parts)
+
+    async def _restore_receipts(self, context: UserContext, run_id: UUID) -> None:
+        receipts = await load_run_receipts(self.unit_of_work, context, run_id)
+        self.presentation_parts[:] = merge_receipt_parts(self.presentation_parts, receipts)
 
     def _check_budget(
         self,

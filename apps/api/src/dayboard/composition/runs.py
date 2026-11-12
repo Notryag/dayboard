@@ -12,9 +12,10 @@ from north.runtime import StreamBridge
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_platform.core import UserContext
-from agent_platform.ports import PlatformUnitOfWorkFactory
+from agent_platform.ports import PlatformUnitOfWork, PlatformUnitOfWorkFactory
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.factory import build_dayboard_agent
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 from dayboard.agent.run_execution import (
     DayboardAgentFactory,
     DayboardRunExecutionDriver,
@@ -45,6 +46,8 @@ def build_dayboard_agent_factory(
     *,
     checkpointer: object | None = None,
     session_lock: asyncio.Lock | None = None,
+    clarification_candidates: RunClarificationCandidates | None = None,
+    run_unit_of_work: PlatformUnitOfWork | None = None,
 ) -> DayboardAgentFactory:
     def create_agent(
         context: UserContext,
@@ -59,6 +62,8 @@ def build_dayboard_agent_factory(
             session_lock=session_lock,
             checkpointer=checkpointer,
             compaction_hooks=list(compaction_hooks),
+            clarification_candidates=clarification_candidates,
+            run_unit_of_work=run_unit_of_work,
         )
 
     return create_agent
@@ -78,6 +83,7 @@ def build_run_execution_scope(
     resolved_settings = settings or get_settings()
     session_lock = asyncio.Lock()
     platform = build_platform_services(session)
+    clarification_candidates = RunClarificationCandidates()
     driver = DayboardRunExecutionDriver(
         unit_of_work=platform.unit_of_work,
         conversations=platform.conversations,
@@ -92,11 +98,14 @@ def build_run_execution_scope(
             session,
             checkpointer=checkpointer,
             session_lock=session_lock,
+            clarification_candidates=clarification_candidates,
+            run_unit_of_work=platform.unit_of_work,
         ),
         model_name=resolved_settings.agent_model_name,
         stream_bridge=stream_bridge,
         executor_factory=executor_factory,
         session_lock=session_lock,
+        clarification_candidates=clarification_candidates,
     )
     return RunExecutionScope(
         platform=platform,

@@ -130,6 +130,7 @@ async def test_stale_running_runs_are_recovered_to_failed(
 
     recovered = await recover_stale_running_runs(
         service,
+        conversations=build_platform_services(db_session).conversations,
         updated_before=datetime.now(UTC) - timedelta(minutes=10),
         timezone="Asia/Shanghai",
         locale="zh-CN",
@@ -141,10 +142,10 @@ async def test_stale_running_runs_are_recovered_to_failed(
     assert recovered == [run.id]
     assert refreshed is not None
     assert refreshed.status == AgentRunStatus.failed
-    assert events[-1].event_type == "run.failed"
-    assert events[-1].extension is not None
-    assert events[-1].extension.kind == "agent-platform.failure"
-    assert events[-1].extension.payload["error_type"] == "StaleRunRecovered"
+    failure = next(event for event in events if event.event_type == "run.failed")
+    assert failure.extension is not None
+    assert failure.extension.kind == "agent-platform.failure"
+    assert failure.extension.payload["error_type"] == "StaleRunRecovered"
 
 
 async def test_stale_queued_runs_are_recovered_without_touching_recent_runs(

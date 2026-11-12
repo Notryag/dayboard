@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -14,6 +15,7 @@ from dayboard.agent.factory import build_dayboard_agent
 from dayboard.agent.budget import ProviderBudgetGuard
 from dayboard.agent.run_execution import DayboardRunExecutionDriver
 from dayboard.agent.run_result_projection import extract_clarification_payload
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 from dayboard.config import Settings
 from agent_platform.core import AgentRun, AgentRunStatus, UserContext
 
@@ -42,9 +44,12 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
         }
     ]
 
+    binding = RunClarificationCandidates()
+    key = binding.register([presentation_parts[0]["item"]["value"]], has_more=False)
+    binding.ask(question="选择哪一个？", candidate_set_key=key)
     payload = extract_clarification_payload(
         ClarificationRequest(question="选择哪一个？"),
-        presentation_parts,
+        binding,
     )
 
     assert payload.response_kind == "calendar_choice"
@@ -65,7 +70,6 @@ def test_clarification_state_uses_agent_suggested_choices_without_search_results
             response_kind="single_choice",
             options=("09:00", "14:00", "其他时间"),
         ),
-        [],
     )
 
     assert payload.response_kind == "single_choice"
@@ -426,7 +430,7 @@ async def test_dayboard_driver_maps_north_clarification_result_to_platform_outco
         DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
     )
     driver = DayboardRunExecutionDriver(
-        unit_of_work=SimpleNamespace(),
+        unit_of_work=SimpleNamespace(events=SimpleNamespace(list_for_run=AsyncMock(return_value=[]))),
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),
@@ -486,7 +490,7 @@ async def test_dayboard_driver_logs_and_projects_failure(
         DAYBOARD_PROVIDER_BUDGET_STORAGE_URL="memory://",
     )
     driver = DayboardRunExecutionDriver(
-        unit_of_work=SimpleNamespace(),
+        unit_of_work=SimpleNamespace(events=SimpleNamespace(list_for_run=AsyncMock(return_value=[]))),
         conversations=SimpleNamespace(),
         runs=SimpleNamespace(),
         budget_guard=ProviderBudgetGuard(settings),

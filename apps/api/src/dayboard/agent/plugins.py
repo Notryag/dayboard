@@ -6,22 +6,51 @@ from typing import Any
 from north import FunctionPlugin, PluginContext, RegistrationHandle
 
 from dayboard.agent.middleware import SchedulingToolBindingMiddleware
+from dayboard.agent.clarification_candidates import RunClarificationCandidates
 
 
 def _register_tools(context: PluginContext, tools: Sequence[Any]) -> RegistrationHandle | None:
     handles = [context.register_tool(tool) for tool in tools]
-    return RegistrationHandle(lambda: [handle.dispose() for handle in reversed(handles)])
+
+    def dispose() -> None:
+        for handle in reversed(handles):
+            handle.dispose()
+
+    return RegistrationHandle(dispose)
 
 
 def build_dayboard_plugins(
     *,
     tools: Sequence[Any],
     runtime_context: str,
+    clarification_candidates: RunClarificationCandidates | None = None,
 ) -> tuple[FunctionPlugin, ...]:
     """Compose Dayboard's lead-agent plugins."""
 
     def install_tools(context: PluginContext) -> RegistrationHandle | None:
-        return _register_tools(context, tools)
+        resolved_tools = list(tools)
+        replaced = []
+        if clarification_candidates is not None:
+            # North installs its runtime tools first. Replace only the interaction
+            # tool schema; its generic typed clarification middleware still runs.
+            replaced = [
+                tool for tool in context.tools if getattr(tool, "name", None) == "ask_clarification"
+            ]
+            context.tools[:] = [tool for tool in context.tools if tool not in replaced]
+            resolved_tools = [
+                tool
+                for tool in resolved_tools
+                if getattr(tool, "name", None) != "ask_clarification"
+            ]
+            resolved_tools.append(clarification_candidates.build_tool())
+        handle = _register_tools(context, resolved_tools)
+
+        def dispose() -> None:
+            if handle is not None:
+                handle.dispose()
+            context.tools.extend(replaced)
+
+        return RegistrationHandle(dispose)
 
     def install_scheduling(context: PluginContext) -> RegistrationHandle:
         return context.register_middleware(
