@@ -27,34 +27,40 @@ from dayboard.tools import (
 )
 
 
-async def test_calendar_search_binds_separate_clarification_candidate_sets(
-    db_session: AsyncSession, user_context: UserContext,
+@pytest.mark.parametrize("kind", ["calendar", "task"])
+async def test_search_binds_separate_clarification_candidate_sets(
+    db_session: AsyncSession, user_context: UserContext, kind: str,
 ) -> None:
     timestamp = datetime(2026, 11, 13, 9, tzinfo=ZoneInfo("Asia/Shanghai"))
     for title in ["产品会议", "项目会议", "入职体检", "年度体检"]:
-        db_session.add(CalendarEntryRow(
-            user_id=user_context.user_id, title=title, timezone=user_context.timezone,
-            start_time=timestamp, end_time=timestamp + timedelta(hours=1),
-        ))
+        fields = dict(user_id=user_context.user_id, title=title, timezone=user_context.timezone)
+        db_session.add(
+            CalendarEntryRow(**fields, start_time=timestamp, end_time=timestamp + timedelta(hours=1))
+            if kind == "calendar" else TaskItemRow(**fields)
+        )
     await db_session.commit()
     binding = RunClarificationCandidates()
     tools = build_scheduling_tools(
         session=db_session, context=user_context, run_id=uuid4(),
         clarification_candidates=binding,
     )
-    search = next(tool for tool in tools if tool.name == "search_calendar_entries")
+    search_name = "search_calendar_entries" if kind == "calendar" else "search_task_items"
+    search = next(tool for tool in tools if tool.name == search_name)
     receipts = []
     for index, title in enumerate(["会议", "体检"]):
+        args = {"title_query": title}
+        if kind == "calendar":
+            args.update(local_start="2026-11-13T00:00", local_end="2026-11-14T00:00")
         result = await search.ainvoke({
             "type": "tool_call", "id": f"search-{index}", "name": search.name,
-            "args": {"title_query": title, "local_start": "2026-11-13T00:00",
-                     "local_end": "2026-11-14T00:00"},
+            "args": args,
         })
         receipts.append(json.loads(result.content))
     assert receipts[0]["candidate_set_key"] != receipts[1]["candidate_set_key"]
     binding.ask(question="哪项体检？", candidate_set_key=receipts[1]["candidate_set_key"])
     payload = extract_clarification_payload(ClarificationRequest(question="哪项体检？"), binding)
     assert {candidate.title for candidate in payload.candidates} == {"入职体检", "年度体检"}
+    assert all(candidate.kind == kind for candidate in payload.candidates)
 
 
 @pytest.mark.parametrize("kind", ["calendar", "task"])

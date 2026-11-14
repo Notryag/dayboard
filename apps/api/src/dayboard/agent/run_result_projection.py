@@ -24,6 +24,9 @@ from dayboard.domain.interactions import (
     SuggestedChoiceCandidate,
     SuggestedChoiceOption,
     SuggestedChoicePresentation,
+    TaskItemChoiceCandidate,
+    TaskItemChoiceOption,
+    TaskItemChoicePresentation,
 )
 
 
@@ -120,6 +123,17 @@ def extract_clarification_payload(
     if not candidates:
         return _suggested_choice_payload(clarification) or ClarificationPayload(
             response_kind="free_text"
+        )
+    if isinstance(candidates[0], TaskItemChoiceCandidate):
+        return ClarificationPayload(
+            response_kind="task_choice",
+            candidates=[candidate for candidate in candidates],
+            presentation=TaskItemChoicePresentation(
+                options=[
+                    TaskItemChoiceOption.model_validate(candidate.model_dump())
+                    for candidate in candidates
+                ]
+            ),
         )
     return ClarificationPayload(
         response_kind="calendar_choice",

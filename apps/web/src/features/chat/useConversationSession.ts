@@ -25,6 +25,10 @@ function clarificationChoiceLabel(interaction: Interaction, optionKey: string, l
     const option = interaction.options.find((candidate) => candidate.key === optionKey);
     return option ? getMessage(locale, "chat.selectOption", { label: option.label }) : null;
   }
+  if (interaction.type === "task_item_choice") {
+    const option = interaction.options.find((candidate) => candidate.key === optionKey);
+    return option ? getMessage(locale, "chat.selectOption", { label: option.title }) : null;
+  }
   const option = interaction.options.find((candidate) => candidate.key === optionKey);
   if (!option) return null;
   const time = option.start_time ? new Intl.DateTimeFormat(locale, {

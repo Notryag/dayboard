@@ -20,6 +20,7 @@ from dayboard.domain.interactions import (
     ClarificationPayload,
     ClarificationPublicPayload,
     SuggestedChoiceCandidate,
+    TaskItemChoiceCandidate,
 )
 
 
@@ -130,7 +131,9 @@ class ClarificationService:
         ):
             raise ClarificationStateError("This clarification is no longer active")
         if state.version != state_version:
-            raise ClarificationStateError("This clarification has changed; refresh and choose again")
+            raise ClarificationStateError(
+                "This clarification has changed; refresh and choose again"
+            )
         if state.expires_at is None or state.expires_at <= now:
             raise ClarificationStateError("This clarification has expired")
 
@@ -152,6 +155,22 @@ class ClarificationService:
                     "Continue the previous request using this answer."
                 ),
                 display_message=f"选择“{selected.label}”",
+            )
+
+        if isinstance(selected, TaskItemChoiceCandidate):
+            model_candidate = {
+                "id": str(selected.id),
+                "row_version": selected.row_version,
+                "title": selected.title,
+                "status": selected.status.value,
+            }
+            return ResolvedClarificationChoice(
+                agent_message=(
+                    "The user selected this server-validated task candidate for the pending "
+                    f"clarification: {json.dumps(model_candidate, ensure_ascii=False)}. "
+                    "Continue the previous request using this exact candidate."
+                ),
+                display_message=f"选择“{selected.title}”",
             )
 
         if not isinstance(selected, CalendarEntryChoiceCandidate):
@@ -178,9 +197,9 @@ class ClarificationService:
 
         display_message = f"选择“{selected.title}”"
         if selected.start_time is not None:
-            display_time = selected.start_time.astimezone(
-                ZoneInfo(selected.timezone)
-            ).strftime("%m月%d日 %H:%M")
+            display_time = selected.start_time.astimezone(ZoneInfo(selected.timezone)).strftime(
+                "%m月%d日 %H:%M"
+            )
             display_message = f"选择“{selected.title} · {display_time}”"
         elif selected.scheduled_date is not None:
             display_message = f"选择“{selected.title} · {selected.scheduled_date} · 随时”"

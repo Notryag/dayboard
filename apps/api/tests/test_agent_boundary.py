@@ -45,7 +45,7 @@ def test_clarification_state_uses_real_search_tool_candidates() -> None:
     ]
 
     binding = RunClarificationCandidates()
-    key = binding.register([presentation_parts[0]["item"]["value"]], has_more=False)
+    key = binding.register([presentation_parts[0]["item"]["value"]], has_more=False, kind="calendar")
     binding.ask(question="选择哪一个？", candidate_set_key=key)
     payload = extract_clarification_payload(
         ClarificationRequest(question="选择哪一个？"),

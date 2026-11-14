@@ -8,7 +8,7 @@ from uuid import uuid4
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from dayboard.domain.interactions import CalendarEntryChoiceCandidate
+from dayboard.domain.interactions import CalendarEntryChoiceCandidate, TaskItemChoiceCandidate
 
 
 class ClarificationInput(BaseModel):
@@ -17,7 +17,7 @@ class ClarificationInput(BaseModel):
     options: list[str] | None = None
     candidate_set_key: str | None = Field(
         default=None,
-        description="Key from the relevant calendar search; omit for other questions.",
+        description="Key from the relevant calendar or task search; omit for other questions.",
     )
 
 
@@ -25,8 +25,10 @@ class RunClarificationCandidates:
     """Own the search-to-interaction binding for exactly one Run, never UI state."""
 
     def __init__(self) -> None:
-        self._sets: dict[str, tuple[CalendarEntryChoiceCandidate, ...]] = {}
-        self.selected: tuple[CalendarEntryChoiceCandidate, ...] = ()
+        self._sets: dict[
+            str, tuple[CalendarEntryChoiceCandidate | TaskItemChoiceCandidate, ...]
+        ] = {}
+        self.selected: tuple[CalendarEntryChoiceCandidate | TaskItemChoiceCandidate, ...] = ()
         self.question: str | None = None
         self.error: str | None = None
 
@@ -36,12 +38,21 @@ class RunClarificationCandidates:
         self.question = None
         self.error = None
 
-    def register(self, snapshots: list[dict], *, has_more: bool) -> str | None:
+    def register(
+        self,
+        snapshots: list[dict],
+        *,
+        has_more: bool,
+        kind: Literal["calendar", "task"],
+    ) -> str | None:
         # A choice must be complete and fit the existing persisted interaction contract.
         if has_more or not 1 <= len(snapshots) <= 10:
             return None
+        candidate_type = (
+            CalendarEntryChoiceCandidate if kind == "calendar" else TaskItemChoiceCandidate
+        )
         candidates = tuple(
-            CalendarEntryChoiceCandidate.model_validate({**snapshot, "key": f"candidate_{index}"})
+            candidate_type.model_validate({**snapshot, "key": f"candidate_{index}"})
             for index, snapshot in enumerate(snapshots, start=1)
         )
         key = uuid4().hex
@@ -71,7 +82,7 @@ class RunClarificationCandidates:
             func=self.ask,
             name="ask_clarification",
             description=(
-                "Ask for missing information. For a calendar target choice, provide the "
+                "Ask for missing information. For a calendar or task target choice, provide the "
                 "candidate_set_key from that search, without options or response_kind. "
                 "Otherwise use free_text or single_choice with text options."
             ),

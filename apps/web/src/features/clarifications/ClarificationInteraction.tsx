@@ -1,5 +1,5 @@
 import { CalendarEntryChoice } from "./CalendarEntryChoice";
-import { SuggestedChoice } from "./SuggestedChoice";
+import { ChoiceOptions } from "./ChoiceOptions";
 import type { ClarificationInteraction as Interaction } from "./types";
 
 type ClarificationInteractionProps = {
@@ -23,6 +23,12 @@ export function ClarificationInteraction({
     );
   }
   return (
-    <SuggestedChoice disabled={disabled} interaction={interaction} onSelect={onSelect} />
+    <ChoiceOptions
+      disabled={disabled}
+      options={interaction.type === "task_item_choice"
+        ? interaction.options.map((option) => ({ key: option.key, label: option.title }))
+        : interaction.options}
+      onSelect={onSelect}
+    />
   );
 }

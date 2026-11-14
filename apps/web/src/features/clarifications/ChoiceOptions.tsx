@@ -1,22 +1,21 @@
-import type { SuggestedChoiceInteraction } from "./types";
 import { useI18n } from "@/i18n";
 import styles from "./clarifications.module.css";
 
-type SuggestedChoiceProps = {
-  interaction: SuggestedChoiceInteraction;
+type ChoiceOptionsProps = {
+  options: { key: string; label: string }[];
   disabled?: boolean;
   onSelect: (optionKey: string) => void;
 };
 
-export function SuggestedChoice({
-  interaction,
+export function ChoiceOptions({
+  options,
   disabled = false,
   onSelect,
-}: SuggestedChoiceProps) {
+}: ChoiceOptionsProps) {
   const { t } = useI18n();
   return (
     <div className={styles.options} role="group" aria-label={t("common.more")}>
-      {interaction.options.map((option) => (
+      {options.map((option) => (
         <button
           className={styles.option}
           disabled={disabled}

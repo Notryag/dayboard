@@ -432,7 +432,7 @@ def build_scheduling_tools(
         )
         if clarification_candidates is not None:
             content["candidate_set_key"] = clarification_candidates.register(
-                [_calendar_entry_view(entry) for entry in entries], has_more=has_more
+                [_calendar_entry_view(entry) for entry in entries], has_more=has_more, kind="calendar"
             )
         return content, artifact
 
@@ -540,6 +540,10 @@ def build_scheduling_tools(
             "task",
             [_task_item_view(task) for task in tasks],
         )
+        if clarification_candidates is not None:
+            content["candidate_set_key"] = clarification_candidates.register(
+                [_task_item_view(task) for task in tasks], has_more=has_more, kind="task"
+            )
         return content, artifact
 
     async def agent_update_task_item(**kwargs):

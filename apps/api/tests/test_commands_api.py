@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
@@ -25,6 +26,9 @@ from dayboard.domain.interactions import (
     SuggestedChoiceCandidate,
     SuggestedChoiceOption,
     SuggestedChoicePresentation,
+    TaskItemChoiceCandidate,
+    TaskItemChoiceOption,
+    TaskItemChoicePresentation,
 )
 
 
@@ -320,10 +324,12 @@ async def test_thread_routes_are_user_scoped(
     assert command.status_code == 404
 
 
+@pytest.mark.parametrize("kind", ["calendar", "task"])
 async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     api_app: FastAPI,
     db_session: AsyncSession,
     user_context: UserContext,
+    kind: str,
 ) -> None:
     conversations = build_conversation_service(db_session)
     thread = await conversations.create_thread(user_context, title="工作安排")
@@ -361,6 +367,14 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
                     )
                 ]
             ),
+        ) if kind == "calendar" else ClarificationPayload(
+            response_kind="task_choice",
+            candidates=[TaskItemChoiceCandidate(
+                key="candidate_1", id=entry_id, row_version=3, title="产品会议", status="open",
+            )],
+            presentation=TaskItemChoicePresentation(options=[TaskItemChoiceOption(
+                key="candidate_1", title="产品会议", status="open",
+            )]),
         ),
     )
     await db_session.commit()
@@ -396,6 +410,8 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     )
     public_body = public_state.json()
     assert "candidates" not in public_body["interaction"]["payload"]
+    assert str(entry_id) not in public_state.text
+    assert "row_version" not in public_state.text
     assert public_body["interaction"]["payload"]["presentation"]["options"][0]["key"] == (
         "candidate_1"
     )
@@ -411,7 +427,12 @@ async def test_structured_clarification_choice_creates_trusted_follow_up_run(
     assert execution_input is not None
     assert execution_input.content is not None
     assert str(entry_id) in execution_input.content
-    assert '"local_start": "2026-07-12T15:00"' in execution_input.content
+    if kind == "calendar":
+        assert '"local_start": "2026-07-12T15:00"' in execution_input.content
+    else:
+        assert "server-validated task candidate" in execution_input.content
+        assert '"status": "open"' in execution_input.content
+    assert '"row_version": 3' in execution_input.content
     assert '"start_time"' not in execution_input.content
     assert "Asia/Shanghai" not in execution_input.content
     assert messages.json()["items"][-1]["content"].startswith("选择“产品会议")

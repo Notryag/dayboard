@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, BaseModel, Field, model_validator
 
 from dayboard.domain.calendar import CalendarTimingKind
+from dayboard.domain.tasks import TaskStatus
 
 
 CLARIFICATION_INTERACTION_TYPE = "dayboard.clarification"
@@ -40,7 +41,11 @@ class CalendarEntryChoiceOption(BaseModel):
     @model_validator(mode="after")
     def validate_timing(self) -> CalendarEntryChoiceOption:
         if self.timing_kind is CalendarTimingKind.anytime:
-            if self.scheduled_date is None or self.start_time is not None or self.end_time is not None:
+            if (
+                self.scheduled_date is None
+                or self.start_time is not None
+                or self.end_time is not None
+            ):
                 raise ValueError("anytime candidates require only scheduled_date")
         elif self.start_time is None or self.end_time is None or self.scheduled_date is not None:
             raise ValueError("timed candidates require start_time and end_time")
@@ -54,6 +59,23 @@ class CalendarEntryChoiceCandidate(CalendarEntryChoiceOption):
     status: Literal["scheduled", "completed", "cancelled"]
 
 
+class TaskItemChoiceOption(BaseModel):
+    key: str = Field(pattern=r"^candidate_[1-9][0-9]*$", max_length=40)
+    title: str = Field(min_length=1, max_length=240)
+    status: TaskStatus
+
+
+class TaskItemChoiceCandidate(TaskItemChoiceOption):
+    kind: Literal["task"] = "task"
+    id: UUID
+    row_version: int = Field(ge=1)
+
+
+class TaskItemChoicePresentation(BaseModel):
+    type: Literal["task_item_choice"] = "task_item_choice"
+    options: list[TaskItemChoiceOption] = Field(min_length=1, max_length=10)
+
+
 class SuggestedChoicePresentation(BaseModel):
     type: Literal["suggested_choice"] = "suggested_choice"
     options: list[SuggestedChoiceOption] = Field(min_length=1, max_length=10)
@@ -65,17 +87,17 @@ class CalendarEntryChoicePresentation(BaseModel):
 
 
 ClarificationCandidate = Annotated[
-    SuggestedChoiceCandidate | CalendarEntryChoiceCandidate,
+    SuggestedChoiceCandidate | CalendarEntryChoiceCandidate | TaskItemChoiceCandidate,
     Field(discriminator="kind"),
 ]
 ClarificationPresentation = Annotated[
-    SuggestedChoicePresentation | CalendarEntryChoicePresentation,
+    SuggestedChoicePresentation | CalendarEntryChoicePresentation | TaskItemChoicePresentation,
     Field(discriminator="type"),
 ]
 
 
 class ClarificationPayload(BaseModel):
-    response_kind: Literal["free_text", "single_choice", "calendar_choice"]
+    response_kind: Literal["free_text", "single_choice", "calendar_choice", "task_choice"]
     candidates: list[ClarificationCandidate] = Field(default_factory=list, max_length=10)
     presentation: ClarificationPresentation | None = None
 
@@ -91,9 +113,12 @@ class ClarificationPayload(BaseModel):
         if self.response_kind == "single_choice":
             expected_kind = "suggested"
             expected_presentation = "suggested_choice"
-        else:
+        elif self.response_kind == "calendar_choice":
             expected_kind = "calendar"
             expected_presentation = "calendar_entry_choice"
+        else:
+            expected_kind = "task"
+            expected_presentation = "task_item_choice"
         if any(candidate.kind != expected_kind for candidate in self.candidates):
             raise ValueError("candidate kind does not match clarification response kind")
         if self.presentation.type != expected_presentation:

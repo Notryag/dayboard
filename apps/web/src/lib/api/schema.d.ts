@@ -907,7 +907,7 @@ export interface components {
         /** ClarificationPublicPayload */
         ClarificationPublicPayload: {
             /** Presentation */
-            presentation?: (components["schemas"]["SuggestedChoicePresentation"] | components["schemas"]["CalendarEntryChoicePresentation"]) | null;
+            presentation?: (components["schemas"]["SuggestedChoicePresentation"] | components["schemas"]["CalendarEntryChoicePresentation"] | components["schemas"]["TaskItemChoicePresentation"]) | null;
         };
         /** CommandRequest */
         CommandRequest: {
@@ -1270,6 +1270,24 @@ export interface components {
             type: "suggested_choice";
             /** Options */
             options: components["schemas"]["SuggestedChoiceOption"][];
+        };
+        /** TaskItemChoiceOption */
+        TaskItemChoiceOption: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            status: components["schemas"]["TaskStatus"];
+        };
+        /** TaskItemChoicePresentation */
+        TaskItemChoicePresentation: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "task_item_choice";
+            /** Options */
+            options: components["schemas"]["TaskItemChoiceOption"][];
         };
         /** TaskItemUpdateRequest */
         TaskItemUpdateRequest: {

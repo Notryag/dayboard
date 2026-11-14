@@ -478,6 +478,51 @@ test("clarification choice resumes execution and writes the final item", async (
   expect(state.requests.some((request) => request.path.endsWith("/clarification-responses"))).toBeTruthy();
 });
 
+test("task clarification survives reload and submits only the selected option", async ({ page }) => {
+  const state = await installApiFixture(page, {
+    threadId: "thread-primary",
+    messages: [{
+      id: "message-clarify-task", thread_id: "thread-primary", run_id: "run-clarify-task",
+      role: "assistant", content: "完成哪个周报任务？", presentation: null,
+      created_at: "2026-07-21T08:00:00Z",
+    }],
+    clarification: {
+      thread_id: "thread-primary",
+      interaction: {
+        interaction_type: "dayboard.clarification",
+        schema_version: 1,
+        source_run_id: "run-clarify-task",
+        prompt: "完成哪个周报任务？",
+        payload: {
+          presentation: {
+            type: "task_item_choice",
+            options: [
+              { key: "candidate_1", title: "整理周报", status: "open" },
+              { key: "candidate_2", title: "提交周报", status: "open" },
+            ],
+          },
+        },
+      },
+      version: 4,
+      expires_at: "2099-07-28T08:00:00Z",
+      updated_at: "2026-07-21T08:00:00Z",
+    },
+  });
+  state.onClarification = (optionKey) => {
+    expect(optionKey).toBe("candidate_2");
+    return { events: terminalEvents([], "已完成提交周报。"), persistedText: "已完成提交周报。" };
+  };
+  await page.goto("/dayboard");
+  await expect(page.getByRole("button", { name: "整理周报", exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "提交周报", exact: true }).click();
+  await expect(page.getByText("已完成提交周报。", { exact: true })).toBeVisible();
+  const submissions = state.requests.filter((request) => request.path.endsWith("/clarification-responses"));
+  expect(submissions).toHaveLength(1);
+  expect(submissions[0].body).toEqual({ state_version: 4, option_key: "candidate_2" });
+  await expect(page.getByRole("button", { name: "整理周报", exact: true })).toHaveCount(0);
+});
+
 test("fixed audio is transcribed and submitted without a real microphone", async ({ page }) => {
   await page.addInitScript(() => {
     const fixedAudio = new Uint8Array([82, 73, 70, 70, 4, 0, 0, 0, 87, 65, 86, 69]);
