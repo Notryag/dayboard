@@ -478,8 +478,8 @@ test("clarification choice resumes execution and writes the final item", async (
   expect(state.requests.some((request) => request.path.endsWith("/clarification-responses"))).toBeTruthy();
 });
 
-test("task clarification survives reload and submits only the selected option", async ({ page }) => {
-  const state = await installApiFixture(page, {
+async function installTaskClarification(page: Page) {
+  return installApiFixture(page, {
     threadId: "thread-primary",
     messages: [{
       id: "message-clarify-task", thread_id: "thread-primary", run_id: "run-clarify-task",
@@ -508,6 +508,10 @@ test("task clarification survives reload and submits only the selected option", 
       updated_at: "2026-07-21T08:00:00Z",
     },
   });
+}
+
+test("task clarification survives reload and submits only the selected option", async ({ page }) => {
+  const state = await installTaskClarification(page);
   state.onClarification = (optionKey) => {
     expect(optionKey).toBe("candidate_2");
     return { events: terminalEvents([], "已完成提交周报。"), persistedText: "已完成提交周报。" };
@@ -521,6 +525,73 @@ test("task clarification survives reload and submits only the selected option", 
   expect(submissions).toHaveLength(1);
   expect(submissions[0].body).toEqual({ state_version: 4, option_key: "candidate_2" });
   await expect(page.getByRole("button", { name: "整理周报", exact: true })).toHaveCount(0);
+});
+
+test("temporary clarification submission failure preserves choices for an idempotent retry", async ({ page }) => {
+  await installTaskClarification(page);
+  const keys: (string | undefined)[] = [];
+  await page.route("**/api/threads/*/clarification-responses", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    keys.push(route.request().headers()["idempotency-key"]);
+    if (keys.length > 1) return route.fallback();
+    await route.fulfill({
+      status: 503,
+      headers: {
+        "access-control-allow-origin": "http://127.0.0.1:3100",
+        "access-control-allow-credentials": "true",
+      },
+      json: { error: { code: "COMMAND_QUEUE_UNAVAILABLE" } },
+    });
+  });
+  await page.goto("/dayboard");
+  const choice = page.getByRole("button", { name: "提交周报", exact: true });
+  await choice.click();
+  await expect(page.getByText("服务暂时繁忙，请稍后重试。", { exact: true })).toBeVisible();
+  await expect(choice).toBeEnabled();
+  await expect(page.getByText("选择“提交周报”", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("这个选项已经失效，请重新选择。", { exact: true })).toHaveCount(0);
+  await choice.click();
+  await expect(page.getByText("已处理完成。", { exact: true })).toBeVisible();
+  expect(keys).toEqual([
+    "clarification:thread-primary:4:candidate_2",
+    "clarification:thread-primary:4:candidate_2",
+  ]);
+  await expect(page.getByText("选择“提交周报”", { exact: true })).toHaveCount(1);
+});
+
+test("a consumed clarification conflict removes old choices without recording a selection", async ({ page }) => {
+  const state = await installTaskClarification(page);
+  await page.route("**/api/threads/*/clarification-responses", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    state.clarification = null;
+    await route.fulfill({
+      status: 409,
+      headers: {
+        "access-control-allow-origin": "http://127.0.0.1:3100",
+        "access-control-allow-credentials": "true",
+      },
+      json: { error: { code: "CLARIFICATION_CONFLICT" } },
+    });
+  });
+  await page.goto("/dayboard");
+  await page.getByRole("button", { name: "提交周报", exact: true }).click();
+  await expect(page.getByText("这个选项已经失效，请重新选择。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "提交周报", exact: true })).toHaveCount(0);
+  await expect(page.getByText("选择“提交周报”", { exact: true })).toHaveCount(0);
+});
+
+test("accepted clarification with an invalid stream never restores consumed choices", async ({ page }) => {
+  const state = await installTaskClarification(page);
+  state.onClarification = () => ({
+    events: [{ type: "assistant_text_delta", data: { content: 123 } }],
+  });
+  await page.goto("/dayboard");
+  await page.getByRole("button", { name: "提交周报", exact: true }).click();
+  await expect(page.getByText("操作已提交，但暂时无法获取执行结果。刷新页面可继续查看，请勿重复提交。", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "提交周报", exact: true })).toHaveCount(0);
+  await expect(page.getByText("这个选项已经失效，请重新选择。", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("选择“提交周报”", { exact: true })).toHaveCount(1);
+  expect(state.requests.filter((request) => request.path.endsWith("/clarification-responses"))).toHaveLength(1);
 });
 
 test("fixed audio is transcribed and submitted without a real microphone", async ({ page }) => {

@@ -7,7 +7,7 @@ import type {
   ConversationState,
 } from "@/features/clarifications/types";
 import { clarificationPresentation } from "@/features/clarifications/types";
-import { apiBaseUrl, userFacingApiError } from "@/lib/api/client";
+import { ApiError, apiBaseUrl, userFacingApiError } from "@/lib/api/client";
 import {
   cancelRun,
   createCommandRun,
@@ -152,19 +152,34 @@ export function useConversationSession() {
 
     setIsSubmitting(true);
     dispatch({ type: "progress_reset" });
-    dispatch({ type: "message_appended", message: createMessage("user", choiceLabel, undefined, undefined, locale) });
+    let accepted = false;
     try {
       const command = await submitClarificationChoice(threadId, {
         state_version: conversationState.version,
         option_key: optionKey,
       });
+      accepted = true;
+      setConversationState(null);
+      dispatch({ type: "message_appended", message: createMessage("user", choiceLabel, undefined, undefined, locale) });
       await consumeRun(command.run_id, threadId);
-    } catch {
+    } catch (error) {
       dispatch({ type: "activity_failed" });
-      await refreshConversationState(threadId).catch(() => undefined);
+      const staleChoice = !accepted && error instanceof ApiError && error.code === "CLARIFICATION_CONFLICT";
+      if (staleChoice) {
+        setConversationState(null);
+        await refreshConversationState(threadId).catch(() => undefined);
+      }
       dispatch({
         type: "message_appended",
-        message: createMessage("assistant", t("chat.staleChoice"), undefined, undefined, locale),
+        message: createMessage(
+          "assistant",
+          accepted ? t("chat.runFollowFailed")
+            : staleChoice ? t("chat.staleChoice")
+              : userFacingApiError(error, t("chat.requestFailed"), locale),
+          undefined,
+          undefined,
+          locale,
+        ),
       });
     } finally {
       setIsSubmitting(false);
